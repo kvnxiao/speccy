@@ -264,8 +264,8 @@ Render structured JSON for harness consumption.
 
 ### Approach
 
-The command lives in `crates/speccy/src/status.rs`. The heavy
-lifting goes into `crates/speccy-core/src/workspace.rs`:
+The command lives in `speccy-cli/src/status.rs`. The heavy
+lifting goes into `speccy-core/src/workspace.rs`:
 
 - `workspace::find_root(start: &Path)` -- walk up to find `.speccy/`.
 - `workspace::scan(project_root: &Path)` -- enumerate spec
@@ -348,7 +348,7 @@ duplicate them.
 `Workspace`, `ScannedSpec`, `Staleness`, `StaleReason` types as
 part of this spec.
 **Alternatives:**
-- Put scan logic in `crates/speccy/src/` -- rejected. Forces
+- Put scan logic in `speccy-cli/src/` -- rejected. Forces
   duplication in later commands.
 **Consequences:** SPEC-0010 and SPEC-0012 consume these utilities.
 PLANNING.md updates SPEC-0010's dependencies to reflect the
@@ -402,10 +402,10 @@ pub struct StatusArgs { pub json: bool }
 
 ### Data changes
 
-- New `crates/speccy-core/src/workspace.rs` (scan, staleness types).
-- New `crates/speccy/src/status.rs` (command logic).
-- New `crates/speccy/src/status_output.rs` (text + JSON renderers).
-- `crates/speccy/Cargo.toml` adds `serde_json` (JSON output).
+- New `speccy-core/src/workspace.rs` (scan, staleness types).
+- New `speccy-cli/src/status.rs` (command logic).
+- New `speccy-cli/src/status_output.rs` (text + JSON renderers).
+- `speccy-cli/Cargo.toml` adds `serde_json` (JSON output).
 
 ### Migration / rollback
 

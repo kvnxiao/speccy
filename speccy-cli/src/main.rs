@@ -1,6 +1,6 @@
 //! Speccy CLI entry point.
 //!
-//! Thin dispatcher over `speccy::status::run`. Future commands land
+//! Thin dispatcher over `speccy_cli::status::run`. Future commands land
 //! alongside; until then, only `speccy status [--json]` is wired.
 
 use camino::Utf8PathBuf;
@@ -52,7 +52,7 @@ fn run_status(args: &[String]) -> Result<(), u8> {
         }
     }
 
-    let cwd = match speccy::status::resolve_cwd() {
+    let cwd = match speccy_cli::status::resolve_cwd() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy status: {e}");
@@ -64,7 +64,7 @@ fn run_status(args: &[String]) -> Result<(), u8> {
 
 fn invoke_status(cwd: &Utf8PathBuf, json: bool) -> Result<(), u8> {
     let mut stdout = std::io::stdout().lock();
-    let result = speccy::status::run(speccy::status::StatusArgs { json }, cwd, &mut stdout);
+    let result = speccy_cli::status::run(speccy_cli::status::StatusArgs { json }, cwd, &mut stdout);
     if stdout.flush().is_err() {
         // stdout is closed; nothing useful to do.
     }

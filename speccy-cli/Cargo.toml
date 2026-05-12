@@ -1,5 +1,5 @@
 [package]
-name = "speccy"
+name = "speccy-cli"
 description = "Speccy CLI: deterministic feedback engine for spec-driven development."
 edition.workspace = true
 rust-version.workspace = true
@@ -9,10 +9,6 @@ version.workspace = true
 readme = "README.md"
 keywords = ["speccy", "cli", "spec", "feedback", "tooling"]
 categories = ["command-line-utilities", "development-tools"]
-
-[lib]
-name = "speccy"
-path = "src/lib.rs"
 
 [[bin]]
 name = "speccy"

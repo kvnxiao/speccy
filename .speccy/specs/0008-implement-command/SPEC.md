@@ -215,7 +215,7 @@ Map all error paths to exit codes and informative stderr.
 
 `speccy_core::task_lookup` is the new shared module. It exposes
 `find` plus the `TaskRef`, `TaskLocation`, and `LookupError`
-types. The command lives in `crates/speccy/src/implement.rs` and
+types. The command lives in `speccy-cli/src/implement.rs` and
 is a thin wrapper: parse args, call `task_lookup::find`, assemble
 prompt, write to stdout.
 
@@ -330,8 +330,8 @@ pub struct ImplementArgs { pub task_ref: String }
 
 ### Data changes
 
-- New `crates/speccy-core/src/task_lookup.rs`.
-- New `crates/speccy/src/implement.rs`.
+- New `speccy-core/src/task_lookup.rs`.
+- New `speccy-cli/src/implement.rs`.
 - New embedded template at
   `skills/shared/prompts/implementer.md` (stub; SPEC-0013
   fills in real content).

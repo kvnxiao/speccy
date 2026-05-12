@@ -18,7 +18,7 @@ generated_at: 2026-05-11T00:00:00Z
     - The embedded bundle exposes `skills/claude-code/`, `skills/codex/`, `skills/shared/personas/`, `skills/shared/prompts/` as walkable `include_dir::Dir` subtrees.
     - A test walks the bundle and asserts every file has non-empty content (catches accidentally-empty stubs).
     - Bundle compiles in release and debug modes.
-  - Suggested files: `crates/speccy/Cargo.toml` (add `include_dir`), `crates/speccy/src/embedded.rs`, `skills/claude-code/.gitkeep`, `skills/codex/.gitkeep`, `skills/shared/personas/.gitkeep`, `skills/shared/prompts/.gitkeep`
+  - Suggested files: `speccy-cli/Cargo.toml` (add `include_dir`), `speccy-cli/src/embedded.rs`, `skills/claude-code/.gitkeep`, `skills/codex/.gitkeep`, `skills/shared/personas/.gitkeep`, `skills/shared/prompts/.gitkeep`
 
 ## Phase 2: Host detection
 
@@ -32,7 +32,7 @@ generated_at: 2026-05-11T00:00:00Z
     - No `--host`; no host directories -> `HostChoice::ClaudeCode` with a `WarnedFallback` flag carried alongside.
     - `--host unknown` -> `InitError::UnknownHost { name: "unknown", supported: &["claude-code", "codex"] }`.
     - Probe order is deterministic: `.claude/` checked before `.codex/`.
-  - Suggested files: `crates/speccy/src/host.rs`, `crates/speccy/tests/host.rs`
+  - Suggested files: `speccy-cli/src/host.rs`, `speccy-cli/tests/host.rs`
 
 ## Phase 3: Scaffold writer
 
@@ -44,7 +44,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Refuses with `InitError::WorkspaceExists { path: ".speccy/" }` when `.speccy/` already exists and `--force` is false.
     - Output: lists `would create <path>` and `would overwrite <path>` lines on stdout before mutating.
     - The scaffolded `.speccy/speccy.toml` round-trips via the SPEC-0001 parser without errors.
-  - Suggested files: `crates/speccy/src/scaffold.rs`, `crates/speccy/src/templates/vision_md.txt`, `crates/speccy/src/templates/speccy_toml.txt`, `crates/speccy/tests/scaffold.rs`
+  - Suggested files: `speccy-cli/src/scaffold.rs`, `speccy-cli/src/templates/vision_md.txt`, `speccy-cli/src/templates/speccy_toml.txt`, `speccy-cli/tests/scaffold.rs`
 
 ## Phase 4: Skill-pack copier
 
@@ -57,7 +57,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Copied bytes match the embedded source via sha256.
     - `--force=true`: shipped files in the destination are overwritten; user-authored files (any filename not in the embedded bundle) are byte-identical before and after.
     - `--force=false` with an existing destination file conflict returns `InitError::WorkspaceExists` (extended variant or distinct error -- decide in T-005).
-  - Suggested files: `crates/speccy/src/copy.rs`, `crates/speccy/tests/copy.rs`
+  - Suggested files: `speccy-cli/src/copy.rs`, `speccy-cli/tests/copy.rs`
 
 ## Phase 5: CLI wiring
 
@@ -72,7 +72,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Cursor-only repo: exits 1; stderr mentions `cursor` and suggests `--host claude-code` or `--host codex`.
     - Simulated I/O failure (e.g. read-only root via `assert_fs`): exits 2; stderr contains the underlying error.
     - `InitError` -> exit-code mapping is consistent with REQ-005.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/init.rs`, `crates/speccy/tests/init.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/init.rs`, `speccy-cli/tests/init.rs`
 
 - [ ] **T-006**: Print "would create / would overwrite" plan before mutating
   - Covers: REQ-002
@@ -80,7 +80,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Capture stdout during a successful init; assert a line per file is printed before any actual write.
     - On `--force`, files being overwritten are tagged `overwrite`; new files are tagged `create`.
     - The summary lines appear before the success line.
-  - Suggested files: `crates/speccy/src/plan_output.rs` (or inline in init.rs)
+  - Suggested files: `speccy-cli/src/plan_output.rs` (or inline in init.rs)
 
 ## Phase 6: Integration
 
@@ -91,4 +91,4 @@ generated_at: 2026-05-11T00:00:00Z
     - Cover: fresh init; refuse-without-force; force overwrite; host override; cursor refusal; unknown-host error.
     - Cross-platform: tests pass on Windows (cmd shell) and Linux (sh).
     - Exit-code assertions match REQ-005.
-  - Suggested files: `crates/speccy/tests/integration_init.rs`, `crates/speccy/Cargo.toml` (add `assert_cmd`, `tempfile`, `assert_fs` dev-deps)
+  - Suggested files: `speccy-cli/tests/integration_init.rs`, `speccy-cli/Cargo.toml` (add `assert_cmd`, `tempfile`, `assert_fs` dev-deps)

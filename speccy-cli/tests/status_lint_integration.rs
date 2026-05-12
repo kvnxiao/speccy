@@ -18,7 +18,7 @@ use common::bootstrap_tasks_md;
 use common::spec_md_template;
 use common::valid_spec_toml;
 use common::write_spec;
-use speccy::status::assemble;
+use speccy_cli::status::assemble;
 use speccy_core::lint;
 use speccy_core::workspace::scan;
 

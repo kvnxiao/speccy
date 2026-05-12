@@ -19,7 +19,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Returned `CheckResult` per check has populated fields (spec_id, check_id, kind, outcome, exit_code, duration_ms).
     - A slow fixture command (e.g. `sleep 0.1; echo a; sleep 0.1; echo b`) produces interleaved output on stderr in roughly real time -- not buffered until completion. (Exact timing assertions are flaky; the test asserts ordering and that the first chunk appears before the child exits.)
     - Manual checks (`kind = "manual"` or any kind with `prompt` and no `command`) return `CheckResult { outcome: Manual, exit_code: None }` without spawning a subprocess; stderr receives the prompt text.
-  - Suggested files: `crates/speccy-core/src/exec.rs`, `crates/speccy-core/tests/exec_captured.rs`
+  - Suggested files: `speccy-core/src/exec.rs`, `speccy-core/tests/exec_captured.rs`
 
 ## Phase 2: Lint integration
 
@@ -30,7 +30,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Returned diagnostics are partitioned into `errors`, `warnings`, `info` based on each diagnostic's `Level`.
     - Lint runs even on workspaces with no checks (verify never skips lint).
     - Empty workspace produces empty buckets without error.
-  - Suggested files: `crates/speccy/src/verify.rs`, `crates/speccy/tests/verify_lint_integration.rs`
+  - Suggested files: `speccy-cli/src/verify.rs`, `speccy-cli/tests/verify_lint_integration.rs`
 
 ## Phase 3: Exit-code aggregation
 
@@ -43,7 +43,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Lint warnings/info only (no errors) + all checks pass -> exit 0.
     - Empty workspace -> exit 0.
     - Deterministic: two runs against the same workspace produce the same exit code.
-  - Suggested files: `crates/speccy/src/verify.rs` (extend), `crates/speccy/tests/verify_exit_code.rs`
+  - Suggested files: `speccy-cli/src/verify.rs` (extend), `speccy-cli/tests/verify_exit_code.rs`
 
 ## Phase 4: Text-mode summary
 
@@ -54,7 +54,7 @@ generated_at: 2026-05-11T00:00:00Z
     - PASS appears iff exit code is 0; FAIL otherwise.
     - Stderr received the live streamed output and per-check headers (`==> CHK-NNN ...`) / footers (`<-- CHK-NNN PASS|FAIL`).
     - Empty workspace prints `Lint: 0 errors, 0 warnings, 0 info` / `Checks: 0 passed, 0 failed, 0 manual` / `verify: PASS`.
-  - Suggested files: `crates/speccy/src/verify_output.rs`, `crates/speccy/tests/verify_text.rs`
+  - Suggested files: `speccy-cli/src/verify_output.rs`, `speccy-cli/tests/verify_text.rs`
 
 ## Phase 5: JSON output
 
@@ -69,7 +69,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `passed` is `true` iff exit code is 0.
     - Pretty-printed.
     - Two runs against identical state produce byte-identical stdout.
-  - Suggested files: `crates/speccy/src/verify_output.rs` (extend), `crates/speccy/tests/verify_json.rs`
+  - Suggested files: `speccy-cli/src/verify_output.rs` (extend), `speccy-cli/tests/verify_json.rs`
 
 ## Phase 6: CLI wiring
 
@@ -81,4 +81,4 @@ generated_at: 2026-05-11T00:00:00Z
     - Text mode and JSON mode each tested separately.
     - From outside a speccy workspace -> exit 1 with `VerifyError::ProjectRootNotFound`.
     - Manual checks are exercised by the fixture (a `kind = "manual"` check that exits the run with PASS but a `manual` count of 1).
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/verify.rs`, `crates/speccy/tests/integration_verify.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/verify.rs`, `speccy-cli/tests/integration_verify.rs`

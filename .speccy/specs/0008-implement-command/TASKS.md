@@ -18,7 +18,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `"SPEC-0001/T-001"` parses to `TaskRef::Qualified { spec_id: "SPEC-0001", task_id: "T-001" }`.
     - `"T-1234"` (4-digit) and `"T-001"` (3-digit) both parse; minimum 3 digits.
     - `"FOO"`, `"T-"`, `"T-AB"`, `"SPEC-0001/FOO"`, `"/T-001"` all return `LookupError::InvalidFormat`.
-  - Suggested files: `crates/speccy-core/src/task_lookup.rs`, `crates/speccy-core/tests/task_lookup.rs`
+  - Suggested files: `speccy-core/src/task_lookup.rs`, `speccy-core/tests/task_lookup.rs`
 
 ## Phase 2: Workspace task lookup
 
@@ -30,7 +30,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Qualified `SPEC-NNNN/T-NNN` -> scopes to that spec; ignores other specs.
     - No spec has the task -> `LookupError::NotFound { task_ref: "<arg>" }`.
     - Spec with `tasks_md` parse error is skipped (no panic; lookup proceeds to other specs).
-  - Suggested files: `crates/speccy-core/src/task_lookup.rs` (extend), `crates/speccy-core/tests/task_lookup.rs` (extend)
+  - Suggested files: `speccy-core/src/task_lookup.rs` (extend), `speccy-core/tests/task_lookup.rs` (extend)
 
 - [ ] **T-003**: Implement ambiguity detection
   - Covers: REQ-003
@@ -38,7 +38,7 @@ generated_at: 2026-05-11T00:00:00Z
     - T-001 in SPEC-0001 and SPEC-0002 -> `LookupError::Ambiguous` with `candidate_specs = ["SPEC-0001", "SPEC-0002"]` (ascending order).
     - T-001 in three specs -> all three appear in `candidate_specs`.
     - Qualified `SPEC-0001/T-001` against the same workspace bypasses ambiguity (returns `Ok` for SPEC-0001's task).
-  - Suggested files: `crates/speccy-core/src/task_lookup.rs` (extend), `crates/speccy-core/tests/task_lookup.rs` (extend)
+  - Suggested files: `speccy-core/src/task_lookup.rs` (extend), `speccy-core/tests/task_lookup.rs` (extend)
 
 ## Phase 3: Prompt assembly
 
@@ -50,7 +50,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Budget trimming applied.
     - Output goes to stdout; exit code 0.
     - A task with three review notes from a prior loop has all three included in `{{task_entry}}`.
-  - Suggested files: `crates/speccy/src/implement.rs`, `skills/shared/prompts/implementer.md` (stub), `crates/speccy/tests/implement_prompt.rs`
+  - Suggested files: `speccy-cli/src/implement.rs`, `skills/shared/prompts/implementer.md` (stub), `speccy-cli/tests/implement_prompt.rs`
 
 ## Phase 4: CLI wiring and error mapping
 
@@ -63,4 +63,4 @@ generated_at: 2026-05-11T00:00:00Z
     - `Ambiguous` -> exit 1; stderr lists each candidate as a copy-pasteable command.
     - Outside-workspace -> exit 1; stderr names the issue.
     - Internal `TemplateNotFound` -> exit 2.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/implement.rs`, `crates/speccy/tests/integration_implement.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/implement.rs`, `speccy-cli/tests/integration_implement.rs`

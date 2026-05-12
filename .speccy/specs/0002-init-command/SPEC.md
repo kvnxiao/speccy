@@ -215,11 +215,11 @@ Predictable exit codes for CI and harnesses.
 
 ### Approach
 
-The command lives in `crates/speccy/src/init.rs`. The embedded skill
-bundle is set up via the `include_dir!` macro at `crates/speccy/src/embedded.rs`
+The command lives in `speccy-cli/src/init.rs`. The embedded skill
+bundle is set up via the `include_dir!` macro at `speccy-cli/src/embedded.rs`
 which exposes a static `Dir` tree the copy logic walks.
 
-Host detection is a small pure function in `crates/speccy/src/host.rs`
+Host detection is a small pure function in `speccy-cli/src/host.rs`
 that takes `(host_flag: Option<&str>, project_root: &Path)` and
 returns `HostChoice` (or an error variant). The scaffold writer and
 the skill-pack copier are independent modules so they can be tested
@@ -325,12 +325,12 @@ The CLI maps `InitError` variants to exit codes:
 
 ### Data changes
 
-- New `crates/speccy/src/init.rs` (command logic).
-- New `crates/speccy/src/host.rs` (detection).
-- New `crates/speccy/src/embedded.rs` (include_dir! root).
-- New `crates/speccy/src/templates/` (VISION.md template, speccy.toml
+- New `speccy-cli/src/init.rs` (command logic).
+- New `speccy-cli/src/host.rs` (detection).
+- New `speccy-cli/src/embedded.rs` (include_dir! root).
+- New `speccy-cli/src/templates/` (VISION.md template, speccy.toml
   template).
-- `crates/speccy/Cargo.toml` adds `include_dir` and an arg-parsing
+- `speccy-cli/Cargo.toml` adds `include_dir` and an arg-parsing
   crate.
 - `skills/claude-code/`, `skills/codex/`, `skills/shared/` directories
   exist at the repo root (initially stub content via `.gitkeep`;

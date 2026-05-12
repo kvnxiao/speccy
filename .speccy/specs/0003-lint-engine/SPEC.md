@@ -261,7 +261,7 @@ contract.
 - A `const REGISTRY: &[(&'static str, Level)]` lists every code the
   engine emits, with its severity.
 - A snapshot test compares `REGISTRY` against an on-disk snapshot
-  (`crates/speccy-core/tests/snapshots/lint_registry.snap`).
+  (`speccy-core/tests/snapshots/lint_registry.snap`).
 - Removing or renaming a code fails the snapshot test.
 - Adding a new code requires snapshot regeneration; the test fails
   until the snapshot includes it.
@@ -283,7 +283,7 @@ contract.
 
 ### Approach
 
-A pure module tree at `crates/speccy-core/src/lint/`:
+A pure module tree at `speccy-core/src/lint/`:
 
 - `lint::types` -- `Diagnostic`, `Level`, `Workspace`, `ParsedSpec`.
 - `lint::registry` -- the stability `REGISTRY` const + a snapshot
@@ -408,11 +408,11 @@ pub enum Level { Error, Warn, Info }
 
 ### Data changes
 
-- New module tree `crates/speccy-core/src/lint/` and submodules.
-- New `crates/speccy-core/tests/lint_*.rs` per code family.
-- New `crates/speccy-core/tests/snapshots/lint_registry.snap` (the
+- New module tree `speccy-core/src/lint/` and submodules.
+- New `speccy-core/tests/lint_*.rs` per code family.
+- New `speccy-core/tests/snapshots/lint_registry.snap` (the
   stability snapshot).
-- New `crates/speccy-core/tests/fixtures/lint/` corpus.
+- New `speccy-core/tests/fixtures/lint/` corpus.
 
 ### Migration / rollback
 

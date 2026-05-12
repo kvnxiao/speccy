@@ -18,7 +18,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Looking up `"plan-amend.md"` returns its template content.
     - Looking up an unknown name (e.g. `"nope.md"`) returns `PromptError::TemplateNotFound { name: "nope.md" }`.
     - The embedded bundle is wired via `include_dir!` (consistent with SPEC-0002 DEC-001).
-  - Suggested files: `crates/speccy-core/src/prompt/template.rs`, `crates/speccy-core/Cargo.toml` (add `include_dir`), `skills/shared/prompts/plan-greenfield.md` (stub), `skills/shared/prompts/plan-amend.md` (stub), `crates/speccy-core/tests/prompt_template.rs`
+  - Suggested files: `speccy-core/src/prompt/template.rs`, `speccy-core/Cargo.toml` (add `include_dir`), `skills/shared/prompts/plan-greenfield.md` (stub), `skills/shared/prompts/plan-amend.md` (stub), `speccy-core/tests/prompt_template.rs`
 
 ## Phase 2: Placeholder substitution
 
@@ -31,7 +31,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Unknown placeholders left in place: `"{{unknown}}"` renders to `"{{unknown}}"` AND stderr contains a warning naming `unknown`.
     - Duplicate unknown placeholders produce one warning per unique name, not one per occurrence.
     - Empty `vars` and empty `template` produce empty output without panicking.
-  - Suggested files: `crates/speccy-core/src/prompt/render.rs`, `crates/speccy-core/tests/prompt_render.rs`
+  - Suggested files: `speccy-core/src/prompt/render.rs`, `speccy-core/tests/prompt_render.rs`
 
 ## Phase 3: AGENTS.md helper
 
@@ -41,7 +41,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Given `<project_root>/AGENTS.md` exists with content `# Agents\n...`, the function returns that content verbatim.
     - Given AGENTS.md is missing, the function returns the literal marker string and stderr contains a one-line warning naming the expected path.
     - Given AGENTS.md exists but is unreadable (simulated permission denied), the function returns the error-marker form and stderr warns.
-  - Suggested files: `crates/speccy-core/src/prompt/agents_md.rs`, `crates/speccy-core/tests/prompt_agents_md.rs`
+  - Suggested files: `speccy-core/src/prompt/agents_md.rs`, `speccy-core/tests/prompt_agents_md.rs`
 
 ## Phase 4: Spec ID allocator
 
@@ -54,7 +54,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `0042-foo` only -> returns `"0043"`.
     - Non-matching directory `_scratch` alongside `0001-foo` -> returns `"0002"` (ignored).
     - Directory with malformed numeric prefix (e.g. `00ab-foo`) -> ignored.
-  - Suggested files: `crates/speccy-core/src/prompt/id_alloc.rs`, `crates/speccy-core/tests/id_alloc.rs`
+  - Suggested files: `speccy-core/src/prompt/id_alloc.rs`, `speccy-core/tests/id_alloc.rs`
 
 ## Phase 5: Context-budget trimmer
 
@@ -66,7 +66,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Each step of the drop order is exercised independently with a fixture designed to make exactly that step the deciding drop.
     - Input that exceeds budget even after all five drop steps -> `fits = false`, output emitted anyway, stderr warning printed naming the overrun.
     - The `dropped` vec preserves the order in which steps fired.
-  - Suggested files: `crates/speccy-core/src/prompt/budget.rs`, `crates/speccy-core/tests/prompt_budget.rs`
+  - Suggested files: `speccy-core/src/prompt/budget.rs`, `speccy-core/tests/prompt_budget.rs`
 
 ## Phase 6: Greenfield assembler
 
@@ -78,7 +78,7 @@ generated_at: 2026-05-11T00:00:00Z
     - VISION.md missing -> exit code 1 with stderr message naming the path.
     - Project root not found (cwd outside any speccy workspace) -> exit code 1 with `PlanError::ProjectRootNotFound`.
     - AGENTS.md missing -> stderr warning per REQ-004; output still produced with marker.
-  - Suggested files: `crates/speccy/src/plan.rs`, `crates/speccy/tests/plan_greenfield.rs`
+  - Suggested files: `speccy-cli/src/plan.rs`, `speccy-cli/tests/plan_greenfield.rs`
 
 ## Phase 7: Amendment assembler
 
@@ -90,7 +90,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Missing spec (e.g. `SPEC-9999`) -> exit code 1 with `PlanError::SpecNotFound`.
     - Parse error on the existing SPEC.md -> exit code 1 with the parser error message.
     - `{{spec_md}}` substituted to full content; `{{spec_id}}` to the canonical ID; `{{agents}}` to AGENTS.md content.
-  - Suggested files: `crates/speccy/src/plan.rs` (extend), `crates/speccy/tests/plan_amend.rs`
+  - Suggested files: `speccy-cli/src/plan.rs` (extend), `speccy-cli/tests/plan_amend.rs`
 
 ## Phase 8: CLI wiring
 
@@ -102,4 +102,4 @@ generated_at: 2026-05-11T00:00:00Z
     - From outside any speccy workspace -> exit 1.
     - `assert_cmd`-based integration test that exec's the binary and inspects stdout/stderr/exit code.
     - Budget overrun: a deliberately-large fixture VISION.md exercises the trimmer; warning surfaces on stderr.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/tests/integration_plan.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/tests/integration_plan.rs`

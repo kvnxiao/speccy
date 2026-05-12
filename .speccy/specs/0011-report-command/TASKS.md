@@ -18,7 +18,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Spec directory exists -> proceeds; missing -> exit 1 with spec-not-found error.
     - SPEC.md and TASKS.md both required; either missing returns a clear "X required for report" error.
     - SPEC.md or TASKS.md parse failure surfaces the parser error to stderr; exit 1.
-  - Suggested files: `crates/speccy/src/report.rs`, `crates/speccy/tests/report_args.rs`
+  - Suggested files: `speccy-cli/src/report.rs`, `speccy-cli/tests/report_args.rs`
 
 ## Phase 2: Completeness gate
 
@@ -31,7 +31,7 @@ generated_at: 2026-05-11T00:00:00Z
     - All `[x]` -> proceed to render.
     - TASKS.md with no task lines -> proceed (vacuously complete).
     - Multiple offending tasks -> all listed in stderr.
-  - Suggested files: `crates/speccy/src/report.rs` (extend), `crates/speccy/tests/report_completeness.rs`
+  - Suggested files: `speccy-cli/src/report.rs` (extend), `speccy-cli/tests/report_completeness.rs`
 
 ## Phase 3: Retry count computation
 
@@ -43,7 +43,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Task with note `Retry on bcrypt` (no colon after `Retry`) -> count 0 (exact prefix match).
     - Case-sensitive: `retry:` (lowercase) does NOT count.
     - Rendered `{{retry_summary}}` is a markdown list with one bullet per task: `- T-NNN: N retries`.
-  - Suggested files: `crates/speccy/src/report.rs` (extend), `crates/speccy/tests/report_retry.rs`
+  - Suggested files: `speccy-cli/src/report.rs` (extend), `speccy-cli/tests/report_retry.rs`
 
 ## Phase 4: Prompt assembly and CLI wiring
 
@@ -55,4 +55,4 @@ generated_at: 2026-05-11T00:00:00Z
     - Budget trimming applied.
     - Output to stdout; exit code 0.
     - End-to-end via `assert_cmd` in a tmpdir fixture: completeness passes -> prompt rendered; completeness fails -> exit 1; outside-workspace -> exit 1.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/report.rs` (extend), `skills/shared/prompts/report.md` (stub; SPEC-0013 fills real content), `crates/speccy/tests/integration_report.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/report.rs` (extend), `skills/shared/prompts/report.md` (stub; SPEC-0013 fills real content), `speccy-cli/tests/integration_report.rs`

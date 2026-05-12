@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/speccy", "crates/speccy-core"]
+members = ["speccy-cli", "speccy-core"]
 resolver = "3"
 
 [workspace.package]

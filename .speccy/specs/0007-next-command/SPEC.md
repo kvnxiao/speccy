@@ -226,8 +226,8 @@ Text mode prints one line per kind variant.
 
 ### Approach
 
-The command lives in `crates/speccy/src/next.rs`. Priority logic
-lives in `crates/speccy-core/src/next.rs` as a pure function
+The command lives in `speccy-cli/src/next.rs`. Priority logic
+lives in `speccy-core/src/next.rs` as a pure function
 taking the parsed `Workspace` and returning a `NextResult`. The
 binary wraps it with output rendering.
 
@@ -364,9 +364,9 @@ pub enum NextError {
 
 ### Data changes
 
-- New `crates/speccy-core/src/next.rs` (priority logic + types).
-- New `crates/speccy/src/next.rs` (command logic).
-- New `crates/speccy/src/next_output.rs` (text + JSON renderers).
+- New `speccy-core/src/next.rs` (priority logic + types).
+- New `speccy-cli/src/next.rs` (command logic).
+- New `speccy-cli/src/next_output.rs` (text + JSON renderers).
 
 ### Migration / rollback
 

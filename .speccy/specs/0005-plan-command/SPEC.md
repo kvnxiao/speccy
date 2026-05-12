@@ -261,10 +261,10 @@ exceeds a budget threshold.
 
 ### Approach
 
-The command lives in `crates/speccy/src/plan.rs`. Cross-cutting
+The command lives in `speccy-cli/src/plan.rs`. Cross-cutting
 helpers (`load_template`, `render`, `load_agents_md`,
 `trim_to_budget`, `allocate_next_spec_id`) live in
-`crates/speccy-core/src/prompt/`. The embedded prompt bundle is
+`speccy-core/src/prompt/`. The embedded prompt bundle is
 the same one SPEC-0002 introduced for skill packs; the
 implementer may either share access to one bundle in
 `speccy-core` or keep parallel bundles. The spec contract is
@@ -413,9 +413,9 @@ pub enum PlanError {
 
 ### Data changes
 
-- New `crates/speccy-core/src/prompt/mod.rs` and submodules
+- New `speccy-core/src/prompt/mod.rs` and submodules
   (`template`, `render`, `agents_md`, `budget`, `id_alloc`).
-- New `crates/speccy/src/plan.rs` (command logic).
+- New `speccy-cli/src/plan.rs` (command logic).
 - New embedded templates: `skills/shared/prompts/plan-greenfield.md`
   and `skills/shared/prompts/plan-amend.md` (initial content can
   be stubs containing only the placeholder syntax; SPEC-0013

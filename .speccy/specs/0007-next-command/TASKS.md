@@ -19,7 +19,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Per-spec tasks are exposed with `(state, id, line, covers, suggested_files, notes)`.
     - `InProgress` (`[~]`) tasks are visible in the enumeration but should be skipped by priority logic (no caller can claim a claimed task).
     - Empty `.speccy/specs/` yields an empty enumeration; the function returns without error.
-  - Suggested files: `crates/speccy-core/src/next.rs`, `crates/speccy-core/tests/next_enumeration.rs`
+  - Suggested files: `speccy-core/src/next.rs`, `speccy-core/tests/next_enumeration.rs`
 
 - [ ] **T-002**: Implement default-priority logic (no `--kind`)
   - Covers: REQ-001
@@ -28,7 +28,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Across specs, the lowest spec ID with actionable work wins -- e.g. SPEC-0001 `[ ]` is returned even when SPEC-0002 has `[?]`.
     - `InProgress` (`[~]`) tasks are skipped (treated as "no actionable work for this caller").
     - When no spec has actionable work, the result falls through to report-kind detection (T-005).
-  - Suggested files: `crates/speccy-core/src/next.rs` (extend), `crates/speccy-core/tests/next_priority.rs`
+  - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs`
 
 ## Phase 2: `--kind` filters
 
@@ -39,7 +39,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Workspace with `[?]` but no `[ ]` -> `NextResult::Blocked` with the canonical "no open tasks; reviews pending" reason.
     - Workspace with `[~]` only -> `Blocked` with a different canonical reason ("all open tasks claimed by other sessions").
     - Walking order is identical to the default (ascending spec ID).
-  - Suggested files: `crates/speccy-core/src/next.rs` (extend), `crates/speccy-core/tests/next_priority.rs` (extend)
+  - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs` (extend)
 
 - [ ] **T-004**: Implement `KindFilter::Review` strict filter with persona fan-out
   - Covers: REQ-002
@@ -47,7 +47,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Only `AwaitingReview` (`[?]`) tasks are returned as `NextResult::Review`.
     - The persona fan-out is the hardcoded `DEFAULT_PERSONAS = ["business", "tests", "security", "style"]`.
     - Workspace with `[ ]` but no `[?]` -> `Blocked` with a "no reviews pending" reason.
-  - Suggested files: `crates/speccy-core/src/next.rs` (extend), `crates/speccy-core/tests/next_priority.rs` (extend)
+  - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs` (extend)
 
 ## Phase 3: Report and blocked kinds
 
@@ -57,7 +57,7 @@ generated_at: 2026-05-11T00:00:00Z
     - All tasks across all specs are `[x]` AND at least one spec lacks REPORT.md -> `NextResult::Report { spec: <lowest-ID> }`.
     - Some spec has `[x]` and REPORT.md present; another has `[x]` and no REPORT.md -> returns the latter.
     - All specs done AND all REPORT.md present -> falls through to blocked.
-  - Suggested files: `crates/speccy-core/src/next.rs` (extend), `crates/speccy-core/tests/next_report.rs`
+  - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_report.rs`
 
 - [ ] **T-006**: Implement `kind: blocked` with canonical reasons
   - Covers: REQ-003
@@ -66,7 +66,7 @@ generated_at: 2026-05-11T00:00:00Z
     - All `[~]` (claimed) tasks across all specs -> `Blocked { reason: "all open tasks are claimed by other sessions" }`.
     - `--kind implement` with no `[ ]` tasks -> `Blocked { reason: "no open tasks; reviews pending" }` (or similar canonical phrase).
     - `--kind review` with no `[?]` tasks -> `Blocked { reason: "no reviews pending" }`.
-  - Suggested files: `crates/speccy-core/src/next.rs` (extend), `crates/speccy-core/tests/next_blocked.rs`
+  - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_blocked.rs`
 
 ## Phase 4: Output rendering
 
@@ -78,7 +78,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `report` kind: `next: report SPEC-NNNN -- all tasks complete\n`.
     - `blocked` kind: `next: blocked -- <reason>\n`.
     - Exit code is 0 for all four kinds.
-  - Suggested files: `crates/speccy/src/next_output.rs`, `crates/speccy/tests/next_text.rs`
+  - Suggested files: `speccy-cli/src/next_output.rs`, `speccy-cli/tests/next_text.rs`
 
 - [ ] **T-008**: Implement `--json` renderer
   - Covers: REQ-004
@@ -91,7 +91,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `blocked` variant has `reason` matching the canonical phrase set.
     - Pretty-printed.
     - Two runs with identical workspace state produce byte-identical stdout.
-  - Suggested files: `crates/speccy/src/next_output.rs` (extend), `crates/speccy/tests/next_json.rs`
+  - Suggested files: `speccy-cli/src/next_output.rs` (extend), `speccy-cli/tests/next_json.rs`
 
 ## Phase 5: CLI wiring
 
@@ -101,4 +101,4 @@ generated_at: 2026-05-11T00:00:00Z
     - End-to-end via `assert_cmd` against fixture workspaces covering all four kinds.
     - From outside a speccy workspace -> exit 1 with `NextError::ProjectRootNotFound`.
     - Text and JSON modes each tested independently per fixture.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/next.rs`, `crates/speccy/tests/integration_next.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/next.rs`, `speccy-cli/tests/integration_next.rs`

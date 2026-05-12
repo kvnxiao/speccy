@@ -254,7 +254,7 @@ project's quality gates from day one.
   string-only errors).
 - The crate sets `#![deny(unsafe_code)]` at its root.
 - No `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`, or
-  `unimplemented!` appears anywhere in `crates/speccy-core/src/`.
+  `unimplemented!` appears anywhere in `speccy-core/src/`.
   (Tests may use `.expect("descriptive message")`.)
 - `cargo clippy -p speccy-core --all-targets --all-features -- -D warnings`
   is clean.
@@ -334,9 +334,9 @@ The parsing stack matches `.speccy/DESIGN.md`'s "Operational details
 **Context:** Rust scaffolding has to land somewhere; this spec is
 the first place that needs it.
 **Decision:** Cargo workspace with two crates:
-- `crates/speccy-core/` -- library; all parsing, rendering, lint
+- `speccy-core/` -- library; all parsing, rendering, lint
   logic.
-- `crates/speccy/` -- thin binary CLI.
+- `speccy-cli/` -- thin binary CLI.
 
 **Alternatives:**
 - Single crate with `src/lib.rs` + `src/main.rs` -- rejected.
@@ -476,10 +476,10 @@ tasks. The shape above is the durable contract.
 ### Data changes
 
 - New top-level Rust workspace: `Cargo.toml` (workspace manifest),
-  `crates/speccy/Cargo.toml`, `crates/speccy-core/Cargo.toml`.
-- New `crates/speccy-core/src/lib.rs` and submodules under
-  `crates/speccy-core/src/parse/`.
-- New `crates/speccy/src/main.rs` (stub that prints
+  `speccy-cli/Cargo.toml`, `speccy-core/Cargo.toml`.
+- New `speccy-core/src/lib.rs` and submodules under
+  `speccy-core/src/parse/`.
+- New `speccy-cli/src/main.rs` (stub that prints
   `speccy CLI; no commands implemented yet` and exits 2 -- actual
   command wiring lands in SPEC-0002 onward).
 - `.gitignore` additions for `target/`.

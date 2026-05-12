@@ -231,10 +231,10 @@ Task lookup errors propagate through the same shape as SPEC-0008.
 
 ### Approach
 
-The command lives in `crates/speccy/src/review.rs`. New helpers
-land in `crates/speccy-core/src/personas.rs` (registry + file
+The command lives in `speccy-cli/src/review.rs`. New helpers
+land in `speccy-core/src/personas.rs` (registry + file
 resolver). The diff computer lives in
-`crates/speccy/src/git.rs` (binary-crate, since `speccy verify`
+`speccy-cli/src/git.rs` (binary-crate, since `speccy verify`
 also shells out to git and could share later).
 
 Flow per invocation:
@@ -374,9 +374,9 @@ pub enum ReviewError {
 
 ### Data changes
 
-- New `crates/speccy-core/src/personas.rs`.
-- New `crates/speccy/src/review.rs`.
-- New `crates/speccy/src/git.rs` (diff helper; future-shared
+- New `speccy-core/src/personas.rs`.
+- New `speccy-cli/src/review.rs`.
+- New `speccy-cli/src/git.rs` (diff helper; future-shared
   with SPEC-0012 if useful).
 - New embedded templates and persona files (SPEC-0013 fills
   these; this spec adds stubs):

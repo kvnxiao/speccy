@@ -153,7 +153,7 @@ Render the Phase 5 prompt to stdout.
 
 ### Approach
 
-The command lives in `crates/speccy/src/report.rs`. The retry
+The command lives in `speccy-cli/src/report.rs`. The retry
 counter is a small helper in the same file -- no shared
 abstraction needed for v1 since no other command computes
 retries.
@@ -239,7 +239,7 @@ pub enum ReportError {
 
 ### Data changes
 
-- New `crates/speccy/src/report.rs`.
+- New `speccy-cli/src/report.rs`.
 - New embedded template `skills/shared/prompts/report.md`
   (stub; SPEC-0013 fills real content).
 

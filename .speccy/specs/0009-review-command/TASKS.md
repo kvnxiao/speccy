@@ -17,7 +17,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `personas::ALL` is a `&'static [&'static str]` of length 6 with the names `["business", "tests", "security", "style", "architecture", "docs"]` in declared order.
     - SPEC-0007's `DEFAULT_PERSONAS` is `personas::ALL[..4]` -- the two MUST be derived from the same source.
     - Adding a hypothetical 7th persona only requires modifying this constant; a regression test catches divergence with DEFAULT_PERSONAS.
-  - Suggested files: `crates/speccy-core/src/personas.rs`, `crates/speccy-core/src/next.rs` (refactor to consume `&personas::ALL[..4]`), `crates/speccy-core/tests/personas_registry.rs`
+  - Suggested files: `speccy-core/src/personas.rs`, `speccy-core/src/next.rs` (refactor to consume `&personas::ALL[..4]`), `speccy-core/tests/personas_registry.rs`
 
 ## Phase 2: Persona file resolver
 
@@ -30,7 +30,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Given the project-local override is an empty file, warns on stderr and returns the embedded content.
     - Given an unknown persona name (not in `ALL`), returns `PersonaError::UnknownName`.
     - Host-native location (`.claude/commands/`) is NOT checked.
-  - Suggested files: `crates/speccy-core/src/personas.rs` (extend), `crates/speccy-core/tests/personas_resolve.rs`
+  - Suggested files: `speccy-core/src/personas.rs` (extend), `speccy-core/tests/personas_resolve.rs`
 
 ## Phase 3: Diff computer
 
@@ -42,7 +42,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Given a clean tree with no `HEAD~1` (single-commit repo), the returned string is the literal fallback note `<!-- no diff available; ... -->`.
     - Given `git` is not on PATH (simulated), returns the fallback note without error.
     - Given the directory is not a git repo, returns the fallback note.
-  - Suggested files: `crates/speccy/src/git.rs`, `crates/speccy/tests/git_diff.rs`
+  - Suggested files: `speccy-cli/src/git.rs`, `speccy-cli/tests/git_diff.rs`
 
 ## Phase 4: Argument validation
 
@@ -53,7 +53,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `--persona security` succeeds (in registry).
     - `--persona unknown` exits 1; stderr contains `unknown` and the six valid names.
     - `--persona Security` (capitalised) exits 1 (case-sensitive).
-  - Suggested files: `crates/speccy/src/review.rs`, `crates/speccy/tests/review_persona_arg.rs`
+  - Suggested files: `speccy-cli/src/review.rs`, `speccy-cli/tests/review_persona_arg.rs`
 
 ## Phase 5: Prompt assembly
 
@@ -67,7 +67,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Placeholders substituted: `{{spec_id}}`, `{{spec_md}}`, `{{task_id}}`, `{{task_entry}}`, `{{diff}}`, `{{persona}}`, `{{persona_content}}`, `{{agents}}`.
     - Budget trimming applied.
     - Output to stdout; exit code 0.
-  - Suggested files: `crates/speccy/src/review.rs` (extend), `skills/shared/prompts/reviewer-security.md` (stub; SPEC-0013 fills the other five and the real content), `crates/speccy/tests/review_prompt.rs`
+  - Suggested files: `speccy-cli/src/review.rs` (extend), `skills/shared/prompts/reviewer-security.md` (stub; SPEC-0013 fills the other five and the real content), `speccy-cli/tests/review_prompt.rs`
 
 ## Phase 6: CLI wiring and integration
 
@@ -79,4 +79,4 @@ generated_at: 2026-05-11T00:00:00Z
     - All persona-error paths (missing arg, unknown name) exit 1.
     - Project-local persona override is picked up without rebuilding the binary.
     - Outside-workspace exits 1.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/review.rs`, `crates/speccy/tests/integration_review.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/review.rs`, `speccy-cli/tests/integration_review.rs`

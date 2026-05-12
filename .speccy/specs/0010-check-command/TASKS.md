@@ -19,7 +19,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Malformed spec.toml -> single stderr warning naming the spec; other specs still scan; eventual exit code is at least 1.
     - Empty `.speccy/specs/` -> `No checks defined.` to stdout, exit 0.
     - Workspace with specs but no `[[checks]]` -> same as above.
-  - Suggested files: `crates/speccy/src/check.rs`, `crates/speccy/tests/check_discovery.rs`
+  - Suggested files: `speccy-cli/src/check.rs`, `speccy-cli/tests/check_discovery.rs`
 
 ## Phase 2: Shell invoker
 
@@ -29,7 +29,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Unix target (`cfg!(unix)`): returns `Command::new("sh").arg("-c").arg(<cmd>)`.
     - Windows target (`cfg!(windows)`): returns `Command::new("cmd").arg("/c").arg(<cmd>)`.
     - Working directory is set to the supplied project root on the returned `Command`.
-  - Suggested files: `crates/speccy/src/shell.rs`, `crates/speccy/tests/shell.rs`
+  - Suggested files: `speccy-cli/src/shell.rs`, `speccy-cli/tests/shell.rs`
 
 - [ ] **T-003**: Implement live-streaming child execution
   - Covers: REQ-003
@@ -37,7 +37,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Child inherits parent stdio via `Stdio::inherit()` (no piped capture by default).
     - Returns the child's exit code via `ExitStatus::code()` (or 130 for SIGINT-like signals on Unix; documented edge case).
     - Test with a fixture command (`echo hello`) asserts output reaches captured terminal output.
-  - Suggested files: `crates/speccy/src/shell.rs` (extend)
+  - Suggested files: `speccy-cli/src/shell.rs` (extend)
 
 ## Phase 3: CHK-ID filtering
 
@@ -48,7 +48,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Two specs each defining `CHK-001` -> both run.
     - Unknown ID (e.g. `CHK-099`) -> `CheckError::NoCheckMatching`; exit 1; stderr names the missing ID and hints at `speccy status`.
     - Malformed ID (e.g. `FOO`, `chk-1`) -> `CheckError::InvalidCheckIdFormat`; exit 1.
-  - Suggested files: `crates/speccy/src/check.rs` (extend), `crates/speccy/tests/check_id_filter.rs`
+  - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_id_filter.rs`
 
 ## Phase 4: Manual checks
 
@@ -60,7 +60,7 @@ generated_at: 2026-05-11T00:00:00Z
     - No subprocess is spawned for manual checks.
     - Manual checks never affect exit code.
     - A check with both `command` AND `prompt` prefers `command` and prints a stderr warning naming the offending check ID.
-  - Suggested files: `crates/speccy/src/check.rs` (extend), `crates/speccy/tests/check_manual.rs`
+  - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_manual.rs`
 
 ## Phase 5: Output and exit-code aggregation
 
@@ -71,7 +71,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Footer `<-- CHK-NNN PASS` on exit 0; `<-- CHK-NNN FAIL (exit N)` on non-zero.
     - Final summary `<N> passed, <M> failed, <K> manual` as the last stdout line.
     - Empty workspace skips the summary; prints `No checks defined.` instead.
-  - Suggested files: `crates/speccy/src/check.rs` (extend), `crates/speccy/tests/check_output_format.rs`
+  - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_output_format.rs`
 
 - [ ] **T-007**: Implement run-all + first-non-zero exit code aggregation
   - Covers: REQ-004
@@ -81,7 +81,7 @@ generated_at: 2026-05-11T00:00:00Z
     - One pass + one manual + one fail-1 -> exit code 1.
     - Manual checks never change the exit code.
     - Malformed spec.toml warning contributes exit code 1 if no check produces a higher code.
-  - Suggested files: `crates/speccy/src/check.rs` (extend), `crates/speccy/tests/check_exit_code.rs`
+  - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_exit_code.rs`
 
 ## Phase 6: CLI wiring
 
@@ -91,7 +91,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `speccy check` runs from any cwd inside a speccy workspace.
     - `speccy check` from outside a workspace -> `CheckError::ProjectRootNotFound`; exit 1.
     - End-to-end via `assert_cmd` in a tmpdir with fixture spec.tomls (mix of test and manual kinds).
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/check.rs`, `crates/speccy/tests/integration_check.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/check.rs`, `speccy-cli/tests/integration_check.rs`
 
 ## Phase 7: Cross-platform integration
 
@@ -101,4 +101,4 @@ generated_at: 2026-05-11T00:00:00Z
     - On Unix: a fixture `command = "echo hello"` runs and produces `hello` on stdout, exit 0.
     - On Windows: same fixture runs via `cmd /c echo hello` and produces `hello`.
     - CI runs the suite on both Linux and Windows runners.
-  - Suggested files: `crates/speccy/tests/integration_check.rs` (extend with cfg-gated assertions), `.github/workflows/ci.yml` (Windows runner if not yet wired; otherwise defer to a CI-setup task in a later spec)
+  - Suggested files: `speccy-cli/tests/integration_check.rs` (extend with cfg-gated assertions), `.github/workflows/ci.yml` (Windows runner if not yet wired; otherwise defer to a CI-setup task in a later spec)

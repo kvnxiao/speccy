@@ -19,7 +19,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `lint::run(&Workspace { specs: vec![], supersession: &empty })` returns an empty vec without panics.
     - Calling `lint::run` twice on the same input returns byte-equal vecs (determinism).
     - Output ordering is `(spec_id, code, file, line)` ascending, with `None` sorting before `Some`.
-  - Suggested files: `crates/speccy-core/src/lint/mod.rs`, `crates/speccy-core/src/lint/types.rs`, `crates/speccy-core/tests/lint_run.rs`
+  - Suggested files: `speccy-core/src/lint/mod.rs`, `speccy-core/src/lint/types.rs`, `speccy-core/tests/lint_run.rs`
 
 - [x] **T-002**: Set up `REGISTRY` and the stability snapshot test
   - Covers: REQ-007
@@ -29,7 +29,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Removing a code from `REGISTRY` produces a snapshot diff (test fails).
     - Adding a new code without snapshot regen produces a snapshot diff.
     - Changing a severity produces a snapshot diff.
-  - Suggested files: `crates/speccy-core/src/lint/registry.rs`, `crates/speccy-core/tests/lint_registry.rs`, `crates/speccy-core/tests/snapshots/lint_registry.snap`
+  - Suggested files: `speccy-core/src/lint/registry.rs`, `speccy-core/tests/lint_registry.rs`, `speccy-core/tests/snapshots/lint_registry.snap`
 
 ## Phase 2: SPC family
 
@@ -41,7 +41,7 @@ generated_at: 2026-05-11T00:00:00Z
     - SPC-003 fires when a `[[requirements]]` row has no matching SPEC.md REQ heading.
     - SPC-004 fires when SPEC.md frontmatter is missing any of `id`, `slug`, `title`, `status`, `created`.
     - SPC-005 fires when `status` value is outside `{in-progress, implemented, dropped, superseded}`; the diagnostic message names the offending value.
-  - Suggested files: `crates/speccy-core/src/lint/rules/spc.rs`, `crates/speccy-core/tests/lint_spc.rs`, `crates/speccy-core/tests/fixtures/lint/spc/`
+  - Suggested files: `speccy-core/src/lint/rules/spc.rs`, `speccy-core/tests/lint_spc.rs`, `speccy-core/tests/fixtures/lint/spc/`
 
 - [x] **T-004**: Implement SPC-006 (supersession graph consistency)
   - Covers: REQ-001
@@ -49,7 +49,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `status: superseded` + no incoming `supersedes` edge in the workspace -> SPC-006 fires.
     - `status: superseded` + at least one incoming edge -> SPC-006 does NOT fire.
     - `status: implemented` + incoming edge present -> SPC-006 does NOT fire (an incoming edge alone never flips status).
-  - Suggested files: `crates/speccy-core/src/lint/rules/spc.rs` (extend), `crates/speccy-core/tests/lint_spc.rs` (extend)
+  - Suggested files: `speccy-core/src/lint/rules/spc.rs` (extend), `speccy-core/tests/lint_spc.rs` (extend)
 
 - [x] **T-005**: Implement SPC-007 (informational status / task mismatch)
   - Covers: REQ-001
@@ -57,7 +57,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `status: implemented` + all tasks `[x]` -> no SPC-007.
     - `status: implemented` + at least one `[ ]` / `[~]` / `[?]` task -> SPC-007 fires at `Level::Info`.
     - `status: in-progress` + any task state -> no SPC-007.
-  - Suggested files: `crates/speccy-core/src/lint/rules/spc.rs` (extend), `crates/speccy-core/tests/lint_spc.rs` (extend)
+  - Suggested files: `speccy-core/src/lint/rules/spc.rs` (extend), `speccy-core/tests/lint_spc.rs` (extend)
 
 ## Phase 3: REQ family
 
@@ -67,7 +67,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `[[requirements]] id = "REQ-001" checks = []` -> REQ-001 lint code fires naming the requirement.
     - `[[requirements]] id = "REQ-001" checks = ["CHK-999"]` with no `[[checks]] id = "CHK-999"` -> REQ-002 fires naming both the requirement and the missing check.
     - Multiple requirements each missing coverage -> one REQ-001 per requirement, ordered by REQ ID.
-  - Suggested files: `crates/speccy-core/src/lint/rules/req.rs`, `crates/speccy-core/tests/lint_req.rs`
+  - Suggested files: `speccy-core/src/lint/rules/req.rs`, `speccy-core/tests/lint_req.rs`
 
 ## Phase 4: VAL family
 
@@ -78,7 +78,7 @@ generated_at: 2026-05-11T00:00:00Z
     - VAL-002 fires for a check with `kind = "test"` or `kind = "command"` missing `command`.
     - VAL-003 fires for a check with `kind = "manual"` missing `prompt`.
     - A free-form `kind` value (e.g. `kind = "property"`) without `command` does NOT trigger VAL-002; the parser only flags missing required fields for the known executable kinds.
-  - Suggested files: `crates/speccy-core/src/lint/rules/val.rs`, `crates/speccy-core/tests/lint_val.rs`
+  - Suggested files: `speccy-core/src/lint/rules/val.rs`, `speccy-core/tests/lint_val.rs`
 
 - [x] **T-008**: Implement VAL-004 (no-op command detection)
   - Covers: REQ-003
@@ -88,7 +88,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Compound commands do NOT fire: `"true && cargo test"`, `": ; do-real-work"`, `"exit 0 || retry"`.
     - Severity is `Level::Warn`.
     - The diagnostic message names the offending command verbatim.
-  - Suggested files: `crates/speccy-core/src/lint/rules/val.rs` (extend), `crates/speccy-core/tests/lint_val.rs` (extend)
+  - Suggested files: `speccy-core/src/lint/rules/val.rs` (extend), `speccy-core/tests/lint_val.rs` (extend)
 
 ## Phase 5: TSK family
 
@@ -98,7 +98,7 @@ generated_at: 2026-05-11T00:00:00Z
     - TSK-001 fires when a task `Covers: REQ-099` and REQ-099 is in neither SPEC.md nor spec.toml; the message names both the task ID and the offending REQ.
     - TSK-002 fires when the parser surfaced a malformed task ID warning (e.g. `**TASK-001**` instead of `**T-001**`); the message names the offending bold-span text.
     - TSK-004 fires when TASKS.md frontmatter is missing `spec`, `spec_hash_at_generation`, or `generated_at`; one diagnostic per missing field.
-  - Suggested files: `crates/speccy-core/src/lint/rules/tsk.rs`, `crates/speccy-core/tests/lint_tsk.rs`
+  - Suggested files: `speccy-core/src/lint/rules/tsk.rs`, `speccy-core/tests/lint_tsk.rs`
 
 - [x] **T-010**: Implement TSK-003 (staleness: hash and mtime drift, plus bootstrap-pending variant)
   - Covers: REQ-004
@@ -107,7 +107,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Hash mismatch -> TSK-003 at `Level::Warn`; message names both stored and current hashes.
     - SPEC.md mtime > TASKS.md mtime (even with hash match) -> TSK-003 at `Level::Warn`.
     - `spec_hash_at_generation: bootstrap-pending` -> TSK-003 at `Level::Info` with a message naming `speccy tasks SPEC-NNNN --commit` as the remediation.
-  - Suggested files: `crates/speccy-core/src/lint/rules/tsk.rs` (extend), `crates/speccy-core/tests/lint_tsk.rs` (extend)
+  - Suggested files: `speccy-core/src/lint/rules/tsk.rs` (extend), `speccy-core/tests/lint_tsk.rs` (extend)
 
 ## Phase 6: QST family
 
@@ -119,15 +119,15 @@ generated_at: 2026-05-11T00:00:00Z
     - Mixed: only unchecked produce QST-001.
     - Question text (after the checkbox glyph) appears in the diagnostic message verbatim.
     - Open questions section is case-insensitive (`## Open Questions` and `## open questions` both work).
-  - Suggested files: `crates/speccy-core/src/lint/rules/qst.rs`, `crates/speccy-core/tests/lint_qst.rs`
+  - Suggested files: `speccy-core/src/lint/rules/qst.rs`, `speccy-core/tests/lint_qst.rs`
 
 ## Phase 7: Fixture corpus and integration
 
 - [x] **T-012**: Build the fixture corpus and a loader helper
   - Covers: REQ-001..REQ-005
   - Tests to write:
-    - A `crates/speccy-core/tests/fixtures/lint/<code>/` directory exists per code (or per family), each containing SPEC.md + spec.toml + optional TASKS.md.
+    - A `speccy-core/tests/fixtures/lint/<code>/` directory exists per code (or per family), each containing SPEC.md + spec.toml + optional TASKS.md.
     - Each fixture has a header comment naming which codes it should trigger and which it should NOT trigger (defensive against rule overreach).
     - A loader helper reads a fixture via the SPEC-0001 parser and produces a `ParsedSpec` ready for `lint::run`.
     - A meta-test iterates every fixture, runs lint, and asserts the emitted codes match the fixture's header.
-  - Suggested files: `crates/speccy-core/tests/fixtures/lint/spc-001/SPEC.md`, `...`, `crates/speccy-core/tests/lint_fixtures.rs`
+  - Suggested files: `speccy-core/tests/fixtures/lint/spc-001/SPEC.md`, `...`, `speccy-core/tests/lint_fixtures.rs`

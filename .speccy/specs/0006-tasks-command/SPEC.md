@@ -217,8 +217,8 @@ Validate the argument and the workspace state.
 
 ### Approach
 
-The command lives in `crates/speccy/src/tasks.rs`. The frontmatter
-rewrite logic lives in `crates/speccy-core/src/tasks.rs` as
+The command lives in `speccy-cli/src/tasks.rs`. The frontmatter
+rewrite logic lives in `speccy-core/src/tasks.rs` as
 `commit_frontmatter(tasks_md_path, spec_id, spec_md_hash, now) ->
 Result<(), CommitError>` -- a narrow helper, not part of the
 general `prompt` module.
@@ -352,13 +352,13 @@ pub enum TasksError {
 
 ### Data changes
 
-- New `crates/speccy-core/src/tasks.rs` (frontmatter rewriter +
+- New `speccy-core/src/tasks.rs` (frontmatter rewriter +
   CommitError).
-- New `crates/speccy/src/tasks.rs` (command logic).
+- New `speccy-cli/src/tasks.rs` (command logic).
 - New embedded templates at `skills/shared/prompts/tasks-generate.md`
   and `skills/shared/prompts/tasks-amend.md` (initial stubs;
   SPEC-0013 fills in real prompts).
-- `crates/speccy-core/Cargo.toml` adds `chrono` (or `time`) for
+- `speccy-core/Cargo.toml` adds `chrono` (or `time`) for
   UTC timestamp formatting.
 
 ### Migration / rollback

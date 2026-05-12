@@ -9,7 +9,7 @@
 //! Tests for `git::repo_sha`. Covers SPEC-0004 T-010.
 
 use camino::Utf8PathBuf;
-use speccy::git::repo_sha;
+use speccy_cli::git::repo_sha;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 

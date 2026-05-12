@@ -212,7 +212,7 @@ established envelope.
 
 ### Approach
 
-The command lives in `crates/speccy/src/verify.rs`. Flow per
+The command lives in `speccy-cli/src/verify.rs`. Flow per
 invocation:
 
 1. Discover project root (`workspace::find_root`).
@@ -339,9 +339,9 @@ pub enum VerifyError {
 
 ### Data changes
 
-- New `crates/speccy-core/src/exec.rs` (captured-execution API).
-- New `crates/speccy/src/verify.rs` (command logic).
-- New `crates/speccy/src/verify_output.rs` (text + JSON
+- New `speccy-core/src/exec.rs` (captured-execution API).
+- New `speccy-cli/src/verify.rs` (command logic).
+- New `speccy-cli/src/verify_output.rs` (text + JSON
   renderers).
 
 ### Migration / rollback

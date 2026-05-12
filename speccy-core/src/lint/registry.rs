@@ -9,7 +9,7 @@ use crate::lint::types::Level;
 /// This list is **append-only across minor versions**. Removing or
 /// renaming an entry is a breaking change; changing a severity is a
 /// breaking change. The snapshot test in
-/// `crates/speccy-core/tests/lint_registry.rs` pins this list.
+/// `speccy-core/tests/lint_registry.rs` pins this list.
 pub const REGISTRY: &[(&str, Level)] = &[
     ("SPC-001", Level::Error),
     ("SPC-002", Level::Error),

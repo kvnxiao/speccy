@@ -17,8 +17,8 @@ use common::bootstrap_tasks_md;
 use common::spec_md_template;
 use common::valid_spec_toml;
 use common::write_spec;
-use speccy::status::StatusArgs;
-use speccy::status::run;
+use speccy_cli::status::StatusArgs;
+use speccy_cli::status::run;
 
 fn render_text(root: &camino::Utf8Path) -> TestResult<String> {
     let mut buf: Vec<u8> = Vec::new();

@@ -18,7 +18,7 @@ generated_at: 2026-05-11T00:00:00Z
     - From inside a deeply-nested subdirectory, walk-up still finds the root.
     - From outside any speccy workspace (walking up reaches filesystem root without finding `.speccy/`), return `WorkspaceError::NoSpeccyDir`.
     - I/O errors during traversal return `WorkspaceError::Io(_)`.
-  - Suggested files: `crates/speccy-core/src/workspace.rs`, `crates/speccy-core/tests/workspace_find_root.rs`
+  - Suggested files: `speccy-core/src/workspace.rs`, `speccy-core/tests/workspace_find_root.rs`
 
 - [x] **T-002**: Implement `workspace::scan`
   - Covers: REQ-001
@@ -29,7 +29,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Empty `.speccy/specs/` yields `Workspace { specs: vec![], ... }`.
     - Missing `.speccy/specs/` directory yields the same empty result without error.
     - Specs are returned in ascending spec-ID order regardless of filesystem iteration order.
-  - Suggested files: `crates/speccy-core/src/workspace.rs` (extend), `crates/speccy-core/tests/workspace_scan.rs`
+  - Suggested files: `speccy-core/src/workspace.rs` (extend), `speccy-core/tests/workspace_scan.rs`
 
 ## Phase 2: Staleness detector
 
@@ -42,7 +42,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `spec_hash_at_generation = "bootstrap-pending"` -> `BootstrapPending` is the SOLE reason (short-circuits other checks).
     - No TASKS.md -> `Staleness { stale: false, reasons: [] }`.
     - Both hash mismatch AND mtime drift -> both reasons present in declared order (`HashDrift, MtimeDrift`).
-  - Suggested files: `crates/speccy-core/src/workspace.rs` (extend), `crates/speccy-core/tests/stale_detection.rs`
+  - Suggested files: `speccy-core/src/workspace.rs` (extend), `speccy-core/tests/stale_detection.rs`
 
 ## Phase 3: Task counts and open questions
 
@@ -53,7 +53,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Missing TASKS.md yields all-zero counts.
     - Tasks under different Phase headings still count.
     - Tasks with malformed IDs (per SPEC-0001 REQ-004 recoverable warnings) are skipped from counts.
-  - Suggested files: `crates/speccy-core/src/workspace.rs` (extend or split), `crates/speccy-core/tests/task_state_aggregation.rs`
+  - Suggested files: `speccy-core/src/workspace.rs` (extend or split), `speccy-core/tests/task_state_aggregation.rs`
 
 - [x] **T-005**: Implement open-questions counter
   - Covers: REQ-006 (text view), REQ-007 (JSON contract)
@@ -62,7 +62,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Checked `- [x]` items don't count.
     - Missing `## Open questions` section yields zero.
     - Case-insensitive heading match (`## OPEN QUESTIONS` also works).
-  - Suggested files: `crates/speccy-core/src/workspace.rs` (extend) or `crates/speccy-core/src/parse/spec_md.rs` extension
+  - Suggested files: `speccy-core/src/workspace.rs` (extend) or `speccy-core/src/parse/spec_md.rs` extension
 
 ## Phase 4: Supersession + lint integration
 
@@ -72,7 +72,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Build `&[&SpecMd]` from successfully-parsed specs; call `supersession_index`; expose `superseded_by` per spec.
     - Specs with parse errors have empty `superseded_by`.
     - `dangling_references()` is exposed on `Workspace` so lint can consume it.
-  - Suggested files: `crates/speccy-core/src/workspace.rs` (extend), `crates/speccy-core/tests/workspace_supersession.rs`
+  - Suggested files: `speccy-core/src/workspace.rs` (extend), `speccy-core/tests/workspace_supersession.rs`
 
 - [x] **T-007**: Build `lint::Workspace` and call `lint::run`; partition by spec_id
   - Covers: REQ-005
@@ -82,7 +82,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Each lint block has three arrays keyed by `Level` (errors / warnings / info).
     - Empty workspace produces an empty workspace-level lint block.
     - The ordering within each array is `(code, file, line)` ascending (inherited from lint::run).
-  - Suggested files: `crates/speccy/src/status.rs`, `crates/speccy/tests/status_lint_integration.rs`
+  - Suggested files: `speccy-cli/src/status.rs`, `speccy-cli/tests/status_lint_integration.rs`
 
 ## Phase 5: Text renderer
 
@@ -94,7 +94,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Same specs WITH any of those signals ARE shown regardless of status.
     - Per-spec output: header line (`SPEC-NNNN <status>: <title>`), tasks counts, lint errors/warnings count, staleness flag with reasons, open-questions count.
     - Empty workspace -> `No specs in workspace.` + exit code 0.
-  - Suggested files: `crates/speccy/src/status_output.rs`, `crates/speccy/tests/status_text_render.rs`, `crates/speccy/tests/status_text_filter.rs`
+  - Suggested files: `speccy-cli/src/status_output.rs`, `speccy-cli/tests/status_text_render.rs`, `speccy-cli/tests/status_text_filter.rs`
 
 ## Phase 6: JSON output
 
@@ -108,7 +108,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Pretty-printed (whitespace-tolerant).
     - Two runs with no filesystem change produce byte-identical output.
     - `stale_reasons` are ordered `HashDrift, MtimeDrift, BootstrapPending` (declared order).
-  - Suggested files: `crates/speccy/src/status_output.rs` (extend), `crates/speccy/tests/status_json.rs`
+  - Suggested files: `speccy-cli/src/status_output.rs` (extend), `speccy-cli/tests/status_json.rs`
 
 - [x] **T-010**: Wire `repo_sha` via shell-out to `git rev-parse HEAD`
   - Covers: REQ-007
@@ -117,7 +117,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Outside a git repo (no `.git/`): `repo_sha` is `""`, no error.
     - Git not on PATH: `repo_sha` is `""`, no error.
     - HEAD unset (fresh repo): `repo_sha` is `""`, no error.
-  - Suggested files: `crates/speccy/src/git.rs`, `crates/speccy/tests/git_repo_sha.rs`
+  - Suggested files: `speccy-cli/src/git.rs`, `speccy-cli/tests/git_repo_sha.rs`
 
 ## Phase 7: CLI wiring
 
@@ -128,4 +128,4 @@ generated_at: 2026-05-11T00:00:00Z
     - `speccy status` from outside a workspace -> exit code 1 with a clear `WorkspaceError::NoSpeccyDir` message.
     - `speccy status --json` emits valid JSON (`serde_json::from_str` round-trip).
     - End-to-end integration test via `assert_cmd` in a tmpdir with fixture specs.
-  - Suggested files: `crates/speccy/src/main.rs`, `crates/speccy/src/status.rs`, `crates/speccy/tests/integration_status.rs`
+  - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/status.rs`, `speccy-cli/tests/integration_status.rs`

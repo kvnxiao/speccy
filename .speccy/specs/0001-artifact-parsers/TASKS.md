@@ -18,16 +18,16 @@ generated_at: 2026-05-11T00:00:00Z
   - Tests to write:
     - `cargo build --workspace` succeeds from a fresh clone.
     - `cargo clippy --workspace --all-targets --all-features -- -D warnings` is clean.
-    - `crates/speccy-core/src/lib.rs` has `#![deny(unsafe_code)]` at the top.
-  - Suggested files: `Cargo.toml`, `crates/speccy/Cargo.toml`, `crates/speccy-core/Cargo.toml`, `crates/speccy/src/main.rs`, `crates/speccy-core/src/lib.rs`, `.gitignore`
+    - `speccy-core/src/lib.rs` has `#![deny(unsafe_code)]` at the top.
+  - Suggested files: `Cargo.toml`, `speccy-cli/Cargo.toml`, `speccy-core/Cargo.toml`, `speccy-cli/src/main.rs`, `speccy-core/src/lib.rs`, `.gitignore`
 
 - [x] **T-002**: Pin parsing-stack dependencies and configure `cargo-deny`
   - Covers: REQ-007
   - Tests to write:
     - `cargo deny check` passes (advisories, bans, licenses, sources).
-    - `serde-saphyr` is pinned exactly to its chosen `0.0.x` patch in `crates/speccy-core/Cargo.toml`.
+    - `serde-saphyr` is pinned exactly to its chosen `0.0.x` patch in `speccy-core/Cargo.toml`.
     - `toml`, `comrak`, `regex`, `sha2` are pinned to current stable major.minor.
-  - Suggested files: `crates/speccy-core/Cargo.toml`, `deny.toml`
+  - Suggested files: `speccy-core/Cargo.toml`, `deny.toml`
 
 ## Phase 2: Frontmatter splitter
 
@@ -40,7 +40,7 @@ generated_at: 2026-05-11T00:00:00Z
     - CRLF line endings behave identically to LF.
     - Body containing a `---` horizontal rule is **not** treated as the closing fence; only the first `---`-on-its-own-line after the opening fence counts.
     - Empty frontmatter and empty body (`---\n---\n`) returns `Some(("", ""))`.
-  - Suggested files: `crates/speccy-core/src/parse/frontmatter.rs`, `crates/speccy-core/tests/frontmatter.rs`
+  - Suggested files: `speccy-core/src/parse/frontmatter.rs`, `speccy-core/tests/frontmatter.rs`
 
 ## Phase 3: TOML parsers
 
@@ -53,7 +53,7 @@ generated_at: 2026-05-11T00:00:00Z
     - A `[[checks]]` entry with neither `command` nor `prompt` returns an error naming the check ID.
     - A `[[checks]]` entry with both `command` and `prompt` returns an error naming the check ID and the conflict.
     - Missing required fields (e.g. `id`, `proves`) return an error naming the field.
-  - Suggested files: `crates/speccy-core/src/parse/toml.rs`, `crates/speccy-core/tests/toml_parsers.rs`
+  - Suggested files: `speccy-core/src/parse/toml.rs`, `speccy-core/tests/toml_parsers.rs`
 
 ## Phase 4: Markdown parsers
 
@@ -66,7 +66,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Absent `## Changelog` heading yields an empty `changelog` vec.
     - `status` outside `{in-progress, implemented, dropped, superseded}` returns a parse error naming the value.
     - sha256 hash changes when any byte changes; identical content yields identical hash.
-  - Suggested files: `crates/speccy-core/src/parse/spec_md.rs`, `crates/speccy-core/tests/spec_md_parser.rs`
+  - Suggested files: `speccy-core/src/parse/spec_md.rs`, `speccy-core/tests/spec_md_parser.rs`
 
 - [x] **T-006**: Implement `parse::tasks_md` (frontmatter + task state + notes)
   - Covers: REQ-004
@@ -78,7 +78,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `` Suggested files: `a`, `b` `` -> `suggested_files: ["a", "b"]`.
     - Sub-list bullets under a task become `notes` in declared order.
     - Phase headings (`## Phase N: ...`) do not appear in parsed output.
-  - Suggested files: `crates/speccy-core/src/parse/tasks_md.rs`, `crates/speccy-core/tests/tasks_md_parser.rs`
+  - Suggested files: `speccy-core/src/parse/tasks_md.rs`, `speccy-core/tests/tasks_md_parser.rs`
 
 - [x] **T-007**: Implement `parse::report_md` (frontmatter only; body verbatim)
   - Covers: REQ-005
@@ -87,7 +87,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `outcome` outside `{delivered, partial, abandoned}` returns a parse error naming the invalid value.
     - Missing `generated_at` returns a parse error naming the field.
     - Body is returned verbatim (no normalisation, no parsing).
-  - Suggested files: `crates/speccy-core/src/parse/report_md.rs`, `crates/speccy-core/tests/report_md_parser.rs`
+  - Suggested files: `speccy-core/src/parse/report_md.rs`, `speccy-core/tests/report_md_parser.rs`
 
 ## Phase 5: Cross-reference and supersession graph
 
@@ -97,7 +97,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Symmetric: `only_in_spec_md`, `only_in_toml`, `in_both` partition the union of REQ IDs.
     - Deterministic: order in each list matches declared order in the source.
     - Idempotent: calling twice on the same inputs returns equal results.
-  - Suggested files: `crates/speccy-core/src/parse/cross_ref.rs`, `crates/speccy-core/tests/cross_ref.rs`
+  - Suggested files: `speccy-core/src/parse/cross_ref.rs`, `speccy-core/tests/cross_ref.rs`
 
 - [x] **T-009**: Implement `parse::supersession_index` (inverse `supersedes` across a workspace)
   - Covers: REQ-008
@@ -106,7 +106,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `index.dangling_references()` includes `"SPEC-0030"` for the same input.
     - Empty workspace returns an empty index without errors or panics.
     - Calling twice on the same input slice returns equal results.
-  - Suggested files: `crates/speccy-core/src/parse/supersession.rs`, `crates/speccy-core/tests/supersession_index.rs`
+  - Suggested files: `speccy-core/src/parse/supersession.rs`, `speccy-core/tests/supersession_index.rs`
 
 ## Phase 6: API surface and hygiene
 
@@ -116,12 +116,12 @@ generated_at: 2026-05-11T00:00:00Z
     - Each `ParseError` variant is reachable from at least one parser path via a unit test.
     - `ParseError` implements `std::error::Error + Send + Sync + 'static`.
     - Public re-exports are stable: `speccy_core::parse::{speccy_toml, spec_toml, spec_md, tasks_md, report_md, cross_ref}` all resolve.
-  - Suggested files: `crates/speccy-core/src/error.rs`, `crates/speccy-core/src/lib.rs`
+  - Suggested files: `speccy-core/src/error.rs`, `speccy-core/src/lib.rs`
 
 - [x] **T-011**: Lock in CI hygiene gates
   - Covers: REQ-007
   - Tests to write:
-    - No `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, or `unimplemented!` appears in `crates/speccy-core/src/`. Verifiable via `grep` in CI. (Tests under `tests/` may use `.expect("descriptive message")`.)
+    - No `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`, or `unimplemented!` appears in `speccy-core/src/`. Verifiable via `grep` in CI. (Tests under `tests/` may use `.expect("descriptive message")`.)
     - `cargo +nightly fmt --all --check` is clean.
     - `cargo clippy --workspace --all-targets --all-features -- -D warnings` is clean.
-  - Suggested files: `crates/speccy-core/src/lib.rs`, project-root scripts or `xtask` if convenient (CI workflow wiring is deferred to a later spec; this task only ensures the gates pass locally).
+  - Suggested files: `speccy-core/src/lib.rs`, project-root scripts or `xtask` if convenient (CI workflow wiring is deferred to a later spec; this task only ensures the gates pass locally).

@@ -234,10 +234,10 @@ Print a deterministic final summary after every run.
 
 ### Approach
 
-The command lives in `crates/speccy/src/check.rs`. It consumes
+The command lives in `speccy-cli/src/check.rs`. It consumes
 `speccy_core::workspace::scan` (from SPEC-0004) to discover specs.
 Shell selection is compile-time via `cfg!(unix)` / `cfg!(windows)`,
-encapsulated in a small `crates/speccy/src/shell.rs` helper.
+encapsulated in a small `speccy-cli/src/shell.rs` helper.
 
 Execution uses `std::process::Command` with inherited stdio so
 output streams live without explicit pipe forwarding.
@@ -331,8 +331,8 @@ CLI mapping:
 
 ### Data changes
 
-- New `crates/speccy/src/check.rs` (command logic).
-- New `crates/speccy/src/shell.rs` (compile-time shell selection).
+- New `speccy-cli/src/check.rs` (command logic).
+- New `speccy-cli/src/shell.rs` (compile-time shell selection).
 - Reuses `speccy_core::workspace::scan` from SPEC-0004.
 
 ### Migration / rollback
