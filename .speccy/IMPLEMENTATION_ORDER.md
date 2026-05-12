@@ -1,7 +1,7 @@
 - [x] SPEC-0001 artifact-parsers — foundation parsers; every other spec depends on it
 - [x] SPEC-0003 lint-engine — pure library; unblocks 0004 and 0012
 - [x] SPEC-0004 status-command — lands speccy_core::workspace::{find_root, scan, stale_for} + JSON envelope conventions
-- [ ] SPEC-0010 check-command — shell execution; direct prerequisite of 0012
+- [x] SPEC-0010 check-command — shell execution; direct prerequisite of 0012
 - [ ] SPEC-0012 verify-command — CI gate lands here; every subsequent spec ships behind a green speccy verify
 - [ ] SPEC-0005 plan-command — lands speccy_core::prompt::* (template loader, render, agents_md, budget trimmer, ID alloc)
 - [ ] SPEC-0002 init-command — skill-bundle copy; reuses include_dir! introduced by 0005

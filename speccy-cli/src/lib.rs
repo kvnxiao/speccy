@@ -7,6 +7,8 @@
 
 #![deny(unsafe_code)]
 
+pub mod check;
 pub mod git;
+pub mod shell;
 pub mod status;
 pub mod status_output;
