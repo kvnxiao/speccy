@@ -10,12 +10,27 @@ readme = "README.md"
 keywords = ["speccy", "cli", "spec", "feedback", "tooling"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "speccy"
+path = "src/lib.rs"
+
 [[bin]]
 name = "speccy"
 path = "src/main.rs"
 
 [dependencies]
+camino = { workspace = true }
+fs-err = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 speccy-core = { path = "../speccy-core", version = "0.1.0" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+indoc = { workspace = true }
+predicates = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,3 +1,7 @@
+#![allow(
+    clippy::expect_used,
+    reason = "test code may .expect() with descriptive messages"
+)]
 #![expect(
     clippy::panic_in_result_fn,
     reason = "tests use assert!/assert_eq! macros and return Result for ? propagation in setup"
@@ -171,7 +175,7 @@ fn spc_006_does_not_fire_when_incoming_edge_exists() -> TestResult {
     let parsed_old = parse_fixture(&fx_old);
     let parsed_new = parse_fixture(&fx_new);
 
-    let diags = run_lint(vec![parsed_old, parsed_new]);
+    let diags = run_lint(&[parsed_old, parsed_new]);
     assert_no_code(&diags, "SPC-006");
     Ok(())
 }

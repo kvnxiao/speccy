@@ -1,3 +1,7 @@
+#![allow(
+    clippy::expect_used,
+    reason = "test code may .expect() with descriptive messages"
+)]
 #![expect(
     clippy::panic_in_result_fn,
     reason = "tests use assert!/assert_eq! macros and return Result for ? propagation in setup"

@@ -2,7 +2,7 @@
 id: SPEC-0004
 slug: status-command
 title: speccy status -- workspace overview, stale detection, lint surfacing
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 
@@ -441,6 +441,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-12 | agent/claude | Implemented: `speccy_core::workspace` (scan, find_root, stale_for, TaskCounts, count_open_questions), `lint::Workspace` refactored to borrow specs, `speccy status [--json]` with text + JSON renderers + dangling-supersedes synthesis (WS-001). |
 
 ## Notes
 

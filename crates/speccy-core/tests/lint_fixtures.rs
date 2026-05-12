@@ -1,3 +1,7 @@
+#![allow(
+    clippy::expect_used,
+    reason = "test code may .expect() with descriptive messages"
+)]
 #![expect(
     clippy::panic_in_result_fn,
     reason = "tests use assert!/assert_eq! macros and return Result for ? propagation in setup"
@@ -75,7 +79,7 @@ fn check_one_fixture(dir: &Path) -> TestResult {
         dir_path: utf8_dir.clone(),
     };
     let parsed = parse_fixture(&fx);
-    let diags = run_lint(vec![parsed]);
+    let diags = run_lint(&[parsed]);
     let emitted: HashSet<&str> = diags.iter().map(|d| d.code).collect();
 
     for required in &expects {

@@ -114,10 +114,13 @@ impl Diagnostic {
 ///
 /// The workspace bundles every parsed spec under `.speccy/specs/` plus
 /// a borrowed [`SupersessionIndex`] computed across all SPEC.md files.
+/// Both fields are borrowed so the owning workspace
+/// ([`crate::workspace::Workspace`]) can be reused for rendering after the lint
+/// pass.
 #[derive(Debug)]
 pub struct Workspace<'a> {
     /// Every spec directory discovered under `.speccy/specs/`, parsed.
-    pub specs: Vec<ParsedSpec>,
+    pub specs: &'a [ParsedSpec],
     /// Inverse `supersedes` relation. Computed once per workspace scan
     /// (typically by SPEC-0004 `status`).
     pub supersession: &'a SupersessionIndex,

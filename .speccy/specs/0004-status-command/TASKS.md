@@ -11,7 +11,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 1: Workspace scanner (speccy-core)
 
-- [ ] **T-001**: Implement `workspace::find_root`
+- [x] **T-001**: Implement `workspace::find_root`
   - Covers: REQ-001
   - Tests to write:
     - From cwd, walk up parent directories until `.speccy/` is found; return that path.
@@ -20,7 +20,7 @@ generated_at: 2026-05-11T00:00:00Z
     - I/O errors during traversal return `WorkspaceError::Io(_)`.
   - Suggested files: `crates/speccy-core/src/workspace.rs`, `crates/speccy-core/tests/workspace_find_root.rs`
 
-- [ ] **T-002**: Implement `workspace::scan`
+- [x] **T-002**: Implement `workspace::scan`
   - Covers: REQ-001
   - Tests to write:
     - Discovers every `.speccy/specs/NNNN-slug/` directory matching the regex `^\d{4}-[a-z0-9-]+$`.
@@ -33,7 +33,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Staleness detector
 
-- [ ] **T-003**: Implement `workspace::stale_for`
+- [x] **T-003**: Implement `workspace::stale_for`
   - Covers: REQ-002
   - Tests to write:
     - Hash match + TASKS.md mtime >= SPEC.md mtime -> `Staleness { stale: false, reasons: [] }`.
@@ -46,7 +46,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Task counts and open questions
 
-- [ ] **T-004**: Implement task state aggregation
+- [x] **T-004**: Implement task state aggregation
   - Covers: REQ-003
   - Tests to write:
     - Counts match the glyph distribution (`[ ]` / `[~]` / `[?]` / `[x]`).
@@ -55,7 +55,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Tasks with malformed IDs (per SPEC-0001 REQ-004 recoverable warnings) are skipped from counts.
   - Suggested files: `crates/speccy-core/src/workspace.rs` (extend or split), `crates/speccy-core/tests/task_state_aggregation.rs`
 
-- [ ] **T-005**: Implement open-questions counter
+- [x] **T-005**: Implement open-questions counter
   - Covers: REQ-006 (text view), REQ-007 (JSON contract)
   - Tests to write:
     - Count of unchecked `- [ ]` items in `## Open questions` matches.
@@ -66,7 +66,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Supersession + lint integration
 
-- [ ] **T-006**: Wire supersession into the workspace result
+- [x] **T-006**: Wire supersession into the workspace result
   - Covers: REQ-004
   - Tests to write:
     - Build `&[&SpecMd]` from successfully-parsed specs; call `supersession_index`; expose `superseded_by` per spec.
@@ -74,7 +74,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `dangling_references()` is exposed on `Workspace` so lint can consume it.
   - Suggested files: `crates/speccy-core/src/workspace.rs` (extend), `crates/speccy-core/tests/workspace_supersession.rs`
 
-- [ ] **T-007**: Build `lint::Workspace` and call `lint::run`; partition by spec_id
+- [x] **T-007**: Build `lint::Workspace` and call `lint::run`; partition by spec_id
   - Covers: REQ-005
   - Tests to write:
     - Diagnostics with `spec_id = Some("SPEC-NNNN")` route to that spec's lint block.
@@ -86,7 +86,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: Text renderer
 
-- [ ] **T-008**: Implement default text view with the in-progress + broken filter
+- [x] **T-008**: Implement default text view with the in-progress + broken filter
   - Covers: REQ-006
   - Tests to write:
     - `status: in-progress` specs are shown unconditionally.
@@ -98,7 +98,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: JSON output
 
-- [ ] **T-009**: Implement `--json` envelope and per-spec output struct
+- [x] **T-009**: Implement `--json` envelope and per-spec output struct
   - Covers: REQ-007
   - Tests to write:
     - Output starts with `"schema_version": 1`.
@@ -110,7 +110,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `stale_reasons` are ordered `HashDrift, MtimeDrift, BootstrapPending` (declared order).
   - Suggested files: `crates/speccy/src/status_output.rs` (extend), `crates/speccy/tests/status_json.rs`
 
-- [ ] **T-010**: Wire `repo_sha` via shell-out to `git rev-parse HEAD`
+- [x] **T-010**: Wire `repo_sha` via shell-out to `git rev-parse HEAD`
   - Covers: REQ-007
   - Tests to write:
     - Inside a git repo with HEAD: `repo_sha` is the 40-character SHA.
@@ -121,7 +121,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 7: CLI wiring
 
-- [ ] **T-011**: Wire `speccy status [--json]` into the binary
+- [x] **T-011**: Wire `speccy status [--json]` into the binary
   - Covers: REQ-001..REQ-007
   - Tests to write:
     - `speccy status` runs from any cwd inside a speccy workspace.

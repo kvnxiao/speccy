@@ -106,7 +106,7 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
 }
 
 /// Run lint against a set of parsed specs.
-pub fn run_lint(specs: Vec<ParsedSpec>) -> Vec<Diagnostic> {
+pub fn run_lint(specs: &[ParsedSpec]) -> Vec<Diagnostic> {
     let spec_md_refs: Vec<&_> = specs
         .iter()
         .filter_map(|s| s.spec_md.as_ref().ok())
@@ -122,7 +122,7 @@ pub fn run_lint(specs: Vec<ParsedSpec>) -> Vec<Diagnostic> {
 /// Convenience: parse + lint a single fixture.
 pub fn lint_fixture(fx: &Fixture) -> Vec<Diagnostic> {
     let parsed = parse_fixture(fx);
-    run_lint(vec![parsed])
+    run_lint(&[parsed])
 }
 
 /// Minimal valid SPEC.md for tests that need a backdrop. Replace

@@ -29,7 +29,7 @@ pub use types::Workspace;
 pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    for spec in &workspace.specs {
+    for spec in workspace.specs {
         rules::spc::lint(spec, workspace, &mut diagnostics);
         rules::req::lint(spec, &mut diagnostics);
         rules::val::lint(spec, &mut diagnostics);
@@ -59,7 +59,7 @@ mod tests {
     fn empty_workspace_yields_no_diagnostics() {
         let index: SupersessionIndex = supersession_index(&[]);
         let workspace = Workspace {
-            specs: Vec::new(),
+            specs: &[],
             supersession: &index,
         };
         let diags = run(&workspace);
@@ -70,7 +70,7 @@ mod tests {
     fn run_is_deterministic_on_empty_input() {
         let index: SupersessionIndex = supersession_index(&[]);
         let workspace = Workspace {
-            specs: Vec::new(),
+            specs: &[],
             supersession: &index,
         };
         let a = run(&workspace);
