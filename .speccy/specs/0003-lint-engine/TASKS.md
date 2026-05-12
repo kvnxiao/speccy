@@ -11,7 +11,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 1: Core types and orchestrator
 
-- [ ] **T-001**: Define `Diagnostic`, `Level`, `Workspace`, `ParsedSpec` and the `lint::run` skeleton
+- [x] **T-001**: Define `Diagnostic`, `Level`, `Workspace`, `ParsedSpec` and the `lint::run` skeleton
   - Covers: REQ-006
   - Tests to write:
     - `Level` has exactly three variants: `Error`, `Warn`, `Info`.
@@ -21,7 +21,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Output ordering is `(spec_id, code, file, line)` ascending, with `None` sorting before `Some`.
   - Suggested files: `crates/speccy-core/src/lint/mod.rs`, `crates/speccy-core/src/lint/types.rs`, `crates/speccy-core/tests/lint_run.rs`
 
-- [ ] **T-002**: Set up `REGISTRY` and the stability snapshot test
+- [x] **T-002**: Set up `REGISTRY` and the stability snapshot test
   - Covers: REQ-007
   - Tests to write:
     - `REGISTRY: &[(&'static str, Level)]` enumerates every code the engine emits with its severity.
@@ -33,7 +33,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: SPC family
 
-- [ ] **T-003**: Implement SPC-001..SPC-005 (structural / frontmatter codes)
+- [x] **T-003**: Implement SPC-001..SPC-005 (structural / frontmatter codes)
   - Covers: REQ-001
   - Tests to write:
     - SPC-001 fires when the spec.toml parser reports a missing required field; the diagnostic file is the offending spec.toml path.
@@ -43,7 +43,7 @@ generated_at: 2026-05-11T00:00:00Z
     - SPC-005 fires when `status` value is outside `{in-progress, implemented, dropped, superseded}`; the diagnostic message names the offending value.
   - Suggested files: `crates/speccy-core/src/lint/rules/spc.rs`, `crates/speccy-core/tests/lint_spc.rs`, `crates/speccy-core/tests/fixtures/lint/spc/`
 
-- [ ] **T-004**: Implement SPC-006 (supersession graph consistency)
+- [x] **T-004**: Implement SPC-006 (supersession graph consistency)
   - Covers: REQ-001
   - Tests to write:
     - `status: superseded` + no incoming `supersedes` edge in the workspace -> SPC-006 fires.
@@ -51,7 +51,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `status: implemented` + incoming edge present -> SPC-006 does NOT fire (an incoming edge alone never flips status).
   - Suggested files: `crates/speccy-core/src/lint/rules/spc.rs` (extend), `crates/speccy-core/tests/lint_spc.rs` (extend)
 
-- [ ] **T-005**: Implement SPC-007 (informational status / task mismatch)
+- [x] **T-005**: Implement SPC-007 (informational status / task mismatch)
   - Covers: REQ-001
   - Tests to write:
     - `status: implemented` + all tasks `[x]` -> no SPC-007.
@@ -61,7 +61,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: REQ family
 
-- [ ] **T-006**: Implement REQ-001 and REQ-002 (coverage graph)
+- [x] **T-006**: Implement REQ-001 and REQ-002 (coverage graph)
   - Covers: REQ-002
   - Tests to write:
     - `[[requirements]] id = "REQ-001" checks = []` -> REQ-001 lint code fires naming the requirement.
@@ -71,7 +71,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: VAL family
 
-- [ ] **T-007**: Implement VAL-001, VAL-002, VAL-003 (check definition completeness)
+- [x] **T-007**: Implement VAL-001, VAL-002, VAL-003 (check definition completeness)
   - Covers: REQ-003
   - Tests to write:
     - VAL-001 fires for a check missing `proves`.
@@ -80,7 +80,7 @@ generated_at: 2026-05-11T00:00:00Z
     - A free-form `kind` value (e.g. `kind = "property"`) without `command` does NOT trigger VAL-002; the parser only flags missing required fields for the known executable kinds.
   - Suggested files: `crates/speccy-core/src/lint/rules/val.rs`, `crates/speccy-core/tests/lint_val.rs`
 
-- [ ] **T-008**: Implement VAL-004 (no-op command detection)
+- [x] **T-008**: Implement VAL-004 (no-op command detection)
   - Covers: REQ-003
   - Tests to write:
     - Each pattern in the closed set fires: `true`, `:`, `exit 0`, `/bin/true`, `cmd /c exit 0`, `exit /b 0`.
@@ -92,7 +92,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: TSK family
 
-- [ ] **T-009**: Implement TSK-001, TSK-002, TSK-004 (task structure)
+- [x] **T-009**: Implement TSK-001, TSK-002, TSK-004 (task structure)
   - Covers: REQ-004
   - Tests to write:
     - TSK-001 fires when a task `Covers: REQ-099` and REQ-099 is in neither SPEC.md nor spec.toml; the message names both the task ID and the offending REQ.
@@ -100,7 +100,7 @@ generated_at: 2026-05-11T00:00:00Z
     - TSK-004 fires when TASKS.md frontmatter is missing `spec`, `spec_hash_at_generation`, or `generated_at`; one diagnostic per missing field.
   - Suggested files: `crates/speccy-core/src/lint/rules/tsk.rs`, `crates/speccy-core/tests/lint_tsk.rs`
 
-- [ ] **T-010**: Implement TSK-003 (staleness: hash and mtime drift, plus bootstrap-pending variant)
+- [x] **T-010**: Implement TSK-003 (staleness: hash and mtime drift, plus bootstrap-pending variant)
   - Covers: REQ-004
   - Tests to write:
     - Hash match + TASKS.md mtime >= SPEC.md mtime -> no TSK-003.
@@ -111,7 +111,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: QST family
 
-- [ ] **T-011**: Implement QST-001 (open question soft signal)
+- [x] **T-011**: Implement QST-001 (open question soft signal)
   - Covers: REQ-005
   - Tests to write:
     - Three unchecked `- [ ] question?` lines in `## Open questions` -> three QST-001 diagnostics at `Level::Info`.
@@ -123,7 +123,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 7: Fixture corpus and integration
 
-- [ ] **T-012**: Build the fixture corpus and a loader helper
+- [x] **T-012**: Build the fixture corpus and a loader helper
   - Covers: REQ-001..REQ-005
   - Tests to write:
     - A `crates/speccy-core/tests/fixtures/lint/<code>/` directory exists per code (or per family), each containing SPEC.md + spec.toml + optional TASKS.md.

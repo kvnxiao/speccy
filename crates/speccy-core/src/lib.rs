@@ -2,6 +2,7 @@
 #![deny(unsafe_code)]
 
 pub mod error;
+pub mod lint;
 pub mod parse;
 
 pub use error::ParseError;
