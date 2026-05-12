@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 camino = { workspace = true }
 comrak = { workspace = true }
 fs-err = { workspace = true }
+include_dir = { workspace = true }
 jiff = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }

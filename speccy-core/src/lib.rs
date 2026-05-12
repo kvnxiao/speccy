@@ -5,6 +5,7 @@ pub mod error;
 pub mod exec;
 pub mod lint;
 pub mod parse;
+pub mod prompt;
 pub mod workspace;
 
 pub use error::ParseError;

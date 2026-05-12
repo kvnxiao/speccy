@@ -27,19 +27,19 @@ checks = ["CHK-008"]
 [[checks]]
 id = "CHK-001"
 kind = "test"
-command = "cargo test -p speccy --test plan -- greenfield_renders"
+command = "cargo test -p speccy-cli --test plan -- greenfield_renders"
 proves = "speccy plan (no arg) renders plan-greenfield.md with vision, agents, and next_spec_id placeholders substituted; output goes to stdout."
 
 [[checks]]
 id = "CHK-002"
 kind = "test"
-command = "cargo test -p speccy --test plan -- greenfield_missing_vision"
+command = "cargo test -p speccy-cli --test plan -- greenfield_missing_vision"
 proves = "speccy plan with missing .speccy/VISION.md exits 1 with a stderr message naming the expected path."
 
 [[checks]]
 id = "CHK-003"
 kind = "test"
-command = "cargo test -p speccy --test plan -- amend_form"
+command = "cargo test -p speccy-cli --test plan -- amend_form"
 proves = "speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; invalid ID format exits 1 with format error; missing spec exits 1 naming the ID."
 
 [[checks]]

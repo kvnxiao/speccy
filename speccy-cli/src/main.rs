@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <status|check|verify> [args]";
+const USAGE: &str = "speccy <plan|status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -25,6 +25,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
     };
 
     match command.as_str() {
+        "plan" => run_plan(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
         "verify" => run_verify(iter.as_slice()),
@@ -36,6 +37,57 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
             eprintln!("speccy: unknown command `{other}`");
             eprintln!("usage: {USAGE}");
             Err(2)
+        }
+    }
+}
+
+fn run_plan(args: &[String]) -> Result<(), u8> {
+    let mut spec_id: Option<String> = None;
+    for arg in args {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy plan [SPEC-ID]");
+                return Ok(());
+            }
+            other if other.starts_with("--") => {
+                eprintln!("speccy plan: unknown flag `{other}`");
+                eprintln!("usage: speccy plan [SPEC-ID]");
+                return Err(2);
+            }
+            positional if spec_id.is_none() => spec_id = Some(positional.to_owned()),
+            extra => {
+                eprintln!("speccy plan: unexpected extra argument `{extra}`");
+                eprintln!("usage: speccy plan [SPEC-ID]");
+                return Err(2);
+            }
+        }
+    }
+
+    let cwd = match speccy_cli::plan::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy plan: {e}");
+            return Err(1);
+        }
+    };
+    invoke_plan(&cwd, spec_id)
+}
+
+fn invoke_plan(cwd: &Utf8PathBuf, spec_id: Option<String>) -> Result<(), u8> {
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::plan::run(speccy_cli::plan::PlanArgs { spec_id }, cwd, &mut stdout);
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(e @ speccy_cli::plan::PlanError::InvalidSpecIdFormat { .. }) => {
+            eprintln!("speccy plan: {e}");
+            Err(2)
+        }
+        Err(e) => {
+            eprintln!("speccy plan: {e}");
+            Err(1)
         }
     }
 }

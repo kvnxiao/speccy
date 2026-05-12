@@ -9,6 +9,7 @@
 
 pub mod check;
 pub mod git;
+pub mod plan;
 pub mod status;
 pub mod status_output;
 pub mod verify;
