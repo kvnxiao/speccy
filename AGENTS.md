@@ -6,57 +6,59 @@
 
 ## Mission
 
-Speccy is a lightweight, deterministic CLI that lets humans and AI agents
-collaborate on software with bounded drift. It exists because LLM
-non-determinism accumulates: small misreadings of intent compound over
-features until what shipped no longer matches what was asked for.
+Speccy is a lightweight CLI that lets humans and AI agents collaborate
+on software with bounded drift. LLM non-determinism accumulates: small
+misreadings of intent compound until what shipped no longer matches
+what was asked for.
 
-Speccy does not try to make LLMs deterministic. It makes the **contract**
-between user intent and shipped behavior machine-checkable, so drift
-becomes loud the moment it happens.
+Speccy does not try to make LLMs deterministic. It makes the contract
+between intent and shipped behavior **visible**, so drift is loud the
+moment it happens. Speccy is a feedback engine, not an enforcement
+system.
 
-Long-term, speccy is the deterministic substrate underneath any
-multi-agent harness that wants to take a greenfield app from zero to v1.0
-without a human re-explaining the intent at every step.
+Long-term, speccy is the substrate underneath multi-agent harnesses
+that move projects toward completion without humans re-explaining
+intent at every step.
 
 ## Core principles
 
-The durable beliefs. Schema and CLI will evolve; these shouldn't.
+Durable beliefs. Schema and CLI will evolve; these shouldn't.
 
-1. **Behavior contracts, not lifecycle ceremony.** Speccy enforces "did
-   you prove the requested behavior?", not "did you follow the workflow?"
-   The load-bearing artifact is the requirement → scenario → validation
-   chain. Status states are bookkeeping.
+1. **Feedback, not enforcement.** Speccy makes drift visible; it does
+   not block agents from making mistakes. `speccy verify` fails CI when
+   proof shape is broken. Everything else is informational. No
+   `--strict` mode, no policy file, no configurable enforcement.
 
-2. **Deterministic core, intelligent edges.** The CLI is thin, mechanical,
-   predictable. The intelligence — what to build, how to structure it,
-   how to test it — lives in skills, prompts, and Spec narratives. Don't
-   bake agent behavior into Rust code that gets worse as models improve.
+2. **Deterministic core, intelligent edges.** The CLI is mechanical:
+   renders prompts, queries state, runs checks. Workflow loops, persona
+   definitions, and "what to do next" intelligence live in the skill
+   layer. The Rust CLI does not call LLMs.
 
-3. **Proof strength matters.** `command = "true"` is not proof. A test
-   that asserts `1 == 1` is not proof. Validations carry an assurance
-   tier; raw shell is a low-assurance escape hatch, never the sole
-   completion proof for a phase.
+3. **Proof shape, not proof scores.** Every Requirement maps to ≥1
+   Check; every Check declares what it proves. The CLI flags one
+   structural anti-pattern (no-op commands as sole proof). Everything
+   else about check quality goes to review.
 
-4. **Make drift loud, fast.** Every requirement must be covered by ≥1
-   non-trivial validation. Every covering validation must have fresh
-   evidence on HEAD's sha before a phase can close. Lint rules are
-   mechanical and predictable — never LLM-graded.
+4. **Review owns semantic judgment.** Multi-persona adversarial review
+   (business, tests, security, style by default) is where drift gets
+   caught. Personas live as markdown skills; the CLI just renders
+   their prompts. Speccy never tries to grade tests algorithmically.
 
-5. **Stay small.** Speccy is a substrate for multi-agent orchestration,
-   not the orchestrator. No in-process agent runner. No GitHub/Linear
-   sync in core. No TUI. If a feature gets worse as models get better,
-   it doesn't belong here.
+5. **Stay small.** Five nouns (Vision, Spec, Requirement, Task, Check),
+   ten commands, no mode toggles, no orchestration runtime. Speccy
+   works identically in any project state — there is no
+   greenfield/brownfield distinction.
 
-6. **Surface unknowns; never invent.** If a Spec is ambiguous, stop and
-   surface it. Don't silently pick between interpretations. If you can't
-   validate something, say so — don't fake a validation.
+6. **Surface unknowns; never invent.** Ambiguous spec → stop and
+   surface it. Can't validate something → say so. Don't fabricate
+   check commands. Don't add agent-behavior knobs to the CLI.
 
 ## Where the design lives
 
-`DESIGN.md` at repo root is the source of truth for the schema, CLI
-surface, lint codes, and implementation sequence. Read it before touching
-any code. If a design decision isn't in `DESIGN.md`, ask before deciding.
+`.speccy/DESIGN.md` is the only source of truth for the schema, CLI
+surface, lint codes, and implementation sequence. Read it before
+touching any code. If a design decision isn't documented, ask before
+deciding.
 
 ## Authoritative references
 

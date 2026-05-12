@@ -1,0 +1,51 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-002"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-003"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-005"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy-core --test task_lookup -- ref_parsing"
+proves = "Task ref parser accepts unqualified T-NNN and qualified SPEC-NNNN/T-NNN; invalid formats return LookupError::InvalidFormat with the offending arg verbatim."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy-core --test task_lookup -- workspace_lookup"
+proves = "find returns TaskLocation for an unambiguous unqualified match; qualified form scopes to one spec and bypasses ambiguity; missing task returns NotFound; failed-parse specs are skipped silently."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy-core --test task_lookup -- ambiguity"
+proves = "Unqualified T-NNN matching multiple specs returns Ambiguous with candidate_specs in ascending spec-ID order; the CLI surfaces the candidates as copy-pasteable speccy implement commands."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy --test implement -- prompt_renders"
+proves = "speccy implement T-NNN loads implementer.md, substitutes spec_id, spec_md, task_id, task_entry (full sub-list), suggested_files, agents; budget trimming applied; output to stdout."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy --test implement -- error_paths_and_integration"
+proves = "End-to-end via assert_cmd: valid task ref succeeds (exit 0); InvalidFormat / NotFound / Ambiguous each exit 1 with informative stderr; outside-workspace exits 1; template-not-found exits 2."

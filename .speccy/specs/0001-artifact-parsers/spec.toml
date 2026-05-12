@@ -1,0 +1,105 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001", "CHK-002", "CHK-007"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-003"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-004", "CHK-005"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-006"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-008"]
+
+[[requirements]]
+id = "REQ-006"
+checks = ["CHK-009"]
+
+[[requirements]]
+id = "REQ-007"
+checks = ["CHK-010", "CHK-011"]
+
+[[requirements]]
+id = "REQ-008"
+checks = ["CHK-012"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy-core --test toml_parsers -- happy_path"
+proves = "Valid speccy.toml and spec.toml fixtures round-trip into typed structs in declared order."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy-core --test toml_parsers -- check_command_xor_prompt"
+proves = "spec.toml [[checks]] entries require exactly one of command or prompt; neither or both is an error naming the check ID."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy-core --test frontmatter"
+proves = "Frontmatter splitter handles valid, missing, malformed, body-with-hr, and CRLF inputs without panicking."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy-core --test spec_md_parser -- headings_skip_fenced_code"
+proves = "SPEC.md parser extracts REQ headings and never emits one that lived inside a fenced code block."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy-core --test spec_md_parser -- changelog_and_hash"
+proves = "SPEC.md parser extracts Changelog rows and computes a stable sha256 that changes on any byte edit."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy-core --test tasks_md_parser"
+proves = "TASKS.md parser extracts task state, IDs, covers, notes, and suggested files; malformed task IDs are surfaced as recoverable warnings."
+
+[[checks]]
+id = "CHK-007"
+kind = "test"
+command = "cargo test -p speccy-core --test toml_parsers -- schema_version_guard"
+proves = "Unknown schema_version values in speccy.toml or spec.toml are rejected with a clear error naming the file and value."
+
+[[checks]]
+id = "CHK-008"
+kind = "test"
+command = "cargo test -p speccy-core --test report_md_parser"
+proves = "REPORT.md frontmatter rejects invalid outcome values and missing required fields; body returns verbatim."
+
+[[checks]]
+id = "CHK-009"
+kind = "test"
+command = "cargo test -p speccy-core --test cross_ref"
+proves = "Cross-reference between parsed SPEC.md and spec.toml is symmetric, deterministic, and idempotent."
+
+[[checks]]
+id = "CHK-010"
+kind = "command"
+command = "cargo clippy -p speccy-core --all-targets --all-features -- -D warnings"
+proves = "speccy-core compiles clean under the project's clippy gate with no warnings."
+
+[[checks]]
+id = "CHK-011"
+kind = "command"
+command = "cargo deny check"
+proves = "Workspace dependency surface is clean (advisories, bans, licenses, sources) per project policy."
+
+[[checks]]
+id = "CHK-012"
+kind = "test"
+command = "cargo test -p speccy-core --test supersession_index"
+proves = "supersession_index inverts supersedes declarations across a workspace and surfaces dangling references for lint to consume."

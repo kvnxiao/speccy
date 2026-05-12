@@ -1,0 +1,73 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001", "CHK-002"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-003"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-005"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-006", "CHK-007"]
+
+[[requirements]]
+id = "REQ-006"
+checks = ["CHK-008"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy --test plan -- greenfield_renders"
+proves = "speccy plan (no arg) renders plan-greenfield.md with vision, agents, and next_spec_id placeholders substituted; output goes to stdout."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy --test plan -- greenfield_missing_vision"
+proves = "speccy plan with missing .speccy/VISION.md exits 1 with a stderr message naming the expected path."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy --test plan -- amend_form"
+proves = "speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; invalid ID format exits 1 with format error; missing spec exits 1 naming the ID."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy-core --test id_alloc"
+proves = "allocate_next_spec_id returns max(existing) + 1 zero-padded to 4 digits; empty specs/ yields 0001; gaps left by dropped specs are not recycled; non-matching directories are ignored."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy-core --test prompt_agents_md"
+proves = "load_agents_md returns file content when present; returns marker + stderr warning when missing; returns error-marker + stderr warning on I/O error."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy-core --test prompt_render -- happy_path"
+proves = "render substitutes every {{name}} placeholder; single-pass means substituted text is not re-scanned for further placeholders."
+
+[[checks]]
+id = "CHK-007"
+kind = "test"
+command = "cargo test -p speccy-core --test prompt_render -- unknown_placeholders"
+proves = "render leaves unrecognised {{placeholders}} in place and prints a stderr warning naming each unique unmatched placeholder."
+
+[[checks]]
+id = "CHK-008"
+kind = "test"
+command = "cargo test -p speccy-core --test prompt_budget"
+proves = "trim_to_budget drops sections in DESIGN.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops."

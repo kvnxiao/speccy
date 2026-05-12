@@ -1,0 +1,63 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-002", "CHK-003"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-005"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-006", "CHK-007"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy --test verify -- lint_integration"
+proves = "speccy verify runs lint::run; partitions diagnostics by Level into errors / warnings / info; lint runs every time verify is invoked."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy --test verify -- check_execution_streams_to_stderr"
+proves = "Executable checks run via the captured-execution API; child output streams live to stderr (not stdout); structured CheckResult per check captures spec_id, check_id, kind, outcome, exit_code, duration_ms."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy --test verify -- run_all_not_fail_fast"
+proves = "All executable checks run regardless of earlier failures; spec-scoped CHK-IDs duplicated across specs all execute; manual checks emit prompts and don't affect exit code."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy --test verify -- binary_exit_code"
+proves = "Exit code is 0 iff lint.errors is empty AND every executable check passed; warnings and info never fail; exit code is deterministic given identical workspace state."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy --test verify -- text_summary_output"
+proves = "Text mode prints Lint / Checks / verify summary lines to stdout as the LAST three lines; stderr received the live streamed output and per-check headers/footers."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy --test verify -- json_contract"
+proves = "speccy verify --json emits schema_version=1, repo_sha, structured lint and checks blocks, summary, and passed bool; pretty-printed; byte-identical across runs with same workspace state and check outcomes."
+
+[[checks]]
+id = "CHK-007"
+kind = "test"
+command = "cargo test -p speccy --test verify -- json_passed_field_mirrors_exit"
+proves = "JSON 'passed' field is true iff exit code is 0 across lint-only failures, check-only failures, both, and clean states."

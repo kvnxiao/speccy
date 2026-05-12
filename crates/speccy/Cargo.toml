@@ -1,0 +1,21 @@
+[package]
+name = "speccy"
+description = "Speccy CLI: deterministic feedback engine for spec-driven development."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+readme = "README.md"
+keywords = ["speccy", "cli", "spec", "feedback", "tooling"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "speccy"
+path = "src/main.rs"
+
+[dependencies]
+speccy-core = { path = "../speccy-core", version = "0.1.0" }
+
+[lints]
+workspace = true

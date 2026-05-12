@@ -1,0 +1,1600 @@
+00:07 [music]
+00:15 
+
+00:15 >> Hi everyone. My name is Luke and my goal
+00:18 
+
+00:18 is that 20 minutes from now you'll be
+00:20 
+
+00:20 able to assemble agent teams that can
+00:22 
+
+00:22 complete tasks orders of magnitude
+00:24 
+
+00:24 harder than what you can complete with a
+00:26 
+
+00:26 single agent today.
+00:28 
+
+00:28 A little bit about me. So
+00:30 
+
+00:30 I come from a background in dev tools.
+00:32 
+
+00:32 About 2 and 1/2 years ago I started a
+00:35 
+
+00:35 project at Block which is where I was
+00:36 
+
+00:36 working at the time. And that project
+00:38 
+
+00:38 evolved into Goose.
+00:40 
+
+00:40 Goose is now one of the leading coding
+00:43 
+
+00:43 agents is open source
+00:46 
+
+00:46 and it's recently was was donated to the
+00:48 
+
+00:48 AI
+00:49 
+
+00:49 agentic AI Foundation. So it's been
+00:52 
+
+00:52 really cool to see.
+00:53 
+
+00:53 Now nowadays I work at Factory where I
+00:56 
+
+00:56 lead our core agent harness and
+00:57 
+
+00:57 Factory's mission is to
+00:60 
+
+00:60 bring autonomy to the entire software
+01:01 
+
+01:01 development life cycle.
+01:04 
+
+01:04 So I want to start off with a claim.
+01:06 
+
+01:06 The bottleneck in software engineering
+01:08 
+
+01:08 nowadays is not intelligence. It's now
+01:11 
+
+01:11 limited by human attention.
+01:13 
+
+01:13 Even the best engineers can only
+01:14 
+
+01:14 complete a couple of tasks at a time.
+01:17 
+
+01:17 They may have a backlog of 50 features
+01:20 
+
+01:20 but they can only drive a few forward
+01:21 
+
+01:21 per day because every task requires
+01:23 
+
+01:23 their attention. Every commit needs
+01:25 
+
+01:25 their review.
+01:27 
+
+01:27 Today's models are smart enough to
+01:28 
+
+01:28 figure out all 50 of these tasks but
+01:31 
+
+01:31 there's not enough uh just bandwidth to
+01:33 
+
+01:33 supervise their implementation.
+01:36 
+
+01:36 So we kept asking ourselves what if a
+01:39 
+
+01:39 human decides what to build and then a
+01:41 
+
+01:41 system figures out how to do so. Right?
+01:43 
+
+01:43 An agent could just work for hours for
+01:45 
+
+01:45 days and you come back to finish work.
+01:48 
+
+01:48 So that's what I'm here to talk about.
+01:51 
+
+01:51 When you start researching multi-agent
+01:53 
+
+01:53 frameworks and systems you quickly
+01:54 
+
+01:54 realize that the field's a bit of a
+01:56 
+
+01:56 mess. Everyone has their own framework,
+01:58 
+
+01:58 their own terminology, their own
+02:01 
+
+02:01 opinions of what works and doesn't work.
+02:03 
+
+02:03 And so I want to propose a simple
+02:04 
+
+02:04 taxonomy. There's five frontier
+02:06 
+
+02:06 multi-agent frameworks.
+02:08 
+
+02:08 One is delegation. Right? This is where
+02:10 
+
+02:10 one agent spawns another agent and the
+02:12 
+
+02:12 parent agent may say go figure out the
+02:14 
+
+02:14 database schema and then gets a response
+02:16 
+
+02:16 back.
+02:18 
+
+02:18 This is the simplest form of multi-agent
+02:19 
+
+02:19 communication as what most people
+02:22 
+
+02:22 implement first. You have you know sub
+02:25 
+
+02:25 agents and coding tools are the most
+02:26 
+
+02:26 common example.
+02:29 
+
+02:29 The other one is creator verifier.
+02:31 
+
+02:31 Right? Where one agent builds something
+02:32 
+
+02:32 and then you have another agent that
+02:34 
+
+02:34 checks that work.
+02:36 
+
+02:36 And the key here is like a separation of
+02:37 
+
+02:37 concerns. The parent the the agent that
+02:40 
+
+02:40 implemented the the code is has some
+02:42 
+
+02:42 cost bias. Right? Wants that code to
+02:44 
+
+02:44 work.
+02:45 
+
+02:45 A fresh agent with fresh context is way
+02:47 
+
+02:47 more likely to find issues and this is
+02:48 
+
+02:48 why we do code review as humans as well.
+02:52 
+
+02:52 Another one is direct communication.
+02:54 
+
+02:54 This is when agents communicate without
+02:56 
+
+02:56 a central coordinator. Right? It's the
+02:58 
+
+02:58 kind of like DMing each other.
+03:00 
+
+03:00 It's hard to get right though because
+03:02 
+
+03:02 state fragments across conversations
+03:05 
+
+03:05 without that coordinator and there's no
+03:07 
+
+03:07 single source of truth.
+03:09 
+
+03:09 The next one is negotiation. Right?
+03:12 
+
+03:12 Negotiation is when agents communicate
+03:15 
+
+03:15 but over a shared resource. So that may
+03:17 
+
+03:17 be you know they want to use the same
+03:19 
+
+03:19 API. They want to modify the same
+03:21 
+
+03:21 portion of the code base.
+03:23 
+
+03:23 But negotiation doesn't need to be
+03:25 
+
+03:25 adversarial. In fact the best use case
+03:27 
+
+03:27 is when there is
+03:29 
+
+03:29 net positive sum trading. Right? And
+03:31 
+
+03:31 that's
+03:32 
+
+03:32 when agents have like a potential
+03:34 
+
+03:34 win-win situation while interacting. And
+03:37 
+
+03:37 then the last one is broadcast and that
+03:39 
+
+03:39 is when one agent sends information to
+03:41 
+
+03:41 many.
+03:42 
+
+03:42 Think of it like you know status
+03:44 
+
+03:44 updates, new context that applies to
+03:46 
+
+03:46 everyone, you shared constraints.
+03:49 
+
+03:49 It's a bit less flashy than the other
+03:52 
+
+03:52 ones but it's critical for maintaining
+03:53 
+
+03:53 coherence over long-running tasks.
+03:57 
+
+03:57 And so when you have all of these
+03:58 
+
+03:58 different building blocks how do you
+03:60 
+
+04:00 assemble that into a system that can run
+04:02 
+
+04:02 for many days?
+04:04 
+
+04:04 So missions is our answer. It's a system
+04:06 
+
+04:06 that combines four of those. Delegation,
+04:09 
+
+04:09 creator verifier,
+04:11 
+
+04:11 broadcast and negotiation
+04:13 
+
+04:13 into a single workflow. You describe a
+04:15 
+
+04:15 goal.
+04:16 
+
+04:16 You scope that through a conversation.
+04:18 
+
+04:18 You approve a plan and then the system
+04:21 
+
+04:21 handles execution for hours or days and
+04:24 
+
+04:24 that enables you to focus on something
+04:25 
+
+04:25 else.
+04:27 
+
+04:27 Notably a mission is not a single agent
+04:29 
+
+04:29 session. It's an ecosystem of agents
+04:32 
+
+04:32 that communicate through structured
+04:34 
+
+04:34 handoffs and shared state.
+04:36 
+
+04:36 It uses a three-role architecture.
+04:39 
+
+04:39 There's orchestrator, there's workers
+04:41 
+
+04:41 and then there's validators.
+04:43 
+
+04:43 The orchestrator handles planning. When
+04:45 
+
+04:45 you describe what you want the
+04:46 
+
+04:46 orchestrator is kind of like your
+04:47 
+
+04:47 sounding board. Ask you the right
+04:48 
+
+04:48 strategic questions. It
+04:51 
+
+04:51 you know
+04:52 
+
+04:52 checks out if there's any unclear
+04:54 
+
+04:54 requirements in in the problem space and
+04:57 
+
+04:57 then it eventually produces a plan that
+04:58 
+
+04:58 includes features, milestones and then
+05:01 
+
+05:01 something that's called a validation
+05:02 
+
+05:02 contract. And that validation contract
+05:04 
+
+05:04 defines what done sort of means before
+05:07 
+
+05:07 any coding is done.
+05:09 
+
+05:09 And I'll come back to why that matters
+05:11 
+
+05:11 because it turns out to be really
+05:12 
+
+05:12 important to the system.
+05:14 
+
+05:14 The next role are workers. They handle
+05:16 
+
+05:16 implementation.
+05:18 
+
+05:18 When a feature is assigned to a worker
+05:20 
+
+05:20 that worker has clean context, no
+05:22 
+
+05:22 accumulated baggage, no degraded
+05:24 
+
+05:24 attention. Right? The worker reads its
+05:26 
+
+05:26 spec. It implements the feature and then
+05:29 
+
+05:29 commits
+05:30 
+
+05:30 by Git allowing the next worker to
+05:32 
+
+05:32 inherit a clean slate and a working code
+05:34 
+
+05:34 base. And then the last role are
+05:36 
+
+05:36 validators. They handle verification.
+05:39 
+
+05:39 And so most systems validate by maybe
+05:41 
+
+05:41 running lint, type check, tests. Maybe
+05:44 
+
+05:44 they do code review.
+05:45 
+
+05:45 Missions does all of that but we also
+05:47 
+
+05:47 validate behavior. Instead of just
+05:49 
+
+05:49 asking you know does the code look
+05:51 
+
+05:51 right? We wonder does this work end to
+05:53 
+
+05:53 end? That's the difference that lets
+05:56 
+
+05:56 lets missions run for many hours, many
+05:58 
+
+05:58 days in a row without drifting. And
+06:01 
+
+06:01 making it work had to involve sort of
+06:04 
+
+06:04 rethinking validation entirely.
+06:07 
+
+06:07 So
+06:08 
+
+06:08 when you've worked with coding agents
+06:09 
+
+06:09 before you've probably seen this pattern
+06:11 
+
+06:11 where an agent builds a feature.
+06:13 
+
+06:13 It writes some tests. The tests pass.
+06:16 
+
+06:16 There's full coverage.
+06:18 
+
+06:18 But the tests were sort of shaped by the
+06:19 
+
+06:19 code not by what the code was attempting
+06:22 
+
+06:22 to actually do.
+06:24 
+
+06:24 Tests written after implementation don't
+06:26 
+
+06:26 catch bugs. They confirm decisions. So
+06:29 
+
+06:29 if you rely on validation like that your
+06:31 
+
+06:31 system will eventually drift.
+06:34 
+
+06:34 That's why this validation contract
+06:36 
+
+06:36 exists. It's written during planning
+06:38 
+
+06:38 before any code and it defines
+06:40 
+
+06:40 correctness independently of
+06:42 
+
+06:42 implementation. So for a complex project
+06:45 
+
+06:45 this can be hundreds of assertions and
+06:47 
+
+06:47 each feature is assigned one or more
+06:49 
+
+06:49 assertions that it must satisfy.
+06:51 
+
+06:51 The sum of all features must mean that
+06:54 
+
+06:54 every assertion is covered.
+06:58 
+
+06:58 After each after each milestone of
+06:60 
+
+06:60 features we have two types of validators
+07:02 
+
+07:02 that run.
+07:03 
+
+07:03 So you have the scrutiny validator and
+07:05 
+
+07:05 the user testing validator. The first
+07:07 
+
+07:07 one
+07:08 
+
+07:08 is more traditional. It runs the test
+07:10 
+
+07:10 suite, type checking, lints and
+07:12 
+
+07:12 critically it spawns
+07:13 
+
+07:13 dedicated code review agents for each
+07:15 
+
+07:15 completed feature within the milestone.
+07:18 
+
+07:18 And then the second one which is the
+07:19 
+
+07:19 user testing validator is more
+07:21 
+
+07:21 interesting. It kind of acts like a QA
+07:23 
+
+07:23 engineer. It spawns the application. It
+07:26 
+
+07:26 interacts with it through computer use
+07:28 
+
+07:28 or something similar to that. It fills
+07:30 
+
+07:30 out forms, you know,
+07:32 
+
+07:32 checks that pages render correctly,
+07:34 
+
+07:34 clicks buttons and ensures that
+07:36 
+
+07:36 functional flows work holistically.
+07:39 
+
+07:39 So this step takes significantly longer
+07:41 
+
+07:41 than the previous one of the scrutiny
+07:44 
+
+07:44 validator
+07:45 
+
+07:45 because the the system is interacting
+07:47 
+
+07:47 with a live application. And what we've
+07:49 
+
+07:49 noticed is that missions most of the
+07:51 
+
+07:51 missions wall clock time is actually
+07:52 
+
+07:52 spent here waiting for this like real
+07:54 
+
+07:54 world execution to occur instead of
+07:56 
+
+07:56 generating tokens.
+07:60 
+
+07:60 Critically neither validator has seen
+08:02 
+
+08:02 the code before.
+08:03 
+
+08:03 They're not invested in the
+08:04 
+
+08:04 implementation and so validation is
+08:06 
+
+08:06 adversarial by design.
+08:10 
+
+08:10 Okay. So then validation catches bugs.
+08:12 
+
+08:12 Right? But for a system that runs for
+08:14 
+
+08:14 many days you also need to make sure
+08:16 
+
+08:16 that context isn't lost between the
+08:18 
+
+08:18 agents.
+08:20 
+
+08:20 When a worker finishes a feature it
+08:21 
+
+08:21 doesn't just say I'm done.
+08:23 
+
+08:23 It fills out a structured handoff
+08:25 
+
+08:25 detailing what was completed, what was
+08:28 
+
+08:28 left undone, what commands were run
+08:30 
+
+08:30 throughout that that agent loop and what
+08:32 
+
+08:32 were the the exit codes of those
+08:34 
+
+08:34 commands.
+08:35 
+
+08:35 What issues were discovered and did it
+08:37 
+
+08:37 abide by the procedures that the
+08:40 
+
+08:40 orchestrator defined for that worker?
+08:44 
+
+08:44 That's how we catch issues and how the
+08:46 
+
+08:46 system self-heals.
+08:48 
+
+08:48 The errors get caught at milestone
+08:49 
+
+08:49 boundaries. Corrective work gets scoped
+08:52 
+
+08:52 and the mission sort of like pulls
+08:53 
+
+08:53 itself back on track. Not by hoping that
+08:56 
+
+08:56 agents remember what happened but by
+08:58 
+
+08:58 forcing them to write it down and then
+09:01 
+
+09:01 actually address issues and I'll I'll
+09:04 
+
+09:04 present on that in just a sec.
+09:06 
+
+09:06 Our longest mission ran for 16 days
+09:09 
+
+09:09 which is much longer than a full sprint
+09:10 
+
+09:10 and we believe that they can run for 30.
+09:13 
+
+09:13 That's only possible because of the
+09:15 
+
+09:15 structure.
+09:17 
+
+09:17 So once we had this architecture the
+09:19 
+
+09:19 next question became became how do we
+09:21 
+
+09:21 actually run it? Right?
+09:24 
+
+09:24 The most obvious choice is like
+09:25 
+
+09:25 parallelism. If you have 10 agents
+09:28 
+
+09:28 running at one point in time then you
+09:30 
+
+09:30 have 10 times the throughput. But we
+09:32 
+
+09:32 tried that and it doesn't really work
+09:34 
+
+09:34 for tasks in the like software dev
+09:35 
+
+09:35 domain because agents conflict. They
+09:38 
+
+09:38 step on each other's changes. They
+09:39 
+
+09:39 duplicate work. They make inconsistent
+09:41 
+
+09:41 architectural decisions. And so the
+09:44 
+
+09:44 coordination overhead ends up
+09:47 
+
+09:47 eating up the speed gains all the while
+09:48 
+
+09:48 you're burning tokens.
+09:50 
+
+09:50 The difference with missions is that we
+09:52 
+
+09:52 run features serially.
+09:54 
+
+09:54 So there's only one worker or validator
+09:56 
+
+09:56 running at any given point in time.
+09:58 
+
+09:58 Within a feature, we allow for
+10:00 
+
+10:00 parallelization on read-only operations.
+10:03 
+
+10:03 So, you have something like
+10:06 
+
+10:06 searching through the code base or
+10:07 
+
+10:07 researching APIs, all that gets
+10:09 
+
+10:09 parallelized. Within validators, we also
+10:12 
+
+10:12 parallelize read-only operations such as
+10:13 
+
+10:13 code review.
+10:15 
+
+10:15 This is serial execution with with
+10:18 
+
+10:18 targeted internal parallelization. It
+10:20 
+
+10:20 seems slower on paper, but the error
+10:22 
+
+10:22 rate drops dramatically, and when you
+10:24 
+
+10:24 have tasks that run for many days, this
+10:26 
+
+10:26 sort of correctness compounds.
+10:30 
+
+10:30 Now,
+10:31 
+
+10:31 your your standard chat interface
+10:33 
+
+10:33 doesn't really work for something that
+10:34 
+
+10:34 lasts many days. At a quick glance, you
+10:36 
+
+10:36 need to be able to be able to see how
+10:38 
+
+10:38 much of the project have you completed,
+10:40 
+
+10:40 and what's what amount of the budget
+10:42 
+
+10:42 that you originally like set off with
+10:44 
+
+10:44 have you burned through.
+10:45 
+
+10:45 So, using a mission actually, we built
+10:47 
+
+10:47 mission control, which is a dedicated
+10:49 
+
+10:49 view for this. You can see what does
+10:52 
+
+10:52 what is active worker doing right now,
+10:54 
+
+10:54 uh read off handoff summary is that
+10:55 
+
+10:55 detail. What did the worker the
+10:57 
+
+10:57 validator discover,
+10:59 
+
+10:59 um how it's going to sort of like alter
+11:01 
+
+11:01 its course moving forward.
+11:03 
+
+11:03 Or,
+11:04 
+
+11:04 you could just, you know,
+11:06 
+
+11:06 go check out, um
+11:08 
+
+11:08 go hang out with your friends that
+11:09 
+
+11:09 night. This entire view lets you just
+11:12 
+
+11:12 run missions asynchronously, and you
+11:14 
+
+11:14 could be plugged in as a project manager
+11:16 
+
+11:16 overseeing implementation, or you could
+11:18 
+
+11:18 just, you know, go and and uh hang out
+11:20 
+
+11:20 with your friends.
+11:22 
+
+11:22 Okay. So, the right model in each role.
+11:25 
+
+11:25 Um
+11:27 
+
+11:27 everything here sort of assumes one
+11:29 
+
+11:29 thing, and that is that you're using the
+11:30 
+
+11:30 right model in each role. Planning
+11:32 
+
+11:32 benefits from slow, careful reasoning,
+11:35 
+
+11:35 implementation from fast code fluency
+11:37 
+
+11:37 and creativity, validation benefits from
+11:40 
+
+11:40 uh precise instruction following, right?
+11:42 
+
+11:42 And so, no single model nor model
+11:44 
+
+11:44 provider is best at all three of these.
+11:48 
+
+11:48 Using systems like missions requires the
+11:50 
+
+11:50 development of a new skill, which
+11:51 
+
+11:51 internally we've been calling droid
+11:52 
+
+11:52 whispering,
+11:54 
+
+11:54 but it's this idea that you need to be
+11:55 
+
+11:55 able to mentally model how different
+11:57 
+
+11:57 LLMs interact, where they fail, how
+11:59 
+
+11:59 those failures compound over a multi-day
+12:02 
+
+12:02 run,
+12:02 
+
+12:02 and then you need to make a deliberate
+12:04 
+
+12:04 choice as to which model sits in which
+12:05 
+
+12:05 seat.
+12:06 
+
+12:06 Theo, the engineer who built our
+12:08 
+
+12:08 missions prototype, came up with our our
+12:11 
+
+12:11 model defaults, but we really encourage
+12:13 
+
+12:13 people to make these uh their own and
+12:15 
+
+12:15 customize them to the needs of their
+12:16 
+
+12:16 project.
+12:17 
+
+12:17 So, for example, validation might use a
+12:19 
+
+12:19 different model provider entirely to
+12:21 
+
+12:21 make sure that it's not biased by the
+12:23 
+
+12:23 same training data.
+12:25 
+
+12:25 This is a structural advantage of a
+12:27 
+
+12:27 model-agnostic architecture.
+12:29 
+
+12:29 You're only as strong as your weakest
+12:30 
+
+12:30 link. And if you're locked into one
+12:32 
+
+12:32 model provider, then you're constrained
+12:34 
+
+12:34 by that family's weakest capability.
+12:37 
+
+12:37 As models continue to specialize,
+12:39 
+
+12:39 the ability to put the right model in
+12:41 
+
+12:41 the right seat becomes a compounding
+12:42 
+
+12:42 advantage.
+12:44 
+
+12:44 It works in the other direction, too. If
+12:46 
+
+12:46 you're using missions, the structure of
+12:48 
+
+12:48 that can compensate for models that are
+12:51 
+
+12:51 not quite at like the frontier level
+12:52 
+
+12:52 performance. So, the validation
+12:55 
+
+12:55 contracts, the milestone checkpoints,
+12:57 
+
+12:57 they allow you to run missions very very
+12:59 
+
+12:59 successfully even using open-weight
+13:01 
+
+13:01 models.
+13:04 
+
+13:04 Now, this all sounds quite theoretical.
+13:06 
+
+13:06 What does it actually look like in
+13:07 
+
+13:07 production?
+13:08 
+
+13:08 I've got an example of building a clone
+13:11 
+
+13:11 of Slack right here. This slide has a
+13:13 
+
+13:13 ton of info, but I'll walk you through
+13:15 
+
+13:15 just a few things that I want to call
+13:16 
+
+13:16 out.
+13:17 
+
+13:17 60% of our time is spent on
+13:19 
+
+13:19 implementation,
+13:20 
+
+13:20 and 60% of our tokens as well.
+13:23 
+
+13:23 Notice how validation never succeeds on
+13:26 
+
+13:26 the first go. That's in the mission
+13:29 
+
+13:29 What's it?
+13:30 
+
+13:30 The one on the bottom left. Um we almost
+13:32 
+
+13:32 always have to create follow-up
+13:33 
+
+13:33 features. So, it really demonstrates
+13:35 
+
+13:35 like the value of a system that does
+13:37 
+
+13:37 this QA loop.
+13:39 
+
+13:39 You end up with with 50% of your lines
+13:41 
+
+13:41 of code at the very end, in the bottom
+13:43 
+
+13:43 right, being tests, and 90% of your uh
+13:47 
+
+13:47 code is covered by those tests.
+13:49 
+
+13:49 And lastly, we take advantage of prompt
+13:51 
+
+13:51 caching heavily to make sure that we're
+13:53 
+
+13:53 sort of offsetting
+13:55 
+
+13:55 um
+13:55 
+
+13:55 the the price of running such a long
+13:57 
+
+13:57 task.
+14:00 
+
+14:00 People have really taken to missions,
+14:02 
+
+14:02 and it's been awesome to see what folks
+14:04 
+
+14:04 have been building with them. Um some
+14:06 
+
+14:06 examples I've included in this slide,
+14:08 
+
+14:08 but ones that I want to call out are
+14:10 
+
+14:10 specifically in the enterprise setting,
+14:11 
+
+14:11 which is where Factory really shines. Um
+14:14 
+
+14:14 they've been used to prototype new ideas
+14:16 
+
+14:16 and features overnight, to um
+14:18 
+
+14:18 make sure that people can uh build
+14:20 
+
+14:20 internal tools at increasingly rapid
+14:22 
+
+14:22 rates, to run huge refactors and
+14:24 
+
+14:24 migrations, for ML search uh research,
+14:27 
+
+14:27 sorry, and to modernize uh codebases so
+14:30 
+
+14:30 that agents are more productive in them.
+14:34 
+
+14:34 Um one thing that I wanted to talk about
+14:36 
+
+14:36 was also this concept of like the bitter
+14:39 
+
+14:39 lesson, because every person building
+14:41 
+
+14:41 multi-agent systems has this fear of the
+14:43 
+
+14:43 next model release sort of like making
+14:45 
+
+14:45 their their architecture obsolete
+14:47 
+
+14:47 overnight.
+14:48 
+
+14:48 Um so,
+14:50 
+
+14:50 when we were building missions, we
+14:52 
+
+14:52 decided we had to make this system get
+14:54 
+
+14:54 better with every model improvement.
+14:57 
+
+14:57 This means that almost all of the
+14:58 
+
+14:58 orchestration logic is defined in
+14:60 
+
+14:60 prompts and skills,
+15:02 
+
+15:02 um instead of like a hard-coded state
+15:03 
+
+15:03 machine.
+15:04 
+
+15:04 How it decomposes failures and um
+15:07 
+
+15:07 or decomposes features and handles
+15:09 
+
+15:09 failures is all in about like 700 lines
+15:12 
+
+15:12 of text, and four sentences of this can
+15:14 
+
+15:14 alter the execution strategy pretty
+15:16 
+
+15:16 dramatically.
+15:18 
+
+15:18 Worker behavior is driven by skills that
+15:20 
+
+15:20 the orchestrator defines per mission, so
+15:22 
+
+15:22 you get very customized behavior,
+15:24 
+
+15:24 and the only deterministic logic is very
+15:27 
+
+15:27 thin, and it's focused on enabling
+15:28 
+
+15:28 models to do what they do best while the
+15:31 
+
+15:31 system handles like the bookkeeping,
+15:32 
+
+15:32 right? Stuff like running validation and
+15:34 
+
+15:34 ensuring that progress is blocked when
+15:36 
+
+15:36 there are some handoff issues that are
+15:38 
+
+15:38 not addressed.
+15:39 
+
+15:39 So, missions sort of ensure the the
+15:41 
+
+15:41 discipline, and the models provide the
+15:43 
+
+15:43 intelligence uh using primitives that
+15:45 
+
+15:45 they're already familiar with, like
+15:47 
+
+15:47 agents.md, skills, etc.
+15:51 
+
+15:51 So, what does this unlock?
+15:53 
+
+15:53 Remember the bottleneck that I started
+15:55 
+
+15:55 off with? Human attention.
+15:57 
+
+15:57 The economics are sort of changing.
+15:58 
+
+15:58 Before, a team of five engineers might
+15:60 
+
+15:60 be able to
+16:01 
+
+16:01 uh work on 10 work streams at any given
+16:03 
+
+16:03 point in time.
+16:05 
+
+16:05 Now, maybe with missions, we can bring
+16:06 
+
+16:06 that up to 30.
+16:08 
+
+16:08 The team can focus on interesting
+16:10 
+
+16:10 problems such as
+16:11 
+
+16:11 uh the architecture, product decisions,
+16:14 
+
+16:14 um instead of uh worrying about the
+16:16 
+
+16:16 execution per se.
+16:18 
+
+16:18 And the important thing is the codebase
+16:20 
+
+16:20 ends up cleaner than when you started.
+16:23 
+
+16:23 The end-to-end tests, the unit tests,
+16:25 
+
+16:25 the skills, the structure that missions
+16:27 
+
+16:27 provide uh means that agents and humans
+16:30 
+
+16:30 are more productive in that environment
+16:31 
+
+16:31 moving forward.
+16:34 
+
+16:34 So, now that you understand how missions
+16:36 
+
+16:36 are structured and how they actually
+16:37 
+
+16:37 work, you can see that they're really a
+16:39 
+
+16:39 composition of those original um
+16:41 
+
+16:41 strategies, right? Delegation shows up
+16:43 
+
+16:43 everywhere in how the orchestrator
+16:46 
+
+16:46 spawns workers and how we spawn research
+16:48 
+
+16:48 sub-agents. Creator-verifier is
+16:50 
+
+16:50 fundamental in that validation and
+16:52 
+
+16:52 implementation are always separate
+16:53 
+
+16:53 agents with separate context. Broadcast
+16:56 
+
+16:56 runs through the shared mission state
+16:58 
+
+16:58 that every agent references, and
+16:60 
+
+16:60 negotiation shows up at milestone
+17:01 
+
+17:01 boundaries, where the orchestrator
+17:03 
+
+17:03 defines, you know, does this does this
+17:05 
+
+17:05 handoff summary sort of like look
+17:06 
+
+17:06 correct? Do we need to create follow-up
+17:08 
+
+17:08 features, rescope, etc.
+17:11 
+
+17:11 But strategies aren't enough. You need
+17:13 
+
+17:13 the connective tissue. You need uh these
+17:16 
+
+17:16 structured handoffs so that agents don't
+17:17 
+
+17:17 lose context, you need the right model
+17:19 
+
+17:19 in each role, and you need an
+17:21 
+
+17:21 architecture that will improve with each
+17:22 
+
+17:22 model improvement.
+17:24 
+
+17:24 So,
+17:26 
+
+17:26 what I like to think about is that
+17:27 
+
+17:27 people in this room who are thinking in
+17:29 
+
+17:29 terms of agent ecosystems, who develop
+17:31 
+
+17:31 an intuition for how different models
+17:33 
+
+17:33 compose under pressure, um that those
+17:35 
+
+17:35 folks are going to be really shipping
+17:36 
+
+17:36 the next generation of innovation.
+17:39 
+
+17:39 Uh there's a lot of open questions
+17:41 
+
+17:41 still, right? Um how do we further
+17:43 
+
+17:43 parallelize the workload of missions so
+17:44 
+
+17:44 that they run faster? How do we start
+17:47 
+
+17:47 orchestrating missions themselves into
+17:48 
+
+17:48 even more complex workflows?
+17:50 
+
+17:50 Uh but the data from production missions
+17:52 
+
+17:52 is clear. This works on real projects at
+17:55 
+
+17:55 scale today.
+17:57 
+
+17:57 So,
+17:58 
+
+17:58 this is what I'll leave you with. Open
+17:59 
+
+17:59 Droid,
+18:00 
+
+18:00 try running /missions,
+18:03 
+
+18:03 argue with the orchestrator about the
+18:04 
+
+18:04 scope,
+18:05 
+
+18:05 approve the plan, and then go do
+18:07 
+
+18:07 something else.
+18:09 
+
+18:09 I'm excited to see what you guys build,
+18:10 
+
+18:10 and I'll be around to answer any
+18:11 
+
+18:11 questions uh for the rest of the day.
+18:13 
+
+18:13 Thanks.
+18:15 
+
+18:15 >> [applause]
+18:18 
+
+18:18 [music]

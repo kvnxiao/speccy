@@ -1,0 +1,95 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001", "CHK-002", "CHK-003"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-005", "CHK-006"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-007", "CHK-008"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-009"]
+
+[[requirements]]
+id = "REQ-006"
+checks = ["CHK-010"]
+
+[[requirements]]
+id = "REQ-007"
+checks = ["CHK-011"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_spc -- structure"
+proves = "SPC-001 through SPC-005 fire for missing fields, mismatched REQ headings, and invalid status values."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_spc -- supersession"
+proves = "SPC-006 fires when status=superseded but no other spec declares supersedes pointing here, computed via supersession_index."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_spc -- informational"
+proves = "SPC-007 fires at severity=Info when status=implemented but TASKS.md has any non-[x] task."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_req"
+proves = "REQ-001 fires for empty checks arrays; REQ-002 fires for check-ID references that have no matching [[checks]] row."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_val -- definitions"
+proves = "VAL-001 fires for missing proves; VAL-002 for missing command on test/command kinds; VAL-003 for missing prompt on manual kinds."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_val -- noop_matrix"
+proves = "VAL-004 fires on the closed set of no-op patterns (true, :, exit 0, /bin/true, cmd /c exit 0, exit /b 0) with whitespace tolerance, and does not fire on no-op-prefixed compound commands."
+
+[[checks]]
+id = "CHK-007"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_tsk -- structure"
+proves = "TSK-001 fires for unknown REQ references; TSK-002 fires when the parser surfaced a malformed task ID warning; TSK-004 fires for missing frontmatter fields."
+
+[[checks]]
+id = "CHK-008"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_tsk -- staleness"
+proves = "TSK-003 fires at severity=Warn for hash or mtime drift; bootstrap-pending sentinel produces TSK-003 at severity=Info with a remediation message naming speccy tasks --commit."
+
+[[checks]]
+id = "CHK-009"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_qst"
+proves = "QST-001 fires once per unchecked open question at severity=Info; checked questions produce nothing; question text is included in the diagnostic message."
+
+[[checks]]
+id = "CHK-010"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_run -- api"
+proves = "lint::run is pure and deterministic; output ordering is (spec_id, code, file, line) ascending; empty workspace returns an empty vec without panics."
+
+[[checks]]
+id = "CHK-011"
+kind = "test"
+command = "cargo test -p speccy-core --test lint_registry"
+proves = "Every code emitted by the engine appears in REGISTRY with its severity; the snapshot test breaks when a code is added, removed, renamed, or has its severity changed."

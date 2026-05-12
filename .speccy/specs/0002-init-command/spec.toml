@@ -1,0 +1,75 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001", "CHK-002"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-003", "CHK-004", "CHK-005"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-006"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-007", "CHK-008"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-009"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy --test init -- scaffold_speccy_toml"
+proves = "speccy init writes .speccy/speccy.toml with schema_version=1, project name from cwd, and root=\"..\"."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy --test init -- scaffold_vision_md"
+proves = "speccy init writes .speccy/VISION.md with every template section heading present in declared order."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy --test init -- refuse_without_force"
+proves = "Existing .speccy/ without --force returns exit code 1 and stderr names the conflicting path."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy --test init -- force_overwrites_shipped_files"
+proves = "--force overwrites speccy-shipped files in .speccy/ and the host skill directory with current binary content."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy --test init -- force_preserves_user_files"
+proves = "--force does not touch user-authored files in the host skill directory whose names are not in the shipped bundle."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy --test init -- host_detection_precedence"
+proves = "--host wins; otherwise .claude/ > .codex/; .cursor/ refuses cleanly; unknown --host value exits 1 listing supported names."
+
+[[checks]]
+id = "CHK-007"
+kind = "test"
+command = "cargo test -p speccy --test init -- copy_claude_code_pack"
+proves = "speccy init --host claude-code copies skills/claude-code/*.md to .claude/commands/ with byte-identical content."
+
+[[checks]]
+id = "CHK-008"
+kind = "test"
+command = "cargo test -p speccy --test init -- copy_codex_pack"
+proves = "speccy init --host codex copies skills/codex/*.md to .codex/skills/ with byte-identical content; destination directory created if missing."
+
+[[checks]]
+id = "CHK-009"
+kind = "test"
+command = "cargo test -p speccy --test init -- exit_codes"
+proves = "Exit codes: 0 on success, 1 on user error (existing workspace, unknown host, cursor detected), 2 on internal I/O failure."
