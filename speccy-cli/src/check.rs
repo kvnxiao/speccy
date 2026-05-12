@@ -8,9 +8,9 @@
 //!
 //! See `.speccy/specs/0010-check-command/SPEC.md`.
 
-use crate::shell::shell_command;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use speccy_core::exec::shell_command;
 use speccy_core::parse::CheckEntry;
 use speccy_core::parse::CheckPayload;
 use speccy_core::workspace::Workspace;

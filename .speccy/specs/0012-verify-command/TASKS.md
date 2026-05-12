@@ -11,7 +11,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 1: Captured check execution (speccy-core)
 
-- [ ] **T-001**: Implement `exec::run_checks_captured` with tee-to-stderr
+- [x] **T-001**: Implement `exec::run_checks_captured` with tee-to-stderr
   - Covers: REQ-002
   - Tests to write:
     - Child stdio is piped (not inherited); a `Stdio::piped()` setup is wired for both stdout and stderr.
@@ -23,7 +23,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Lint integration
 
-- [ ] **T-002**: Run lint via `lint::run` and partition by Level
+- [x] **T-002**: Run lint via `lint::run` and partition by Level
   - Covers: REQ-001
   - Tests to write:
     - `lint::run` is called against a `lint::Workspace` built from `workspace::scan` output.
@@ -34,7 +34,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Exit-code aggregation
 
-- [ ] **T-003**: Compose lint and check outcomes into a binary exit code
+- [x] **T-003**: Compose lint and check outcomes into a binary exit code
   - Covers: REQ-003
   - Tests to write:
     - Clean lint + all checks pass -> exit 0.
@@ -47,7 +47,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Text-mode summary
 
-- [ ] **T-004**: Implement text-mode summary output
+- [x] **T-004**: Implement text-mode summary output
   - Covers: REQ-004
   - Tests to write:
     - The last three stdout lines are `Lint: <E> errors, <W> warnings, <I> info`, `Checks: <P> passed, <F> failed, <M> manual`, `verify: PASS|FAIL`.
@@ -58,7 +58,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: JSON output
 
-- [ ] **T-005**: Implement `--json` envelope and structured per-check output
+- [x] **T-005**: Implement `--json` envelope and structured per-check output
   - Covers: REQ-005
   - Tests to write:
     - Output begins with `"schema_version": 1` (first non-whitespace key).
@@ -73,7 +73,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: CLI wiring
 
-- [ ] **T-006**: Wire `speccy verify [--json]` into the binary
+- [x] **T-006**: Wire `speccy verify [--json]` into the binary
   - Covers: REQ-001..REQ-005
   - Tests to write:
     - End-to-end via `assert_cmd` with a tmpdir fixture workspace.

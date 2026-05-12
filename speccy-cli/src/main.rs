@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <status|check> [args]";
+const USAGE: &str = "speccy <status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -27,6 +27,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
     match command.as_str() {
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
+        "verify" => run_verify(iter.as_slice()),
         "--help" | "-h" | "help" => {
             println!("{USAGE}");
             Ok(0)
@@ -139,5 +140,56 @@ fn clamp_exit(code: i32) -> u8 {
         0
     } else {
         u8::try_from(code).unwrap_or(1)
+    }
+}
+
+fn run_verify(args: &[String]) -> Result<u8, u8> {
+    let mut json = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("usage: speccy verify [--json]");
+                return Ok(0);
+            }
+            other => {
+                eprintln!("speccy verify: unknown argument `{other}`");
+                eprintln!("usage: speccy verify [--json]");
+                return Err(2);
+            }
+        }
+    }
+
+    let cwd = match speccy_cli::verify::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy verify: {e}");
+            return Err(1);
+        }
+    };
+    invoke_verify(&cwd, json)
+}
+
+fn invoke_verify(cwd: &Utf8PathBuf, json: bool) -> Result<u8, u8> {
+    let mut stdout = std::io::stdout().lock();
+    let mut stderr = std::io::stderr().lock();
+    let result = speccy_cli::verify::run(
+        speccy_cli::verify::VerifyArgs { json },
+        cwd,
+        &mut stdout,
+        &mut stderr,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    if stderr.flush().is_err() {
+        // stderr closed; nothing more to do.
+    }
+    match result {
+        Ok(code) => Ok(clamp_exit(code)),
+        Err(e) => {
+            eprintln!("speccy verify: {e}");
+            Err(1)
+        }
     }
 }
