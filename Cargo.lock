@@ -764,6 +764,7 @@ dependencies = [
  "assert_cmd",
  "camino",
  "fs-err",
+ "include_dir",
  "indoc",
  "predicates",
  "regex",

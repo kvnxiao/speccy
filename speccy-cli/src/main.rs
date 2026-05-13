@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <plan|status|check|verify> [args]";
+const USAGE: &str = "speccy <init|plan|status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -25,6 +25,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
     };
 
     match command.as_str() {
+        "init" => run_init(iter.as_slice()).map(|()| 0_u8),
         "plan" => run_plan(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
@@ -36,6 +37,79 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
         other => {
             eprintln!("speccy: unknown command `{other}`");
             eprintln!("usage: {USAGE}");
+            Err(2)
+        }
+    }
+}
+
+fn run_init(args: &[String]) -> Result<(), u8> {
+    let mut host: Option<String> = None;
+    let mut force = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy init [--host <name>] [--force]");
+                return Ok(());
+            }
+            "--force" => force = true,
+            "--host" => {
+                let Some(value) = iter.next() else {
+                    eprintln!("speccy init: --host requires a value");
+                    eprintln!("usage: speccy init [--host <name>] [--force]");
+                    return Err(2);
+                };
+                host = Some(value.clone());
+            }
+            other if other.starts_with("--host=") => {
+                let value = other.strip_prefix("--host=").unwrap_or("");
+                host = Some(value.to_owned());
+            }
+            other => {
+                eprintln!("speccy init: unexpected argument `{other}`");
+                eprintln!("usage: speccy init [--host <name>] [--force]");
+                return Err(2);
+            }
+        }
+    }
+
+    let cwd = match speccy_cli::init::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy init: {e}");
+            return Err(2);
+        }
+    };
+    invoke_init(&cwd, host, force)
+}
+
+fn invoke_init(cwd: &Utf8PathBuf, host: Option<String>, force: bool) -> Result<(), u8> {
+    let mut stdout = std::io::stdout().lock();
+    let mut stderr = std::io::stderr().lock();
+    let result = speccy_cli::init::run(
+        speccy_cli::init::InitArgs { host, force },
+        cwd,
+        &mut stdout,
+        &mut stderr,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    if stderr.flush().is_err() {
+        // stderr closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(
+            e @ (speccy_cli::init::InitError::WorkspaceExists { .. }
+            | speccy_cli::init::InitError::UnknownHost { .. }
+            | speccy_cli::init::InitError::CursorDetected),
+        ) => {
+            eprintln!("speccy init: {e}");
+            Err(1)
+        }
+        Err(e) => {
+            eprintln!("speccy init: {e}");
             Err(2)
         }
     }
