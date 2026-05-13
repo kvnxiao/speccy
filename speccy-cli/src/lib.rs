@@ -11,6 +11,7 @@ pub mod check;
 pub mod embedded;
 pub mod git;
 pub mod host;
+pub mod implement;
 pub mod init;
 pub mod plan;
 pub mod status;

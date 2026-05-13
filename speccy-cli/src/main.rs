@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <init|plan|tasks|status|check|verify> [args]";
+const USAGE: &str = "speccy <init|plan|tasks|implement|status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -28,6 +28,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
         "init" => run_init(iter.as_slice()).map(|()| 0_u8),
         "plan" => run_plan(iter.as_slice()).map(|()| 0_u8),
         "tasks" => run_tasks(iter.as_slice()).map(|()| 0_u8),
+        "implement" => run_implement(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
         "verify" => run_verify(iter.as_slice()),
@@ -237,6 +238,96 @@ fn invoke_tasks(cwd: &Utf8PathBuf, spec_id: String, commit: bool) -> Result<(), 
         }
         Err(e) => {
             eprintln!("speccy tasks: {e}");
+            Err(1)
+        }
+    }
+}
+
+fn run_implement(args: &[String]) -> Result<(), u8> {
+    let mut task_ref: Option<String> = None;
+    for arg in args {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy implement TASK-ID");
+                println!("       TASK-ID is T-NNN (searches all specs) or SPEC-NNNN/T-NNN");
+                return Ok(());
+            }
+            other if other.starts_with("--") => {
+                eprintln!("speccy implement: unknown flag `{other}`");
+                eprintln!("usage: speccy implement TASK-ID");
+                return Err(2);
+            }
+            positional if task_ref.is_none() => task_ref = Some(positional.to_owned()),
+            extra => {
+                eprintln!("speccy implement: unexpected extra argument `{extra}`");
+                eprintln!("usage: speccy implement TASK-ID");
+                return Err(2);
+            }
+        }
+    }
+
+    let Some(arg) = task_ref else {
+        eprintln!("speccy implement: missing required TASK-ID argument");
+        eprintln!("usage: speccy implement TASK-ID");
+        eprintln!("       TASK-ID is T-NNN (searches all specs) or SPEC-NNNN/T-NNN");
+        return Err(2);
+    };
+
+    let cwd = match speccy_cli::implement::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy implement: {e}");
+            return Err(1);
+        }
+    };
+    invoke_implement(&cwd, arg)
+}
+
+fn invoke_implement(cwd: &Utf8PathBuf, task_ref: String) -> Result<(), u8> {
+    use speccy_cli::implement::ImplementError;
+    use speccy_core::task_lookup::LookupError;
+
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::implement::run(
+        &speccy_cli::implement::ImplementArgs { task_ref },
+        cwd,
+        &mut stdout,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(ImplementError::Lookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy implement: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            Err(1)
+        }
+        Err(ImplementError::Lookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy implement: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            Err(1)
+        }
+        Err(ImplementError::Lookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy implement: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy implement {spec_id}/{task_id}");
+            }
+            Err(1)
+        }
+        Err(ImplementError::Prompt(e)) => {
+            eprintln!("speccy implement: prompt template error: {e}");
+            Err(2)
+        }
+        Err(e) => {
+            eprintln!("speccy implement: {e}");
             Err(1)
         }
     }

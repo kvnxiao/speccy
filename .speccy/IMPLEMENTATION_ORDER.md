@@ -6,7 +6,7 @@
 - [x] SPEC-0005 plan-command — lands speccy_core::prompt::* (template loader, render, agents_md, budget trimmer, ID alloc)
 - [x] SPEC-0002 init-command — skill-bundle copy; reuses include_dir! introduced by 0005
 - [x] SPEC-0006 tasks-command — Phase 2 + --commit body-byte-preserving rewrite
-- [ ] SPEC-0008 implement-command — lands speccy_core::task_lookup; must precede 0009
+- [x] SPEC-0008 implement-command — lands speccy_core::task_lookup; must precede 0009
 - [ ] SPEC-0009 review-command — lands speccy_core::personas::ALL; land before 0007 so DEFAULT_PERSONAS can be defined as &ALL[..4] without a later refactor
 - [ ] SPEC-0007 next-command — consumes personas::ALL[..4] from 0009
 - [ ] SPEC-0011 report-command — Phase 5 prompt; small
