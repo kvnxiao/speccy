@@ -19,23 +19,23 @@ checks = ["CHK-004"]
 [[checks]]
 id = "CHK-001"
 kind = "test"
-command = "cargo test -p speccy --test report -- spec_lookup_and_validation"
+command = "cargo test -p speccy-cli --test report -- spec_lookup_and_validation"
 proves = "speccy report validates SPEC-ID format; spec-not-found exits 1; missing or malformed SPEC.md / TASKS.md exits 1 with clear error messages."
 
 [[checks]]
 id = "CHK-002"
 kind = "test"
-command = "cargo test -p speccy --test report -- completeness_gate"
+command = "cargo test -p speccy-cli --test report -- completeness_gate"
 proves = "Refuses with exit 1 when any task is [ ], [~], or [?]; renders the prompt only when all tasks are [x]; empty TASKS.md (no tasks) is treated as vacuously complete."
 
 [[checks]]
 id = "CHK-003"
 kind = "test"
-command = "cargo test -p speccy --test report -- retry_count"
+command = "cargo test -p speccy-cli --test report -- retry_count"
 proves = "Retry count per task equals the number of notes beginning with 'Retry:' (case-sensitive prefix); rendered as a markdown list under the retry_summary placeholder."
 
 [[checks]]
 id = "CHK-004"
 kind = "test"
-command = "cargo test -p speccy --test report -- prompt_renders_and_integration"
+command = "cargo test -p speccy-cli --test report -- prompt_renders_and_integration"
 proves = "When completeness passes, report.md template loaded with spec_id, spec_md, tasks_md, retry_summary, agents placeholders substituted; budget trimming applied; output to stdout."

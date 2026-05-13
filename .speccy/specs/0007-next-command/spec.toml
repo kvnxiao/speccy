@@ -59,17 +59,17 @@ proves = "Blocked variant carries one of a small set of canonical reason strings
 [[checks]]
 id = "CHK-007"
 kind = "test"
-command = "cargo test -p speccy --test next_json -- envelope_and_variants"
+command = "cargo test -p speccy-cli --test next_json -- envelope_and_variants"
 proves = "speccy next --json emits schema_version=1 envelope; the kind field discriminates four variants (implement, review, report, blocked) with the field shapes from DESIGN.md and SPEC.md."
 
 [[checks]]
 id = "CHK-008"
 kind = "test"
-command = "cargo test -p speccy --test next_json -- determinism"
+command = "cargo test -p speccy-cli --test next_json -- determinism"
 proves = "Two back-to-back speccy next --json invocations against identical workspace state produce byte-identical stdout."
 
 [[checks]]
 id = "CHK-009"
 kind = "test"
-command = "cargo test -p speccy --test next_text -- one_line_per_kind"
+command = "cargo test -p speccy-cli --test next_text -- one_line_per_kind"
 proves = "Text mode prints one line per kind variant matching the contract; exit code is 0 for all four kinds (blocked is not an error)."

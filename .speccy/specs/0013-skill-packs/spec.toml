@@ -31,49 +31,49 @@ checks = ["CHK-009"]
 [[checks]]
 id = "CHK-001"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- persona_files_present"
+command = "cargo test -p speccy-cli --test skill_packs -- persona_files_present"
 proves = "skills/shared/personas/ contains the 8 expected files (planner, implementer, six reviewers) and each is non-empty."
 
 [[checks]]
 id = "CHK-002"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- persona_names_match_registry"
+command = "cargo test -p speccy-cli --test skill_packs -- persona_names_match_registry"
 proves = "Reviewer persona file names match personas::ALL exactly (business, tests, security, style, architecture, docs)."
 
 [[checks]]
 id = "CHK-003"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- prompt_templates_present"
+command = "cargo test -p speccy-cli --test skill_packs -- prompt_templates_present"
 proves = "skills/shared/prompts/ contains the 11 expected templates (plan-greenfield/amend, tasks-generate/amend, implementer, six reviewers, report) and each is non-empty."
 
 [[checks]]
 id = "CHK-004"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- prompt_placeholders_match_commands"
+command = "cargo test -p speccy-cli --test skill_packs -- prompt_placeholders_match_commands"
 proves = "Each template contains the placeholders its corresponding CLI command (per REQs in SPEC-0005/0006/0008/0009/0011) substitutes; placeholder names are valid identifiers."
 
 [[checks]]
 id = "CHK-005"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- claude_code_recipes"
+command = "cargo test -p speccy-cli --test skill_packs -- claude_code_recipes"
 proves = "skills/claude-code/ contains the 7 expected recipes (speccy-init/plan/tasks/work/review/amend/ship) with valid YAML frontmatter and non-empty description fields."
 
 [[checks]]
 id = "CHK-006"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- codex_recipes"
+command = "cargo test -p speccy-cli --test skill_packs -- codex_recipes"
 proves = "skills/codex/ contains the 7 parallel recipes with valid Codex frontmatter."
 
 [[checks]]
 id = "CHK-007"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- persona_content_shape"
+command = "cargo test -p speccy-cli --test skill_packs -- persona_content_shape"
 proves = "Each reviewer persona file has the required headings in declared order: # Reviewer Persona, ## Role, ## Focus, ## What to look for that's easy to miss, ## Inline note format, ## Example."
 
 [[checks]]
 id = "CHK-008"
 kind = "test"
-command = "cargo test -p speccy --test skill_packs -- recipe_content_shape"
+command = "cargo test -p speccy-cli --test skill_packs -- recipe_content_shape"
 proves = "Each top-level recipe has an intro paragraph, a 'When to use' heading, and at least one fenced code block with a speccy command from the v1 surface."
 
 [[checks]]

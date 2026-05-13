@@ -45,23 +45,23 @@ proves = "An empty or unreadable project-local override warns on stderr and fall
 [[checks]]
 id = "CHK-004"
 kind = "test"
-command = "cargo test -p speccy --test review -- persona_arg_validation"
+command = "cargo test -p speccy-cli --test review -- persona_arg_validation"
 proves = "Missing --persona exits 1 with usage listing valid names; unknown --persona value exits 1; case-sensitive match (Security != security)."
 
 [[checks]]
 id = "CHK-005"
 kind = "test"
-command = "cargo test -p speccy --test review -- diff_fallback_chain"
+command = "cargo test -p speccy-cli --test review -- diff_fallback_chain"
 proves = "git diff HEAD output is captured first; if clean working tree, falls back to HEAD vs HEAD~1; if neither yields content or git is unavailable, uses the literal no-diff fallback note."
 
 [[checks]]
 id = "CHK-006"
 kind = "test"
-command = "cargo test -p speccy --test review -- prompt_renders"
+command = "cargo test -p speccy-cli --test review -- prompt_renders"
 proves = "reviewer-<persona>.md template loaded; placeholders (spec_id, spec_md, task_id, task_entry, diff, persona, persona_content, agents) all substituted; budget trimming applied; output to stdout."
 
 [[checks]]
 id = "CHK-007"
 kind = "test"
-command = "cargo test -p speccy --test review -- shared_task_lookup_and_integration"
+command = "cargo test -p speccy-cli --test review -- shared_task_lookup_and_integration"
 proves = "speccy review uses SPEC-0008's task_lookup; lookup errors map to the same exit codes; ambiguity stderr suggests the speccy review SPEC-NNNN/T-NNN --persona <name> form."
