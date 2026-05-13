@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 assert_cmd = { workspace = true }
 indoc = { workspace = true }
 predicates = { workspace = true }
+serde-saphyr = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

@@ -770,6 +770,7 @@ dependencies = [
  "predicates",
  "regex",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "speccy-core",
  "tempfile",
