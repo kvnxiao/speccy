@@ -9,5 +9,5 @@
 - [x] SPEC-0008 implement-command — lands speccy_core::task_lookup; must precede 0009
 - [x] SPEC-0009 review-command — lands speccy_core::personas::ALL; land before 0007 so DEFAULT_PERSONAS can be defined as &ALL[..4] without a later refactor
 - [x] SPEC-0007 next-command — consumes personas::ALL[..4] from 0009
-- [ ] SPEC-0011 report-command — Phase 5 prompt; small
+- [x] SPEC-0011 report-command — Phase 5 prompt; small
 - [ ] SPEC-0013 skill-packs — content; recipes reference every command's CLI surface so all command specs must exist first

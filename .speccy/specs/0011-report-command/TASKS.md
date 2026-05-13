@@ -11,7 +11,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 1: Argument validation and spec lookup
 
-- [ ] **T-001**: Parse SPEC-ID and locate the spec
+- [x] **T-001**: Parse SPEC-ID and locate the spec
   - Covers: REQ-001
   - Tests to write:
     - `"SPEC-0001"` -> proceed; `"FOO"` -> exit 1 with format error.
@@ -22,7 +22,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Completeness gate
 
-- [ ] **T-002**: Refuse when tasks aren't all `[x]`
+- [x] **T-002**: Refuse when tasks aren't all `[x]`
   - Covers: REQ-002
   - Tests to write:
     - 5 `[x]` + 1 `[ ]` task -> exit 1; stderr lists the `[ ]` task ID and state.
@@ -35,7 +35,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Retry count computation
 
-- [ ] **T-003**: Count `Retry:` markers per task
+- [x] **T-003**: Count `Retry:` markers per task
   - Covers: REQ-003
   - Tests to write:
     - Task with two notes starting `Retry:` -> count 2.
@@ -47,7 +47,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Prompt assembly and CLI wiring
 
-- [ ] **T-004**: Render report prompt and wire CLI
+- [x] **T-004**: Render report prompt and wire CLI
   - Covers: REQ-004
   - Tests to write:
     - `report.md` template loaded via `prompt::load_template`.

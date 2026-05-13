@@ -8,7 +8,8 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <init|plan|tasks|implement|review|status|next|check|verify> [args]";
+const USAGE: &str =
+    "speccy <init|plan|tasks|implement|review|report|status|next|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -30,6 +31,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
         "tasks" => run_tasks(iter.as_slice()).map(|()| 0_u8),
         "implement" => run_implement(iter.as_slice()).map(|()| 0_u8),
         "review" => run_review(iter.as_slice()).map(|()| 0_u8),
+        "report" => run_report(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "next" => run_next(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
@@ -452,6 +454,90 @@ fn invoke_review(cwd: &Utf8PathBuf, task_ref: String, persona: String) -> Result
         }
         Err(e) => {
             eprintln!("speccy review: {e}");
+            Err(1)
+        }
+    }
+}
+
+fn run_report(args: &[String]) -> Result<(), u8> {
+    let mut spec_id: Option<String> = None;
+    for arg in args {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy report SPEC-ID");
+                return Ok(());
+            }
+            other if other.starts_with("--") => {
+                eprintln!("speccy report: unknown flag `{other}`");
+                eprintln!("usage: speccy report SPEC-ID");
+                return Err(2);
+            }
+            positional if spec_id.is_none() => spec_id = Some(positional.to_owned()),
+            extra => {
+                eprintln!("speccy report: unexpected extra argument `{extra}`");
+                eprintln!("usage: speccy report SPEC-ID");
+                return Err(2);
+            }
+        }
+    }
+
+    let Some(id) = spec_id else {
+        eprintln!("speccy report: missing required SPEC-ID argument");
+        eprintln!("usage: speccy report SPEC-ID");
+        return Err(2);
+    };
+
+    let cwd = match speccy_cli::report::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy report: {e}");
+            return Err(1);
+        }
+    };
+    invoke_report(&cwd, id)
+}
+
+fn invoke_report(cwd: &Utf8PathBuf, spec_id: String) -> Result<(), u8> {
+    use speccy_cli::report::ReportError;
+
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::report::run(
+        &speccy_cli::report::ReportArgs { spec_id },
+        cwd,
+        &mut stdout,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(ReportError::Incomplete { id, offending }) => {
+            eprintln!(
+                "speccy report: {id} has incomplete tasks; all tasks must be [x] before report",
+            );
+            for task in &offending {
+                eprintln!(
+                    "  {id}: {state}",
+                    id = task.id,
+                    state = task.state.as_glyph()
+                );
+            }
+            Err(1)
+        }
+        Err(ReportError::Parse {
+            artifact,
+            id,
+            source,
+        }) => {
+            eprintln!("speccy report: failed to parse {artifact} for {id}: {source}");
+            Err(1)
+        }
+        Err(ReportError::Prompt(e)) => {
+            eprintln!("speccy report: prompt template error: {e}");
+            Err(2)
+        }
+        Err(e) => {
+            eprintln!("speccy report: {e}");
             Err(1)
         }
     }
