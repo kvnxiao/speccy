@@ -368,6 +368,7 @@ landing first.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` checks are skipped; `Fail` outcomes on `in-progress` specs are reported as IN-FLIGHT and do not gate the exit code (only `implemented` failures gate). Summary line gains an `in-flight` count. |
 
 ## Notes
 

@@ -380,6 +380,7 @@ deepened.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` specs are skipped entirely; `Fail` outcomes on `in-progress` specs are categorised as in-flight and do NOT gate the exit code. Only `Level::Error` lint diagnostics and `Fail` on `implemented` specs trigger `verify: FAIL`. JSON envelope gains `summary.checks.in_flight` and per-check `spec_status` fields; text summary becomes `Checks: P passed, F failed, FL in-flight, M manual`. |
 
 ## Notes
 

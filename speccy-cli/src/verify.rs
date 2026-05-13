@@ -20,6 +20,7 @@ use speccy_core::exec::run_checks_captured;
 use speccy_core::lint;
 use speccy_core::lint::Diagnostic;
 use speccy_core::lint::Level;
+use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
@@ -78,13 +79,14 @@ pub struct VerifyReport {
 
 impl VerifyReport {
     /// Whether the workspace passes the gate.
+    ///
+    /// `true` iff no `Level::Error` lint diagnostics fired and every
+    /// `Fail` outcome came from an `in-progress` spec (work-in-flight,
+    /// not a regression). `Fail` outcomes on `implemented` specs gate
+    /// the exit code.
     #[must_use = "the pass/fail signal drives the exit code"]
     pub fn passed(&self) -> bool {
-        self.lint_errors.is_empty()
-            && !self
-                .checks
-                .iter()
-                .any(|r| matches!(r.outcome, CheckOutcome::Fail))
+        self.lint_errors.is_empty() && !self.checks.iter().any(CheckResult::is_gating_failure)
     }
 
     /// Number of checks with outcome [`CheckOutcome::Pass`].
@@ -96,13 +98,19 @@ impl VerifyReport {
             .count()
     }
 
-    /// Number of checks with outcome [`CheckOutcome::Fail`].
+    /// Number of checks with outcome [`CheckOutcome::Fail`] on
+    /// `implemented` specs — the "real" failure count that gates the
+    /// exit code.
     #[must_use = "the count is part of the summary output"]
     pub fn failed_checks(&self) -> usize {
-        self.checks
-            .iter()
-            .filter(|r| matches!(r.outcome, CheckOutcome::Fail))
-            .count()
+        self.checks.iter().filter(|r| r.is_gating_failure()).count()
+    }
+
+    /// Number of checks with outcome [`CheckOutcome::Fail`] on
+    /// `in-progress` specs — informational only, does not gate.
+    #[must_use = "the count is part of the summary output"]
+    pub fn in_flight_checks(&self) -> usize {
+        self.checks.iter().filter(|r| r.is_in_flight()).count()
     }
 
     /// Number of checks with outcome [`CheckOutcome::Manual`].
@@ -195,10 +203,22 @@ fn collect_check_specs(ws: &Workspace, err: &mut dyn Write) -> Result<Vec<CheckS
             .spec_id
             .clone()
             .unwrap_or_else(|| display_spec_label(&parsed.dir));
+        let spec_status = parsed
+            .spec_md
+            .as_ref()
+            .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+        // Skip defunct specs entirely: their checks should never run.
+        if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
+            continue;
+        }
         match &parsed.spec_toml {
             Ok(toml) => {
                 for check in &toml.checks {
-                    out.push(CheckSpec::from_entry(label.clone(), check));
+                    out.push(CheckSpec::from_entry(
+                        label.clone(),
+                        spec_status.as_str(),
+                        check,
+                    ));
                 }
             }
             Err(e) => {
@@ -231,8 +251,13 @@ mod tests {
     }
 
     fn check(outcome: CheckOutcome) -> CheckResult {
+        check_with_status(outcome, "implemented")
+    }
+
+    fn check_with_status(outcome: CheckOutcome, status: &str) -> CheckResult {
         CheckResult {
             spec_id: "SPEC-0001".into(),
+            spec_status: status.into(),
             check_id: "CHK-001".into(),
             kind: "test".into(),
             outcome,
@@ -320,5 +345,43 @@ mod tests {
             repo_sha: String::new(),
         };
         assert!(report.passed());
+    }
+
+    #[test]
+    fn in_progress_fail_is_in_flight_not_gating() {
+        let report = VerifyReport {
+            lint_errors: vec![],
+            lint_warnings: vec![],
+            lint_info: vec![],
+            checks: vec![
+                check(CheckOutcome::Pass),
+                check_with_status(CheckOutcome::Fail, "in-progress"),
+            ],
+            repo_sha: String::new(),
+        };
+        assert!(
+            report.passed(),
+            "Fail on in-progress spec must not gate verify",
+        );
+        assert_eq!(report.passed_checks(), 1);
+        assert_eq!(report.failed_checks(), 0, "implemented-failures count");
+        assert_eq!(report.in_flight_checks(), 1, "in-progress failures count");
+    }
+
+    #[test]
+    fn implemented_fail_still_gates() {
+        let report = VerifyReport {
+            lint_errors: vec![],
+            lint_warnings: vec![],
+            lint_info: vec![],
+            checks: vec![check_with_status(CheckOutcome::Fail, "implemented")],
+            repo_sha: String::new(),
+        };
+        assert!(
+            !report.passed(),
+            "Fail on implemented spec must gate verify"
+        );
+        assert_eq!(report.failed_checks(), 1);
+        assert_eq!(report.in_flight_checks(), 0);
     }
 }

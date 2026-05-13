@@ -269,7 +269,8 @@ fn run_all_not_fail_fast() -> TestResult {
     write_spec(
         &ws.root,
         "0001-mixed",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented: the failure must gate so exit code is 1.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_three_outcomes(),
         None,
     )?;
@@ -330,7 +331,7 @@ fn manual_check_does_not_affect_exit_code() -> TestResult {
     assert!(err.contains("<-- CHK-002 MANUAL (verify and proceed)"));
 
     // Summary on stdout reflects the manual count.
-    assert!(out.contains("Checks: 2 passed, 0 failed, 1 manual"));
+    assert!(out.contains("Checks: 2 passed, 0 failed, 0 in-flight, 1 manual"));
     Ok(())
 }
 
@@ -377,7 +378,8 @@ fn binary_exit_code_check_only_failure() -> TestResult {
     write_spec(
         &ws.root,
         "0001-fail",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented status: failing checks gate the exit code.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_passing("exit 1"),
         None,
     )?;
@@ -433,7 +435,7 @@ fn text_summary_output_last_three_lines() -> TestResult {
         last,
         vec![
             "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 1 passed, 0 failed, 0 manual",
+            "Checks: 1 passed, 0 failed, 0 in-flight, 0 manual",
             "verify: PASS",
         ],
         "expected the three summary lines; out:\n{out}\nerr:\n{err}",
@@ -447,7 +449,8 @@ fn text_summary_output_failure_shows_fail() -> TestResult {
     write_spec(
         &ws.root,
         "0001-fail",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented: failure gates -> FAIL verdict.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_passing("exit 1"),
         None,
     )?;
@@ -458,7 +461,7 @@ fn text_summary_output_failure_shows_fail() -> TestResult {
         last,
         vec![
             "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 1 failed, 0 manual",
+            "Checks: 0 passed, 1 failed, 0 in-flight, 0 manual",
             "verify: FAIL",
         ],
     );
@@ -474,7 +477,7 @@ fn text_summary_output_empty_workspace_passes() -> TestResult {
         last,
         vec![
             "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 0 failed, 0 manual",
+            "Checks: 0 passed, 0 failed, 0 in-flight, 0 manual",
             "verify: PASS",
         ],
     );
@@ -531,7 +534,19 @@ fn json_contract_shape() -> TestResult {
     assert_eq!(at(&json, &["summary", "lint", "errors"]), &Value::from(0));
     assert_eq!(at(&json, &["summary", "checks", "passed"]), &Value::from(2));
     assert_eq!(at(&json, &["summary", "checks", "failed"]), &Value::from(0));
+    assert_eq!(
+        at(&json, &["summary", "checks", "in_flight"]),
+        &Value::from(0),
+        "JSON summary must expose the in-flight bucket",
+    );
     assert_eq!(at(&json, &["summary", "checks", "manual"]), &Value::from(1));
+
+    // Each check entry now carries spec_status for harness filtering.
+    assert_eq!(
+        field(first, "spec_status"),
+        &Value::from("in-progress"),
+        "per-check JSON entries must include spec_status",
+    );
 
     // passed bool mirrors exit code.
     assert_eq!(field(&json, "passed"), &Value::Bool(true));
@@ -625,7 +640,8 @@ fn json_passed_field_mirrors_exit_check_only() -> TestResult {
     write_spec(
         &ws.root,
         "0001-check-only",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented: failing check must gate (exit 1, passed=false).
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_passing("exit 1"),
         None,
     )?;
@@ -678,7 +694,8 @@ fn binary_propagates_exit_one_on_failure() -> TestResult {
     write_spec(
         &ws.root,
         "0001-fail",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented: failing check must gate the exit code.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_passing("exit 1"),
         None,
     )?;
@@ -686,6 +703,64 @@ fn binary_propagates_exit_one_on_failure() -> TestResult {
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("verify").current_dir(ws.root.as_std_path());
     cmd.assert().failure().code(1);
+    Ok(())
+}
+
+#[test]
+fn in_progress_spec_failures_do_not_gate_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-flight",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_toml_passing("exit 1"),
+        None,
+    )?;
+
+    let (code, out, err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0, "in-progress failures must not gate; err:\n{err}");
+    assert!(
+        err.contains("IN-FLIGHT"),
+        "footer must use IN-FLIGHT wording: {err}",
+    );
+    let last = last_n_lines(&out, 3);
+    assert_eq!(
+        last,
+        vec![
+            "Lint: 0 errors, 0 warnings, 0 info",
+            "Checks: 0 passed, 0 failed, 1 in-flight, 0 manual",
+            "verify: PASS",
+        ],
+    );
+    Ok(())
+}
+
+#[test]
+fn dropped_spec_checks_are_skipped_in_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-dropped",
+        &spec_md_template("SPEC-0001", "dropped"),
+        &spec_toml_passing("exit 1"),
+        None,
+    )?;
+
+    let (code, out, err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0, "dropped spec checks must not run");
+    assert!(
+        !err.contains("CHK-001"),
+        "no per-check framing for dropped specs: {err}",
+    );
+    let last = last_n_lines(&out, 3);
+    assert_eq!(
+        last,
+        vec![
+            "Lint: 0 errors, 0 warnings, 0 info",
+            "Checks: 0 passed, 0 failed, 0 in-flight, 0 manual",
+            "verify: PASS",
+        ],
+    );
     Ok(())
 }
 

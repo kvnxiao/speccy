@@ -13,6 +13,7 @@ use camino::Utf8PathBuf;
 use speccy_core::exec::shell_command;
 use speccy_core::parse::CheckEntry;
 use speccy_core::parse::CheckPayload;
+use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
@@ -61,10 +62,12 @@ pub struct CheckArgs {
     pub id: Option<String>,
 }
 
-/// One check enriched with the `spec_id` it came from (for header lines).
+/// One check enriched with the `spec_id` and parent-spec lifecycle
+/// status (drives in-flight categorisation and header lines).
 #[derive(Debug, Clone)]
 struct CollectedCheck {
     spec_id: String,
+    spec_status: SpecStatus,
     entry: CheckEntry,
 }
 
@@ -150,8 +153,9 @@ fn execute_checks(
 ) -> Result<i32, CheckError> {
     let mut passed: u32 = 0;
     let mut failed: u32 = 0;
+    let mut in_flight: u32 = 0;
     let mut manual: u32 = 0;
-    let mut first_nonzero: Option<i32> = None;
+    let mut first_gating_nonzero: Option<i32> = None;
 
     for c in checks {
         match &c.entry.payload {
@@ -163,19 +167,24 @@ fn execute_checks(
                 let code = run_executable(c, command, project_root, out)?;
                 if code == 0 {
                     passed = passed.saturating_add(1);
+                } else if matches!(c.spec_status, SpecStatus::InProgress) {
+                    in_flight = in_flight.saturating_add(1);
                 } else {
                     failed = failed.saturating_add(1);
-                    if first_nonzero.is_none() {
-                        first_nonzero = Some(code);
+                    if first_gating_nonzero.is_none() {
+                        first_gating_nonzero = Some(code);
                     }
                 }
             }
         }
     }
 
-    writeln!(out, "{passed} passed, {failed} failed, {manual} manual")?;
+    writeln!(
+        out,
+        "{passed} passed, {failed} failed, {in_flight} in-flight, {manual} manual",
+    )?;
 
-    let exit = first_nonzero.unwrap_or(i32::from(malformed > 0));
+    let exit = first_gating_nonzero.unwrap_or(i32::from(malformed > 0));
     Ok(exit)
 }
 
@@ -212,6 +221,12 @@ fn run_executable(
 
     if code == 0 {
         writeln!(out, "<-- {} PASS", c.entry.id)?;
+    } else if matches!(c.spec_status, SpecStatus::InProgress) {
+        writeln!(
+            out,
+            "<-- {} IN-FLIGHT (in-progress spec, exit {code})",
+            c.entry.id,
+        )?;
     } else {
         writeln!(out, "<-- {} FAIL (exit {code})", c.entry.id)?;
     }
@@ -229,11 +244,20 @@ fn collect_checks(
             .spec_id
             .clone()
             .unwrap_or_else(|| display_spec_label(&parsed.dir));
+        let spec_status = parsed
+            .spec_md
+            .as_ref()
+            .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+        // Skip defunct specs entirely: their checks should never run.
+        if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
+            continue;
+        }
         match &parsed.spec_toml {
             Ok(toml) => {
                 for check in &toml.checks {
                     out.push(CollectedCheck {
                         spec_id: label.clone(),
+                        spec_status,
                         entry: check.clone(),
                     });
                 }

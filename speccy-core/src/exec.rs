@@ -74,6 +74,12 @@ impl CheckOutcome {
 pub struct CheckSpec {
     /// Spec the check belongs to (e.g. `SPEC-0001`).
     pub spec_id: String,
+    /// Lifecycle status of the parent spec (`"in-progress"` or
+    /// `"implemented"`). Drives footer wording and exit-code semantics
+    /// in `speccy check` / `speccy verify`: a `Fail` outcome on an
+    /// `in-progress` spec is reported as `IN-FLIGHT` and does not gate
+    /// the exit code.
+    pub spec_status: String,
     /// Stable `CHK-NNN` identifier.
     pub check_id: String,
     /// Free-form kind label.
@@ -87,15 +93,21 @@ pub struct CheckSpec {
 }
 
 impl CheckSpec {
-    /// Construct from a parsed [`CheckEntry`] plus the spec it came from.
+    /// Construct from a parsed [`CheckEntry`] plus the spec it came from
+    /// (id and lifecycle status).
     #[must_use = "the returned CheckSpec is the input to run_checks_captured"]
-    pub fn from_entry(spec_id: impl Into<String>, entry: &CheckEntry) -> Self {
+    pub fn from_entry(
+        spec_id: impl Into<String>,
+        spec_status: impl Into<String>,
+        entry: &CheckEntry,
+    ) -> Self {
         let (command, prompt) = match &entry.payload {
             CheckPayload::Command(c) => (Some(c.clone()), None),
             CheckPayload::Prompt(p) => (None, Some(p.clone())),
         };
         Self {
             spec_id: spec_id.into(),
+            spec_status: spec_status.into(),
             check_id: entry.id.clone(),
             kind: entry.kind.clone(),
             command,
@@ -110,6 +122,11 @@ impl CheckSpec {
 pub struct CheckResult {
     /// Spec the check belongs to.
     pub spec_id: String,
+    /// Lifecycle status of the parent spec (`"in-progress"` /
+    /// `"implemented"`). Mirrored from [`CheckSpec::spec_status`] so
+    /// consumers can categorise results without re-parsing the
+    /// workspace.
+    pub spec_status: String,
     /// Stable `CHK-NNN` identifier.
     pub check_id: String,
     /// Free-form kind label.
@@ -121,6 +138,26 @@ pub struct CheckResult {
     /// Wall-clock duration in milliseconds. Not serialised to JSON in
     /// v1 (omitted for byte-determinism across runs).
     pub duration_ms: Option<u64>,
+}
+
+impl CheckResult {
+    /// Whether this result is a "real" failure that should gate the
+    /// `speccy verify` exit code.
+    ///
+    /// `true` only when the outcome is [`CheckOutcome::Fail`] **and** the
+    /// owning spec's status is `"implemented"`. Fail outcomes from
+    /// `in-progress` specs are treated as in-flight signal, not regression.
+    #[must_use = "the gating decision drives exit code"]
+    pub fn is_gating_failure(&self) -> bool {
+        matches!(self.outcome, CheckOutcome::Fail) && self.spec_status == "implemented"
+    }
+
+    /// Whether this result is a `Fail` outcome on an `in-progress` spec
+    /// (work-in-flight; not gating).
+    #[must_use = "the in-flight category drives summary output"]
+    pub fn is_in_flight(&self) -> bool {
+        matches!(self.outcome, CheckOutcome::Fail) && self.spec_status == "in-progress"
+    }
 }
 
 /// Execute every check in `checks` serially, tee'ing each child's stdio
@@ -172,6 +209,7 @@ fn run_one(
             writeln!(err, "<-- {} FAIL (malformed)", c.check_id)?;
             Ok(CheckResult {
                 spec_id: c.spec_id.clone(),
+                spec_status: c.spec_status.clone(),
                 check_id: c.check_id.clone(),
                 kind: c.kind.clone(),
                 outcome: CheckOutcome::Fail,
@@ -192,6 +230,7 @@ fn render_manual(c: &CheckSpec, prompt: &str, err: &mut dyn Write) -> std::io::R
     writeln!(err, "<-- {} MANUAL (verify and proceed)", c.check_id)?;
     Ok(CheckResult {
         spec_id: c.spec_id.clone(),
+        spec_status: c.spec_status.clone(),
         check_id: c.check_id.clone(),
         kind: c.kind.clone(),
         outcome: CheckOutcome::Manual,
@@ -221,6 +260,7 @@ fn run_executable(
             writeln!(err, "<-- {} FAIL (spawn error: {spawn_err})", c.check_id)?;
             return Ok(CheckResult {
                 spec_id: c.spec_id.clone(),
+                spec_status: c.spec_status.clone(),
                 check_id: c.check_id.clone(),
                 kind: c.kind.clone(),
                 outcome: CheckOutcome::Fail,
@@ -239,6 +279,7 @@ fn run_executable(
         writeln!(err, "<-- {} FAIL (missing child pipes)", c.check_id)?;
         return Ok(CheckResult {
             spec_id: c.spec_id.clone(),
+            spec_status: c.spec_status.clone(),
             check_id: c.check_id.clone(),
             kind: c.kind.clone(),
             outcome: CheckOutcome::Fail,
@@ -286,8 +327,15 @@ fn run_executable(
     };
     let duration_ms = u64::try_from(start.elapsed().as_millis()).ok();
 
+    let is_in_flight = matches!(outcome, CheckOutcome::Fail) && c.spec_status == "in-progress";
     match outcome {
         CheckOutcome::Pass => writeln!(err, "<-- {} PASS", c.check_id)?,
+        CheckOutcome::Fail if is_in_flight => writeln!(
+            err,
+            "<-- {} IN-FLIGHT (in-progress spec, exit {code})",
+            c.check_id,
+            code = exit_code.unwrap_or(-1),
+        )?,
         CheckOutcome::Fail => writeln!(
             err,
             "<-- {} FAIL (exit {code})",
@@ -299,6 +347,7 @@ fn run_executable(
 
     Ok(CheckResult {
         spec_id: c.spec_id.clone(),
+        spec_status: c.spec_status.clone(),
         check_id: c.check_id.clone(),
         kind: c.kind.clone(),
         outcome,
@@ -363,7 +412,7 @@ mod tests {
             proves: "x".into(),
             payload: CheckPayload::Command("echo".into()),
         };
-        let spec = CheckSpec::from_entry("SPEC-0001", &entry);
+        let spec = CheckSpec::from_entry("SPEC-0001", "implemented", &entry);
         assert_eq!(spec.command.as_deref(), Some("echo"));
         assert!(spec.prompt.is_none());
     }
@@ -376,7 +425,7 @@ mod tests {
             proves: "x".into(),
             payload: CheckPayload::Prompt("verify".into()),
         };
-        let spec = CheckSpec::from_entry("SPEC-0001", &entry);
+        let spec = CheckSpec::from_entry("SPEC-0001", "implemented", &entry);
         assert!(spec.command.is_none());
         assert_eq!(spec.prompt.as_deref(), Some("verify"));
     }

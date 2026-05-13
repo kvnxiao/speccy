@@ -17,9 +17,13 @@ use std::io::Write;
 ///
 /// ```text
 /// Lint: <E> errors, <W> warnings, <I> info
-/// Checks: <P> passed, <F> failed, <M> manual
+/// Checks: <P> passed, <F> failed, <FL> in-flight, <M> manual
 /// verify: PASS|FAIL
 /// ```
+///
+/// `failed` counts only `Fail` outcomes on `implemented` specs (which
+/// gate the exit code); `in-flight` counts `Fail` outcomes on
+/// `in-progress` specs (informational, do not gate). See SPEC-0012.
 ///
 /// # Errors
 ///
@@ -34,9 +38,10 @@ pub fn write_text(report: &VerifyReport, out: &mut dyn Write) -> std::io::Result
     )?;
     writeln!(
         out,
-        "Checks: {p} passed, {f} failed, {m} manual",
+        "Checks: {p} passed, {f} failed, {fl} in-flight, {m} manual",
         p = report.passed_checks(),
         f = report.failed_checks(),
+        fl = report.in_flight_checks(),
         m = report.manual_checks(),
     )?;
     let verdict = if report.passed() { "PASS" } else { "FAIL" };
@@ -69,6 +74,7 @@ pub fn write_json(report: &VerifyReport, out: &mut dyn Write) -> Result<(), Veri
             checks: JsonCheckCounts {
                 passed: report.passed_checks(),
                 failed: report.failed_checks(),
+                in_flight: report.in_flight_checks(),
                 manual: report.manual_checks(),
             },
         },
@@ -93,6 +99,7 @@ fn lint_block(report: &VerifyReport) -> JsonLintBlock {
 fn json_check(r: &CheckResult) -> JsonCheck {
     JsonCheck {
         spec_id: r.spec_id.clone(),
+        spec_status: r.spec_status.clone(),
         check_id: r.check_id.clone(),
         kind: r.kind.clone(),
         outcome: r.outcome.as_str().to_owned(),
@@ -123,6 +130,10 @@ pub struct JsonOutput {
 pub struct JsonCheck {
     /// Spec the check belongs to.
     pub spec_id: String,
+    /// Lifecycle status of the parent spec (`"in-progress"` or
+    /// `"implemented"`). Lets consumers distinguish gating failures
+    /// from in-flight signal without re-parsing the workspace.
+    pub spec_status: String,
     /// Stable `CHK-NNN` identifier.
     pub check_id: String,
     /// Free-form kind label.
@@ -159,8 +170,10 @@ pub struct JsonLintCounts {
 pub struct JsonCheckCounts {
     /// `Pass` count.
     pub passed: usize,
-    /// `Fail` count.
+    /// `Fail` count on `implemented` specs (gates the exit code).
     pub failed: usize,
+    /// `Fail` count on `in-progress` specs (work-in-flight; informational).
+    pub in_flight: usize,
     /// `Manual` count.
     pub manual: usize,
 }

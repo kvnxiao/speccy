@@ -232,7 +232,7 @@ fn discovers_workspace_checks() -> TestResult {
         "headers must appear in (spec ascending, declared check order):\n{out}"
     );
 
-    assert!(out.contains("6 passed, 0 failed, 0 manual"));
+    assert!(out.contains("6 passed, 0 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -314,7 +314,7 @@ fn malformed_spec_toml_warns_and_other_specs_run() -> TestResult {
         "stderr should name SPEC-0001 and call out spec.toml; got:\n{err}"
     );
     // 4 checks across SPEC-0002 + SPEC-0003 still ran.
-    assert!(out.contains("4 passed, 0 failed, 0 manual"));
+    assert!(out.contains("4 passed, 0 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -346,7 +346,7 @@ fn id_filter_matches_across_specs() -> TestResult {
     assert!(out.contains("==> CHK-001 (SPEC-0003)"));
     assert!(!out.contains("CHK-002"));
     assert!(!out.contains("CHK-003"));
-    assert!(out.contains("2 passed, 0 failed, 0 manual"));
+    assert!(out.contains("2 passed, 0 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -456,7 +456,7 @@ fn live_streaming_smoke_via_binary() -> TestResult {
         .stdout(contains("==> CHK-001 (SPEC-0001)"))
         .stdout(contains("hello"))
         .stdout(contains("<-- CHK-001 PASS"))
-        .stdout(contains("1 passed, 0 failed, 0 manual"));
+        .stdout(contains("1 passed, 0 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -470,7 +470,11 @@ fn exit_code_first_nonzero_wins() -> TestResult {
     write_spec(
         &ws.root,
         "0001-mixed",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented status: failures gate the exit code (regression
+        // semantic). In-progress would categorise the failures as
+        // in-flight and exit 0; that path is covered separately by
+        // `in_progress_spec_failures_are_in_flight_not_gating`.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_pass_fail_fail(),
         None,
     )?;
@@ -481,7 +485,7 @@ fn exit_code_first_nonzero_wins() -> TestResult {
     assert!(out.contains("<-- CHK-001 PASS"));
     assert!(out.contains("<-- CHK-002 FAIL (exit 2)"));
     assert!(out.contains("<-- CHK-003 FAIL (exit 1)"));
-    assert!(out.contains("1 passed, 2 failed, 0 manual"));
+    assert!(out.contains("1 passed, 2 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -498,7 +502,7 @@ fn all_passing_returns_zero() -> TestResult {
 
     let (code, out, _err) = invoke(&ws.root, None)?;
     assert_eq!(code, 0);
-    assert!(out.contains("2 passed, 0 failed, 0 manual"));
+    assert!(out.contains("2 passed, 0 failed, 0 in-flight, 0 manual"));
     Ok(())
 }
 
@@ -512,7 +516,9 @@ fn manual_check_renders_prompt_and_footer() -> TestResult {
     write_spec(
         &ws.root,
         "0001-manual",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented so CHK-003's failure gates the exit code; the
+        // in-progress / in-flight path is covered separately.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_with_manual(),
         None,
     )?;
@@ -526,7 +532,7 @@ fn manual_check_renders_prompt_and_footer() -> TestResult {
     assert!(out.contains("<-- CHK-002 MANUAL (verify and proceed)"));
 
     // Manual count appears in summary.
-    assert!(out.contains("1 passed, 1 failed, 1 manual"));
+    assert!(out.contains("1 passed, 1 failed, 0 in-flight, 1 manual"));
     Ok(())
 }
 
@@ -556,7 +562,7 @@ fn manual_only_workspace_returns_zero() -> TestResult {
 
     let (code, out, _err) = invoke(&ws.root, None)?;
     assert_eq!(code, 0);
-    assert!(out.contains("0 passed, 0 failed, 1 manual"));
+    assert!(out.contains("0 passed, 0 failed, 0 in-flight, 1 manual"));
     Ok(())
 }
 
@@ -570,7 +576,7 @@ fn summary_is_last_stdout_line() -> TestResult {
     write_spec(
         &ws.root,
         "0001-mix",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_with_manual(),
         None,
     )?;
@@ -580,7 +586,7 @@ fn summary_is_last_stdout_line() -> TestResult {
         .lines()
         .last()
         .expect("output must have at least one line");
-    assert_eq!(last_line, "1 passed, 1 failed, 1 manual");
+    assert_eq!(last_line, "1 passed, 1 failed, 0 in-flight, 1 manual");
     Ok(())
 }
 
@@ -621,7 +627,8 @@ fn binary_propagates_first_nonzero_exit() -> TestResult {
     write_spec(
         &ws.root,
         "0001-mixed",
-        &spec_md_template("SPEC-0001", "in-progress"),
+        // Implemented so the failing checks gate the exit code.
+        &spec_md_template("SPEC-0001", "implemented"),
         &spec_toml_pass_fail_fail(),
         None,
     )?;
@@ -629,6 +636,50 @@ fn binary_propagates_first_nonzero_exit() -> TestResult {
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("check").current_dir(ws.root.as_std_path());
     cmd.assert().failure().code(2);
+    Ok(())
+}
+
+#[test]
+fn in_progress_spec_failures_are_in_flight_not_gating() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-mixed",
+        // In-progress: failing checks are categorised as in-flight
+        // and do NOT gate the exit code.
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_toml_pass_fail_fail(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, None)?;
+    assert_eq!(code, 0, "in-progress failures must not gate; out:\n{out}");
+    assert!(
+        out.contains("<-- CHK-002 IN-FLIGHT (in-progress spec, exit 2)"),
+        "footer must use IN-FLIGHT wording for in-progress failures: {out}",
+    );
+    assert!(out.contains("1 passed, 0 failed, 2 in-flight, 0 manual"));
+    Ok(())
+}
+
+#[test]
+fn dropped_spec_is_skipped_entirely() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-dropped",
+        &spec_md_template("SPEC-0001", "dropped"),
+        &spec_toml_pass_fail_fail(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, None)?;
+    assert_eq!(code, 0);
+    assert!(
+        !out.contains("CHK-001") && !out.contains("CHK-002") && !out.contains("CHK-003"),
+        "no checks from a dropped spec should run: {out}",
+    );
+    assert!(out.contains("No checks defined."));
     Ok(())
 }
 

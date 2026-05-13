@@ -29,6 +29,7 @@ fn sandbox() -> Sandbox {
 fn passing_spec(spec_id: &str, check_id: &str, command: &str) -> CheckSpec {
     CheckSpec {
         spec_id: spec_id.to_owned(),
+        spec_status: "implemented".to_owned(),
         check_id: check_id.to_owned(),
         kind: "test".to_owned(),
         command: Some(command.to_owned()),
@@ -40,6 +41,7 @@ fn passing_spec(spec_id: &str, check_id: &str, command: &str) -> CheckSpec {
 fn manual_spec(spec_id: &str, check_id: &str, prompt: &str) -> CheckSpec {
     CheckSpec {
         spec_id: spec_id.to_owned(),
+        spec_status: "implemented".to_owned(),
         check_id: check_id.to_owned(),
         kind: "manual".to_owned(),
         command: None,
