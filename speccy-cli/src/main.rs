@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <init|plan|status|check|verify> [args]";
+const USAGE: &str = "speccy <init|plan|tasks|status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -27,6 +27,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
     match command.as_str() {
         "init" => run_init(iter.as_slice()).map(|()| 0_u8),
         "plan" => run_plan(iter.as_slice()).map(|()| 0_u8),
+        "tasks" => run_tasks(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
         "verify" => run_verify(iter.as_slice()),
@@ -161,6 +162,81 @@ fn invoke_plan(cwd: &Utf8PathBuf, spec_id: Option<String>) -> Result<(), u8> {
         }
         Err(e) => {
             eprintln!("speccy plan: {e}");
+            Err(1)
+        }
+    }
+}
+
+fn run_tasks(args: &[String]) -> Result<(), u8> {
+    let mut spec_id: Option<String> = None;
+    let mut commit = false;
+    for arg in args {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy tasks SPEC-ID [--commit]");
+                return Ok(());
+            }
+            "--commit" => commit = true,
+            other if other.starts_with("--") => {
+                eprintln!("speccy tasks: unknown flag `{other}`");
+                eprintln!("usage: speccy tasks SPEC-ID [--commit]");
+                return Err(2);
+            }
+            positional if spec_id.is_none() => spec_id = Some(positional.to_owned()),
+            extra => {
+                eprintln!("speccy tasks: unexpected extra argument `{extra}`");
+                eprintln!("usage: speccy tasks SPEC-ID [--commit]");
+                return Err(2);
+            }
+        }
+    }
+
+    let Some(id) = spec_id else {
+        eprintln!("speccy tasks: missing required SPEC-ID argument");
+        eprintln!("usage: speccy tasks SPEC-ID [--commit]");
+        return Err(2);
+    };
+
+    let cwd = match speccy_cli::tasks::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy tasks: {e}");
+            return Err(1);
+        }
+    };
+    invoke_tasks(&cwd, id, commit)
+}
+
+fn invoke_tasks(cwd: &Utf8PathBuf, spec_id: String, commit: bool) -> Result<(), u8> {
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::tasks::run(
+        speccy_cli::tasks::TasksArgs { spec_id, commit },
+        cwd,
+        &mut stdout,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(e @ speccy_cli::tasks::TasksError::InvalidSpecIdFormat { .. }) => {
+            eprintln!("speccy tasks: {e}");
+            Err(2)
+        }
+        Err(speccy_cli::tasks::TasksError::Commit(inner)) => {
+            eprintln!("speccy tasks: --commit failed: {inner}");
+            Err(1)
+        }
+        Err(speccy_cli::tasks::TasksError::Parse {
+            artifact,
+            id,
+            source,
+        }) => {
+            eprintln!("speccy tasks: failed to parse {artifact} for {id}: {source}");
+            Err(1)
+        }
+        Err(e) => {
+            eprintln!("speccy tasks: {e}");
             Err(1)
         }
     }

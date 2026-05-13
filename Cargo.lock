@@ -766,6 +766,7 @@ dependencies = [
  "fs-err",
  "include_dir",
  "indoc",
+ "jiff",
  "predicates",
  "regex",
  "serde",

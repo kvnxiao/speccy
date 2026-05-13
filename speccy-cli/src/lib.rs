@@ -15,5 +15,6 @@ pub mod init;
 pub mod plan;
 pub mod status;
 pub mod status_output;
+pub mod tasks;
 pub mod verify;
 pub mod verify_output;
