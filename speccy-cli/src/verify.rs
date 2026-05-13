@@ -25,6 +25,7 @@ use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
+use std::collections::HashMap;
 use std::io::Write;
 use thiserror::Error;
 
@@ -147,7 +148,8 @@ pub fn run(
 
     let workspace = scan(&project_root);
     let diagnostics = lint::run(&workspace.as_lint_workspace());
-    let (lint_errors, lint_warnings, lint_info) = partition_lint(diagnostics);
+    let status_by_spec = build_status_map(&workspace);
+    let (lint_errors, lint_warnings, lint_info) = partition_lint(diagnostics, &status_by_spec);
 
     let check_specs = collect_check_specs(&workspace, err)?;
     let checks = run_checks_captured(&check_specs, &project_root, err)?;
@@ -180,13 +182,30 @@ pub fn resolve_cwd() -> Result<Utf8PathBuf, VerifyError> {
     Utf8PathBuf::from_path_buf(std_path).map_err(|_path| VerifyError::CwdNotUtf8)
 }
 
+/// Partition diagnostics into severity buckets, demoting `Level::Error`
+/// diagnostics on `in-progress` specs to `Level::Info`.
+///
+/// Mirrors the check-side filter introduced in commit a5b5fea: drafted
+/// specs (those still being authored) should not gate `speccy verify`
+/// when their TASKS.md or SPEC.md hasn't been polished yet. Workspace-
+/// level diagnostics (no `spec_id`) and diagnostics on `implemented` /
+/// `dropped` / `superseded` specs keep their original severity.
 fn partition_lint(
     diagnostics: Vec<Diagnostic>,
+    status_by_spec: &HashMap<String, SpecStatus>,
 ) -> (Vec<Diagnostic>, Vec<Diagnostic>, Vec<Diagnostic>) {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
     let mut info = Vec::new();
-    for d in diagnostics {
+    for mut d in diagnostics {
+        if matches!(d.level, Level::Error)
+            && d.spec_id
+                .as_deref()
+                .and_then(|id| status_by_spec.get(id).copied())
+                == Some(SpecStatus::InProgress)
+        {
+            d.level = Level::Info;
+        }
         match d.level {
             Level::Error => errors.push(d),
             Level::Warn => warnings.push(d),
@@ -194,6 +213,17 @@ fn partition_lint(
         }
     }
     (errors, warnings, info)
+}
+
+fn build_status_map(ws: &Workspace) -> HashMap<String, SpecStatus> {
+    ws.specs
+        .iter()
+        .filter_map(|s| {
+            let id = s.spec_id.clone()?;
+            let status = s.spec_md.as_ref().ok()?.frontmatter.status;
+            Some((id, status))
+        })
+        .collect()
 }
 
 fn collect_check_specs(ws: &Workspace, err: &mut dyn Write) -> Result<Vec<CheckSpec>, VerifyError> {
@@ -240,7 +270,9 @@ fn display_spec_label(dir: &Utf8Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::Diagnostic;
+    use super::HashMap;
     use super::Level;
+    use super::SpecStatus;
     use super::VerifyReport;
     use super::partition_lint;
     use speccy_core::exec::CheckOutcome;
@@ -248,6 +280,10 @@ mod tests {
 
     fn diag(code: &'static str, level: Level) -> Diagnostic {
         Diagnostic::spec_only(code, level, None, "test")
+    }
+
+    fn diag_for_spec(code: &'static str, level: Level, spec_id: &str) -> Diagnostic {
+        Diagnostic::spec_only(code, level, Some(spec_id.to_owned()), "test")
     }
 
     fn check(outcome: CheckOutcome) -> CheckResult {
@@ -278,10 +314,47 @@ mod tests {
             diag("SPC-006", Level::Warn),
             diag("SPC-002", Level::Error),
         ];
-        let (errors, warnings, info) = partition_lint(diagnostics);
+        let (errors, warnings, info) = partition_lint(diagnostics, &HashMap::new());
         assert_eq!(errors.len(), 2);
         assert_eq!(warnings.len(), 1);
         assert_eq!(info.len(), 1);
+    }
+
+    #[test]
+    fn partition_lint_demotes_errors_on_in_progress_specs() {
+        let diagnostics = vec![
+            diag_for_spec("TSK-001", Level::Error, "SPEC-0001"),
+            diag_for_spec("TSK-001", Level::Error, "SPEC-0002"),
+            diag_for_spec("SPC-006", Level::Warn, "SPEC-0001"),
+        ];
+        let mut status_map: HashMap<String, SpecStatus> = HashMap::new();
+        status_map.insert("SPEC-0001".to_owned(), SpecStatus::InProgress);
+        status_map.insert("SPEC-0002".to_owned(), SpecStatus::Implemented);
+
+        let (errors, warnings, info) = partition_lint(diagnostics, &status_map);
+        assert_eq!(errors.len(), 1, "implemented spec error must remain gating");
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            info.len(),
+            1,
+            "in-progress spec error must be demoted to info"
+        );
+        assert_eq!(
+            info.first().map(|d| d.spec_id.as_deref()),
+            Some(Some("SPEC-0001"))
+        );
+    }
+
+    #[test]
+    fn partition_lint_keeps_workspace_level_errors_gating() {
+        // Diagnostics with no spec_id (workspace-level) keep Error.
+        let diagnostics = vec![diag("SPC-001", Level::Error)];
+        let mut status_map: HashMap<String, SpecStatus> = HashMap::new();
+        status_map.insert("SPEC-0001".to_owned(), SpecStatus::InProgress);
+
+        let (errors, _warnings, info) = partition_lint(diagnostics, &status_map);
+        assert_eq!(errors.len(), 1, "workspace-level Error must not be demoted");
+        assert!(info.is_empty());
     }
 
     #[test]

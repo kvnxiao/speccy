@@ -373,6 +373,91 @@ fn binary_exit_code_lint_only_failure() -> TestResult {
 }
 
 #[test]
+fn in_progress_spec_lint_errors_do_not_gate_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    // SPEC.md parses cleanly with status: in-progress, but TASKS.md
+    // references a REQ that doesn't exist in SPEC.md/spec.toml. That's a
+    // TSK-001 Level::Error — but on an in-progress spec, it must be
+    // demoted to info and not gate verify.
+    let tasks_md = indoc! {r"
+        ---
+        spec: SPEC-0001
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        - [ ] **T-001**: covers a non-existent REQ
+          - Covers: REQ-999
+    "};
+    write_spec(
+        &ws.root,
+        "0001-drafted",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_toml_passing("exit 0"),
+        Some(tasks_md),
+    )?;
+
+    let (code, out, err) = invoke(&ws.root, true)?;
+    assert_eq!(
+        code, 0,
+        "TSK-001 on an in-progress spec must not gate; err:\n{err}",
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+    assert_eq!(
+        at(&json, &["summary", "lint", "errors"]),
+        &Value::from(0),
+        "demoted TSK-001 must not count as an error; json:\n{out}",
+    );
+    assert_eq!(field(&json, "passed"), &Value::Bool(true));
+
+    let info = at(&json, &["lint", "info"])
+        .as_array()
+        .expect("lint.info array");
+    let demoted = info
+        .iter()
+        .find(|d| field(d, "code").as_str() == Some("TSK-001"))
+        .expect("demoted TSK-001 must appear in info bucket");
+    assert_eq!(
+        field(demoted, "level"),
+        &Value::from("info"),
+        "demoted diagnostic must carry level=info",
+    );
+    Ok(())
+}
+
+#[test]
+fn implemented_spec_lint_errors_still_gate_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    // Same TSK-001 shape as the in-progress test above, but the parent
+    // spec is implemented; the error must remain gating.
+    let tasks_md = indoc! {r"
+        ---
+        spec: SPEC-0001
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        - [x] **T-001**: covers a non-existent REQ
+          - Covers: REQ-999
+    "};
+    write_spec(
+        &ws.root,
+        "0001-shipped",
+        &spec_md_template("SPEC-0001", "implemented"),
+        &spec_toml_passing("exit 0"),
+        Some(tasks_md),
+    )?;
+
+    let (code, _out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(
+        code, 1,
+        "TSK-001 on an implemented spec must still gate verify",
+    );
+    Ok(())
+}
+
+#[test]
 fn binary_exit_code_check_only_failure() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(

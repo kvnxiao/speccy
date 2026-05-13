@@ -56,7 +56,7 @@ generated_at: 2026-05-11T00:00:00Z
   - Suggested files: `speccy-core/src/workspace.rs` (extend or split), `speccy-core/tests/task_state_aggregation.rs`
 
 - [x] **T-005**: Implement open-questions counter
-  - Covers: REQ-006 (text view), REQ-007 (JSON contract)
+  - Covers: REQ-006, REQ-007
   - Tests to write:
     - Count of unchecked `- [ ]` items in `## Open questions` matches.
     - Checked `- [x]` items don't count.
@@ -122,7 +122,7 @@ generated_at: 2026-05-11T00:00:00Z
 ## Phase 7: CLI wiring
 
 - [x] **T-011**: Wire `speccy status [--json]` into the binary
-  - Covers: REQ-001..REQ-007
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007
   - Tests to write:
     - `speccy status` runs from any cwd inside a speccy workspace.
     - `speccy status` from outside a workspace -> exit code 1 with a clear `WorkspaceError::NoSpeccyDir` message.
