@@ -14,6 +14,7 @@ pub mod host;
 pub mod implement;
 pub mod init;
 pub mod plan;
+pub mod review;
 pub mod status;
 pub mod status_output;
 pub mod tasks;

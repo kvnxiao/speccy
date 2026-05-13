@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <init|plan|tasks|implement|status|check|verify> [args]";
+const USAGE: &str = "speccy <init|plan|tasks|implement|review|status|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -29,6 +29,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
         "plan" => run_plan(iter.as_slice()).map(|()| 0_u8),
         "tasks" => run_tasks(iter.as_slice()).map(|()| 0_u8),
         "implement" => run_implement(iter.as_slice()).map(|()| 0_u8),
+        "review" => run_review(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
         "verify" => run_verify(iter.as_slice()),
@@ -328,6 +329,128 @@ fn invoke_implement(cwd: &Utf8PathBuf, task_ref: String) -> Result<(), u8> {
         }
         Err(e) => {
             eprintln!("speccy implement: {e}");
+            Err(1)
+        }
+    }
+}
+
+fn run_review(args: &[String]) -> Result<(), u8> {
+    let mut task_ref: Option<String> = None;
+    let mut persona: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy review TASK-ID --persona <name>");
+                println!("       TASK-ID is T-NNN (searches all specs) or SPEC-NNNN/T-NNN");
+                println!(
+                    "       <name> is one of: business, tests, security, style, architecture, docs",
+                );
+                return Ok(());
+            }
+            "--persona" => {
+                let Some(value) = iter.next() else {
+                    eprintln!("speccy review: --persona requires a value");
+                    eprintln!("usage: speccy review TASK-ID --persona <name>");
+                    return Err(2);
+                };
+                persona = Some(value.clone());
+            }
+            other if other.starts_with("--persona=") => {
+                let value = other.strip_prefix("--persona=").unwrap_or("");
+                persona = Some(value.to_owned());
+            }
+            other if other.starts_with("--") => {
+                eprintln!("speccy review: unknown flag `{other}`");
+                eprintln!("usage: speccy review TASK-ID --persona <name>");
+                return Err(2);
+            }
+            positional if task_ref.is_none() => task_ref = Some(positional.to_owned()),
+            extra => {
+                eprintln!("speccy review: unexpected extra argument `{extra}`");
+                eprintln!("usage: speccy review TASK-ID --persona <name>");
+                return Err(2);
+            }
+        }
+    }
+
+    let Some(arg) = task_ref else {
+        eprintln!("speccy review: missing required TASK-ID argument");
+        eprintln!("usage: speccy review TASK-ID --persona <name>");
+        return Err(2);
+    };
+
+    let Some(p) = persona else {
+        eprintln!("speccy review: missing required --persona <name>");
+        eprintln!("usage: speccy review TASK-ID --persona <name>");
+        eprintln!(
+            "  valid personas: {}",
+            speccy_core::personas::ALL.join(", "),
+        );
+        return Err(1);
+    };
+
+    let cwd = match speccy_cli::review::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy review: {e}");
+            return Err(1);
+        }
+    };
+    invoke_review(&cwd, arg, p)
+}
+
+fn invoke_review(cwd: &Utf8PathBuf, task_ref: String, persona: String) -> Result<(), u8> {
+    use speccy_cli::review::ReviewError;
+    use speccy_core::personas::PersonaError;
+    use speccy_core::task_lookup::LookupError;
+
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::review::run(
+        &speccy_cli::review::ReviewArgs { task_ref, persona },
+        cwd,
+        &mut stdout,
+    );
+    if stdout.flush().is_err() {
+        // stdout closed; nothing more to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(ReviewError::Lookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy review: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            Err(1)
+        }
+        Err(ReviewError::Lookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy review: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            Err(1)
+        }
+        Err(ReviewError::Lookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy review: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy review {spec_id}/{task_id} --persona <name>");
+            }
+            Err(1)
+        }
+        Err(ReviewError::Persona(PersonaError::UnknownName { name, valid })) => {
+            eprintln!("speccy review: unknown persona `{name}`");
+            eprintln!("  valid personas: {}", valid.join(", "));
+            Err(1)
+        }
+        Err(ReviewError::Prompt(e)) => {
+            eprintln!("speccy review: prompt template error: {e}");
+            Err(2)
+        }
+        Err(e) => {
+            eprintln!("speccy review: {e}");
             Err(1)
         }
     }
