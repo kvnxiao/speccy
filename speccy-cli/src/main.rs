@@ -8,7 +8,7 @@ use camino::Utf8PathBuf;
 use std::io::Write as _;
 use std::process::ExitCode;
 
-const USAGE: &str = "speccy <init|plan|tasks|implement|review|status|check|verify> [args]";
+const USAGE: &str = "speccy <init|plan|tasks|implement|review|status|next|check|verify> [args]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -31,6 +31,7 @@ fn dispatch(args: &[String]) -> Result<u8, u8> {
         "implement" => run_implement(iter.as_slice()).map(|()| 0_u8),
         "review" => run_review(iter.as_slice()).map(|()| 0_u8),
         "status" => run_status(iter.as_slice()).map(|()| 0_u8),
+        "next" => run_next(iter.as_slice()).map(|()| 0_u8),
         "check" => run_check(iter.as_slice()),
         "verify" => run_verify(iter.as_slice()),
         "--help" | "-h" | "help" => {
@@ -489,6 +490,78 @@ fn invoke_status(cwd: &Utf8PathBuf, json: bool) -> Result<(), u8> {
         Ok(()) => Ok(()),
         Err(e) => {
             eprintln!("speccy status: {e}");
+            Err(1)
+        }
+    }
+}
+
+fn run_next(args: &[String]) -> Result<(), u8> {
+    let mut kind: Option<speccy_core::next::KindFilter> = None;
+    let mut json = false;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("usage: speccy next [--kind implement|review] [--json]");
+                return Ok(());
+            }
+            "--json" => json = true,
+            "--kind" => {
+                let Some(value) = iter.next() else {
+                    eprintln!("speccy next: --kind requires a value (`implement` or `review`)");
+                    eprintln!("usage: speccy next [--kind implement|review] [--json]");
+                    return Err(2);
+                };
+                kind = Some(parse_kind(value)?);
+            }
+            other if other.starts_with("--kind=") => {
+                let value = other.strip_prefix("--kind=").unwrap_or("");
+                kind = Some(parse_kind(value)?);
+            }
+            other => {
+                eprintln!("speccy next: unknown argument `{other}`");
+                eprintln!("usage: speccy next [--kind implement|review] [--json]");
+                return Err(2);
+            }
+        }
+    }
+
+    let cwd = match speccy_cli::next::resolve_cwd() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy next: {e}");
+            return Err(1);
+        }
+    };
+    invoke_next(&cwd, kind, json)
+}
+
+fn parse_kind(value: &str) -> Result<speccy_core::next::KindFilter, u8> {
+    match value {
+        "implement" => Ok(speccy_core::next::KindFilter::Implement),
+        "review" => Ok(speccy_core::next::KindFilter::Review),
+        other => {
+            eprintln!("speccy next: invalid --kind `{other}` (expected `implement` or `review`)");
+            eprintln!("usage: speccy next [--kind implement|review] [--json]");
+            Err(2)
+        }
+    }
+}
+
+fn invoke_next(
+    cwd: &Utf8PathBuf,
+    kind: Option<speccy_core::next::KindFilter>,
+    json: bool,
+) -> Result<(), u8> {
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::next::run(speccy_cli::next::NextArgs { kind, json }, cwd, &mut stdout);
+    if stdout.flush().is_err() {
+        // stdout closed; nothing useful to do.
+    }
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            eprintln!("speccy next: {e}");
             Err(1)
         }
     }

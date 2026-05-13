@@ -4,6 +4,7 @@
 pub mod error;
 pub mod exec;
 pub mod lint;
+pub mod next;
 pub mod parse;
 pub mod personas;
 pub mod prompt;
