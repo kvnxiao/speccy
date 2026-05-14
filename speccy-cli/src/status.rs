@@ -171,6 +171,20 @@ fn partition_diagnostics(
     (per_spec, workspace_level)
 }
 
+fn count_by_level(diagnostics: &[Diagnostic]) -> (usize, usize, usize) {
+    let mut errors = 0;
+    let mut warnings = 0;
+    let mut info = 0;
+    for diag in diagnostics {
+        match diag.level {
+            Level::Error => errors += 1,
+            Level::Warn => warnings += 1,
+            Level::Info => info += 1,
+        }
+    }
+    (errors, warnings, info)
+}
+
 fn build_view<'a>(
     workspace: &Workspace,
     parsed: &'a speccy_core::lint::ParsedSpec,
@@ -350,21 +364,7 @@ fn render_spec_text(view: &SpecView<'_>, out: &mut dyn std::io::Write) -> Result
     );
     write_line(out, &tasks_line)?;
 
-    let errors = view
-        .diagnostics
-        .iter()
-        .filter(|d| matches!(d.level, Level::Error))
-        .count();
-    let warnings = view
-        .diagnostics
-        .iter()
-        .filter(|d| matches!(d.level, Level::Warn))
-        .count();
-    let info = view
-        .diagnostics
-        .iter()
-        .filter(|d| matches!(d.level, Level::Info))
-        .count();
+    let (errors, warnings, info) = count_by_level(&view.diagnostics);
     let lint_line = format!("  lint: {errors} errors, {warnings} warnings, {info} info");
     write_line(out, &lint_line)?;
 

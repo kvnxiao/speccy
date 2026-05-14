@@ -137,7 +137,7 @@ fn req_id_regex() -> &'static Regex {
 /// `status` value, or YAML deserialisation failures.
 pub fn spec_md(path: &Utf8Path) -> Result<SpecMd, ParseError> {
     let raw = read_to_string(path)?;
-    let sha256 = compute_sha256(raw.as_bytes());
+    let sha256: [u8; 32] = Sha256::digest(raw.as_bytes()).into();
 
     let frontmatter = parse_frontmatter(&raw, path)?;
     let (requirements, changelog) = parse_body(&raw);
@@ -149,12 +149,6 @@ pub fn spec_md(path: &Utf8Path) -> Result<SpecMd, ParseError> {
         raw,
         sha256,
     })
-}
-
-fn compute_sha256(bytes: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hasher.finalize().into()
 }
 
 fn parse_frontmatter(raw: &str, path: &Utf8Path) -> Result<SpecFrontmatter, ParseError> {

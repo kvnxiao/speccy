@@ -66,7 +66,7 @@ pub fn trim_to_budget_with_warn<W: Write>(
     let mut dropped: Vec<String> = Vec::new();
 
     let steps: [(&str, DropStep); 5] = [
-        ("## Notes", drop_notes_section),
+        ("## Notes", |c| drop_section_by_heading(c, "Notes")),
         ("answered open questions", drop_answered_open_questions),
         (
             "Changelog rows older than 5 most recent",
@@ -76,7 +76,9 @@ pub fn trim_to_budget_with_warn<W: Write>(
             "task review notes older than 3 most recent per task",
             trim_task_review_notes,
         ),
-        ("other specs' summaries", drop_other_specs_summaries),
+        ("other specs' summaries", |c| {
+            drop_section_by_heading(c, "Other specs")
+        }),
     ];
 
     for (label, step) in steps {
@@ -106,14 +108,6 @@ pub fn trim_to_budget_with_warn<W: Write>(
         dropped,
         fits,
     }
-}
-
-fn drop_notes_section(content: &str) -> Option<String> {
-    drop_section_by_heading(content, "Notes")
-}
-
-fn drop_other_specs_summaries(content: &str) -> Option<String> {
-    drop_section_by_heading(content, "Other specs")
 }
 
 fn drop_section_by_heading(content: &str, heading_name: &str) -> Option<String> {
