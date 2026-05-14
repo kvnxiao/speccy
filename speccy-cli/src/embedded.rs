@@ -1,66 +1,85 @@
-//! Compile-time embedded skill bundle.
+//! Compile-time embedded resource bundle.
 //!
-//! `include_dir!` snapshots the workspace `skills/` tree into the binary
-//! at build time (per SPEC-0002 DEC-001). Layout under [`SKILLS`],
-//! per SPEC-0015:
+//! `include_dir!` snapshots the workspace `resources/` tree into the
+//! binary at build time (per SPEC-0002 DEC-001, re-targeted by
+//! SPEC-0016 T-007). The bundle is structured into two top-level
+//! subtrees:
 //!
-//! - `claude-code/speccy-<verb>/SKILL.md` -- Claude Code skills; copied to
-//!   `.claude/skills/speccy-<verb>/SKILL.md` at init time so the pack is
-//!   discoverable as host-native skills (not slash commands).
-//! - `codex/speccy-<verb>/SKILL.md` -- Codex skills; copied to
-//!   `.agents/skills/speccy-<verb>/SKILL.md` (the project-local scan path
-//!   `OpenAI`'s Codex docs list). Layout mirrors the Claude Code pack 1:1.
-//! - `shared/personas/*.md` -- persona definitions; copied to
-//!   `.speccy/skills/personas/` so SPEC-0009's reviewer-persona resolver can
-//!   find them as project-local overrides.
-//! - `shared/prompts/*.md` -- prompt templates; copied to
-//!   `.speccy/skills/prompts/` so future overrides have a documented home (the
-//!   prompts are also loaded directly from the embedded bundle by
-//!   `speccy-core::prompt::template`).
+//! - `agents/.<install_root>/...` -- host-specific wrapper templates whose
+//!   folder structure mirrors the install destination 1:1. For `.claude/`
+//!   Claude Code wrappers land under
+//!   `agents/.claude/skills/speccy-<verb>/SKILL.md.tmpl`; Codex wrappers split
+//!   between `agents/.agents/` (skill packs, per SPEC-0015) and
+//!   `agents/.codex/` (subagents, per `OpenAI`'s Codex subagents docs).
+//! - `modules/...` -- host-neutral content, single-source for every wrapper to
+//!   `{% include %}`. Personas live at
+//!   `modules/personas/reviewer-<persona>.md`, prompts at
+//!   `modules/prompts/<name>.md`, skill bodies at
+//!   `modules/skills/speccy-<verb>.md`.
+//!
+//! [`crate::render`] consumes both subtrees at init time: it walks
+//! `agents/.<install_root>/` for each install root the chosen host
+//! writes to, then renders each `.tmpl` file through `MiniJinja` with a
+//! loader rooted at `modules/`.
 
 use include_dir::Dir;
 use include_dir::include_dir;
 
-/// Embedded copy of the workspace `skills/` directory.
-pub static SKILLS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills");
+/// Embedded copy of the workspace `resources/` directory.
+///
+/// Layout invariants asserted by the in-module tests: at least the
+/// `agents/` and `modules/` top-level subtrees exist, each non-empty,
+/// and key per-host wrapper / module-body files resolve to a present
+/// file.
+pub static RESOURCES: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../resources");
 
 #[cfg(test)]
 mod tests {
-    use super::SKILLS;
+    use super::RESOURCES;
 
     #[test]
     fn claude_code_pack_contains_init_recipe() {
         assert!(
-            SKILLS
-                .get_file("claude-code/speccy-init/SKILL.md")
+            RESOURCES
+                .get_file("agents/.claude/skills/speccy-init/SKILL.md.tmpl")
                 .is_some(),
-            "bundle should contain claude-code/speccy-init/SKILL.md",
+            "bundle should contain agents/.claude/skills/speccy-init/SKILL.md.tmpl",
         );
     }
 
     #[test]
     fn codex_pack_contains_init_recipe() {
         assert!(
-            SKILLS.get_file("codex/speccy-init/SKILL.md").is_some(),
-            "bundle should contain codex/speccy-init/SKILL.md",
-        );
-    }
-
-    #[test]
-    fn shared_personas_contain_security_reviewer() {
-        assert!(
-            SKILLS
-                .get_file("shared/personas/reviewer-security.md")
+            RESOURCES
+                .get_file("agents/.agents/skills/speccy-init/SKILL.md.tmpl")
                 .is_some(),
-            "bundle should contain shared/personas/reviewer-security.md",
+            "bundle should contain agents/.agents/skills/speccy-init/SKILL.md.tmpl",
         );
     }
 
     #[test]
     fn root_bundle_is_non_empty() {
+        let top_level: Vec<&str> = RESOURCES
+            .dirs()
+            .filter_map(|d| d.path().file_name().and_then(|n| n.to_str()))
+            .collect();
         assert!(
-            SKILLS.dirs().count() >= 3,
-            "SKILLS should contain at least claude-code/, codex/, shared/",
+            top_level.contains(&"agents") && top_level.contains(&"modules"),
+            "RESOURCES should contain `agents/` and `modules/` top-level subtrees; got: {top_level:?}",
+        );
+        let agents = RESOURCES
+            .get_dir("agents")
+            .expect("RESOURCES.get_dir(\"agents\") should resolve");
+        assert!(
+            agents.dirs().count() >= 1,
+            "agents/ subtree should be non-empty",
+        );
+        let modules = RESOURCES
+            .get_dir("modules")
+            .expect("RESOURCES.get_dir(\"modules\") should resolve");
+        assert!(
+            modules.dirs().count() >= 1,
+            "modules/ subtree should be non-empty",
         );
     }
 }

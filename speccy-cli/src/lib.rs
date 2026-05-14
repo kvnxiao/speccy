@@ -16,6 +16,7 @@ pub mod init;
 pub mod next;
 pub mod next_output;
 pub mod plan;
+pub mod render;
 pub mod report;
 pub mod review;
 pub mod status;

@@ -8,7 +8,7 @@
 //! mechanically derived from one source.
 //!
 //! Persona content is markdown shipped under
-//! `skills/shared/personas/reviewer-<name>.md`. Resolution order:
+//! `resources/modules/personas/reviewer-<name>.md`. Resolution order:
 //!
 //! 1. **Project-local override.**
 //!    `<project_root>/.speccy/skills/personas/reviewer-<name>.md`.
@@ -34,9 +34,12 @@ use thiserror::Error;
 /// Embedded copy of every shipped reviewer-persona markdown file.
 ///
 /// Mirrors [`crate::prompt::template`]'s embedded prompts directory, but
-/// scoped to `skills/shared/personas/` so persona resolution does not
-/// depend on the binary crate's separate `SKILLS` bundle.
-static PERSONAS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills/shared/personas");
+/// scoped to `resources/modules/personas/` so persona resolution does
+/// not depend on the binary crate's separate `SKILLS` bundle. SPEC-0016
+/// T-002 moved the embedded source from `skills/shared/personas/` to
+/// `resources/modules/personas/`; the resolver chain (project-local
+/// override → embedded bundle) and external API are unchanged.
+pub static PERSONAS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../resources/modules/personas");
 
 /// All reviewer personas shipped with Speccy, in declared order.
 ///

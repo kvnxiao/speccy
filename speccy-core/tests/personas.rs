@@ -137,6 +137,32 @@ fn resolve_unknown_name_returns_unknown_name_error() {
     );
 }
 
+// --------------------------------------------------------------------
+// SPEC-0016 T-002: embedded source path moved from
+// `skills/shared/personas/` to `resources/modules/personas/`.
+// --------------------------------------------------------------------
+
+#[test]
+fn t002_resolve_reviewer_security_returns_shipped_body_with_pre_move_first_line() {
+    // After T-002, the embedded path is `resources/modules/personas/`.
+    // The file content itself is byte-identical to the pre-move file
+    // under `skills/shared/personas/`. The first line of the shipped
+    // reviewer-security persona is the stable `# Reviewer Persona:
+    // Security` header; if that drifts, the registry / resolver wiring
+    // has regressed.
+    let (_tmp, root) = make_tmp_root();
+    let body = resolve_file("security", &root)
+        .expect("post-T-002 resolver must still return the embedded reviewer-security persona");
+    let first_line = body
+        .lines()
+        .next()
+        .expect("persona body must have at least one line");
+    assert_eq!(
+        first_line, "# Reviewer Persona: Security",
+        "post-move resolver must return the same body as pre-move (first line stable)",
+    );
+}
+
 #[test]
 fn resolve_does_not_check_host_native_locations() {
     let (_tmp, root) = make_tmp_root();

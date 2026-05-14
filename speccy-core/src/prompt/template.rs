@@ -1,17 +1,19 @@
 //! Embedded prompt-template loader.
 //!
 //! Templates ship inside the binary via [`include_dir!`] from the
-//! `skills/shared/prompts/` directory at the workspace root. Per
+//! `resources/modules/prompts/` directory at the workspace root. Per
 //! SPEC-0005 DEC-002 and SPEC-0002 DEC-001 (`include_dir!` for
-//! embedded resources).
+//! embedded resources). SPEC-0016 T-002 moved the embedded source from
+//! `skills/shared/prompts/` to `resources/modules/prompts/`; the
+//! lookup API is unchanged.
 
 use include_dir::Dir;
 use include_dir::include_dir;
 use thiserror::Error;
 
 /// Embedded copy of every shipped prompt template. Sourced from
-/// `skills/shared/prompts/` at compile time.
-static PROMPTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills/shared/prompts");
+/// `resources/modules/prompts/` at compile time.
+pub static PROMPTS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../resources/modules/prompts");
 
 /// Failure mode of [`load_template`].
 #[derive(Debug, Error)]
@@ -34,8 +36,8 @@ pub enum PromptError {
 
 /// Look up an embedded prompt template by file name.
 ///
-/// `name` is the file name within `skills/shared/prompts/`, including
-/// the `.md` extension (e.g. `"plan-greenfield.md"`).
+/// `name` is the file name within `resources/modules/prompts/`,
+/// including the `.md` extension (e.g. `"plan-greenfield.md"`).
 ///
 /// # Errors
 ///

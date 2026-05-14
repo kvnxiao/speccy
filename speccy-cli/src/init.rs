@@ -7,13 +7,16 @@
 //!
 //! See `.speccy/specs/0002-init-command/SPEC.md`.
 
-use crate::embedded::SKILLS;
 use crate::host::Detected;
 use crate::host::HostChoice;
 use crate::host::detect_host;
+use crate::render::RenderError;
+use crate::render::render_host_pack;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use include_dir::Dir;
+use speccy_core::personas::PERSONAS;
+use speccy_core::prompt::PROMPTS;
 use std::io::Write;
 use std::path::Component;
 use thiserror::Error;
@@ -44,15 +47,12 @@ pub enum InitError {
         ".cursor/ detected but speccy v1 ships no Cursor pack; pass --host claude-code or --host codex"
     )]
     CursorDetected,
-    /// Embedded bundle is missing a sub-path the build is supposed to
-    /// guarantee. Reachable only if the workspace `skills/` tree is
-    /// edited in a way that strips a required sub-directory before the
-    /// next release.
-    #[error("embedded skill bundle is missing sub-path `{subpath}`; this is a build bug")]
-    BundleSubpathMissing {
-        /// Sub-path inside [`SKILLS`] that came back `None`.
-        subpath: &'static str,
-    },
+    /// `MiniJinja` template render failed during host-pack materialisation.
+    /// Wraps the [`RenderError`] from [`crate::render`] so the dispatcher
+    /// can surface the failing template name without re-walking the
+    /// bundle.
+    #[error("template render failed")]
+    Render(#[from] RenderError),
     /// Failure during workspace mutation (`fs_err::write`, `create_dir_all`).
     #[error("I/O error during init")]
     Io(#[from] std::io::Error),
@@ -180,29 +180,58 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
         action: speccy_toml_action,
     });
 
-    let dest_segs = host.destination_segments();
-    let host_dest_root = project_root.join(dest_segs[0]).join(dest_segs[1]);
-    append_bundle_items(host.bundle_subpath(), &host_dest_root, &mut plan)?;
+    append_host_pack_items(project_root, host, &mut plan)?;
 
     let personas_dest = project_root.join(".speccy").join("skills").join("personas");
-    append_bundle_items("shared/personas", &personas_dest, &mut plan)?;
+    append_dir_items(&PERSONAS, &personas_dest, &mut plan);
 
     let prompts_dest = project_root.join(".speccy").join("skills").join("prompts");
-    append_bundle_items("shared/prompts", &prompts_dest, &mut plan)?;
+    append_dir_items(&PROMPTS, &prompts_dest, &mut plan);
 
     Ok(plan)
 }
 
-fn append_bundle_items(
-    subpath: &'static str,
-    dest_root: &Utf8Path,
+/// Materialise the host-templated wrapper pack via [`render_host_pack`]
+/// and append one [`PlanItem`] per rendered file to `plan`.
+///
+/// SPEC-0016 T-007 replaced the previous per-host SKILL.md filesystem
+/// walk: wrappers under `resources/agents/.<install_root>/` are now
+/// rendered through `MiniJinja` with the host's template context (see
+/// [`HostChoice::template_context`]), `.tmpl` suffixes are stripped,
+/// and the resulting `rel_path` is joined onto `project_root` to give
+/// the absolute destination. Create/Overwrite classification and the
+/// `--force` plan-print behaviour stay unchanged because every entry
+/// still flows through [`classify`] at plan-build time.
+fn append_host_pack_items(
+    project_root: &Utf8Path,
+    host: HostChoice,
     plan: &mut Vec<PlanItem>,
 ) -> Result<(), InitError> {
-    let Some(dir) = SKILLS.get_dir(subpath) else {
-        return Err(InitError::BundleSubpathMissing { subpath });
-    };
+    let rendered = render_host_pack(host)?;
+    for file in rendered {
+        let destination = project_root.join(&file.rel_path);
+        let action = classify(&destination);
+        plan.push(PlanItem {
+            destination,
+            content: file.contents.into_bytes(),
+            action,
+        });
+    }
+    Ok(())
+}
+
+/// Walk a self-rooted embedded directory (one whose own root *is* the
+/// content to copy, with no per-host subtree prefix) and append one
+/// [`PlanItem`] per shipped markdown file to `plan`. Used for the
+/// shared persona and prompt bundles re-exported from `speccy-core`
+/// after the SPEC-0016 T-002 layout move.
+fn append_dir_items(dir: &'static Dir<'static>, dest_root: &Utf8Path, plan: &mut Vec<PlanItem>) {
+    // Strip the directory's own root segment so each entry lands flat
+    // under `dest_root`, matching the pre-T-002 behaviour of writing
+    // every persona / prompt straight into the destination folder.
+    let prefix = dir.path().to_str().unwrap_or_default().to_owned();
     let mut entries: Vec<(Utf8PathBuf, &'static [u8])> = Vec::new();
-    collect_bundle_files(dir, subpath, &mut entries);
+    collect_bundle_files(dir, &prefix, &mut entries);
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     for (rel, content) in entries {
         let dest = dest_root.join(&rel);
@@ -213,7 +242,6 @@ fn append_bundle_items(
             action,
         });
     }
-    Ok(())
 }
 
 fn collect_bundle_files(

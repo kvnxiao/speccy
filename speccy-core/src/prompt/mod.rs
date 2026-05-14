@@ -29,5 +29,6 @@ pub use budget::trim_to_budget;
 pub use id_alloc::allocate_next_spec_id;
 pub use mission_md::find_nearest_mission_md;
 pub use render::render;
+pub use template::PROMPTS;
 pub use template::PromptError;
 pub use template::load_template;

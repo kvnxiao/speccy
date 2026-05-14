@@ -25,8 +25,21 @@ implementations complete.
 
 2. If the result is empty or `blocked`, exit the loop.
 3. The JSON includes a `personas` array (default fan-out:
-   `business`, `tests`, `security`, `style`). For each persona, render
-   the reviewer prompt:
+   `business`, `tests`, `security`, `style`).
+4. Spawn the four reviewer sub-agents in parallel via the
+   host-native subagent primitive. Each sub-agent appends exactly
+   one inline note to the task in TASKS.md.
+
+   Prose-spawn the four reviewer subagents by name in parallel:
+   `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
+   `reviewer-style`. Codex resolves each name to its TOML file at
+   `.codex/agents/reviewer-<persona>.toml`, so the persona body is
+   already loaded as the sub-agent's developer instructions.
+
+   Fallback for harnesses that do not recognise the subagent type:
+   render the persona prompt to stdout with the existing CLI and
+   splice the output into the spawned sub-agent's system prompt
+   directly:
 
    ```bash
    speccy review T-003 --persona business
@@ -35,8 +48,6 @@ implementations complete.
    speccy review T-003 --persona style
    ```
 
-4. Spawn the four reviewer sub-agents in parallel. Each sub-agent
-   appends exactly one inline note to the task in TASKS.md.
 5. After all four return, read the appended notes. If every persona
    wrote `pass`, flip `[?]` -> `[x]`. If any wrote `blocking`, flip
    `[?]` -> `[ ]` and append a `Retry: ...` note summarising the

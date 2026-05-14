@@ -25,10 +25,13 @@ committed. Can be rerun after `/speccy-review` flips tasks back to
 
 2. If the result is `kind: blocked` or empty, exit the loop and tell
    the user no implementable tasks remain.
-3. If the result is a task, render the implementer prompt:
+3. If the result is a task, render the implementer prompt using the
+   disambiguated `<spec>/<task>` form constructed from the JSON's
+   `spec` and `task` fields (the bare `prompt_command` field is
+   ambiguous across specs — every spec has its own `T-001`):
 
    ```bash
-   speccy implement T-003
+   speccy implement SPEC-0007/T-003
    ```
 
 4. Spawn an implementer sub-agent with that prompt. The sub-agent

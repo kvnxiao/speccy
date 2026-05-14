@@ -13,6 +13,7 @@
 
 use crate::init::InitError;
 use camino::Utf8Path;
+use serde::Serialize;
 
 /// Selected host pack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,22 +37,19 @@ impl HostChoice {
         }
     }
 
-    /// Sub-path inside the embedded `skills/` bundle to copy from.
-    #[must_use = "the sub-path drives the embedded-bundle source for the copy"]
-    pub const fn bundle_subpath(self) -> &'static str {
-        match self {
-            HostChoice::ClaudeCode => "claude-code",
-            HostChoice::Codex => "codex",
-        }
-    }
-
-    /// Destination directory relative to the project root.
+    /// Project-relative skill install directory split into its two
+    /// path segments. SPEC-0015 documents the destination paths; the
+    /// bundle layout now mirrors the install destination 1:1 via
+    /// [`Self::install_roots`], so a separate sub-path constant is
+    /// redundant.
     ///
-    /// Per SPEC-0015, both hosts use their published project-local skills
-    /// directory so the shipped pack is discoverable as host-native skills
-    /// (not slash commands). Claude Code: `.claude/skills/`. Codex:
-    /// `.agents/skills/` per `OpenAI`'s docs at
-    /// `developers.openai.com/codex/skills`.
+    /// This split form is retained for callers that classify
+    /// `--force` user-file safety: tests in `speccy-cli/tests/init.rs`
+    /// (and the SPEC-0015 invariant preserved across SPEC-0016) join
+    /// these segments onto the project root when reasoning about which
+    /// shipped files the renderer will overwrite. Claude Code:
+    /// `.claude/skills/`. Codex: `.agents/skills/` per `OpenAI`'s docs
+    /// at `developers.openai.com/codex/skills`.
     #[must_use = "the destination path is where the copy lands on disk"]
     pub const fn destination_segments(self) -> [&'static str; 2] {
         match self {
@@ -59,6 +57,76 @@ impl HostChoice {
             HostChoice::Codex => [".agents", "skills"],
         }
     }
+
+    /// Project-relative install roots this host writes to.
+    ///
+    /// Claude Code writes only to `.claude/`. Codex writes to two
+    /// siblings: `.agents/` for skills (per SPEC-0015 and `OpenAI`'s
+    /// project-local skill scan path) and `.codex/` for subagents
+    /// (per `OpenAI`'s Codex subagents docs, which list
+    /// `.codex/agents/` as the project-local subagent scan path).
+    ///
+    /// The SPEC-0016 renderer iterates these to walk the matching
+    /// `resources/agents/<root>/` subtrees in the embedded bundle.
+    #[must_use = "the install roots drive which resources/agents/ subtrees are rendered"]
+    pub const fn install_roots(self) -> &'static [&'static str] {
+        match self {
+            HostChoice::ClaudeCode => &[".claude"],
+            HostChoice::Codex => &[".agents", ".codex"],
+        }
+    }
+
+    /// `MiniJinja` template context for this host.
+    ///
+    /// The returned [`minijinja::Value`] carries four string-typed
+    /// keys used by every `resources/agents/<host>/*.tmpl` wrapper
+    /// and by the host-divergent blocks inside
+    /// `resources/modules/skills/speccy-*.md`:
+    ///
+    /// - `host`: lowercase host name (`"claude-code"` or `"codex"`). The skill
+    ///   bodies' `{% if host == "claude-code" %}` blocks key off this value.
+    /// - `cmd_prefix`: `"/"` for Claude Code's slash-prefixed skill
+    ///   invocations, `""` for Codex's bare skill names.
+    /// - `host_display_name`: human-facing host name (`"Claude Code"` or
+    ///   `"Codex"`) used in skill prose.
+    /// - `skill_install_path`: project-relative skill install directory
+    ///   (`".claude/skills"` or `".agents/skills"`), used by `speccy-init`'s
+    ///   skill body to tell users where the pack lands.
+    #[must_use = "the template context drives every substitution in resources/agents/<host>/*.tmpl"]
+    pub fn template_context(self) -> minijinja::Value {
+        minijinja::Value::from_serialize(self.template_context_raw())
+    }
+
+    fn template_context_raw(self) -> TemplateContext {
+        match self {
+            HostChoice::ClaudeCode => TemplateContext {
+                host: "claude-code",
+                cmd_prefix: "/",
+                host_display_name: "Claude Code",
+                skill_install_path: ".claude/skills",
+            },
+            HostChoice::Codex => TemplateContext {
+                host: "codex",
+                cmd_prefix: "",
+                host_display_name: "Codex",
+                skill_install_path: ".agents/skills",
+            },
+        }
+    }
+}
+
+/// Internal serializable representation of [`HostChoice::template_context`].
+///
+/// Kept private: external callers receive a [`minijinja::Value`] so the
+/// keys are stable but the carrier type can evolve. `Serialize` is the
+/// only trait `MiniJinja` needs to materialise this into a `Value` via
+/// `Value::from_serialize`.
+#[derive(Debug, Clone, Copy, Serialize)]
+struct TemplateContext {
+    host: &'static str,
+    cmd_prefix: &'static str,
+    host_display_name: &'static str,
+    skill_install_path: &'static str,
 }
 
 /// Supported `--host` values, in the order they're listed in error
@@ -209,5 +277,52 @@ mod tests {
             .as_ref()
             .expect("fallback should carry a warning");
         assert!(warning.contains("claude-code"));
+    }
+
+    #[test]
+    fn install_roots_claude_code_is_dot_claude() {
+        assert_eq!(HostChoice::ClaudeCode.install_roots(), &[".claude"]);
+    }
+
+    #[test]
+    fn install_roots_codex_is_dot_agents_and_dot_codex() {
+        assert_eq!(HostChoice::Codex.install_roots(), &[".agents", ".codex"]);
+    }
+
+    /// Render a probe template against the host's template context and
+    /// return the result. Exercising the context through a real
+    /// `MiniJinja` render keeps the test focused on what the renderer
+    /// actually consumes — the four string keys, surfaced via the
+    /// `{{ var }}` substitution path — rather than poking at the
+    /// internal shape of [`minijinja::Value`].
+    fn render_probe(host: HostChoice) -> String {
+        let mut env = minijinja::Environment::new();
+        env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+        env.add_template(
+            "probe",
+            "{{ host }}|{{ cmd_prefix }}|{{ host_display_name }}|{{ skill_install_path }}",
+        )
+        .expect("probe template should register cleanly");
+        let tmpl = env
+            .get_template("probe")
+            .expect("probe template should be retrievable after registration");
+        tmpl.render(host.template_context())
+            .expect("probe template should render with the host context")
+    }
+
+    #[test]
+    fn template_context_claude_code_renders_expected_keys() {
+        assert_eq!(
+            render_probe(HostChoice::ClaudeCode),
+            "claude-code|/|Claude Code|.claude/skills",
+        );
+    }
+
+    #[test]
+    fn template_context_codex_renders_expected_keys() {
+        assert_eq!(
+            render_probe(HostChoice::Codex),
+            "codex||Codex|.agents/skills",
+        );
     }
 }

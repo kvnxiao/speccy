@@ -44,6 +44,30 @@ fn loads_plan_amend_template_from_embedded_bundle() {
     );
 }
 
+// --------------------------------------------------------------------
+// SPEC-0016 T-002: embedded path moved from `skills/shared/prompts/`
+// to `resources/modules/prompts/`. The renderer must return the file
+// body byte-identical to the on-disk source after the move.
+// --------------------------------------------------------------------
+
+/// On-disk source under the new T-002 location. If the move dropped or
+/// rewrote the file, this `include_str!` fails to compile, surfacing
+/// the regression before the test even runs.
+const PLAN_GREENFIELD_SOURCE: &str =
+    include_str!("../../resources/modules/prompts/plan-greenfield.md");
+
+#[test]
+fn t002_plan_greenfield_load_template_is_byte_identical_to_source() {
+    let loaded = load_template("plan-greenfield.md")
+        .expect("plan-greenfield.md must ship in the embedded bundle");
+    assert_eq!(
+        loaded, PLAN_GREENFIELD_SOURCE,
+        "load_template must return the on-disk body byte-identical \
+         after T-002 moved the source from skills/shared/prompts/ to \
+         resources/modules/prompts/",
+    );
+}
+
 #[test]
 fn unknown_template_name_returns_template_not_found() {
     let err = load_template("nonexistent.md")

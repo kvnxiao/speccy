@@ -25,8 +25,23 @@ implementations complete.
 
 2. If the result is empty or `blocked`, exit the loop.
 3. The JSON includes a `personas` array (default fan-out:
-   `business`, `tests`, `security`, `style`). For each persona, render
-   the reviewer prompt:
+   `business`, `tests`, `security`, `style`).
+4. Spawn the four reviewer sub-agents in parallel via the
+   host-native subagent primitive. Each sub-agent appends exactly
+   one inline note to the task in TASKS.md.
+
+   Invoke the `Task` tool four times in parallel, once per persona,
+   with `subagent_type: "reviewer-business"`,
+   `subagent_type: "reviewer-tests"`,
+   `subagent_type: "reviewer-security"`, and
+   `subagent_type: "reviewer-style"`. Each subagent resolves to its
+   markdown file at `.claude/agents/reviewer-<persona>.md`, so the
+   persona body is already loaded for the sub-agent.
+
+   Fallback for harnesses that do not recognise the subagent type:
+   render the persona prompt to stdout with the existing CLI and
+   splice the output into the spawned sub-agent's system prompt
+   directly:
 
    ```bash
    speccy review T-003 --persona business
@@ -35,8 +50,6 @@ implementations complete.
    speccy review T-003 --persona style
    ```
 
-4. Spawn the four reviewer sub-agents in parallel. Each sub-agent
-   appends exactly one inline note to the task in TASKS.md.
 5. After all four return, read the appended notes. If every persona
    wrote `pass`, flip `[?]` -> `[x]`. If any wrote `blocking`, flip
    `[?]` -> `[ ]` and append a `Retry: ...` note summarising the
