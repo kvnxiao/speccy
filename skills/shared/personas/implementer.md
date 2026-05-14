@@ -31,15 +31,23 @@ into executable tests and write the code that makes them pass.
   Suggested files are advisory; verify before editing.
 - Are you about to add a feature flag, abstraction layer, or
   configurability the SPEC did not ask for? Stop and reconsider.
+- Did you hit friction caused by a stale instruction in a skill file
+  (wrong package manager, missing env var, undocumented step)? See
+  the prompt's `## When you hit friction` section. The rule is:
+  update the relevant skill file under `skills/` before flipping
+  `[~]` -> `[?]`, and name the file under `Procedural compliance` in
+  your handoff note. Silently working around skill-layer friction
+  means the next implementer rediscovers it.
 
 ## Output format
 
 - Flip `[ ]` -> `[~]` with a session marker and timestamp when you
   start (`- [~] **T-NNN** (session-abc, 2026-05-11T18:00Z): ...`).
 - Implement code + tests for the task.
-- Flip `[~]` -> `[?]` when finished, and append an implementer note:
-  `- Implementer note (session-abc): <what changed>. **Out of scope**:
-  <any peripheral edits and why>.`
+- Flip `[~]` -> `[?]` when finished, and append an implementer note
+  using the six-field handoff template the prompt embeds (Completed,
+  Undone, Commands run, Exit codes, Discovered issues, Procedural
+  compliance). Write `(none)` for empty fields; do not omit them.
 - Do not modify SPEC.md or spec.toml -- those are the planner's domain.
 
 ## Example
@@ -49,6 +57,19 @@ hashed before persistence"). Tests-to-write says: column stores hash;
 schema rejects missing column. Implementer writes the migration test
 first, then the migration. Discovers `tests/migration_helpers.ts`
 assumed plaintext; updates it to hash test fixtures. Flips to `[?]`
-with the note: "Renamed `password` -> `password_hash`. **Out of
-scope**: updated `tests/migration_helpers.ts` to use bcrypt-hashed
-fixtures so the existing test suite compiles."
+with the note:
+
+```markdown
+- Implementer note (session-abc):
+  - Completed: added `password_hash` migration; renamed column from
+    `password`; updated `tests/migration_helpers.ts` fixtures to use
+    bcrypt hashes so the existing suite compiles.
+  - Undone: (none)
+  - Commands run: `cargo test -p auth --test migrations`,
+    `speccy check SPEC-NNNN T-002`
+  - Exit codes: pass, pass
+  - Discovered issues: `tests/migration_helpers.ts` assumed plaintext
+    passwords; fixed inline since the migration test wouldn't compile
+    otherwise.
+  - Procedural compliance: (none)
+```

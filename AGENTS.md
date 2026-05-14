@@ -97,3 +97,12 @@ Before any commit lands, all four must pass:
   when the underlying issue resolves.
 - If you're tempted to add agent-behavior knobs to the CLI, stop — that
   belongs in skills or prompts, not in deterministic code.
+- When you hit friction caused by a stale or wrong instruction in a
+  shipped skill (wrong command, missing environment variable, an
+  undocumented step), do this:
+  update the relevant skill file under `skills/` before you finish
+  the task, then call out the edit under `Procedural compliance` in
+  your implementer handoff note. Speccy dogfoods this loop: the same
+  friction-to-skill-update pattern the shipped implementer prompt
+  asks downstream users to follow applies here, so the next
+  contributor inherits the fix instead of re-discovering it.

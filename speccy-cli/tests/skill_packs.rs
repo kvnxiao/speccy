@@ -2,10 +2,9 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Skill-pack content tests for SPEC-0013.
+//! Skill-pack content tests for SPEC-0013 and SPEC-0014.
 //!
-//! Each test maps to one CHK-NNN in
-//! `.speccy/specs/0013-skill-packs/spec.toml`:
+//! SPEC-0013 checks (`.speccy/specs/0013-skill-packs/spec.toml`):
 //!
 //! - CHK-001: [`persona_files_present`]
 //! - CHK-002: [`persona_names_match_registry`]
@@ -15,6 +14,16 @@
 //! - CHK-006: [`codex_recipes`]
 //! - CHK-007: [`persona_content_shape`]
 //! - CHK-008: [`recipe_content_shape`]
+//!
+//! SPEC-0014 checks
+//! (`.speccy/specs/0014-handoff-and-friction-conventions/spec.toml`):
+//!
+//! - CHK-001: [`implementer_prompt_handoff_template`]
+//! - CHK-002: [`implementer_prompt_handoff_referenced_in_task_steps`]
+//! - CHK-003: [`implementer_prompt_friction_section`]
+//! - CHK-004: [`implementer_persona_friction_reference`]
+//! - CHK-005: [`agents_md_friction_paragraph`]
+//! - CHK-006: [`report_prompt_skill_updates_section`]
 
 use include_dir::Dir;
 use serde::Deserialize;
@@ -413,4 +422,232 @@ fn recipe_content_shape() {
             }
         }
     }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 helpers and fixtures
+// --------------------------------------------------------------------
+
+/// Six handoff-note field labels from SPEC-0014 DEC-001. Order matters
+/// for readability only; presence is what the check enforces.
+const HANDOFF_LABELS: [&str; 6] = [
+    "Completed",
+    "Undone",
+    "Commands run",
+    "Exit codes",
+    "Discovered issues",
+    "Procedural compliance",
+];
+
+/// Stable phrase the friction-to-skill-update pattern reuses across
+/// the implementer prompt, the implementer persona, and AGENTS.md.
+/// Changing it is a coordinated edit across all three files.
+const FRICTION_PHRASE: &str = "update the relevant skill file under `skills/`";
+
+/// Pulls fenced code blocks out of a markdown body. When `lang_filter`
+/// is `Some`, only blocks opened with that language tag are returned;
+/// `None` returns every fenced block. Bodies are concatenated lines
+/// (newline-terminated) so substring checks behave naturally.
+fn fenced_blocks(body: &str, lang_filter: Option<&str>) -> Vec<String> {
+    let mut blocks: Vec<String> = Vec::new();
+    let mut current: Option<String> = None;
+    let mut current_matches = false;
+    for line in body.lines() {
+        if let Some(rest) = line.trim_start().strip_prefix("```") {
+            if let Some(open) = current.take() {
+                if current_matches {
+                    blocks.push(open);
+                }
+                current_matches = false;
+            } else {
+                let lang = rest.trim();
+                current_matches = lang_filter.is_none_or(|want| lang == want);
+                current = Some(String::new());
+            }
+            continue;
+        }
+        if let Some(buf) = current.as_mut() {
+            buf.push_str(line);
+            buf.push('\n');
+        }
+    }
+    blocks
+}
+
+/// Returns the slice of `body` belonging to the H2 section opened by
+/// `heading` (exclusive of the heading line itself), terminated by
+/// the next `\n## ` boundary or end of file.
+fn section_body<'a>(body: &'a str, heading: &str) -> Option<&'a str> {
+    let start = body.find(heading)?;
+    let after_heading = body.get(start.checked_add(heading.len())?..)?;
+    let end = after_heading.find("\n## ").unwrap_or(after_heading.len());
+    after_heading.get(..end)
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-001
+// --------------------------------------------------------------------
+
+#[test]
+fn implementer_prompt_handoff_template() {
+    let body = read_bundle_file("shared/prompts", "implementer.md");
+    let blocks = fenced_blocks(body, Some("markdown"));
+    assert!(
+        !blocks.is_empty(),
+        "implementer prompt must contain at least one ```markdown fenced block",
+    );
+
+    let found = blocks
+        .iter()
+        .any(|b| HANDOFF_LABELS.iter().all(|label| b.contains(label)));
+    assert!(
+        found,
+        "implementer prompt must contain a ```markdown fenced block with all six handoff labels verbatim: {HANDOFF_LABELS:?}",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-002
+// --------------------------------------------------------------------
+
+#[test]
+fn implementer_prompt_handoff_referenced_in_task_steps() {
+    let body = read_bundle_file("shared/prompts", "implementer.md");
+    let task_section = section_body(body, "## Your task")
+        .expect("implementer prompt must contain a `## Your task` section");
+
+    assert!(
+        task_section.contains("handoff template"),
+        "`## Your task` must reference the handoff template by name",
+    );
+    assert!(
+        task_section.contains("(none)"),
+        "`## Your task` must instruct writing `(none)` for empty fields",
+    );
+
+    // The old freeform sentence must be gone everywhere in the prompt.
+    let old_phrase =
+        "summarizing what you did, including any out-of-scope edits made for the test to compile";
+    assert!(
+        !body.contains(old_phrase),
+        "the pre-edit freeform implementer-note instruction must be removed from the prompt",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-003
+// --------------------------------------------------------------------
+
+#[test]
+fn implementer_prompt_friction_section() {
+    let body = read_bundle_file("shared/prompts", "implementer.md");
+    let heading = "## When you hit friction";
+    let section = section_body(body, heading).unwrap_or_else(|| {
+        panic_with_test_message(&format!(
+            "implementer prompt must contain the `{heading}` heading"
+        ))
+    });
+
+    let blocks = fenced_blocks(section, None);
+    assert!(
+        blocks.iter().any(|b| b.contains("skills/")),
+        "`{heading}` section must contain at least one fenced block referencing a `skills/` path",
+    );
+
+    // Ordering invariant: friction section sits between Suggested files
+    // and Your task so the implementer reads it before producing work.
+    let suggested = body
+        .find("## Suggested files")
+        .expect("implementer prompt must contain `## Suggested files`");
+    let friction = body
+        .find(heading)
+        .expect("implementer prompt must contain the friction heading");
+    let your_task = body
+        .find("## Your task")
+        .expect("implementer prompt must contain `## Your task`");
+    assert!(
+        suggested < friction && friction < your_task,
+        "`{heading}` must sit between `## Suggested files` and `## Your task`",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-004
+// --------------------------------------------------------------------
+
+#[test]
+fn implementer_persona_friction_reference() {
+    let body = read_bundle_file("shared/personas", "implementer.md");
+    let section = section_body(body, "## What to consider")
+        .expect("implementer persona must contain `## What to consider`");
+
+    assert!(
+        section.contains(FRICTION_PHRASE),
+        "`## What to consider` must contain the stable friction phrase `{FRICTION_PHRASE}`",
+    );
+    assert!(
+        section.contains("friction"),
+        "`## What to consider` must mention friction explicitly",
+    );
+    assert!(
+        section.contains("## When you hit friction"),
+        "`## What to consider` must point back to the prompt's `## When you hit friction` section",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-005
+// --------------------------------------------------------------------
+
+/// `AGENTS.md` is not part of the embedded skill bundle; it lives at
+/// the workspace root. We pull it in at compile time via `include_str!`
+/// relative to this test file so the test stays hermetic.
+const AGENTS_MD: &str = include_str!("../../AGENTS.md");
+
+#[test]
+fn agents_md_friction_paragraph() {
+    let section = section_body(AGENTS_MD, "## Conventions for AI agents specifically")
+        .expect("AGENTS.md must contain `## Conventions for AI agents specifically`");
+
+    assert!(
+        section.contains(FRICTION_PHRASE),
+        "AGENTS.md conventions section must contain the stable friction phrase `{FRICTION_PHRASE}`",
+    );
+    assert!(
+        section.contains("Procedural compliance"),
+        "AGENTS.md conventions section must reference the `Procedural compliance` handoff field",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0014 CHK-006
+// --------------------------------------------------------------------
+
+#[test]
+fn report_prompt_skill_updates_section() {
+    let body = read_bundle_file("shared/prompts", "report.md");
+
+    let out_of_scope = body
+        .find("## Out-of-scope items absorbed")
+        .expect("report prompt must contain `## Out-of-scope items absorbed`");
+    let skill_updates = body
+        .find("## Skill updates")
+        .expect("report prompt must contain `## Skill updates`");
+    let deferred = body
+        .find("## Deferred / known limitations")
+        .expect("report prompt must contain `## Deferred / known limitations`");
+
+    assert!(
+        out_of_scope < skill_updates,
+        "`## Skill updates` must appear after `## Out-of-scope items absorbed`",
+    );
+    assert!(
+        skill_updates < deferred,
+        "`## Skill updates` must appear before `## Deferred / known limitations`",
+    );
+
+    assert!(
+        body.contains("git diff --name-only -- skills/"),
+        "report prompt must reference `git diff --name-only -- skills/` as the derivation path for the skill-updates list",
+    );
 }
