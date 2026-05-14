@@ -38,8 +38,13 @@ jobs:
       - name: cargo +nightly fmt --check
         run: cargo +nightly fmt --all --check
 
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
       - name: cargo deny check
-        uses: EmbarkStudios/cargo-deny-action@v2
+        run: cargo deny check
 
       - name: Build speccy binary
         run: cargo build -p speccy-cli --locked
