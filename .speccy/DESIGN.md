@@ -146,10 +146,11 @@ responsibility.
 # File Layout
 
 ```text
+AGENTS.md                Project-wide agent conventions (root, not inside .speccy/)
+
 .speccy/
   speccy.toml
   VISION.md
-  AGENTS.md
   specs/
     0001-user-signup/
       SPEC.md            Frontmatter + PRD prose + Decisions + Changelog
@@ -164,6 +165,11 @@ skills/                  Shipped with Speccy; copied by `speccy init`
     personas/
     prompts/
 ```
+
+`AGENTS.md` lives at project root, not inside `.speccy/`. Every
+project already keeps `AGENTS.md` (and often `CLAUDE.md` as a symlink)
+at the root for the broader agent ecosystem; speccy reads the file
+in place rather than asking projects to duplicate it under `.speccy/`.
 
 `skills/` is a top-level directory in the Speccy workspace. `speccy
 init` copies the appropriate host pack into the user's project at
