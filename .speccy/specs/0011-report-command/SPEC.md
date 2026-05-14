@@ -2,7 +2,7 @@
 id: SPEC-0011
 slug: report-command
 title: speccy report -- render Phase 5 prompt for a completed spec
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

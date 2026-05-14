@@ -124,7 +124,7 @@ generated_at: 2026-05-11T00:00:00Z
 ## Phase 7: Fixture corpus and integration
 
 - [x] **T-012**: Build the fixture corpus and a loader helper
-  - Covers: REQ-001..REQ-005
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - A `speccy-core/tests/fixtures/lint/<code>/` directory exists per code (or per family), each containing SPEC.md + spec.toml + optional TASKS.md.
     - Each fixture has a header comment naming which codes it should trigger and which it should NOT trigger (defensive against rule overreach).

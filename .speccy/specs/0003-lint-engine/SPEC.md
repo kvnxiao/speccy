@@ -2,7 +2,7 @@
 id: SPEC-0003
 slug: lint-engine
 title: Lint engine -- SPC / REQ / VAL / TSK / QST diagnostics
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

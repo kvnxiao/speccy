@@ -74,7 +74,7 @@ generated_at: 2026-05-11T00:00:00Z
 ## Phase 6: CLI wiring
 
 - [x] **T-006**: Wire `speccy verify [--json]` into the binary
-  - Covers: REQ-001..REQ-005
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - End-to-end via `assert_cmd` with a tmpdir fixture workspace.
     - Cover: clean workspace -> exit 0; lint-failing workspace -> exit 1; check-failing workspace -> exit 1; both failing -> exit 1.

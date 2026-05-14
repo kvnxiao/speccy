@@ -2,7 +2,7 @@
 id: SPEC-0007
 slug: next-command
 title: speccy next -- pick the next actionable task with priority + JSON
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

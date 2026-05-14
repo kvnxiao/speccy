@@ -2,7 +2,7 @@
 id: SPEC-0002
 slug: init-command
 title: speccy init -- scaffold workspace, detect host, copy skill pack
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

@@ -2,7 +2,7 @@
 id: SPEC-0013
 slug: skill-packs
 title: skill-packs -- markdown content for personas, prompts, and host recipes
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

@@ -2,7 +2,7 @@
 id: SPEC-0012
 slug: verify-command
 title: speccy verify -- CI gate composing lint + check execution
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

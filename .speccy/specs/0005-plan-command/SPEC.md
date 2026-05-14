@@ -2,7 +2,7 @@
 id: SPEC-0005
 slug: plan-command
 title: speccy plan -- render Phase 1 prompts (greenfield + amendment)
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

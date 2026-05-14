@@ -9,9 +9,14 @@ generated_at: 2026-05-11T00:00:00Z
 > `spec_hash_at_generation` is `bootstrap-pending` until SPEC-0006
 > lands and `speccy tasks SPEC-0008 --commit` runs.
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-005
+> landed in commit `2b1ee4c`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Task reference parsing
 
-- [ ] **T-001**: Implement `task_lookup::parse_ref`
+- [x] **T-001**: Implement `task_lookup::parse_ref`
   - Covers: REQ-001
   - Tests to write:
     - `"T-001"` parses to `TaskRef::Unqualified { id: "T-001" }`.
@@ -22,7 +27,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Workspace task lookup
 
-- [ ] **T-002**: Implement `task_lookup::find` with unique-match semantics
+- [x] **T-002**: Implement `task_lookup::find` with unique-match semantics
   - Covers: REQ-002
   - Tests to write:
     - Single spec with one matching `T-NNN` -> `Ok(TaskLocation)` with the spec_id populated.
@@ -32,7 +37,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Spec with `tasks_md` parse error is skipped (no panic; lookup proceeds to other specs).
   - Suggested files: `speccy-core/src/task_lookup.rs` (extend), `speccy-core/tests/task_lookup.rs` (extend)
 
-- [ ] **T-003**: Implement ambiguity detection
+- [x] **T-003**: Implement ambiguity detection
   - Covers: REQ-003
   - Tests to write:
     - T-001 in SPEC-0001 and SPEC-0002 -> `LookupError::Ambiguous` with `candidate_specs = ["SPEC-0001", "SPEC-0002"]` (ascending order).
@@ -42,7 +47,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Prompt assembly
 
-- [ ] **T-004**: Render implementer prompt with full task entry
+- [x] **T-004**: Render implementer prompt with full task entry
   - Covers: REQ-004
   - Tests to write:
     - `implementer.md` template is loaded via `prompt::load_template`.
@@ -54,7 +59,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: CLI wiring and error mapping
 
-- [ ] **T-005**: Wire `speccy implement TASK-ID` and map errors
+- [x] **T-005**: Wire `speccy implement TASK-ID` and map errors
   - Covers: REQ-005
   - Tests to write:
     - End-to-end via `assert_cmd`: valid task ref renders prompt to stdout (exit 0).

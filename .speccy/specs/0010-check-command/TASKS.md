@@ -86,7 +86,7 @@ generated_at: 2026-05-11T00:00:00Z
 ## Phase 6: CLI wiring
 
 - [x] **T-008**: Wire `speccy check [CHK-ID]` into the binary
-  - Covers: REQ-001..REQ-006
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006
   - Tests to write:
     - `speccy check` runs from any cwd inside a speccy workspace.
     - `speccy check` from outside a workspace -> `CheckError::ProjectRootNotFound`; exit 1.

@@ -9,9 +9,14 @@ generated_at: 2026-05-11T00:00:00Z
 > `spec_hash_at_generation` is `bootstrap-pending` until SPEC-0006
 > (`speccy tasks --commit`) lands.
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-008
+> landed in commit `960a5a1`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Template loading
 
-- [ ] **T-001**: Implement `prompt::load_template` consuming embedded resources
+- [x] **T-001**: Implement `prompt::load_template` consuming embedded resources
   - Covers: REQ-005
   - Tests to write:
     - Looking up `"plan-greenfield.md"` returns the template content (stub or real).
@@ -22,7 +27,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Placeholder substitution
 
-- [ ] **T-002**: Implement `prompt::render`
+- [x] **T-002**: Implement `prompt::render`
   - Covers: REQ-005
   - Tests to write:
     - `"hello {{name}}"` + `{"name": "world"}` renders to `"hello world"`.
@@ -35,7 +40,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: AGENTS.md helper
 
-- [ ] **T-003**: Implement `prompt::load_agents_md`
+- [x] **T-003**: Implement `prompt::load_agents_md`
   - Covers: REQ-004
   - Tests to write:
     - Given `<project_root>/AGENTS.md` exists with content `# Agents\n...`, the function returns that content verbatim.
@@ -45,7 +50,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Spec ID allocator
 
-- [ ] **T-004**: Implement `prompt::allocate_next_spec_id`
+- [x] **T-004**: Implement `prompt::allocate_next_spec_id`
   - Covers: REQ-003
   - Tests to write:
     - Empty `specs/` directory -> returns `"0001"`.
@@ -58,7 +63,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: Context-budget trimmer
 
-- [ ] **T-005**: Implement `prompt::trim_to_budget` with the DESIGN.md drop ordering
+- [x] **T-005**: Implement `prompt::trim_to_budget` with the DESIGN.md drop ordering
   - Covers: REQ-006
   - Tests to write:
     - 60,000-char input + 80,000 budget -> output unchanged, `dropped = []`, `fits = true`.
@@ -70,7 +75,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: Greenfield assembler
 
-- [ ] **T-006**: Implement greenfield prompt assembler
+- [x] **T-006**: Implement greenfield prompt assembler
   - Covers: REQ-001
   - Tests to write:
     - End-to-end: VISION.md content appears in the rendered output where `{{vision}}` was; AGENTS.md content appears where `{{agents}}` was; `{{next_spec_id}}` substituted to the allocated ID.
@@ -82,7 +87,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 7: Amendment assembler
 
-- [ ] **T-007**: Implement amendment prompt assembler
+- [x] **T-007**: Implement amendment prompt assembler
   - Covers: REQ-002
   - Tests to write:
     - `speccy plan SPEC-0001` resolves to `.speccy/specs/0001-<slug>/SPEC.md` and inlines it.
@@ -94,8 +99,8 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 8: CLI wiring
 
-- [ ] **T-008**: Wire `speccy plan [SPEC-ID]` into the binary
-  - Covers: REQ-001..REQ-006
+- [x] **T-008**: Wire `speccy plan [SPEC-ID]` into the binary
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006
   - Tests to write:
     - No-arg form runs end-to-end in a tmpdir fixture workspace; stdout receives the rendered prompt.
     - SPEC-ID arg form runs end-to-end with a fixture spec.

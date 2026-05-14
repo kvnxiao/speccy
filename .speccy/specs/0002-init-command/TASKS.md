@@ -10,9 +10,14 @@ generated_at: 2026-05-11T00:00:00Z
 > was decomposed manually before `speccy tasks --commit` (SPEC-0006)
 > exists. Backfill the real sha256 once that command lands.
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-007
+> landed in commit `5041dc0`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Embedded skill bundle
 
-- [ ] **T-001**: Add `include_dir!` and embed `skills/` at compile time
+- [x] **T-001**: Add `include_dir!` and embed `skills/` at compile time
   - Covers: REQ-004
   - Tests to write:
     - The embedded bundle exposes `skills/claude-code/`, `skills/codex/`, `skills/shared/personas/`, `skills/shared/prompts/` as walkable `include_dir::Dir` subtrees.
@@ -22,7 +27,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Host detection
 
-- [ ] **T-002**: Implement the host detector
+- [x] **T-002**: Implement the host detector
   - Covers: REQ-003
   - Tests to write:
     - `--host claude-code` wins regardless of which host directories exist.
@@ -36,7 +41,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Scaffold writer
 
-- [ ] **T-003**: Implement the `.speccy/` scaffold writer
+- [x] **T-003**: Implement the `.speccy/` scaffold writer
   - Covers: REQ-001, REQ-002
   - Tests to write:
     - Writes `.speccy/speccy.toml` with `schema_version = 1`, `[project]` block, `name` from the parent directory of the project root, `root = ".."`.
@@ -48,7 +53,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Skill-pack copier
 
-- [ ] **T-004**: Implement the skill-pack copier
+- [x] **T-004**: Implement the skill-pack copier
   - Covers: REQ-004, REQ-002
   - Tests to write:
     - `claude-code` host -> files copy from embedded `skills/claude-code/` to `.claude/commands/<filename>`.
@@ -61,7 +66,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: CLI wiring
 
-- [ ] **T-005**: Wire `speccy init` as a subcommand in `main.rs`
+- [x] **T-005**: Wire `speccy init` as a subcommand in `main.rs`
   - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - `speccy init` (no args) on a fresh repo: exits 0; scaffolds `.speccy/`; copies skills to the detected host.
@@ -74,7 +79,7 @@ generated_at: 2026-05-11T00:00:00Z
     - `InitError` -> exit-code mapping is consistent with REQ-005.
   - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/init.rs`, `speccy-cli/tests/init.rs`
 
-- [ ] **T-006**: Print "would create / would overwrite" plan before mutating
+- [x] **T-006**: Print "would create / would overwrite" plan before mutating
   - Covers: REQ-002
   - Tests to write:
     - Capture stdout during a successful init; assert a line per file is printed before any actual write.
@@ -84,8 +89,8 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: Integration
 
-- [ ] **T-007**: End-to-end integration test via `assert_cmd`
-  - Covers: REQ-001..REQ-005
+- [x] **T-007**: End-to-end integration test via `assert_cmd`
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - Build the binary; exec in a `tempfile::TempDir`; assert on the resulting tree.
     - Cover: fresh init; refuse-without-force; force overwrite; host override; cursor refusal; unknown-host error.

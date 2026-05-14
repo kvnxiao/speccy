@@ -2,7 +2,7 @@
 id: SPEC-0008
 slug: implement-command
 title: speccy implement -- render Phase 3 implementer prompt
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

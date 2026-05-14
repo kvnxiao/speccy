@@ -10,9 +10,14 @@ generated_at: 2026-05-11T00:00:00Z
 > lands and `speccy tasks SPEC-0006 --commit` is the first command
 > run against it (a fitting self-referential closure).
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-008
+> landed in commit `727f48f`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Spec lookup and argument validation
 
-- [ ] **T-001**: Implement SPEC-ID parsing and spec-directory lookup
+- [x] **T-001**: Implement SPEC-ID parsing and spec-directory lookup
   - Covers: REQ-005
   - Tests to write:
     - Argument matching `SPEC-\d{4,}` is accepted; non-matching argument returns `TasksError::InvalidSpecIdFormat`.
@@ -22,7 +27,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Initial prompt assembler
 
-- [ ] **T-002**: Detect initial form (TASKS.md absent) and render `tasks-generate.md`
+- [x] **T-002**: Detect initial form (TASKS.md absent) and render `tasks-generate.md`
   - Covers: REQ-001
   - Tests to write:
     - TASKS.md absent -> initial template is selected.
@@ -34,7 +39,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Amendment prompt assembler
 
-- [ ] **T-003**: Render `tasks-amend.md` when TASKS.md is present
+- [x] **T-003**: Render `tasks-amend.md` when TASKS.md is present
   - Covers: REQ-002
   - Tests to write:
     - TASKS.md present -> amendment template is selected.
@@ -46,7 +51,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: `--commit` core
 
-- [ ] **T-004**: Implement `tasks::commit_frontmatter` -- body-byte-preserving rewrite
+- [x] **T-004**: Implement `tasks::commit_frontmatter` -- body-byte-preserving rewrite
   - Covers: REQ-003, REQ-004
   - Tests to write:
     - SPEC.md sha256 is written as 64-char hex into `spec_hash_at_generation`.
@@ -59,7 +64,7 @@ generated_at: 2026-05-11T00:00:00Z
     - The function returns `Result<(), CommitError>`.
   - Suggested files: `speccy-core/src/tasks.rs`, `speccy-core/tests/tasks_commit.rs`
 
-- [ ] **T-005**: Handle the bootstrap-pending sentinel and missing-frontmatter cases
+- [x] **T-005**: Handle the bootstrap-pending sentinel and missing-frontmatter cases
   - Covers: REQ-003
   - Tests to write:
     - TASKS.md with `spec_hash_at_generation: bootstrap-pending` -> after commit, sentinel is replaced with the real hex hash.
@@ -69,7 +74,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: `--commit` wiring
 
-- [ ] **T-006**: Wire `--commit` sub-action through the CLI
+- [x] **T-006**: Wire `--commit` sub-action through the CLI
   - Covers: REQ-003, REQ-005
   - Tests to write:
     - `speccy tasks SPEC-NNNN --commit` with TASKS.md present succeeds; resulting file has updated frontmatter and unchanged body.
@@ -80,8 +85,8 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: CLI wiring and integration
 
-- [ ] **T-007**: Wire `speccy tasks SPEC-ID [--commit]` into the binary
-  - Covers: REQ-001..REQ-005
+- [x] **T-007**: Wire `speccy tasks SPEC-ID [--commit]` into the binary
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - End-to-end via `assert_cmd`:
       - Initial form on a tmpdir fixture writes the rendered prompt to stdout and exits 0.
@@ -91,7 +96,7 @@ generated_at: 2026-05-11T00:00:00Z
       - All argument-validation errors map to exit code 1 with informative messages.
   - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/tests/integration_tasks.rs`
 
-- [ ] **T-008**: Self-referential dogfood test: commit SPEC-0006's own TASKS.md
+- [x] **T-008**: Self-referential dogfood test: commit SPEC-0006's own TASKS.md
   - Covers: REQ-003, REQ-004
   - Tests to write:
     - As a one-shot integration test: run `speccy tasks SPEC-0006 --commit` against the actual `.speccy/specs/0006-tasks-command/TASKS.md`; assert the bootstrap-pending sentinel is replaced.

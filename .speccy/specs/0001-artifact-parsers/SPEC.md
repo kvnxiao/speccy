@@ -2,7 +2,7 @@
 id: SPEC-0001
 slug: artifact-parsers
 title: Artifact parsers for Speccy's five file types
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

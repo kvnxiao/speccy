@@ -2,7 +2,7 @@
 id: SPEC-0006
 slug: tasks-command
 title: speccy tasks -- render Phase 2 prompt + record TASKS.md hash
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

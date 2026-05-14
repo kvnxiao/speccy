@@ -10,9 +10,14 @@ generated_at: 2026-05-11T00:00:00Z
 > lands and `speccy tasks SPEC-0007 --commit` runs against this
 > spec.
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-009
+> landed in commit `ffad1ec`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Task discovery and priority logic (speccy-core)
 
-- [ ] **T-001**: Implement task enumeration from `workspace::scan`
+- [x] **T-001**: Implement task enumeration from `workspace::scan`
   - Covers: REQ-001
   - Tests to write:
     - Enumeration walks specs in ascending ID order.
@@ -21,7 +26,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Empty `.speccy/specs/` yields an empty enumeration; the function returns without error.
   - Suggested files: `speccy-core/src/next.rs`, `speccy-core/tests/next_enumeration.rs`
 
-- [ ] **T-002**: Implement default-priority logic (no `--kind`)
+- [x] **T-002**: Implement default-priority logic (no `--kind`)
   - Covers: REQ-001
   - Tests to write:
     - Within a spec, an `AwaitingReview` (`[?]`) task is returned before an `Open` (`[ ]`) task in the same spec.
@@ -32,7 +37,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: `--kind` filters
 
-- [ ] **T-003**: Implement `KindFilter::Implement` strict filter
+- [x] **T-003**: Implement `KindFilter::Implement` strict filter
   - Covers: REQ-002
   - Tests to write:
     - Only `Open` (`[ ]`) tasks are returned as `NextResult::Implement`.
@@ -41,7 +46,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Walking order is identical to the default (ascending spec ID).
   - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs` (extend)
 
-- [ ] **T-004**: Implement `KindFilter::Review` strict filter with persona fan-out
+- [x] **T-004**: Implement `KindFilter::Review` strict filter with persona fan-out
   - Covers: REQ-002
   - Tests to write:
     - Only `AwaitingReview` (`[?]`) tasks are returned as `NextResult::Review`.
@@ -51,7 +56,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Report and blocked kinds
 
-- [ ] **T-005**: Implement `kind: report` detection
+- [x] **T-005**: Implement `kind: report` detection
   - Covers: REQ-003
   - Tests to write:
     - All tasks across all specs are `[x]` AND at least one spec lacks REPORT.md -> `NextResult::Report { spec: <lowest-ID> }`.
@@ -59,7 +64,7 @@ generated_at: 2026-05-11T00:00:00Z
     - All specs done AND all REPORT.md present -> falls through to blocked.
   - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_report.rs`
 
-- [ ] **T-006**: Implement `kind: blocked` with canonical reasons
+- [x] **T-006**: Implement `kind: blocked` with canonical reasons
   - Covers: REQ-003
   - Tests to write:
     - Empty workspace -> `Blocked { reason: "no specs in workspace" }`.
@@ -70,7 +75,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Output rendering
 
-- [ ] **T-007**: Implement text-mode renderer
+- [x] **T-007**: Implement text-mode renderer
   - Covers: REQ-005
   - Tests to write:
     - `implement` kind: `next: implement T-NNN (SPEC-NNNN) -- <task_line>\n`.
@@ -80,7 +85,7 @@ generated_at: 2026-05-11T00:00:00Z
     - Exit code is 0 for all four kinds.
   - Suggested files: `speccy-cli/src/next_output.rs`, `speccy-cli/tests/next_text.rs`
 
-- [ ] **T-008**: Implement `--json` renderer
+- [x] **T-008**: Implement `--json` renderer
   - Covers: REQ-004
   - Tests to write:
     - Output begins with `"schema_version": 1`.
@@ -95,8 +100,8 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: CLI wiring
 
-- [ ] **T-009**: Wire `speccy next [--kind] [--json]` into the binary
-  - Covers: REQ-001..REQ-005
+- [x] **T-009**: Wire `speccy next [--kind] [--json]` into the binary
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005
   - Tests to write:
     - End-to-end via `assert_cmd` against fixture workspaces covering all four kinds.
     - From outside a speccy workspace -> exit 1 with `NextError::ProjectRootNotFound`.

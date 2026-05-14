@@ -2,7 +2,7 @@
 id: SPEC-0009
 slug: review-command
 title: speccy review -- render Phase 4 reviewer prompt per persona
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

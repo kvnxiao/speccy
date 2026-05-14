@@ -2,7 +2,7 @@
 id: SPEC-0010
 slug: check-command
 title: speccy check -- execute proofs, surface results, never persist
-status: in-progress
+status: implemented
 created: 2026-05-11
 ---
 

@@ -9,9 +9,14 @@ generated_at: 2026-05-11T00:00:00Z
 > `spec_hash_at_generation` is `bootstrap-pending` until SPEC-0006
 > lands and `speccy tasks SPEC-0009 --commit` runs.
 
+> Implementer note (retroactive, 2026-05-13): Tasks T-001..T-006
+> landed in commit `f4720fe`. Checkboxes back-filled during the v1
+> dogfood status sweep; no per-task review notes were captured at
+> implementation time.
+
 ## Phase 1: Persona registry
 
-- [ ] **T-001**: Define `personas::ALL` and align with SPEC-0007's DEFAULT_PERSONAS
+- [x] **T-001**: Define `personas::ALL` and align with SPEC-0007's DEFAULT_PERSONAS
   - Covers: REQ-001
   - Tests to write:
     - `personas::ALL` is a `&'static [&'static str]` of length 6 with the names `["business", "tests", "security", "style", "architecture", "docs"]` in declared order.
@@ -21,7 +26,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 2: Persona file resolver
 
-- [ ] **T-002**: Implement `personas::resolve_file` with project-local-first chain
+- [x] **T-002**: Implement `personas::resolve_file` with project-local-first chain
   - Covers: REQ-002
   - Tests to write:
     - Given `.speccy/skills/personas/reviewer-security.md` exists with content "X", `resolve_file("security", root)` returns `"X"`.
@@ -34,7 +39,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 3: Diff computer
 
-- [ ] **T-003**: Implement diff with fallback chain
+- [x] **T-003**: Implement diff with fallback chain
   - Covers: REQ-004
   - Tests to write:
     - Given uncommitted edits exist in a fixture git repo, the returned diff string is non-empty and matches `git diff HEAD` output.
@@ -46,7 +51,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 4: Argument validation
 
-- [ ] **T-004**: Validate `--persona` against the registry
+- [x] **T-004**: Validate `--persona` against the registry
   - Covers: REQ-003
   - Tests to write:
     - Missing `--persona` exits 1 with a usage message listing the six valid names.
@@ -57,7 +62,7 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 5: Prompt assembly
 
-- [ ] **T-005**: Render reviewer prompt for one persona
+- [x] **T-005**: Render reviewer prompt for one persona
   - Covers: REQ-005, REQ-006
   - Tests to write:
     - Looks up the task via `task_lookup::find` (SPEC-0008).
@@ -71,8 +76,8 @@ generated_at: 2026-05-11T00:00:00Z
 
 ## Phase 6: CLI wiring and integration
 
-- [ ] **T-006**: Wire `speccy review TASK-ID --persona <name>` and integration tests
-  - Covers: REQ-001..REQ-006
+- [x] **T-006**: Wire `speccy review TASK-ID --persona <name>` and integration tests
+  - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006
   - Tests to write:
     - End-to-end via `assert_cmd`: valid task ref + valid persona renders prompt to stdout (exit 0).
     - Ambiguity error suggests `speccy review SPEC-NNNN/T-NNN --persona <name>` form.
