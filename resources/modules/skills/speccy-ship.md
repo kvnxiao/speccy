@@ -34,15 +34,36 @@ IDs -- pick up `{{ cmd_prefix }}speccy-work` or `{{ cmd_prefix }}speccy-review` 
    frontmatter (`spec`, `outcome`, `generated_at`), the requirements
    coverage table, retry counts, and any out-of-scope items
    implementers absorbed.
-5. Commit SPEC.md, TASKS.md, REPORT.md, and the code changes from the
-   loop. Then open the PR:
+5. Flip the SPEC's frontmatter status. Edit
+   `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
+   to `status: implemented`. The diff that ships in this PR is what
+   makes the SPEC implemented, so the status flip belongs in the
+   same PR, not in a follow-up. The byte-level edit invalidates
+   TASKS.md's `spec_hash_at_generation`; refresh it and confirm:
 
    ```bash
-   gh pr create --title "<spec id> <slug>" --body "$(cat REPORT.md)"
+   speccy tasks SPEC-NNNN --commit
+   speccy status
    ```
 
-6. After the PR is open, set `frontmatter.status` to `implemented` on
-   SPEC.md when the PR merges (a future amendment skill may automate
-   this).
+   `speccy status` should report no `TSK-003` mismatch for SPEC-NNNN.
+6. Commit SPEC.md, TASKS.md, REPORT.md, and the code changes from the
+   loop. Then push:
+
+   - If this branch has no open PR yet, open one:
+
+     ```bash
+     gh pr create --title "<spec id> <slug>" --body "$(cat REPORT.md)"
+     ```
+
+   - If a PR already exists for this branch (e.g., a long-running
+     branch carrying multiple specs), push to update it:
+
+     ```bash
+     git push
+     ```
+
+   The status flip in step 5 lands in the same PR — no follow-up
+   commit needed after merge.
 
 This recipe does not loop.

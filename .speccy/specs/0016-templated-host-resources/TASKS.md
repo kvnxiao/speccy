@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0016
-spec_hash_at_generation: ac2557cd755a97e8fef9609cfedec169476b74d67820d452c37450dbfa7c35a2
-generated_at: 2026-05-14T21:15:40Z
+spec_hash_at_generation: 44cee7c5ff49faad27a55621f5d8177902c92dd7b2046ed3dc015301a7b2824e
+generated_at: 2026-05-14T23:55:44Z
 ---
 
 # Tasks: SPEC-0016 Templated host resources and reviewer subagents

@@ -2,7 +2,7 @@
 id: SPEC-0016
 slug: templated-host-resources
 title: Templated host resources and reviewer subagents
-status: in-progress
+status: implemented
 created: 2026-05-14
 supersedes: []
 ---
