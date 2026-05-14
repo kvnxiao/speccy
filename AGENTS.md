@@ -55,7 +55,7 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
 
 ## Where the design lives
 
-`.speccy/DESIGN.md` is the only source of truth for the schema, CLI
+`.speccy/ARCHITECTURE.md` is the only source of truth for the schema, CLI
 surface, lint codes, and implementation sequence. Read it before
 touching any code. If a design decision isn't documented, ask before
 deciding.

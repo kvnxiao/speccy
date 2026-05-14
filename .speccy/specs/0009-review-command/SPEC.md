@@ -254,8 +254,8 @@ Flow per invocation:
 
 #### DEC-001: Persona registry hardcoded; six names
 
-**Status:** Accepted (per DESIGN.md)
-**Context:** DESIGN.md fixes six personas with the default
+**Status:** Accepted (per ARCHITECTURE.md)
+**Context:** ARCHITECTURE.md fixes six personas with the default
 fan-out subset.
 **Decision:** `personas::ALL` is a const slice. No runtime
 extensibility.
@@ -269,7 +269,7 @@ for v1.
 #### DEC-002: Persona lookup: project-local first; embedded second; no host-native
 
 **Status:** Accepted
-**Context:** DESIGN.md is ambiguous on where the "shipped"
+**Context:** ARCHITECTURE.md is ambiguous on where the "shipped"
 persona files live at runtime: the file layout section
 references `skills/shared/personas/` (embedded), but the
 "Persona file resolution" section mentions
@@ -291,13 +291,13 @@ The host-native location (`.claude/commands/`,
   into the review prompt.
 - Project-local only -- rejected. Forces every project to
   author its own personas.
-**Consequences:** DESIGN.md may want a one-line clarification
+**Consequences:** ARCHITECTURE.md may want a one-line clarification
 in a future amendment. The behaviour is unambiguous at the
 spec level.
 
 #### DEC-003: Diff via shell-out to git; documented fallback chain
 
-**Status:** Accepted (per DESIGN.md "speccy review diff scoping")
+**Status:** Accepted (per ARCHITECTURE.md "speccy review diff scoping")
 **Context:** Reviewers need to see the work. The implementer
 might have committed or not.
 **Decision:** Shell out to `git`:
@@ -318,7 +318,7 @@ two) per invocation is cheap.
 #### DEC-004: `--persona` is required; no implicit default
 
 **Status:** Accepted
-**Context:** DESIGN.md notes review "is the only phase with
+**Context:** ARCHITECTURE.md notes review "is the only phase with
 parallel sub-types," and the persona fan-out is the
 orchestrating skill's job. The CLI runs one persona at a time.
 **Decision:** `--persona` has no default; missing it is a
@@ -411,7 +411,7 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005, SPEC-0008.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 
@@ -421,7 +421,7 @@ rather than defining its own list -- the two have to stay
 aligned. Implementer: when landing this spec, refactor SPEC-0007
 to consume `personas::ALL[..4]` if it doesn't already.
 
-DEC-002 resolves a real ambiguity in DESIGN.md. The DESIGN.md
+DEC-002 resolves a real ambiguity in ARCHITECTURE.md. The ARCHITECTURE.md
 amendment to align with this decision is a non-blocking
 follow-up (a one-line edit to the "Persona file resolution"
 section).

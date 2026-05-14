@@ -30,5 +30,5 @@ its host's expected location. Landed in commit `758f9c8`.
 
 REPORT.md back-filled retroactively on 2026-05-13 as part of the v1
 dogfood completeness sweep. SPEC-0013 was the final spec in the
-DESIGN.md implementation sequence; v1 dogfood is complete with its
+ARCHITECTURE.md implementation sequence; v1 dogfood is complete with its
 landing.

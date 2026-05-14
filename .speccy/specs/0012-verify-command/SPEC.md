@@ -278,7 +278,7 @@ that severity and applies the pass/fail rule.
 executable check passed. Warnings and info never fail the gate.
 **Alternatives:**
 - Configurable severity threshold -- rejected. Matches the "no
-  `--strict` mode" stance from DESIGN.md and SPEC-0003 DEC-003.
+  `--strict` mode" stance from ARCHITECTURE.md and SPEC-0003 DEC-003.
 **Consequences:** Projects that want stricter gates must propose
 severity changes upstream (SPEC-0003 amendments + the lint
 stability registry).
@@ -379,7 +379,7 @@ deepened.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` specs are skipped entirely; `Fail` outcomes on `in-progress` specs are categorised as in-flight and do NOT gate the exit code. Only `Level::Error` lint diagnostics and `Fail` on `implemented` specs trigger `verify: FAIL`. JSON envelope gains `summary.checks.in_flight` and per-check `spec_status` fields; text summary becomes `Checks: P passed, F failed, FL in-flight, M manual`. |
 | 2026-05-13 | agent/claude | Lint side of the same status filter: `Level::Error` lint diagnostics on `in-progress` specs are demoted to `Level::Info` before partitioning, so drafted-spec lint noise (e.g. TSK-001 on a TASKS.md whose REQs aren't finalised yet) flows into the info bucket and does not gate `verify`. Workspace-level diagnostics (no `spec_id`) and diagnostics on `implemented` specs keep their original severity. |
 

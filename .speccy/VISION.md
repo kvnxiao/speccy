@@ -25,7 +25,7 @@ at the edges: in skills, prompts, and personas.
 
 ## V1.0 outcome
 
-- Ten-command Rust CLI implementing the surface in `.speccy/DESIGN.md`:
+- Ten-command Rust CLI implementing the surface in `.speccy/ARCHITECTURE.md`:
   `init`, `plan`, `tasks`, `implement`, `review`, `report`, `status`,
   `next`, `check`, `verify`.
 - Shipped skill packs for Claude Code and Codex that drive the full

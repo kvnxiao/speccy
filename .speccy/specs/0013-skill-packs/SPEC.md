@@ -35,7 +35,7 @@ is iteratable.
 - Personas (planner, implementer, six reviewers) follow a
   consistent content shape so agents can reliably consume them.
 - Host recipe skills orchestrate the multi-step loops
-  (`speccy:work`, `speccy:review`) correctly per DESIGN.md's
+  (`speccy:work`, `speccy:review`) correctly per ARCHITECTURE.md's
   workflow phases.
 - Each top-level recipe is loadable by its host without parse
   errors.
@@ -212,7 +212,7 @@ Each top-level recipe skill follows a consistent shape.
      `speccy:amend`) -- explicit loop conditions and exit
      criteria.
 - The CLI commands referenced in the steps match the v1
-  CLI surface (the ten commands from DESIGN.md).
+  CLI surface (the ten commands from ARCHITECTURE.md).
 
 **Behavior:**
 - A test loads each recipe and asserts presence of an intro
@@ -355,7 +355,7 @@ load these files).
   author.
 - [ ] Should `speccy/amend.md` orchestrate both `speccy plan
   SPEC-ID` and `speccy tasks SPEC-ID`, or only one? Per
-  DESIGN.md "Amendment": both. The recipe should reflect this.
+  ARCHITECTURE.md "Amendment": both. The recipe should reflect this.
 - [ ] Should the report prompt template (`report.md`) suggest
   a specific REPORT.md frontmatter shape? Yes -- match
   SPEC-0001 REQ-005 (spec, outcome, generated_at). Document
@@ -374,7 +374,7 @@ load these files).
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

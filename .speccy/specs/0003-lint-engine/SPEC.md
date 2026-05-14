@@ -16,7 +16,7 @@ SPEC-0001) and emits structured `Diagnostic` values with stable lint
 codes. It is consumed by SPEC-0004 (`status`) and SPEC-0012
 (`verify`); future commands and dashboards can call it the same way.
 
-The catalogue of codes is the one in `.speccy/DESIGN.md` "Lint
+The catalogue of codes is the one in `.speccy/ARCHITECTURE.md` "Lint
 Codes": `SPC-001` through `SPC-007`, `REQ-001` and `REQ-002`,
 `VAL-001` through `VAL-004`, `TSK-001` through `TSK-004`, and
 `QST-001`. This spec implements every one and locks the catalogue
@@ -32,7 +32,7 @@ regex set rather than a heuristic.
 
 ## Goals
 
-- Every code in `.speccy/DESIGN.md` "Lint Codes" is implemented and
+- Every code in `.speccy/ARCHITECTURE.md` "Lint Codes" is implemented and
   triggered by at least one fixture.
 - Codes are stable: removing or renaming one is a build-breaking
   change; adding a new one is non-breaking.
@@ -444,11 +444,11 @@ SPEC-0012 land.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition (bootstrap of speccy). |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
 
 ## Notes
 
-This spec is "narrow but exhaustive": every code in DESIGN.md's
+This spec is "narrow but exhaustive": every code in ARCHITECTURE.md's
 "Lint Codes" section is implemented, and the stability registry
 ensures none are silently lost. The fixture corpus (T-012) is the
 durable test surface -- each code has at least one fixture that

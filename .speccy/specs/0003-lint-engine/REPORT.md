@@ -9,7 +9,7 @@ generated_at: 2026-05-13T20:00:00Z
 ## Summary
 
 Structured-diagnostic lint engine emitting the SPC / REQ / VAL / TSK
-/ QST code families described in DESIGN.md, including the
+/ QST code families described in ARCHITECTURE.md, including the
 single-no-op-command anti-pattern (VAL-002). Landed in commit
 `cbc0eaa`; consumed by both `speccy status` (SPEC-0004) and
 `speccy verify` (SPEC-0012).

@@ -26,7 +26,7 @@ error type. No CLI command is added in this spec; later specs
 The parser must handle Speccy's known quirks:
 
 - Markdown fenced code blocks containing example REQ headings.
-  `.speccy/DESIGN.md` is itself a worked example -- the design doc
+  `.speccy/ARCHITECTURE.md` is itself a worked example -- the design doc
   embeds `### REQ-NNN:` headings inside its own SPEC.md template
   examples. A naive regex scan would mis-identify them.
 - CRLF line endings on Windows (the primary dev environment).
@@ -306,7 +306,7 @@ A Cargo workspace with two crates: `speccy-core` (library) and
 library exposes one parser function per artifact type, all sharing a
 single `ParseError` enum.
 
-The parsing stack matches `.speccy/DESIGN.md`'s "Operational details
+The parsing stack matches `.speccy/ARCHITECTURE.md`'s "Operational details
 / Parsing stack" section:
 
 - `toml` for TOML files.
@@ -315,7 +315,7 @@ The parsing stack matches `.speccy/DESIGN.md`'s "Operational details
   skip fenced code blocks when looking for REQ headings.
 - `serde-saphyr` for YAML frontmatter. Direct-to-struct
   deserialisation, panic-free on malformed input. Pinned exact
-  `0.0.x` per DESIGN.md guidance. Expected to need a minor refactor
+  `0.0.x` per ARCHITECTURE.md guidance. Expected to need a minor refactor
   when `0.1.0` ships.
 - `regex` only for narrow ID extraction (REQ-NNN, T-NNN) from
   already-isolated heading or strong-text node content. Never used
@@ -351,7 +351,7 @@ land code in one of these two crates.
 
 #### DEC-002: `serde-saphyr` for YAML frontmatter
 
-**Status:** Accepted (per `.speccy/DESIGN.md` "Operational details")
+**Status:** Accepted (per `.speccy/ARCHITECTURE.md` "Operational details")
 **Context:** Existing Rust YAML crates are either deprecated
 (`serde_yaml`) or archived as unsafe (`serde_yml`,
 RUSTSEC-2025-0068).
@@ -382,7 +382,7 @@ nodes.
   behavior.
 
 **Consequences:** Adds a CommonMark dependency. Worth it; this is
-the robustness `.speccy/DESIGN.md` specifically calls out.
+the robustness `.speccy/ARCHITECTURE.md` specifically calls out.
 
 #### DEC-004: Hash SPEC.md raw bytes for staleness detection
 
@@ -407,7 +407,7 @@ the remedy is `/speccy:amend` (covered by SPEC-0005, SPEC-0006).
 **Status:** Accepted
 **Context:** SPEC.md frontmatter could store both `supersedes` (this
 spec replaces those) and `superseded_by` (those specs replaced this
-one), as the initial `.speccy/DESIGN.md` sketch did. The bidirectional
+one), as the initial `.speccy/ARCHITECTURE.md` sketch did. The bidirectional
 form requires editing the older spec whenever a new one supersedes
 it, which is easy to skip and easy to get out of sync.
 **Decision:** Store only `supersedes` on the new spec. Compute
@@ -425,7 +425,7 @@ SPEC.mds at query time. Expose this as `supersession_index`
   not a graph-derived inference.
 
 **Consequences:** Lineage is single-sourced; new specs declare their
-replacements in one place. `.speccy/DESIGN.md` is amended in the
+replacements in one place. `.speccy/ARCHITECTURE.md` is amended in the
 same change to drop `superseded_by` from the frontmatter table and
 to redefine `SPC-006` ("status = superseded but no other spec
 declares `supersedes` pointing here") accordingly.
@@ -501,10 +501,10 @@ project root.
   cost more to plumb. Defer to first downstream consumer (likely
   SPEC-0003 lint), which will tell us what it actually needs.
 - [x] Where does `AGENTS.md` live? -- At the project root (existing
-  location). `.speccy/DESIGN.md`'s file-layout sketch showing
+  location). `.speccy/ARCHITECTURE.md`'s file-layout sketch showing
   `.speccy/AGENTS.md` is conceptual. Every host already loads
   `AGENTS.md` from the project root, and the symlink from
-  `CLAUDE.md` reinforces that. `.speccy/DESIGN.md` should be amended
+  `CLAUDE.md` reinforces that. `.speccy/ARCHITECTURE.md` should be amended
   to reflect this in a later, non-blocking pass.
 
 ## Assumptions
@@ -522,7 +522,7 @@ project root.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from `.speccy/DESIGN.md` decomposition (bootstrap of speccy itself). |
+| 2026-05-11 | human/kevin  | Initial draft from `.speccy/ARCHITECTURE.md` decomposition (bootstrap of speccy itself). |
 
 ## Notes
 

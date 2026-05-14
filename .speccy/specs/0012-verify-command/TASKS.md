@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0012
-spec_hash_at_generation: c33690c3375444d7b6e662b6d80eee21c500029309134e1309c84adef5d614ed
-generated_at: 2026-05-14T03:00:28Z
+spec_hash_at_generation: 8ec57a0fffa1ce7a67b3a9c30cb17a9a868d25be78c62238ce863fe4b469479a
+generated_at: 2026-05-14T03:25:15Z
 ---
 
 # Tasks: SPEC-0012 verify-command

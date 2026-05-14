@@ -16,7 +16,7 @@ template inlining the relevant SPEC.md, the task entry from
 TASKS.md with all its prior notes, suggested files, AGENTS.md, and
 the implementer skill content.
 
-Task IDs are spec-scoped per DESIGN.md ("`**T-NNN**` IDs are stable
+Task IDs are spec-scoped per ARCHITECTURE.md ("`**T-NNN**` IDs are stable
 within the file"). The command accepts two argument forms:
 
 - **Unqualified** `T-NNN` -- searches every spec; succeeds only
@@ -273,7 +273,7 @@ auto-resolution.
 - Interactive prompt -- rejected. The CLI is non-interactive
   (matches SPEC-0002 stance).
 **Consequences:** Users with multi-spec workspaces who duplicate
-`T-NNN` IDs (legitimate per DESIGN.md) must always qualify or
+`T-NNN` IDs (legitimate per ARCHITECTURE.md) must always qualify or
 ensure each invocation is unambiguous in practice.
 
 #### DEC-004: Task entry inlines the full sub-list
@@ -364,7 +364,7 @@ SPEC-0004 (workspace::scan), SPEC-0005 (prompt helpers).
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

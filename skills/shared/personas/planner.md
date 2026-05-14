@@ -35,7 +35,7 @@ re-deriving intent. Your output is markdown, not code; your worry is
 
 ## Output format
 
-- Write `SPEC.md` (PRD-shaped per `.speccy/DESIGN.md`) and `spec.toml`
+- Write `SPEC.md` (PRD-shaped per `.speccy/ARCHITECTURE.md`) and `spec.toml`
   (requirement-to-check mapping) into the spec folder.
 - Frontmatter: `id`, `slug`, `title`, `status: in-progress`, `created`
   (today, ISO date). `supersedes` only when applicable.

@@ -1,7 +1,7 @@
 //! Context-budget trimmer.
 //!
 //! Drops low-priority sections in the order specified by
-//! `.speccy/DESIGN.md` "Prompt context budget" (and SPEC-0005 REQ-006):
+//! `.speccy/ARCHITECTURE.md` "Prompt context budget" (and SPEC-0005 REQ-006):
 //!
 //! 1. `## Notes` section content.
 //! 2. Answered `## Open questions` entries (`- [x]` items).
@@ -36,7 +36,7 @@ pub struct TrimResult {
     pub fits: bool,
 }
 
-/// Trim `rendered` to fit `budget` characters using the DESIGN.md drop
+/// Trim `rendered` to fit `budget` characters using the ARCHITECTURE.md drop
 /// order. Warnings about overrun go to process stderr; use
 /// [`trim_to_budget_with_warn`] to inject a custom sink for tests.
 #[must_use = "the trim result carries the prompt text caller must emit"]
@@ -476,7 +476,7 @@ mod tests {
             .expect("answered drop must be present");
         assert!(
             notes_pos < answered_pos,
-            "Notes must drop before answered questions per DESIGN.md order",
+            "Notes must drop before answered questions per ARCHITECTURE.md order",
         );
     }
 }

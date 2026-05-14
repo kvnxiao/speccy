@@ -60,7 +60,7 @@ proves = "Blocked variant carries one of a small set of canonical reason strings
 id = "CHK-007"
 kind = "test"
 command = "cargo test -p speccy-cli --test next_json -- envelope_and_variants"
-proves = "speccy next --json emits schema_version=1 envelope; the kind field discriminates four variants (implement, review, report, blocked) with the field shapes from DESIGN.md and SPEC.md."
+proves = "speccy next --json emits schema_version=1 envelope; the kind field discriminates four variants (implement, review, report, blocked) with the field shapes from ARCHITECTURE.md and SPEC.md."
 
 [[checks]]
 id = "CHK-008"

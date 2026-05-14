@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0010
-spec_hash_at_generation: a2923f72d6bbfdd47c2cfc137fbe3492ceabaf6767697b0d36851ea94b929d6f
-generated_at: 2026-05-14T03:00:28Z
+spec_hash_at_generation: 04b5b26cd936e38ad8c59b4f81a4dc852d7a941630c40f2a2302740d96ea183a
+generated_at: 2026-05-14T03:25:14Z
 ---
 
 # Tasks: SPEC-0010 check-command

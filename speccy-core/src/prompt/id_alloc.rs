@@ -1,6 +1,6 @@
 //! Spec ID allocator (`max + 1`; no gap recycling).
 //!
-//! Per SPEC-0005 DEC-005 and `.speccy/DESIGN.md` "Spec ID allocation":
+//! Per SPEC-0005 DEC-005 and `.speccy/ARCHITECTURE.md` "Spec ID allocation":
 //! gaps left by dropped specs are not recycled so historical SPEC IDs
 //! retain unambiguous meaning in commits and PR descriptions.
 

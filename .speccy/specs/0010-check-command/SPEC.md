@@ -108,7 +108,7 @@ Restrict execution to a single check ID when one is supplied.
 - `speccy check CHK-NNN` runs only checks whose `id == "CHK-NNN"`
   across every spec.
 - If multiple specs each define `CHK-NNN`, ALL of them run
-  (DESIGN.md scopes CHK IDs to specs; cross-spec collision is
+  (ARCHITECTURE.md scopes CHK IDs to specs; cross-spec collision is
   legitimate, not an error).
 - If no check in any spec.toml matches the supplied ID, exit code
   is 1 and stderr names the missing ID plus suggests `speccy
@@ -279,7 +279,7 @@ slow check suites run `speccy check CHK-NNN` to scope to one.
 #### DEC-003: CHK IDs are spec-scoped; cross-spec collision is legitimate
 
 **Status:** Accepted
-**Context:** DESIGN.md scopes `CHK-NNN` IDs to specs. SPEC-0001 and
+**Context:** ARCHITECTURE.md scopes `CHK-NNN` IDs to specs. SPEC-0001 and
 SPEC-0003 might both define `CHK-001`. Treating IDs as global
 would force disambiguation.
 **Decision:** `speccy check CHK-NNN` matches every spec where
@@ -293,15 +293,15 @@ error.
 **Consequences:** A future flag (`--spec SPEC-NNNN`) could narrow
 selection; not needed for v1.
 
-#### DEC-004: No execution records (per DESIGN.md)
+#### DEC-004: No execution records (per ARCHITECTURE.md)
 
 **Status:** Accepted
-**Context:** DESIGN.md "Checks / No freshness, no records"
+**Context:** ARCHITECTURE.md "Checks / No freshness, no records"
 explicitly rejects committing check-execution artifacts.
 **Decision:** `speccy check` writes nothing. Output goes to the
 terminal; CI artifact storage handles persistence.
 **Alternatives:**
-- Write a `.speccy/check_results.json` -- rejected per DESIGN.md.
+- Write a `.speccy/check_results.json` -- rejected per ARCHITECTURE.md.
 **Consequences:** The proof-chain in v1 is: SPEC.md says what
 matters; spec.toml says what checks prove it; running them is
 on-demand.
@@ -367,7 +367,7 @@ landing first.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` checks are skipped; `Fail` outcomes on `in-progress` specs are reported as IN-FLIGHT and do not gate the exit code (only `implemented` failures gate). Summary line gains an `in-flight` count. |
 
 ## Notes

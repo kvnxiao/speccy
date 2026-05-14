@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0008
-spec_hash_at_generation: 2b8e9e14700a1bcb367dc878ebd1fc08c4644d3aea505f4ed41eb32acad09af9
-generated_at: 2026-05-14T03:00:27Z
+spec_hash_at_generation: 705e5d3a48a279968e7507afe74f8cef0d298360b124cb9727d6ecce1505eb06
+generated_at: 2026-05-14T03:25:14Z
 ---
 
 # Tasks: SPEC-0008 implement-command

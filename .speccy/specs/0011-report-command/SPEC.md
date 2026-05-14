@@ -187,7 +187,7 @@ trust that "if `speccy report` succeeds, the spec is done."
 
 #### DEC-002: Retry count = `Retry:` marker occurrences in notes
 
-**Status:** Accepted (per DESIGN.md "TASKS.md State Model")
+**Status:** Accepted (per ARCHITECTURE.md "TASKS.md State Model")
 **Context:** Review notes follow conventions like
 `Retry: <reason>`. Counting them is a straightforward
 proxy for "how many times did this task come back."
@@ -210,7 +210,7 @@ fine; the agent can always edit the report.
 question: should `speccy report` work on dropped specs?
 **Decision:** For v1, no. Dropped specs don't need a report;
 their abandonment is documented in the SPEC.md `## Changelog`
-table (per DESIGN.md). The CLI's completeness gate applies
+table (per ARCHITECTURE.md). The CLI's completeness gate applies
 uniformly regardless of status.
 **Alternatives:**
 - Allow report for `status: dropped` -- rejected for v1.
@@ -267,7 +267,7 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

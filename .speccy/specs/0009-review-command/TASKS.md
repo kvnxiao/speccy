@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0009
-spec_hash_at_generation: 5056c0bb5e7d921ff1a652e8b9641fc980e458f5380de878b137178f7838ea19
-generated_at: 2026-05-14T03:00:28Z
+spec_hash_at_generation: c1c6b1678065da3541173b9a5c9602cfc122869cf02f7d1f2dea2f348652efe8
+generated_at: 2026-05-14T03:25:14Z
 ---
 
 # Tasks: SPEC-0009 review-command

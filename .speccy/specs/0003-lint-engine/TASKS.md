@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0003
-spec_hash_at_generation: de6720aabc81dd570e5e75cd2af0a5dd992beb72b2b2bdb53f9dcb231fa4c731
-generated_at: 2026-05-14T03:00:26Z
+spec_hash_at_generation: 101ecbd36f2091b9decb53f04a620e62353c31cf88b72337a2783e7352aa026a
+generated_at: 2026-05-14T03:25:12Z
 ---
 
 # Tasks: SPEC-0003 lint-engine

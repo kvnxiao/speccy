@@ -11,7 +11,7 @@ generated_at: 2026-05-13T20:00:00Z
 `speccy plan [SPEC-ID]` renders the Phase 1 prompt (greenfield or
 amendment). Lands the cross-cutting `prompt::` helpers consumed by
 subsequent commands: `load_template`, `render`, `load_agents_md`,
-`allocate_next_spec_id`, and `trim_to_budget` (with DESIGN.md's
+`allocate_next_spec_id`, and `trim_to_budget` (with ARCHITECTURE.md's
 five-step drop ordering). Landed in commit `960a5a1`.
 
 ## Requirements coverage

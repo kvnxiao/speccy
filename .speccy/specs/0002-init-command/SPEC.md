@@ -69,10 +69,9 @@ content when neither exists.
 
 **Done when:**
 - `.speccy/speccy.toml` is written with `schema_version = 1` and a
-  `[project]` block; `name` is the parent directory's name; `root`
-  is `".."`.
+  `[project]` block; `name` is the parent directory's name.
 - `.speccy/VISION.md` is written with all the template sections
-  defined in `.speccy/DESIGN.md` "VISION.md" section: Product, Users,
+  defined in `.speccy/ARCHITECTURE.md` "VISION.md" section: Product, Users,
   V1.0 outcome, Constraints, Non-goals, Quality bar, Known unknowns.
 - Both files validate against the SPEC-0001 parser without errors.
 
@@ -181,7 +180,7 @@ location.
   `skills/shared/personas/reviewer-security.md`, when `speccy init`
   runs, then a project-local override location holds that file (the
   exact path is the implementer's choice within `.speccy/skills/`
-  per DESIGN.md "Persona file resolution").
+  per ARCHITECTURE.md "Persona file resolution").
 
 **Covered by:** CHK-007, CHK-008
 
@@ -249,7 +248,7 @@ in v1; revisit if skill iteration cadence outpaces release cadence.
 #### DEC-002: Cursor detected but unsupported in v1
 
 **Status:** Accepted
-**Context:** `.speccy/DESIGN.md` lists `.cursor/` as a host signal
+**Context:** `.speccy/ARCHITECTURE.md` lists `.cursor/` as a host signal
 but no `skills/cursor/` pack ships in v1. Silent fallback would
 violate "surface unknowns; never invent" (CLAUDE.md).
 **Decision:** Detect `.cursor/` as a host signal but refuse to
@@ -366,7 +365,7 @@ commit; no data migration since the command creates net-new files.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition (bootstrap of speccy). |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
 
 ## Notes
 

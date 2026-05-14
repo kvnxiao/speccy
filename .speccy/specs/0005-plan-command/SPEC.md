@@ -226,7 +226,7 @@ exceeds a budget threshold.
 **Done when:**
 - `prompt::trim_to_budget(rendered: String, budget: usize) -> TrimResult`
   returns `{ output: String, dropped: Vec<String>, fits: bool }`.
-- Drop ordering matches DESIGN.md "Prompt context budget":
+- Drop ordering matches ARCHITECTURE.md "Prompt context budget":
   1. `## Notes` section content (from inlined SPEC.md sections).
   2. Answered `## Open questions` entries (`- [x]` items).
   3. `## Changelog` rows older than the 5 most recent.
@@ -355,7 +355,7 @@ than needed. Documented as a known limitation.
 
 #### DEC-005: Spec ID allocation is "max + 1"; no gap recycling
 
-**Status:** Accepted (per DESIGN.md "Spec ID allocation")
+**Status:** Accepted (per ARCHITECTURE.md "Spec ID allocation")
 **Context:** Gaps left by dropped specs could be recycled. But
 recycling means a dropped SPEC-0007 could later mean something
 completely different, confusing anyone reading historical
@@ -459,7 +459,7 @@ and SPEC-0002 (embedded-bundle mechanism).
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

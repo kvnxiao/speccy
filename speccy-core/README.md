@@ -5,4 +5,4 @@ Provides deterministic parsers for the five Speccy artifact files
 (`speccy.toml`, `spec.toml`, `SPEC.md`, `TASKS.md`, `REPORT.md`),
 cross-reference utilities, and a workspace-wide supersession index.
 
-See `.speccy/DESIGN.md` for the canonical contract.
+See `.speccy/ARCHITECTURE.md` for the canonical contract.

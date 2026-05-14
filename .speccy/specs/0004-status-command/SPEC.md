@@ -241,7 +241,7 @@ Render structured JSON for harness consumption.
   `supersedes`, `superseded_by`, `tasks`, `stale`, `stale_reasons`,
   `open_questions`, `lint`, and optional `parse_error`.
 - Lint diagnostics inside `lint.errors/warnings/info` are structured
-  objects: `{ code, level, message, file?, line? }`. (DESIGN.md
+  objects: `{ code, level, message, file?, line? }`. (ARCHITECTURE.md
   showed them as strings; this spec upgrades to structured -- the
   string form would force every harness to re-parse them.)
 - Output is deterministic: spec order is ascending by spec ID;
@@ -308,7 +308,7 @@ skips errored ones.
 #### DEC-002: Structured lint diagnostics in JSON, not strings
 
 **Status:** Accepted
-**Context:** DESIGN.md's JSON example shows lint diagnostics as
+**Context:** ARCHITECTURE.md's JSON example shows lint diagnostics as
 strings (`"VAL-001: CHK-003 missing 'proves' field"`). Strings
 force every consumer to re-parse them, which is a small but real
 foot-gun.
@@ -316,15 +316,15 @@ foot-gun.
 level, message, file, line }`. Text view continues to render them
 as one-line strings.
 **Alternatives:**
-- Strings (per DESIGN.md example) -- rejected.
-**Consequences:** DESIGN.md's JSON example is illustrative, not
-literal. A one-line clarification in DESIGN.md is queued as a
+- Strings (per ARCHITECTURE.md example) -- rejected.
+**Consequences:** ARCHITECTURE.md's JSON example is illustrative, not
+literal. A one-line clarification in ARCHITECTURE.md is queued as a
 non-blocking follow-up.
 
 #### DEC-003: `repo_sha` via shell-out to git, optional
 
 **Status:** Accepted
-**Context:** DESIGN.md's JSON shape includes `repo_sha`. It's
+**Context:** ARCHITECTURE.md's JSON shape includes `repo_sha`. It's
 useful for "which commit was this snapshot taken on?" but adding a
 git library is heavy for one field.
 **Decision:** Shell out to `git rev-parse HEAD` once per
@@ -332,7 +332,7 @@ invocation. If the command fails (no git on PATH, no HEAD, not a
 git repo), set `repo_sha = ""` and continue without error.
 **Alternatives:**
 - `gix` library -- rejected for v1.
-- Omit the field -- rejected; DESIGN.md contract has it.
+- Omit the field -- rejected; ARCHITECTURE.md contract has it.
 **Consequences:** One subprocess per `status` invocation.
 Negligible cost.
 
@@ -417,7 +417,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 - [ ] Should `--json` accept a `--filter <pattern>` flag for harness
   ergonomics, or is "filter on the harness side" sufficient? Likely
   sufficient for v1 -- JSON output is small enough.
-- [ ] `JSON-001` from DESIGN.md's lint codes is the only `JSON-*`
+- [ ] `JSON-001` from ARCHITECTURE.md's lint codes is the only `JSON-*`
   family member. Its purpose is unclear (status emits JSON, doesn't
   read it). Defer; SPEC-0003 didn't implement it either.
 - [ ] Should `repo_sha` use the short SHA (7 chars) or full SHA (40
@@ -440,7 +440,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-12 | agent/claude | Implemented: `speccy_core::workspace` (scan, find_root, stale_for, TaskCounts, count_open_questions), `lint::Workspace` refactored to borrow specs, `speccy status [--json]` with text + JSON renderers + dangling-supersedes synthesis (WS-001). |
 
 ## Notes

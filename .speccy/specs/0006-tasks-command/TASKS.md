@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0006
-spec_hash_at_generation: c90602ff63e75979d4144bb7c37c0642fee507916bf0c5fcd5c908cd5cabb490
-generated_at: 2026-05-14T03:00:27Z
+spec_hash_at_generation: a3a287413a63a9ac81439114c06bb267eba435735e02f6fa300aabe10fd20b59
+generated_at: 2026-05-14T03:25:13Z
 ---
 
 # Tasks: SPEC-0006 tasks-command

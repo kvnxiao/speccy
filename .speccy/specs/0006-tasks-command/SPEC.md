@@ -241,8 +241,8 @@ Flow per invocation:
 
 #### DEC-001: `--commit` is a sub-action, not a separate verb
 
-**Status:** Accepted (per DESIGN.md "CLI Surface")
-**Context:** DESIGN.md keeps the CLI surface flat: ten commands,
+**Status:** Accepted (per ARCHITECTURE.md "CLI Surface")
+**Context:** ARCHITECTURE.md keeps the CLI surface flat: ten commands,
 no mode toggles. Adding `speccy commit` or `speccy tasks-commit`
 as a separate verb would inflate the surface for a narrow
 sub-action.
@@ -395,7 +395,7 @@ SPEC-0005 (prompt helpers) -- all deepened.
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

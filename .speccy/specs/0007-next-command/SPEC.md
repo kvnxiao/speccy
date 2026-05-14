@@ -46,7 +46,7 @@ right specific command.
   implementer or reviewer flips checkboxes.
 - No claiming or locking. If two agents both ask for the next
   task, they get the same answer; if they both try to start work,
-  git resolves the contention (per DESIGN.md "Concurrent pickup").
+  git resolves the contention (per ARCHITECTURE.md "Concurrent pickup").
 - No predictive scheduling. Priority is mechanical: lowest spec
   ID, then within-spec ordering. No estimated-time-to-complete,
   no critical-path computation.
@@ -179,7 +179,7 @@ envelope conventions.
   - `"report"`: `{ kind, spec, prompt_command }`.
   - `"blocked"`: `{ kind, reason }`.
 - `prompt_command` and `prompt_command_template` follow the
-  shapes in DESIGN.md "speccy next --json":
+  shapes in ARCHITECTURE.md "speccy next --json":
   - implement: `"speccy implement T-NNN"`.
   - review: `"speccy review T-NNN --persona {persona}"`.
   - report: `"speccy report SPEC-NNNN"`.
@@ -243,10 +243,10 @@ Flow per invocation:
 
 #### DEC-001: Walk specs ascending; within-spec, `[?]` before `[ ]`
 
-**Status:** Accepted (per DESIGN.md "speccy next priority")
+**Status:** Accepted (per ARCHITECTURE.md "speccy next priority")
 **Context:** Two competing orderings exist: by spec ID
 (stable, locality of work) and by task age / priority (which
-speccy doesn't track). DESIGN.md picks spec ID.
+speccy doesn't track). ARCHITECTURE.md picks spec ID.
 **Decision:** Lowest spec ID first; within a spec, `[?]` review-
 ready tasks before `[ ]` open tasks. `--kind` filters override
 the within-spec preference.
@@ -262,8 +262,8 @@ until done before SPEC-0002 demands attention.
 
 #### DEC-002: Persona fan-out is hardcoded in v1
 
-**Status:** Accepted (per DESIGN.md "Phase 4: Review loop")
-**Context:** DESIGN.md says: "The default reviewer persona fan-
+**Status:** Accepted (per ARCHITECTURE.md "Phase 4: Review loop")
+**Context:** ARCHITECTURE.md says: "The default reviewer persona fan-
 out is: business, tests, security, style. The other personas
 (architecture, docs) are available via `--persona` but not in
 the default fan-out. Projects can override the default set in
@@ -273,7 +273,7 @@ the default fan-out. Projects can override the default set in
 results. No project-level config in v1.
 **Alternatives:**
 - Configurable via `speccy.toml` -- rejected for v1. Matches the
-  DESIGN.md stance and "no `--strict` mode" philosophy.
+  ARCHITECTURE.md stance and "no `--strict` mode" philosophy.
 **Consequences:** All v1 deployments get the same review
 discipline. Future config knob can override.
 
@@ -403,7 +403,7 @@ Greenfield. Rollback via `git revert`. Depends on SPEC-0001
 
 | Date       | Author       | Summary |
 |------------|--------------|---------|
-| 2026-05-11 | human/kevin  | Initial draft from DESIGN.md decomposition. |
+| 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 
 ## Notes
 

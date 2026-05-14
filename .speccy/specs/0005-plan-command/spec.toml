@@ -70,4 +70,4 @@ proves = "render leaves unrecognised {{placeholders}} in place and prints a stde
 id = "CHK-008"
 kind = "test"
 command = "cargo test -p speccy-core --test prompt_budget"
-proves = "trim_to_budget drops sections in DESIGN.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops."
+proves = "trim_to_budget drops sections in ARCHITECTURE.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops."

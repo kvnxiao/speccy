@@ -1,6 +1,6 @@
-# Speccy Design
+# Speccy Architecture
 
-> Canonical design for Speccy.
+> Canonical architecture for Speccy.
 >
 > Speccy is an AI-first, lightweight feedback engine for spec-driven
 > development. It does not try to enforce determinism on LLMs. It makes

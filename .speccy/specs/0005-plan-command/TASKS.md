@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0005
-spec_hash_at_generation: 1bc075c954f009e39825f464125488337e949cd2e719a2566db26500ecbe2125
-generated_at: 2026-05-14T03:00:27Z
+spec_hash_at_generation: f1846617a2eebb51638c76663994acb88e8f7fcc2415a52dacfb0b492db002e6
+generated_at: 2026-05-14T03:25:13Z
 ---
 
 # Tasks: SPEC-0005 plan-command
@@ -63,7 +63,7 @@ generated_at: 2026-05-14T03:00:27Z
 
 ## Phase 5: Context-budget trimmer
 
-- [x] **T-005**: Implement `prompt::trim_to_budget` with the DESIGN.md drop ordering
+- [x] **T-005**: Implement `prompt::trim_to_budget` with the ARCHITECTURE.md drop ordering
   - Covers: REQ-006
   - Tests to write:
     - 60,000-char input + 80,000 budget -> output unchanged, `dropped = []`, `fits = true`.
