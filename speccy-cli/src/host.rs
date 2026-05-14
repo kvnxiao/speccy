@@ -21,7 +21,7 @@ pub enum HostChoice {
     /// per SPEC-0015 (was `.claude/commands/` pre-v1).
     ClaudeCode,
     /// Codex skill pack; destination `.agents/skills/<name>/SKILL.md` per
-    /// SPEC-0015 (the path OpenAI's Codex docs list as the project-local
+    /// SPEC-0015 (the path `OpenAI`'s Codex docs list as the project-local
     /// scan location; was `.codex/skills/` pre-v1).
     Codex,
 }
@@ -50,7 +50,7 @@ impl HostChoice {
     /// Per SPEC-0015, both hosts use their published project-local skills
     /// directory so the shipped pack is discoverable as host-native skills
     /// (not slash commands). Claude Code: `.claude/skills/`. Codex:
-    /// `.agents/skills/` per OpenAI's docs at
+    /// `.agents/skills/` per `OpenAI`'s docs at
     /// `developers.openai.com/codex/skills`.
     #[must_use = "the destination path is where the copy lands on disk"]
     pub const fn destination_segments(self) -> [&'static str; 2] {

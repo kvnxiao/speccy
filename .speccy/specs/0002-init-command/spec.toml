@@ -2,7 +2,7 @@ schema_version = 1
 
 [[requirements]]
 id = "REQ-001"
-checks = ["CHK-001", "CHK-002"]
+checks = ["CHK-001"]
 
 [[requirements]]
 id = "REQ-002"
@@ -25,12 +25,6 @@ id = "CHK-001"
 kind = "test"
 command = "cargo test -p speccy-cli --test init -- scaffold_speccy_toml"
 proves = "speccy init writes .speccy/speccy.toml with schema_version=1, project name from cwd, and root=\"..\"."
-
-[[checks]]
-id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test init -- scaffold_vision_md"
-proves = "speccy init writes .speccy/VISION.md with every template section heading present in declared order."
 
 [[checks]]
 id = "CHK-003"

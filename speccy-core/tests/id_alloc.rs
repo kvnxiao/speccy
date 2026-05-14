@@ -61,5 +61,27 @@ fn non_matching_directories_are_ignored() {
     fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
     mkdir(&specs, "0001-foo");
     mkdir(&specs, "_scratch");
+    // `_scratch` is descended into but contributes no NNNN-prefix.
     assert_eq!(allocate_next_spec_id(&specs), "0002");
+}
+
+#[test]
+fn nested_mission_folders_share_id_space() {
+    let (_tmp, root) = make_tmp_root();
+    let specs = root.join("specs");
+    fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+    mkdir(&specs, "auth/0001-signup");
+    mkdir(&specs, "billing/0002-invoice");
+    assert_eq!(allocate_next_spec_id(&specs), "0003");
+}
+
+#[test]
+fn flat_and_nested_specs_share_one_id_space() {
+    let (_tmp, root) = make_tmp_root();
+    let specs = root.join("specs");
+    fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+    mkdir(&specs, "0001-foo");
+    mkdir(&specs, "auth/0002-signup");
+    mkdir(&specs, "billing/0010-invoice");
+    assert_eq!(allocate_next_spec_id(&specs), "0011");
 }

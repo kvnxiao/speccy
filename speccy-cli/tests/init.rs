@@ -90,33 +90,16 @@ fn scaffold_speccy_toml() -> TestResult {
 }
 
 #[test]
-fn scaffold_vision_md() -> TestResult {
-    let fx = project_with_name("vision-project")?;
+fn does_not_scaffold_vision_md() -> TestResult {
+    let fx = project_with_name("no-vision-project")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let body = read_file(&fx.root, ".speccy/VISION.md")?;
-    let expected_sections = [
-        "## Product",
-        "## Users",
-        "## V1.0 outcome",
-        "## Constraints",
-        "## Non-goals",
-        "## Quality bar",
-        "## Known unknowns",
-    ];
-    let mut last_idx: usize = 0;
-    for section in expected_sections {
-        let idx = body
-            .find(section)
-            .ok_or_else(|| format!("VISION.md missing section `{section}`; got:\n{body}"))?;
-        assert!(
-            idx >= last_idx,
-            "VISION.md sections out of order at `{section}`",
-        );
-        last_idx = idx;
-    }
+    assert!(
+        !fx.root.join(".speccy/VISION.md").exists(),
+        "speccy init must not scaffold .speccy/VISION.md (the noun has been retired; the product north star lives in AGENTS.md instead)",
+    );
     Ok(())
 }
 
@@ -207,9 +190,7 @@ fn host_detection_precedence() -> TestResult {
             .current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root
-                .join(".agents/skills/speccy-init/SKILL.md")
-                .exists(),
+            fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
             "--host codex must populate .agents/skills/ regardless of .claude/ presence",
         );
     }
@@ -227,9 +208,7 @@ fn host_detection_precedence() -> TestResult {
             ".claude/ should win autodetect when both present",
         );
         assert!(
-            !fx.root
-                .join(".agents/skills/speccy-init/SKILL.md")
-                .exists(),
+            !fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
             ".agents/ should NOT be populated when .claude/ won detection",
         );
     }

@@ -64,18 +64,33 @@ Speccy, not in the user's workflow.
 
 | Noun | What it is | Where it lives |
 |---|---|---|
-| **Vision** | Product north star | `VISION.md` |
-| **Spec** | One bounded behavior contract | `specs/NNNN-slug/SPEC.md` + `spec.toml` |
+| **Mission** | Scope of one long-running initiative composed of 1+ specs | `specs/[focus]/MISSION.md` (optional grouping; omit for flat single-focus projects) |
+| **Spec** | One bounded behavior contract | `specs/[focus]/NNNN-slug/SPEC.md` + `spec.toml`, or `specs/NNNN-slug/...` when ungrouped |
 | **Requirement** | One observable behavior with a done condition | Heading in SPEC.md + entry in `spec.toml` |
 | **Task** | One implementation slice sized for one agent | Line in `TASKS.md` |
 | **Check** | One proof obligation (executable or manual) | Entry in `spec.toml` |
+
+The project-wide product north star ("what we're building, why, who
+for, what 'good enough to ship v1' looks like") is **not** a Speccy
+noun. It lives as a section inside `AGENTS.md` at the repo root.
+AGENTS.md is loaded into every rendered prompt, so the north star
+is always in context for any planner, implementer, or reviewer agent.
+
+A **Mission** is a narrower thing: the scope of one long-running
+initiative composed of multiple related specs. Mission folders are
+optional. A solo greenfield project with one focus area may have
+zero MISSION.md files; specs live flat under `.speccy/specs/`. When
+a focus accumulates 2+ specs that share enough context that loading
+them together at plan time is cheaper than rediscovering it, the
+planner skill creates `specs/[focus]/MISSION.md` and writes new
+specs into the focus folder.
 
 That is the complete conceptual vocabulary. Capability, milestone,
 release, decision, amendment, assumption, constraint, invariant,
 question, scenario, claim, lease, validation, evidence, finding,
 review, and amendment are all either cut, derived from artifact
 state, or rendered as freeform markdown sections inside SPEC.md /
-TASKS.md.
+TASKS.md / MISSION.md / AGENTS.md.
 
 ---
 
@@ -108,7 +123,7 @@ transition verbs. No mode toggles.
 ```text
 speccy init                       Scaffold .speccy/ + host skill pack
 speccy plan [SPEC-ID]             Phase 1 prompt
-                                    no arg:  Vision -> new SPEC scaffold
+                                    no arg:  AGENTS.md north star + optional MISSION.md -> new SPEC scaffold
                                     SPEC-ID: amend existing SPEC.md
 speccy tasks SPEC-ID              Phase 2 prompt
                                     TASKS.md absent:  initial generation
@@ -146,17 +161,27 @@ responsibility.
 # File Layout
 
 ```text
-AGENTS.md                Project-wide agent conventions (root, not inside .speccy/)
+AGENTS.md                Project-wide product north star + agent conventions
+                         (root, not inside .speccy/)
 
 .speccy/
   speccy.toml
-  VISION.md
   specs/
-    0001-user-signup/
+    0001-user-signup/                Ungrouped spec (no mission folder)
       SPEC.md            Frontmatter + PRD prose + Decisions + Changelog
       TASKS.md           Frontmatter (gen hash) + checklist + notes
       spec.toml          Requirement <-> Check mapping (machine contract)
       REPORT.md          Frontmatter (outcome) + summary (end of loop)
+    auth/                            Mission folder (optional grouping)
+      MISSION.md                     Scope/context for this focus area
+      0002-signup/
+        SPEC.md
+        TASKS.md
+        spec.toml
+        REPORT.md
+      0003-password-reset/
+        SPEC.md
+        ...
 
 skills/                  Shipped with Speccy; copied by `speccy init`
   claude-code/
@@ -170,6 +195,19 @@ skills/                  Shipped with Speccy; copied by `speccy init`
 project already keeps `AGENTS.md` (and often `CLAUDE.md` as a symlink)
 at the root for the broader agent ecosystem; speccy reads the file
 in place rather than asking projects to duplicate it under `.speccy/`.
+AGENTS.md carries both the product north star (what we're building,
+who for, v1 outcome, quality bar) and the cross-cutting agent
+conventions (hygiene, rule files, behavioral expectations). Section
+the file explicitly so reviewer-business and reviewer-architecture
+personas can find the product context, while reviewer-style finds
+the conventions.
+
+Mission folders are optional. A flat project with one focus area
+may have zero MISSION.md files — specs live directly under
+`.speccy/specs/NNNN-slug/`. When grouping emerges, the planner
+skill creates `.speccy/specs/[focus]/MISSION.md` and writes new
+specs into the focus folder. Existing flat specs may be moved into
+a focus folder retroactively; spec IDs do not change.
 
 `skills/` is a top-level directory in the Speccy workspace. `speccy
 init` copies the appropriate host pack into the user's project at
@@ -179,7 +217,8 @@ the host-native location (e.g. `.claude/commands/` for Claude Code,
 Decisions (ADRs) are not a separate folder. Each spec's `## Design
 > Decisions` subsection holds the architectural choices made for
 that spec. Project-wide conventions that span specs belong in
-`AGENTS.md`.
+`AGENTS.md`. Cross-spec context bounded to one focus area belongs
+in that focus area's `MISSION.md`.
 
 ---
 
@@ -193,10 +232,14 @@ speccy plan
 
 Renders a deterministic prompt that asks the agent to:
 
-- read `VISION.md`
-- propose the first SPEC slice
-- write `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template)
-- write `specs/NNNN-slug/spec.toml` (IDs + check definitions)
+- read `AGENTS.md` (carries the project-wide product north star)
+- read the nearest parent `MISSION.md` if writing into an existing
+  focus area (the planner skill walks upward from the target spec
+  path; absent MISSION.md is fine, just means the spec is ungrouped)
+- propose the next SPEC slice
+- write `specs/[focus]/NNNN-slug/SPEC.md` when targeting a focus
+  area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template)
+- write the corresponding `spec.toml` (IDs + check definitions)
 - surface material questions inline in SPEC.md
 
 If `SPEC-ID` is passed, the prompt instead asks for a minimal
@@ -377,39 +420,69 @@ isolation. Speccy v1 does not.
 
 # Artifacts
 
-## VISION.md
+## MISSION.md
 
-The greenfield seed. Not a full spec.
+Optional parent-context artifact for a focus area. Not required: a
+flat single-focus project may have zero MISSION.md files. When
+present, it lives at `.speccy/specs/[focus]/MISSION.md` and the
+planner / implementer / reviewer skills walk upward from any spec
+path looking for the nearest MISSION.md and include it in rendered
+prompts.
+
+The project-wide product north star (what we're building, who for,
+v1 outcome, quality bar) does **not** live here — it lives in
+`AGENTS.md` at the repo root. MISSION.md is narrower: the scope of
+one focus area within the broader product.
 
 Recommended sections:
 
 ```markdown
-# Vision
+# Mission: <focus name>
 
-## Product
-What we are building and why.
+## Scope
+What this focus area covers. What it doesn't.
 
-## Users
-Who will use this. What they need.
+## Why now
+The motivation driving this initiative, and any deadline / sequencing
+constraints.
 
-## V1.0 outcome
-What "done enough to call v1" means.
+## Specs in scope
+- SPEC-NNN — short title
+- SPEC-NNN — short title
 
-## Constraints
-Things we are not free to violate.
+## Cross-spec invariants
+Things every spec in this mission must respect (auth model, data
+ownership, error semantics, etc.).
 
-## Non-goals
-Things we are explicitly not building.
-
-## Quality bar
-What "good enough to ship" looks like.
-
-## Known unknowns
-Things we expect to learn during construction.
+## Open questions
+Things we expect to learn as specs land.
 ```
 
-VISION.md is markdown; Speccy does not parse its structure. The
-`speccy plan` prompt asks the agent to read it.
+MISSION.md is markdown; Speccy does not parse its structure beyond
+detecting its presence to scope prompts. No `MIS-NNN` lint codes
+exist in v1. No `speccy mission` command exists. Mission is a
+filesystem-and-skill convention, not a CLI-aware noun. (This is a
+deliberate v1 simplification; promote to a parsed noun later only
+if dogfooding shows pain.)
+
+### Greenfield bootstrap
+
+When `AGENTS.md` is missing or lacks a product north star section,
+the **`speccy-init` skill** (not the CLI) runs an interactive Q&A to
+populate it. The skill detects three states:
+
+1. AGENTS.md missing entirely → bootstrap from scratch via full Q&A
+   (product, users, v1 outcome, constraints, non-goals, quality bar,
+   known unknowns).
+2. AGENTS.md exists with process conventions but no `## Product
+   north star` section (or equivalent) → narrower Q&A; append the
+   section.
+3. AGENTS.md already has a north star → leave alone; confirm with
+   the user.
+
+The skill never overwrites: always append, or stop. The CLI's
+`speccy init` only scaffolds `.speccy/` and copies the host skill
+pack; it never edits `AGENTS.md`.
 
 ## speccy.toml
 
@@ -551,7 +624,7 @@ Token revocation requires key rotation or a blocklist (deferred).
 
 | Date       | Author          | Summary |
 |------------|-----------------|---------|
-| 2026-05-11 | agent/claude-1  | Initial draft from VISION.md |
+| 2026-05-11 | agent/claude-1  | Initial draft from AGENTS.md north star |
 
 ## Notes
 Free-form context for future agents and reviewers.
@@ -1201,7 +1274,7 @@ without any further setup.
 Each top-level skill is a recipe:
 
 - `/speccy:init` -- bootstrap the project
-- `/speccy:plan` -- Phase 1 (Vision -> SPEC)
+- `/speccy:plan` -- Phase 1 (AGENTS.md north star + optional MISSION.md -> SPEC)
 - `/speccy:tasks` -- Phase 2 (SPEC -> TASKS)
 - `/speccy:work` -- Phase 3 (impl loop)
 - `/speccy:review` -- Phase 4 (review loop)
@@ -1439,8 +1512,8 @@ These are not v1 features. Each was considered and rejected.
 
 | Cut | Reason |
 |---|---|
-| Capability map (`CAP-NNN`) | Specs are flat. Grouping via tags or filesystem is sufficient. |
-| Milestone state machine | Replaced by tag-based releases + a checklist file if the project wants one. |
+| Capability map (`CAP-NNN`) | Mission folders (`specs/[focus]/MISSION.md`) cover grouping. No second taxonomy. |
+| Milestone state machine | Replaced by tag-based releases + a checklist file if the project wants one. Missions are *scope*, not lifecycle. |
 | Release readiness as separate gate | Same: git tag + checklist. Not first-class. |
 | Decision (ADR) as a separate noun | Decisions live inline in SPEC.md as `### Decisions` blocks. No separate folder, no CLI command, no lifecycle machinery. |
 | Amendment as TOML | Replaced by SPEC.md frontmatter `status` + `## Changelog` table. |
@@ -1575,9 +1648,12 @@ nodes.
 
 ## Spec ID allocation
 
-`speccy plan` (creating a new spec) and `speccy spec <slug>` scan
-`specs/` for the maximum `NNNN-` prefix and increment. Gaps left
-by dropped specs are not recycled.
+Global ID space. `speccy plan` walks `.speccy/specs/**/spec.toml`
+across every mission folder and every flat (ungrouped) spec, finds
+the maximum `NNNN-` prefix, and increments. SPEC-NNN IDs are unique
+repo-wide regardless of which mission folder a spec sits in. Moving
+a spec into or out of a mission folder does not change its ID. Gaps
+left by dropped specs are not recycled.
 
 ## `speccy init` behavior
 

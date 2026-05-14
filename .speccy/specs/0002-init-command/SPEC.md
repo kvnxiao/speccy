@@ -65,29 +65,30 @@ filesystem signals.
 
 ### REQ-001: Scaffold the `.speccy/` workspace
 
-Create `.speccy/speccy.toml` and `.speccy/VISION.md` with template
-content when neither exists.
+Create `.speccy/speccy.toml` with template content when it does not
+exist. No `VISION.md` is written: the product north star lives in
+the project's root `AGENTS.md`, and the greenfield bootstrap that
+populates it is a **harness-skill** responsibility (the shipped
+`speccy-init` skill markdown), not the CLI's.
 
 **Done when:**
 - `.speccy/speccy.toml` is written with `schema_version = 1` and a
   `[project]` block; `name` is the parent directory's name.
-- `.speccy/VISION.md` is written with all the template sections
-  defined in `.speccy/ARCHITECTURE.md` "VISION.md" section: Product, Users,
-  V1.0 outcome, Constraints, Non-goals, Quality bar, Known unknowns.
-- Both files validate against the SPEC-0001 parser without errors.
+- The file validates against the SPEC-0001 parser without errors.
+- No file is written under `.speccy/` other than `speccy.toml` plus
+  the per-spec skill resources copied by REQ-004.
 
 **Behavior:**
 - Given a fresh repo at `/foo/bar` with no `.speccy/`, when
   `speccy init` runs successfully, then `.speccy/speccy.toml` exists
   with `name = "bar"`.
-- Given a fresh repo, when `speccy init` runs, then `.speccy/VISION.md`
-  exists and contains the heading `## Product`, `## Users`, and the
-  remaining template sections in declared order.
+- Given a fresh repo, when `speccy init` runs, then no
+  `.speccy/VISION.md` is created (the CLI no longer scaffolds one).
 - Given the templates change between speccy releases, when `speccy
-  init` runs, then the scaffolded files reflect the templates baked
-  into the current binary.
+  init` runs, then the scaffolded `speccy.toml` reflects the
+  template baked into the current binary.
 
-**Covered by:** CHK-001, CHK-002
+**Covered by:** CHK-001
 
 ### REQ-002: Existence check and `--force` semantics
 
@@ -332,8 +333,9 @@ The CLI maps `InitError` variants to exit codes:
 - New `speccy-cli/src/init.rs` (command logic).
 - New `speccy-cli/src/host.rs` (detection).
 - New `speccy-cli/src/embedded.rs` (include_dir! root).
-- New `speccy-cli/src/templates/` (VISION.md template, speccy.toml
-  template).
+- New `speccy-cli/src/templates/speccy.toml.tmpl` (the only
+  templated file the CLI writes; the prior `VISION.md.tmpl` was
+  removed when the noun was retired).
 - `speccy-cli/Cargo.toml` adds `include_dir` and an arg-parsing
   crate.
 - `skills/claude-code/`, `skills/codex/`, `skills/shared/` directories
@@ -350,10 +352,6 @@ commit; no data migration since the command creates net-new files.
 - [ ] Should `speccy init` print a "next steps" hint after success
   (e.g. "Run /speccy:plan in your host to start")? Likely yes;
   defer the exact wording to first dogfood pass.
-- [ ] Should `--force` regenerate `VISION.md` if it already exists?
-  Pragmatic answer: only if the existing file is byte-identical to
-  the unmodified template (hash compare). Defer the exact policy to
-  implementer.
 
 ## Assumptions
 
@@ -372,6 +370,7 @@ commit; no data migration since the command creates net-new files.
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
 | 2026-05-14 | agent/claude | REQ-004 destinations updated by SPEC-0015. Claude Code pack moves from `.claude/commands/` to `.claude/skills/<name>/SKILL.md`; Codex pack moves from `.codex/skills/` to `.agents/skills/<name>/SKILL.md` per OpenAI's official Codex scan paths. Layout shifts from flat `<verb>.md` files to SKILL.md directory format. Pre-v1: no shipped-install migration needed. |
+| 2026-05-14 | agent/claude | Vision noun retired; CLI no longer scaffolds `.speccy/VISION.md`. REQ-001 narrowed to scaffolding `speccy.toml` plus skill-pack resources only. CHK-002 repurposed from "VISION.md sections present in declared order" to "no VISION.md is created" (negative assertion). `templates/VISION.md.tmpl` is deleted. The greenfield Q&A that previously seeded VISION.md sections now lives in the shipped `speccy-init` skill markdown, which appends a `## Product north star` section to `AGENTS.md` when one is absent. |
 
 ## Notes
 

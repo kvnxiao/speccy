@@ -8,6 +8,10 @@ correct.
 
 {{agents}}
 
+## Mission context
+
+{{mission}}
+
 ## Existing SPEC
 
 {{spec_md}}

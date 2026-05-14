@@ -13,16 +13,16 @@ fn loads_plan_greenfield_template_from_embedded_bundle() {
     let body = load_template("plan-greenfield.md")
         .expect("plan-greenfield.md must ship in the embedded bundle");
     assert!(
-        body.contains("{{vision}}"),
-        "greenfield template missing {{vision}} placeholder",
-    );
-    assert!(
         body.contains("{{next_spec_id}}"),
         "greenfield template missing {{next_spec_id}} placeholder",
     );
     assert!(
         body.contains("{{agents}}"),
         "greenfield template missing {{agents}} placeholder",
+    );
+    assert!(
+        !body.contains("{{vision}}"),
+        "greenfield template must not contain the retired {{vision}} placeholder",
     );
 }
 
@@ -37,6 +37,10 @@ fn loads_plan_amend_template_from_embedded_bundle() {
     assert!(
         body.contains("{{spec_md}}"),
         "amend template missing {{spec_md}} placeholder",
+    );
+    assert!(
+        body.contains("{{mission}}"),
+        "amend template missing {{mission}} placeholder for nearest-parent MISSION.md",
     );
 }
 

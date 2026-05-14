@@ -8,9 +8,8 @@
 //!   `.claude/skills/speccy-<verb>/SKILL.md` at init time so the pack is
 //!   discoverable as host-native skills (not slash commands).
 //! - `codex/speccy-<verb>/SKILL.md` -- Codex skills; copied to
-//!   `.agents/skills/speccy-<verb>/SKILL.md` (the project-local scan
-//!   path OpenAI's Codex docs list). Layout mirrors the Claude Code pack
-//!   1:1.
+//!   `.agents/skills/speccy-<verb>/SKILL.md` (the project-local scan path
+//!   `OpenAI`'s Codex docs list). Layout mirrors the Claude Code pack 1:1.
 //! - `shared/personas/*.md` -- persona definitions; copied to
 //!   `.speccy/skills/personas/` so SPEC-0009's reviewer-persona resolver can
 //!   find them as project-local overrides.

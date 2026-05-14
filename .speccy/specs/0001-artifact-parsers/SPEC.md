@@ -364,7 +364,8 @@ RUSTSEC-2025-0068).
 
 **Consequences:** Frontmatter parsing is safe and direct-to-struct.
 Pre-`0.1.0` API may break; we accept a minor refactor when it
-stabilises. Recorded as a known unknown in `VISION.md`.
+stabilises. Recorded as a known unknown in `AGENTS.md`
+(`## Product north star > ### Known unknowns`).
 
 #### DEC-003: `comrak` event walk, not rendering
 
@@ -523,6 +524,7 @@ project root.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from `.speccy/ARCHITECTURE.md` decomposition (bootstrap of speccy itself). |
+| 2026-05-14 | agent/claude | Noun swap (Vision → Mission) lands in ARCHITECTURE.md; serde-saphyr known-unknown reference shifts from `VISION.md` to `AGENTS.md ## Product north star > Known unknowns`. No parser-code changes. |
 
 ## Notes
 

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0013
-spec_hash_at_generation: 1aff1cec3bc94a8a80685e853d3dbed440c2e6613b094a4bf610a53b5228d269
-generated_at: 2026-05-14T03:25:15Z
+spec_hash_at_generation: c3ad2a39571b6192f154a32e50df438cde248ba5744fe54d3a63c30717b7f4a8
+generated_at: 2026-05-14T05:28:44Z
 ---
 
 # Tasks: SPEC-0013 skill-packs

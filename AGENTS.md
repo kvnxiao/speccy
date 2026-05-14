@@ -4,7 +4,22 @@
 > `CLAUDE.md` is a symlink to this file. On platforms that don't honor
 > symlinks, treat the two filenames as required-to-be-identical.
 
-## Mission
+## Product north star
+
+> This is the project-wide product context — what we're building, who
+> for, what "done enough to ship v1" looks like. The `speccy-init`
+> skill writes (or updates) this section when bootstrapping a
+> greenfield repo. Speccy itself has no separate `VISION.md`; the
+> always-loaded `AGENTS.md` carries this content for every prompt.
+>
+> The word "Mission" is reserved for the Speccy noun (a focus-area
+> grouping under `.speccy/specs/[focus]/MISSION.md`). Don't conflate.
+> Mission folders are **optional**: a flat single-focus project may
+> have zero `MISSION.md` files, with every spec living directly
+> under `.speccy/specs/NNNN-slug/`. Mission folders earn their
+> existence only when 2+ related specs share enough context that
+> loading them together at plan time is cheaper than rediscovering
+> it.
 
 Speccy is a lightweight CLI that lets humans and AI agents collaborate
 on software with bounded drift. LLM non-determinism accumulates: small
@@ -19,6 +34,60 @@ system.
 Long-term, speccy is the substrate underneath multi-agent harnesses
 that move projects toward completion without humans re-explaining
 intent at every step.
+
+### Users
+
+- Solo developers bootstrapping greenfield projects with AI assistance
+  who want drift detection without orchestration overhead.
+- AI coding agents driven by host skill packs (Claude Code, Codex)
+  through a Plan → Tasks → Impl → Review → Report loop.
+- (Future) multi-agent harnesses building on Speccy's deterministic
+  feedback substrate.
+
+### V1.0 outcome
+
+- Ten-command Rust CLI implementing the surface in
+  `.speccy/ARCHITECTURE.md`: `init`, `plan`, `tasks`, `implement`,
+  `review`, `report`, `status`, `next`, `check`, `verify`.
+- Shipped skill packs for Claude Code and Codex driving the full
+  development loop end-to-end without humans chaining commands.
+- Speccy's own implementation tracked in `.speccy/specs/` — by the
+  time the CLI is real, its history is the proof that it works.
+- `speccy verify` runs as a CI gate that fails on broken proof shape
+  and passes when intact, with no flakes attributable to its own
+  state.
+
+### Quality bar
+
+"Useful for my next greenfield" is the bar. Features justified only
+by hypothetical broader audiences are out of scope for v1.
+
+- A solo developer can run `speccy init` in a fresh repo and reach
+  their first green check via shipped skills without inventing process.
+- An AI agent driven by shipped skills can complete a full
+  Plan → Tasks → Impl → Review → Report loop on a non-trivial spec
+  without humans chaining commands.
+- Reviewer personas catch at least one class of drift per review run
+  on representative work (proven via dogfooding Speccy on itself).
+- Every command has stable text output and, where contracted, stable
+  JSON output. JSON breaks are versioned via `schema_version`.
+
+### Known unknowns
+
+- Optimal balance between skill-pack richness and CLI determinism
+  surfaces only through dogfooding.
+- Persona prompt definitions will iterate as host models change;
+  shipped defaults are best-effort starting points.
+- Whether the default persona fan-out (business / tests / security /
+  style) holds on real work, or whether it needs to become
+  project-configurable before v1.
+- Whether the `serde-saphyr` `0.0.x` dependency surfaces stabilization
+  pain (API churn, behavioral changes) before Speccy's first release.
+
+Non-goals and the full list of "what we deliberately don't do" are
+catalogued in `.speccy/ARCHITECTURE.md`'s "What We Deliberately Don't
+Do" table. Constraints are catalogued in `## Core principles` below
+and in `## Standard hygiene`.
 
 ## Core principles
 
@@ -44,7 +113,7 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
    caught. Personas live as markdown skills; the CLI just renders
    their prompts. Speccy never tries to grade tests algorithmically.
 
-5. **Stay small.** Five nouns (Vision, Spec, Requirement, Task, Check),
+5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check),
    ten commands, no mode toggles, no orchestration runtime. Speccy
    works identically in any project state — there is no
    greenfield/brownfield distinction.

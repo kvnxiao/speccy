@@ -65,12 +65,16 @@ mod tests {
         let body = load_template("plan-greenfield.md")
             .expect("plan-greenfield.md must ship in the embedded bundle");
         assert!(
-            body.contains("{{vision}}"),
-            "plan-greenfield stub must contain `{{{{vision}}}}` placeholder",
+            body.contains("{{agents}}"),
+            "plan-greenfield stub must contain `{{{{agents}}}}` placeholder",
         );
         assert!(
             body.contains("{{next_spec_id}}"),
             "plan-greenfield stub must contain `{{{{next_spec_id}}}}` placeholder",
+        );
+        assert!(
+            !body.contains("{{vision}}"),
+            "plan-greenfield template must not contain the retired `{{{{vision}}}}` placeholder",
         );
     }
 
@@ -85,6 +89,10 @@ mod tests {
         assert!(
             body.contains("{{spec_id}}"),
             "plan-amend stub must contain `{{{{spec_id}}}}` placeholder",
+        );
+        assert!(
+            body.contains("{{mission}}"),
+            "plan-amend template must contain `{{{{mission}}}}` placeholder for nearest-parent MISSION.md content",
         );
     }
 

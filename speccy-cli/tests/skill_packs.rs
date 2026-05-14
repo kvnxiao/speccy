@@ -235,14 +235,21 @@ fn prompt_placeholders_match_commands() {
     let plan_greenfield = read_bundle_file("shared/prompts", "plan-greenfield.md");
     assert_placeholders(
         plan_greenfield,
-        &["vision", "agents", "next_spec_id"],
+        &["agents", "next_spec_id"],
         "plan-greenfield.md",
+    );
+    // Negative: the retired `{{vision}}` placeholder must not appear
+    // anywhere in plan-greenfield.md (Vision was swapped for Mission
+    // and the product north star now lives in AGENTS.md).
+    assert!(
+        !plan_greenfield.contains("{{vision}}"),
+        "plan-greenfield.md must not contain the retired `{{{{vision}}}}` placeholder",
     );
 
     let plan_amend = read_bundle_file("shared/prompts", "plan-amend.md");
     assert_placeholders(
         plan_amend,
-        &["spec_id", "spec_md", "agents"],
+        &["spec_id", "spec_md", "agents", "mission"],
         "plan-amend.md",
     );
 

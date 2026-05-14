@@ -53,8 +53,8 @@ is iteratable.
 
 - As a developer who ran `speccy init`, I want `/speccy:plan` in
   my host to load and produce the expected agent behaviour
-  (call `speccy plan`, read VISION.md, propose the first SPEC
-  slice).
+  (call `speccy plan`, read AGENTS.md's product north star,
+  propose the first SPEC slice).
 - As a reviewer-agent reading the `reviewer-security.md` persona,
   I want clear guidance on what to look for, what's easy to
   miss, and what format to use for the inline note.
@@ -375,6 +375,7 @@ load these files).
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
+| 2026-05-14 | agent/claude | Noun swap (Vision → Mission) lands in ARCHITECTURE.md; planner user story re-points at `AGENTS.md` north star (VISION.md is deleted). Persona content unchanged. |
 
 ## Notes
 

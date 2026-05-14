@@ -1,24 +1,32 @@
 # Speccy: Plan (greenfield)
 
-You are drafting a new SPEC for an existing speccy workspace.
+You are drafting a new SPEC for an existing speccy workspace. The
+project-wide product north star is carried in `AGENTS.md` below —
+read it for what we're building, who for, the v1 outcome, the
+quality bar, and known unknowns.
 
-## Project conventions
+## Project conventions and product north star
 
 {{agents}}
-
-## Vision
-
-{{vision}}
 
 ## Your task
 
 Author the next slice as `SPEC-{{next_spec_id}}`.
 
 1. Propose a slug (lowercase kebab-case).
-2. Create `.speccy/specs/{{next_spec_id}}-<slug>/SPEC.md` using the
-   PRD-shaped template in `.speccy/ARCHITECTURE.md`.
-3. Create `.speccy/specs/{{next_spec_id}}-<slug>/spec.toml` mapping
-   each requirement to at least one check.
-4. Surface any material questions inline in `## Open questions`.
+2. Decide placement:
+   - If the spec belongs in an existing mission folder (a focus area
+     that already has `.speccy/specs/[focus]/MISSION.md`), write to
+     `.speccy/specs/[focus]/{{next_spec_id}}-<slug>/SPEC.md`.
+   - Otherwise write flat to
+     `.speccy/specs/{{next_spec_id}}-<slug>/SPEC.md`. Do not invent
+     a new mission folder for a single spec; grouping is worthwhile
+     only when 2+ related specs share enough context that loading
+     them together at plan time is cheaper than rediscovering it.
+3. Create the SPEC.md using the PRD-shaped template in
+   `.speccy/ARCHITECTURE.md`.
+4. Create `spec.toml` alongside, mapping each requirement to at
+   least one check.
+5. Surface any material questions inline in `## Open questions`.
 
 Do not write TASKS.md; the next phase will decompose it.

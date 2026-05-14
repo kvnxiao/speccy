@@ -19,7 +19,6 @@ use std::path::Component;
 use thiserror::Error;
 
 const SPECCY_TOML_TEMPLATE: &str = include_str!("templates/speccy.toml.tmpl");
-const VISION_MD_TEMPLATE: &str = include_str!("templates/VISION.md.tmpl");
 
 /// CLI-level error returned by [`run`].
 #[derive(Debug, Error)]
@@ -96,8 +95,6 @@ enum Action {
     Create,
     /// Destination exists and is a shipped file; will be replaced.
     Overwrite,
-    /// Destination exists and we keep it (user-authored or VISION.md).
-    Preserve,
 }
 
 impl Action {
@@ -105,7 +102,6 @@ impl Action {
         match self {
             Action::Create => "create",
             Action::Overwrite => "overwrite",
-            Action::Preserve => "preserve",
         }
     }
 }
@@ -157,10 +153,9 @@ pub fn run(
     let outcome = execute_plan(&plan)?;
     writeln!(
         out,
-        "Init complete: {created} created, {overwritten} overwritten, {preserved} preserved.",
+        "Init complete: {created} created, {overwritten} overwritten.",
         created = outcome.created,
         overwritten = outcome.overwritten,
-        preserved = outcome.preserved,
     )?;
 
     Ok(())
@@ -170,7 +165,6 @@ pub fn run(
 struct Outcome {
     created: u32,
     overwritten: u32,
-    preserved: u32,
 }
 
 fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>, InitError> {
@@ -179,62 +173,29 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
     let speccy_toml_path = project_root.join(".speccy").join("speccy.toml");
     let project_name = project_name_from(project_root);
     let speccy_toml_body = render_speccy_toml(&project_name);
-    let speccy_toml_action = classify(&speccy_toml_path, FileKind::Shipped);
+    let speccy_toml_action = classify(&speccy_toml_path);
     plan.push(PlanItem {
         destination: speccy_toml_path,
         content: speccy_toml_body.into_bytes(),
         action: speccy_toml_action,
     });
 
-    let vision_path = project_root.join(".speccy").join("VISION.md");
-    let vision_action = classify(&vision_path, FileKind::UserPreserved);
-    plan.push(PlanItem {
-        destination: vision_path,
-        content: VISION_MD_TEMPLATE.as_bytes().to_vec(),
-        action: vision_action,
-    });
-
     let dest_segs = host.destination_segments();
     let host_dest_root = project_root.join(dest_segs[0]).join(dest_segs[1]);
-    append_bundle_items(
-        host.bundle_subpath(),
-        &host_dest_root,
-        FileKind::Shipped,
-        &mut plan,
-    )?;
+    append_bundle_items(host.bundle_subpath(), &host_dest_root, &mut plan)?;
 
     let personas_dest = project_root.join(".speccy").join("skills").join("personas");
-    append_bundle_items(
-        "shared/personas",
-        &personas_dest,
-        FileKind::Shipped,
-        &mut plan,
-    )?;
+    append_bundle_items("shared/personas", &personas_dest, &mut plan)?;
 
     let prompts_dest = project_root.join(".speccy").join("skills").join("prompts");
-    append_bundle_items(
-        "shared/prompts",
-        &prompts_dest,
-        FileKind::Shipped,
-        &mut plan,
-    )?;
+    append_bundle_items("shared/prompts", &prompts_dest, &mut plan)?;
 
     Ok(plan)
-}
-
-#[derive(Debug, Clone, Copy)]
-enum FileKind {
-    /// Shipped by the binary; `--force` (or absent destination) writes,
-    /// otherwise preserved.
-    Shipped,
-    /// User-owned once created; never overwritten by re-init.
-    UserPreserved,
 }
 
 fn append_bundle_items(
     subpath: &'static str,
     dest_root: &Utf8Path,
-    kind: FileKind,
     plan: &mut Vec<PlanItem>,
 ) -> Result<(), InitError> {
     let Some(dir) = SKILLS.get_dir(subpath) else {
@@ -245,7 +206,7 @@ fn append_bundle_items(
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     for (rel, content) in entries {
         let dest = dest_root.join(&rel);
-        let action = classify(&dest, kind);
+        let action = classify(&dest);
         plan.push(PlanItem {
             destination: dest,
             content: content.to_vec(),
@@ -289,12 +250,11 @@ fn collect_bundle_files(
     }
 }
 
-fn classify(dest: &Utf8Path, kind: FileKind) -> Action {
-    let exists = fs_err::metadata(dest.as_std_path()).is_ok();
-    match (exists, kind) {
-        (false, _) => Action::Create,
-        (true, FileKind::Shipped) => Action::Overwrite,
-        (true, FileKind::UserPreserved) => Action::Preserve,
+fn classify(dest: &Utf8Path) -> Action {
+    if fs_err::metadata(dest.as_std_path()).is_ok() {
+        Action::Overwrite
+    } else {
+        Action::Create
     }
 }
 
@@ -331,16 +291,12 @@ fn display_relative(dest: &Utf8Path, project_root: &Utf8Path) -> String {
 fn execute_plan(plan: &[PlanItem]) -> Result<Outcome, InitError> {
     let mut outcome = Outcome::default();
     for item in plan {
+        write_item(item)?;
         match item.action {
-            Action::Preserve => {
-                outcome.preserved = outcome.preserved.saturating_add(1);
-            }
             Action::Create => {
-                write_item(item)?;
                 outcome.created = outcome.created.saturating_add(1);
             }
             Action::Overwrite => {
-                write_item(item)?;
                 outcome.overwritten = outcome.overwritten.saturating_add(1);
             }
         }

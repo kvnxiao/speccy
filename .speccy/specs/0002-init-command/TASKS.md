@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0002
-spec_hash_at_generation: d6041e822edf49186ca128f3eb04e23da0c135beecb63158c7328e7ab2c2d458
-generated_at: 2026-05-14T04:30:11Z
+spec_hash_at_generation: 34da18b0ea4437cc9f1bbcb266fdac43012da827c4ab9dc35930f90b6f403111
+generated_at: 2026-05-14T05:28:44Z
 ---
 
 # Tasks: SPEC-0002 init-command
@@ -45,11 +45,11 @@ generated_at: 2026-05-14T04:30:11Z
   - Covers: REQ-001, REQ-002
   - Tests to write:
     - Writes `.speccy/speccy.toml` with `schema_version = 1`, `[project]` block, and `name` from the parent directory of the project root.
-    - Writes `.speccy/VISION.md` with the template headings: Product, Users, V1.0 outcome, Constraints, Non-goals, Quality bar, Known unknowns (in declared order).
+    - Does **not** scaffold `.speccy/VISION.md` (the noun has been retired; the product north star lives in `AGENTS.md` instead, populated by the `speccy-init` skill).
     - Refuses with `InitError::WorkspaceExists { path: ".speccy/" }` when `.speccy/` already exists and `--force` is false.
     - Output: lists `would create <path>` and `would overwrite <path>` lines on stdout before mutating.
     - The scaffolded `.speccy/speccy.toml` round-trips via the SPEC-0001 parser without errors.
-  - Suggested files: `speccy-cli/src/scaffold.rs`, `speccy-cli/src/templates/vision_md.txt`, `speccy-cli/src/templates/speccy_toml.txt`, `speccy-cli/tests/scaffold.rs`
+  - Suggested files: `speccy-cli/src/scaffold.rs`, `speccy-cli/src/templates/speccy_toml.txt`, `speccy-cli/tests/scaffold.rs`
 
 ## Phase 4: Skill-pack copier
 

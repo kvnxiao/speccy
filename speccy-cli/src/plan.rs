@@ -2,17 +2,22 @@
 //!
 //! Renders the Phase 1 prompt that an agent reads to author or amend a
 //! SPEC.md + spec.toml pair. The CLI never invokes a model; it loads
-//! VISION.md / AGENTS.md / SPEC.md context, substitutes placeholders
-//! into an embedded markdown template, trims to the budget, and writes
-//! the rendered prompt to stdout.
+//! `AGENTS.md` (carrier of the project-wide product north star), the
+//! existing `SPEC.md` and nearest parent `MISSION.md` when amending,
+//! substitutes placeholders into an embedded markdown template, trims
+//! to the budget, and writes the rendered prompt to stdout.
 //!
 //! Two forms:
 //!
-//! - `speccy plan` (no arg) -- greenfield. Reads `.speccy/VISION.md`, allocates
-//!   the next available `SPEC-NNNN` ID, renders `plan-greenfield.md`.
-//! - `speccy plan SPEC-NNNN` -- amendment. Reads the named SPEC.md, renders
-//!   `plan-amend.md` (the agent is asked for a minimal surgical edit, not a
-//!   rewrite).
+//! - `speccy plan` (no arg) -- greenfield. Loads `AGENTS.md`, allocates the
+//!   next available `SPEC-NNNN` ID (walking nested mission folders under
+//!   `.speccy/specs/`), renders `plan-greenfield.md`. No `VISION.md` is read:
+//!   the noun has been retired.
+//! - `speccy plan SPEC-NNNN` -- amendment. Reads the named SPEC.md (which may
+//!   live flat under `.speccy/specs/NNNN-slug/` or grouped under
+//!   `.speccy/specs/[focus]/NNNN-slug/`), walks upward from the spec dir for
+//!   the nearest parent `MISSION.md`, renders `plan-amend.md` (the agent is
+//!   asked for a minimal surgical edit, not a rewrite).
 //!
 //! See `.speccy/specs/0005-plan-command/SPEC.md`.
 
@@ -26,6 +31,7 @@ use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
 use speccy_core::prompt::allocate_next_spec_id;
+use speccy_core::prompt::find_nearest_mission_md;
 use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
@@ -48,21 +54,6 @@ pub enum PlanError {
     /// I/O failure during workspace discovery.
     #[error("workspace discovery failed")]
     Workspace(#[from] WorkspaceError),
-    /// `.speccy/VISION.md` was not present.
-    #[error(".speccy/VISION.md not found at {path}; run `speccy init` first, or create the file")]
-    VisionMissing {
-        /// Expected path of VISION.md.
-        path: Utf8PathBuf,
-    },
-    /// `.speccy/VISION.md` could not be read for non-NotFound reasons.
-    #[error("failed to read .speccy/VISION.md at {path}")]
-    VisionIo {
-        /// Path of VISION.md.
-        path: Utf8PathBuf,
-        /// Underlying I/O error.
-        #[source]
-        source: std::io::Error,
-    },
     /// Argument did not match the `SPEC-\d{4,}` shape.
     #[error("invalid SPEC-ID `{arg}`; expected format SPEC-NNNN (4+ digits)")]
     InvalidSpecIdFormat {
@@ -134,27 +125,12 @@ pub fn run(args: PlanArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), Pl
 }
 
 fn render_greenfield(project_root: &Utf8Path) -> Result<String, PlanError> {
-    let vision_path = project_root.join(".speccy").join("VISION.md");
-    let vision = match fs_err::read_to_string(vision_path.as_std_path()) {
-        Ok(v) => v,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(PlanError::VisionMissing { path: vision_path });
-        }
-        Err(source) => {
-            return Err(PlanError::VisionIo {
-                path: vision_path,
-                source,
-            });
-        }
-    };
-
     let agents = load_agents_md(project_root);
     let specs_dir = project_root.join(".speccy").join("specs");
     let next_id = allocate_next_spec_id(&specs_dir);
 
     let template = load_template("plan-greenfield.md")?;
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
-    vars.insert("vision", vision);
     vars.insert("agents", agents);
     vars.insert("next_spec_id", next_id);
     Ok(render(template, &vars))
@@ -162,7 +138,8 @@ fn render_greenfield(project_root: &Utf8Path) -> Result<String, PlanError> {
 
 fn render_amendment(project_root: &Utf8Path, raw_id: &str) -> Result<String, PlanError> {
     let canonical_id = validate_spec_id(raw_id)?;
-    let spec_dir = locate_spec_dir(project_root, &canonical_id)?;
+    let specs_root = project_root.join(".speccy").join("specs");
+    let spec_dir = locate_spec_dir(&specs_root, &canonical_id)?;
     let spec_path = spec_dir.join("SPEC.md");
     let parsed = spec_md(&spec_path).map_err(|source| PlanError::Parse {
         id: canonical_id.clone(),
@@ -170,6 +147,7 @@ fn render_amendment(project_root: &Utf8Path, raw_id: &str) -> Result<String, Pla
     })?;
 
     let agents = load_agents_md(project_root);
+    let mission = find_nearest_mission_md(&spec_dir, &specs_root);
     let changelog = format_changelog(&parsed);
 
     let template = load_template("plan-amend.md")?;
@@ -177,6 +155,7 @@ fn render_amendment(project_root: &Utf8Path, raw_id: &str) -> Result<String, Pla
     vars.insert("spec_id", canonical_id);
     vars.insert("spec_md", parsed.raw);
     vars.insert("agents", agents);
+    vars.insert("mission", mission);
     vars.insert("changelog", changelog);
     Ok(render(template, &vars))
 }
@@ -190,19 +169,28 @@ fn validate_spec_id(raw: &str) -> Result<String, PlanError> {
     Ok(raw.to_owned())
 }
 
-fn locate_spec_dir(project_root: &Utf8Path, canonical_id: &str) -> Result<Utf8PathBuf, PlanError> {
+/// Locate the directory holding the named spec. Searches `specs_root`
+/// and any mission folders (subdirectories whose names do not match
+/// `NNNN-slug`) one level deep. The first directory whose name starts
+/// with `{digits}-` wins.
+fn locate_spec_dir(specs_root: &Utf8Path, canonical_id: &str) -> Result<Utf8PathBuf, PlanError> {
     let digits =
         canonical_id
             .strip_prefix("SPEC-")
             .ok_or_else(|| PlanError::InvalidSpecIdFormat {
                 arg: canonical_id.to_owned(),
             })?;
-    let specs_dir = project_root.join(".speccy").join("specs");
-    let read =
-        fs_err::read_dir(specs_dir.as_std_path()).map_err(|_io| PlanError::SpecNotFound {
-            id: canonical_id.to_owned(),
-        })?;
     let prefix = format!("{digits}-");
+    find_spec_dir(specs_root, &prefix).ok_or_else(|| PlanError::SpecNotFound {
+        id: canonical_id.to_owned(),
+    })
+}
+
+/// Recursive search for a spec directory whose name starts with `prefix`.
+/// Stops descending into a child once it matches the prefix (specs are
+/// leaves). Mission folders (any other dir) are descended into.
+fn find_spec_dir(dir: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
+    let read = fs_err::read_dir(dir.as_std_path()).ok()?;
     for entry in read.flatten() {
         let Ok(meta) = entry.metadata() else { continue };
         if !meta.is_dir() {
@@ -212,20 +200,21 @@ fn locate_spec_dir(project_root: &Utf8Path, canonical_id: &str) -> Result<Utf8Pa
             .path()
             .file_name()
             .and_then(|n| n.to_str())
-            .map(ToOwned::to_owned)
+            .map(str::to_owned)
         else {
             continue;
         };
-        if name.starts_with(&prefix) {
-            let Ok(path) = Utf8PathBuf::from_path_buf(entry.path()) else {
-                continue;
-            };
-            return Ok(path);
+        let Ok(child) = Utf8PathBuf::from_path_buf(entry.path()) else {
+            continue;
+        };
+        if name.starts_with(prefix) {
+            return Some(child);
+        }
+        if let Some(hit) = find_spec_dir(&child, prefix) {
+            return Some(hit);
         }
     }
-    Err(PlanError::SpecNotFound {
-        id: canonical_id.to_owned(),
-    })
+    None
 }
 
 fn format_changelog(spec: &SpecMd) -> String {

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0005
-spec_hash_at_generation: f1846617a2eebb51638c76663994acb88e8f7fcc2415a52dacfb0b492db002e6
-generated_at: 2026-05-14T03:25:13Z
+spec_hash_at_generation: 56453182ffbabd551c9c6dcdd4b143a04efcf29bdc729116a398bc1d5c856a09
+generated_at: 2026-05-14T05:28:44Z
 ---
 
 # Tasks: SPEC-0005 plan-command
@@ -78,11 +78,11 @@ generated_at: 2026-05-14T03:25:13Z
 - [x] **T-006**: Implement greenfield prompt assembler
   - Covers: REQ-001
   - Tests to write:
-    - End-to-end: VISION.md content appears in the rendered output where `{{vision}}` was; AGENTS.md content appears where `{{agents}}` was; `{{next_spec_id}}` substituted to the allocated ID.
+    - End-to-end: AGENTS.md content appears in the rendered output where `{{agents}}` was; `{{next_spec_id}}` substituted to the allocated ID. There is no `{{vision}}` placeholder.
     - Output goes to stdout.
-    - VISION.md missing -> exit code 1 with stderr message naming the path.
     - Project root not found (cwd outside any speccy workspace) -> exit code 1 with `PlanError::ProjectRootNotFound`.
     - AGENTS.md missing -> stderr warning per REQ-004; output still produced with marker.
+    - The spec-ID allocator walks `.speccy/specs/**` so flat and mission-grouped specs share one ID space (REQ-003).
   - Suggested files: `speccy-cli/src/plan.rs`, `speccy-cli/tests/plan_greenfield.rs`
 
 ## Phase 7: Amendment assembler
@@ -106,5 +106,5 @@ generated_at: 2026-05-14T03:25:13Z
     - SPEC-ID arg form runs end-to-end with a fixture spec.
     - From outside any speccy workspace -> exit 1.
     - `assert_cmd`-based integration test that exec's the binary and inspects stdout/stderr/exit code.
-    - Budget overrun: a deliberately-large fixture VISION.md exercises the trimmer; warning surfaces on stderr.
+    - Budget overrun: a deliberately-large fixture AGENTS.md exercises the trimmer; warning surfaces on stderr.
   - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/tests/integration_plan.rs`

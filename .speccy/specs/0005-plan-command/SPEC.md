@@ -13,23 +13,30 @@ created: 2026-05-11
 `speccy plan` is the Phase 1 command. It renders a deterministic
 prompt that an agent reads to author or amend a SPEC.md + spec.toml
 pair. The CLI never invokes an LLM; it loads context
-(VISION.md, AGENTS.md, the existing SPEC.md if amending),
-substitutes placeholders into an embedded markdown template, and
-prints the result.
+(AGENTS.md, the nearest parent MISSION.md when amending, the
+existing SPEC.md if amending), substitutes placeholders into an
+embedded markdown template, and prints the result.
 
 Two forms:
 
-- `speccy plan` (no arg) -- greenfield. Reads VISION.md, allocates
-  the next available `SPEC-NNNN` ID, renders `plan-greenfield.md`.
+- `speccy plan` (no arg) -- greenfield. Allocates the next available
+  `SPEC-NNNN` ID by walking `.speccy/specs/**` (across mission folders
+  and flat specs alike), loads `AGENTS.md` (which carries the
+  project-wide product north star), and renders `plan-greenfield.md`.
+  No `VISION.md` is read: the noun has been retired in favor of
+  AGENTS.md.
 - `speccy plan SPEC-NNNN` -- amendment. Reads the named SPEC.md,
-  renders `plan-amend.md` (the agent is asked for a minimal
-  surgical edit, not a rewrite).
+  walks upward from the spec's directory to find the nearest parent
+  `MISSION.md` (if the spec lives under a mission folder), and
+  renders `plan-amend.md`. The agent is asked for a minimal surgical
+  edit, not a rewrite.
 
 This spec also lands the **shared prompt-rendering infrastructure**
 in `speccy_core::prompt` that SPEC-0006 (`tasks`), SPEC-0008
 (`implement`), SPEC-0009 (`review`), and SPEC-0011 (`report`)
 reuse: template loading, placeholder substitution, AGENTS.md
-loading, context-budget trimming, and spec ID allocation.
+loading, MISSION.md walking, context-budget trimming, and spec ID
+allocation.
 
 ## Goals
 
@@ -57,14 +64,19 @@ loading, context-budget trimming, and spec ID allocation.
 ## User stories
 
 - As a developer starting a new spec, I want `speccy plan` to give
-  me a prompt my agent reads with VISION.md + AGENTS.md already
-  inlined so the agent has the right context.
+  me a prompt my agent reads with `AGENTS.md` (carrying the product
+  north star) already inlined and a fresh `SPEC-NNNN` ID allocated.
+- As a developer amending a spec inside a mission folder, I want
+  `speccy plan SPEC-0042` to also inline the nearest parent
+  `MISSION.md` so the agent sees the focus-area scope alongside the
+  spec being amended.
 - As a developer amending a spec mid-loop, I want `speccy plan
   SPEC-0042` to render a "minimal-diff" prompt that respects the
   existing SPEC.md rather than asking for a rewrite.
 - As a future SPEC-0006 implementer, I want shared prompt helpers
   in `speccy-core` so my `speccy tasks` command doesn't reimplement
-  AGENTS.md loading, template rendering, or budget trimming.
+  AGENTS.md loading, MISSION.md walking, template rendering, or
+  budget trimming.
 
 ## Requirements
 
@@ -75,29 +87,36 @@ loading, context-budget trimming, and spec ID allocation.
 **Done when:**
 - The command discovers the project root via
   `speccy_core::workspace::find_root`.
-- It reads `.speccy/VISION.md`. If missing, exit code 1 with a
-  clear message naming the expected path.
-- It scans `.speccy/specs/` and allocates the next `SPEC-NNNN` ID
-  via `prompt::allocate_next_spec_id` (REQ-003).
-- It loads AGENTS.md via `prompt::load_agents_md` (REQ-004).
+- It allocates the next `SPEC-NNNN` ID via
+  `prompt::allocate_next_spec_id` (REQ-003), walking
+  `.speccy/specs/**` so flat and mission-grouped specs share one ID
+  space.
+- It loads AGENTS.md via `prompt::load_agents_md` (REQ-004). Missing
+  AGENTS.md is a stderr warning, not an error (greenfield projects
+  may not have one yet; the planner agent reading the rendered
+  prompt sees a marker indicating conventions are not loaded).
 - It loads the embedded `plan-greenfield.md` template via
   `prompt::load_template` and substitutes placeholders:
-  `{{vision}}`, `{{agents}}`, `{{next_spec_id}}`.
+  `{{agents}}`, `{{next_spec_id}}`. There is no `{{vision}}`
+  placeholder.
 - It trims the rendered output to the budget via
   `prompt::trim_to_budget` (REQ-006).
 - It writes the final rendered prompt to stdout; exits 0.
 
 **Behavior:**
-- Given `.speccy/VISION.md` exists and no specs yet, when
-  `speccy plan` runs, then `{{next_spec_id}}` substitutes to
-  `SPEC-0001`.
-- Given specs SPEC-0001 through SPEC-0013 exist, when `speccy
-  plan` runs, then `{{next_spec_id}}` substitutes to `SPEC-0014`.
+- Given a fresh `.speccy/` with no specs yet, when `speccy plan`
+  runs, then `{{next_spec_id}}` substitutes to `SPEC-0001` and
+  AGENTS.md content (or the missing-marker) appears at the
+  `{{agents}}` site.
+- Given specs SPEC-0001 through SPEC-0013 exist (mix of flat and
+  mission-grouped), when `speccy plan` runs, then `{{next_spec_id}}`
+  substitutes to `SPEC-0014`.
 - Given specs SPEC-0001 and SPEC-0003 exist (gap at 0002), then
-  `{{next_spec_id}}` substitutes to `SPEC-0004` (no gap
-  recycling, per DEC-005).
-- Given VISION.md is missing, then exit code is 1 with a stderr
-  message naming `.speccy/VISION.md`.
+  `{{next_spec_id}}` substitutes to `SPEC-0004` (no gap recycling,
+  per DEC-005).
+- Given `speccy plan` runs outside a `.speccy/` workspace, then
+  exit code is 1 with a stderr message stating `.speccy/` was not
+  found walking up from cwd.
 
 **Covered by:** CHK-001, CHK-002
 
@@ -108,24 +127,38 @@ loading, context-budget trimming, and spec ID allocation.
 **Done when:**
 - The command parses the SPEC-ID argument. If it doesn't match
   `SPEC-\d{4,}`, exit code 1 with a format-error message.
-- It discovers the spec directory matching the ID. If no matching
-  directory exists, exit code 1 with a "spec not found" message
-  naming the ID.
+- It discovers the spec directory matching the ID. The directory
+  may live directly under `.speccy/specs/NNNN-slug/` (flat) or
+  under a mission folder at `.speccy/specs/[focus]/NNNN-slug/`. If
+  no matching directory exists, exit code 1 with a "spec not found"
+  message naming the ID.
 - It reads the matching SPEC.md via the SPEC-0001 parser. Parse
   errors return exit code 1 with the parser's error message.
+- It walks upward from the spec directory looking for the nearest
+  `MISSION.md` via `prompt::find_nearest_mission_md` (REQ-007). If
+  one exists at `.speccy/specs/[focus]/MISSION.md` (parent of the
+  matched spec dir), its content is loaded. If absent, the
+  `{{mission}}` placeholder substitutes to a marker indicating the
+  spec is ungrouped.
 - It loads AGENTS.md (REQ-004).
 - It loads the embedded `plan-amend.md` template and substitutes
   placeholders: `{{spec_id}}`, `{{spec_md}}` (full content),
-  `{{agents}}`, `{{changelog}}` (the existing Changelog table
-  rows for context).
+  `{{agents}}`, `{{mission}}` (parent MISSION.md content or
+  ungrouped marker), `{{changelog}}` (the existing Changelog
+  table rows for context).
 - It trims the rendered output to the budget.
 - It writes the final rendered prompt to stdout; exits 0.
 
 **Behavior:**
 - Given `speccy plan SPEC-0001` and
-  `.speccy/specs/0001-artifact-parsers/` exists, when the command
-  runs, then the rendered output contains the full SPEC.md content
-  and the amendment-mode template language.
+  `.speccy/specs/0001-artifact-parsers/` exists (flat), when the
+  command runs, then the rendered output contains the full SPEC.md
+  content, the amendment-mode template language, and a marker at
+  `{{mission}}` stating the spec is ungrouped.
+- Given `speccy plan SPEC-0042` and
+  `.speccy/specs/auth/0042-signup/SPEC.md` exists alongside
+  `.speccy/specs/auth/MISSION.md`, then the rendered output
+  inlines the MISSION.md content at `{{mission}}`.
 - Given `speccy plan SPEC-9999` and no such spec exists, then exit
   code is 1 and stderr names SPEC-9999.
 - Given `speccy plan FOO`, then exit code is 1 with a format
@@ -135,23 +168,31 @@ loading, context-budget trimming, and spec ID allocation.
 
 ### REQ-003: Spec ID allocation
 
-Allocate the next available `SPEC-NNNN` ID by scanning `specs/`.
+Allocate the next available `SPEC-NNNN` ID by walking `specs/`
+recursively so flat and mission-grouped specs share one ID space.
 
 **Done when:**
-- `prompt::allocate_next_spec_id(specs_dir: &Path) -> String`
-  reads every immediate subdirectory of `specs_dir` matching
-  `^\d{4}-`, parses the numeric prefix, and returns
+- `prompt::allocate_next_spec_id(specs_dir: &Utf8Path) -> String`
+  walks `specs_dir` recursively, finds every directory whose name
+  matches `^(\d{4,})-`, parses the numeric prefix, and returns
   `max(prefixes) + 1` zero-padded to 4 digits (e.g. `"0014"`).
+- Mission folders (subdirectories of `specs_dir` whose names do not
+  match the `NNNN-slug` pattern, e.g. `auth/`) are descended into
+  but contribute no prefix themselves.
 - If `specs_dir` is empty or absent, returns `"0001"`.
-- Non-matching directories are silently ignored.
-- The function does only the directory listing -- no per-spec
-  parsing.
+- Non-matching directories that aren't mission folders (e.g.
+  `_scratch`, `00ab-foo`) are silently ignored.
+- The function does directory traversal only; no spec.toml or
+  SPEC.md content is read.
 
 **Behavior:**
 - Given an empty `specs/`, the allocator returns `"0001"`.
-- Given `0001-foo` and `0003-bar`, the allocator returns `"0004"`
-  (no gap recycling).
-- Given `0042-foo` only, the allocator returns `"0043"`.
+- Given flat `0001-foo` and `0003-bar`, the allocator returns
+  `"0004"` (no gap recycling).
+- Given `auth/0001-signup` and `billing/0002-invoice` (mission
+  folders), the allocator returns `"0003"`.
+- Given a mix: flat `0001-foo`, `auth/0002-signup`,
+  `billing/0010-invoice`, the allocator returns `"0011"`.
 - Given a non-matching directory `_scratch` alongside `0001-foo`,
   the allocator returns `"0002"`.
 
@@ -257,6 +298,41 @@ exceeds a budget threshold.
 
 **Covered by:** CHK-008
 
+### REQ-007: Nearest-parent MISSION.md walking (cross-cutting helper)
+
+Walk upward from a spec directory looking for the nearest parent
+`MISSION.md`, returning either its content or an ungrouped marker.
+
+**Done when:**
+- `prompt::find_nearest_mission_md(spec_dir: &Utf8Path, specs_root: &Utf8Path) -> String`:
+  - Walks from `spec_dir`'s parent upward (toward `specs_root`),
+    stopping at `specs_root` inclusive.
+  - At each level, checks for a `MISSION.md` file. The first one
+    found wins.
+  - Returns the file content on hit.
+  - Returns a literal marker
+    `<!-- no parent MISSION.md; spec is ungrouped -->` if no
+    MISSION.md is found before reaching `specs_root`.
+  - On I/O error reading a found MISSION.md, returns a marker
+    `<!-- MISSION.md unreadable at <path>: <err> -->` and prints a
+    one-line stderr warning.
+- The function does not search outside the `specs_root` subtree.
+- The function is consumed by SPEC-0005 (amendment path), SPEC-0008
+  (implementer), SPEC-0009 (reviewer), and SPEC-0011 (report).
+
+**Behavior:**
+- Given `specs_root = .speccy/specs/` and
+  `spec_dir = .speccy/specs/0001-foo/` with no MISSION.md anywhere,
+  the function returns the ungrouped marker.
+- Given `specs_root = .speccy/specs/` and
+  `spec_dir = .speccy/specs/auth/0042-signup/` with
+  `.speccy/specs/auth/MISSION.md` present, the function returns
+  that file's content verbatim.
+- Given a malformed unreadable `MISSION.md`, the function returns
+  the unreadable marker and stderr is non-empty.
+
+**Covered by:** CHK-009
+
 ## Design
 
 ### Approach
@@ -276,12 +352,14 @@ Flow per invocation:
 1. Discover project root.
 2. Branch on argument presence (greenfield vs amendment).
 3. Load AGENTS.md.
-4. Load VISION.md (greenfield) or the named SPEC.md (amendment).
-5. Allocate the next spec ID (greenfield only).
-6. Load the relevant template.
-7. Substitute placeholders.
-8. Trim to budget.
-9. Write rendered output to stdout.
+4. Greenfield: allocate the next spec ID. Amendment: locate the
+   spec dir (anywhere under `specs/` including mission folders),
+   parse the named SPEC.md, and walk for the nearest parent
+   MISSION.md.
+5. Load the relevant template.
+6. Substitute placeholders.
+7. Trim to budget.
+8. Write rendered output to stdout.
 
 ### Decisions
 
@@ -376,9 +454,10 @@ pub mod prompt {
         template: &str,
         vars: &BTreeMap<&str, String>,
     ) -> String;
-    pub fn load_agents_md(project_root: &Path) -> String;
+    pub fn load_agents_md(project_root: &Utf8Path) -> String;
+    pub fn find_nearest_mission_md(spec_dir: &Utf8Path, specs_root: &Utf8Path) -> String;
     pub fn trim_to_budget(rendered: String, budget: usize) -> TrimResult;
-    pub fn allocate_next_spec_id(specs_dir: &Path) -> String;
+    pub fn allocate_next_spec_id(specs_dir: &Utf8Path) -> String;
 }
 
 pub enum PromptError {
@@ -404,22 +483,32 @@ pub struct PlanArgs {
 pub enum PlanError {
     InvalidSpecIdFormat { arg: String },
     SpecNotFound { id: String },
-    VisionMissing,
     ProjectRootNotFound,
     Prompt(PromptError),
     Parse(ParseError),
 }
 ```
 
+Note that `PlanError::VisionMissing` and the corresponding
+`VisionIo` variant from the original v1 draft have been removed:
+the greenfield path no longer reads any `.speccy/VISION.md`. The
+product north star now lives in `AGENTS.md` and is loaded via
+`prompt::load_agents_md`, which treats absence as a warning rather
+than an error (per DEC-003).
+
 ### Data changes
 
 - New `speccy-core/src/prompt/mod.rs` and submodules
-  (`template`, `render`, `agents_md`, `budget`, `id_alloc`).
+  (`template`, `render`, `agents_md`, `mission_md`, `budget`,
+  `id_alloc`). The `mission_md` submodule owns
+  `find_nearest_mission_md` (REQ-007).
 - New `speccy-cli/src/plan.rs` (command logic).
 - New embedded templates: `skills/shared/prompts/plan-greenfield.md`
-  and `skills/shared/prompts/plan-amend.md` (initial content can
-  be stubs containing only the placeholder syntax; SPEC-0013
-  fills in the real prompts).
+  (placeholders: `{{agents}}`, `{{next_spec_id}}`) and
+  `skills/shared/prompts/plan-amend.md` (placeholders: `{{spec_id}}`,
+  `{{spec_md}}`, `{{agents}}`, `{{mission}}`, `{{changelog}}`).
+  Initial content can be stubs containing only the placeholder
+  syntax; SPEC-0013 fills in the real prompts.
 - The `include_dir!` bundle from SPEC-0002 may move to
   `speccy-core` so both crates can share it.
 
@@ -434,15 +523,13 @@ and SPEC-0002 (embedded-bundle mechanism).
 - [ ] Should the embedded prompt bundle live in `speccy-core` (so
   SPEC-0005+ share it with SPEC-0002's init) or stay in the
   binary crate? Implementer call at first prompt-command landing.
-- [ ] When the greenfield template would benefit from a
-  `{{next_spec_slug_hint}}` placeholder (an LLM-friendly guess at
-  the slug based on VISION.md), should we compute it now or
-  leave the agent to invent it? Likely leave it to the agent for
-  v1; SPEC-0013 author should ensure the template asks for a
-  slug.
 - [ ] Should `plan-amend.md` include the `## Changelog` rows
   explicitly (separate placeholder) or rely on `{{spec_md}}`
   containing them inline? Latter is simpler; defer to SPEC-0013.
+- [ ] Should `speccy plan` (no arg, greenfield) ever attempt to
+  scope to a focus area, e.g. via cwd inspection or a flag, or
+  should the planner agent always decide placement (flat vs
+  mission folder)? v1 ships the latter; revisit if friction emerges.
 
 ## Assumptions
 
@@ -460,6 +547,7 @@ and SPEC-0002 (embedded-bundle mechanism).
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
+| 2026-05-14 | agent/claude | Vision noun retired. Greenfield path no longer reads `.speccy/VISION.md`; product north star now lives in `AGENTS.md`. Amendment path walks upward from the spec dir for the nearest parent `MISSION.md` (introduced REQ-007 + `prompt::find_nearest_mission_md`). REQ-003 spec-ID allocation now walks `specs/**` recursively so flat and mission-grouped specs share one ID space. `plan-greenfield.md` template loses the `{{vision}}` placeholder; `plan-amend.md` gains `{{mission}}`. `PlanError::VisionMissing` / `VisionIo` removed; missing AGENTS.md is a warning, not an error. |
 
 ## Notes
 
