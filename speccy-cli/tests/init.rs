@@ -71,10 +71,6 @@ fn scaffold_speccy_toml() -> TestResult {
         body.contains("name = \"acme\""),
         "speccy.toml should set project name to parent dir name `acme`; got: {body}",
     );
-    assert!(
-        body.contains("root = \"..\""),
-        "speccy.toml should set root = \"..\"; got: {body}",
-    );
     Ok(())
 }
 

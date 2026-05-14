@@ -386,7 +386,6 @@ mod tests {
         let body = render_speccy_toml("acme");
         assert!(body.contains("name = \"acme\""));
         assert!(body.contains("schema_version = 1"));
-        assert!(body.contains("root = \"..\""));
     }
 
     #[test]

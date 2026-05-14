@@ -21,10 +21,6 @@ pub struct SpeccyConfig {
 pub struct ProjectConfig {
     /// Project name (free-form string).
     pub name: String,
-    /// Optional project root relative to `.speccy/`. Defaults to `".."` in
-    /// practice; left as `Option` to surface missing fields explicitly to
-    /// the lint engine.
-    pub root: Option<String>,
 }
 
 /// Parsed `spec.toml` for one spec folder.
@@ -79,7 +75,6 @@ struct RawSpeccyConfig {
 #[derive(Debug, Deserialize)]
 struct RawProject {
     name: String,
-    root: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,7 +121,6 @@ pub fn speccy_toml(path: &Utf8Path) -> Result<SpeccyConfig, ParseError> {
     Ok(SpeccyConfig {
         project: ProjectConfig {
             name: raw.project.name,
-            root: raw.project.root,
         },
     })
 }
@@ -242,12 +236,10 @@ mod tests {
 
             [project]
             name = "demo"
-            root = ".."
         "#};
         let fx = write_tmp("speccy.toml", src);
         let parsed = speccy_toml(&fx.path).expect("parse should succeed");
         assert_eq!(parsed.project.name, "demo");
-        assert_eq!(parsed.project.root.as_deref(), Some(".."));
     }
 
     #[test]

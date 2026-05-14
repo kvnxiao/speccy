@@ -418,16 +418,16 @@ schema_version = 1
 
 [project]
 name = "taskify"
-root = ".."
 ```
 
 That is the complete configuration. There is no `[policy]` block,
-no `[env]` block, no review identity setting, no
-`[[global_checks]]` array. Project-level conventions and toolchain
-context belong in `AGENTS.md`, which every skill prompt already
-loads. If the CLI ever needs structured access to environment
-metadata, the block will come back with a real purpose; until
-then, it isn't here.
+no `[env]` block, no review identity setting, no `[[global_checks]]`
+array, no `root` field — the project root is the directory containing
+`.speccy/` (found by `find_root` walking up). Project-level conventions
+and toolchain context belong in `AGENTS.md`, which every skill prompt
+already loads. If the CLI ever needs structured access to environment
+metadata, the block will come back with a real purpose; until then,
+it isn't here.
 
 ## SPEC.md (PRD-shaped template)
 

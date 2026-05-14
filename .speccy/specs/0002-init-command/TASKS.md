@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0002
-spec_hash_at_generation: bfb725b6ffb02e97d820cb5900952ed7763a47ac4609ee37e665cd12104dd965
-generated_at: 2026-05-14T03:00:26Z
+spec_hash_at_generation: 866b9c17044ebd2e2ca5b048c811517a6d266ec66d3a8ea3799d203ac4fa9d05
+generated_at: 2026-05-14T03:15:36Z
 ---
 
 # Tasks: SPEC-0002 init-command
@@ -44,7 +44,7 @@ generated_at: 2026-05-14T03:00:26Z
 - [x] **T-003**: Implement the `.speccy/` scaffold writer
   - Covers: REQ-001, REQ-002
   - Tests to write:
-    - Writes `.speccy/speccy.toml` with `schema_version = 1`, `[project]` block, `name` from the parent directory of the project root, `root = ".."`.
+    - Writes `.speccy/speccy.toml` with `schema_version = 1`, `[project]` block, and `name` from the parent directory of the project root.
     - Writes `.speccy/VISION.md` with the template headings: Product, Users, V1.0 outcome, Constraints, Non-goals, Quality bar, Known unknowns (in declared order).
     - Refuses with `InitError::WorkspaceExists { path: ".speccy/" }` when `.speccy/` already exists and `--force` is false.
     - Output: lists `would create <path>` and `would overwrite <path>` lines on stdout before mutating.

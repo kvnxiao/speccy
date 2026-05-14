@@ -79,7 +79,7 @@ content when neither exists.
 **Behavior:**
 - Given a fresh repo at `/foo/bar` with no `.speccy/`, when
   `speccy init` runs successfully, then `.speccy/speccy.toml` exists
-  with `name = "bar"` and `root = ".."`.
+  with `name = "bar"`.
 - Given a fresh repo, when `speccy init` runs, then `.speccy/VISION.md`
   exists and contains the heading `## Product`, `## Users`, and the
   remaining template sections in declared order.
