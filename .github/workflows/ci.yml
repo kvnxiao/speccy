@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "implement/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: hygiene + verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust (stable, with clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install Rust (nightly, rustfmt only)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --all-features --locked
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: cargo +nightly fmt --check
+        run: cargo +nightly fmt --all --check
+
+      - name: cargo deny check
+        uses: EmbarkStudios/cargo-deny-action@v2
+
+      - name: Build speccy binary
+        run: cargo build -p speccy-cli --locked
+
+      - name: speccy verify
+        run: ./target/debug/speccy verify
+
+      - name: Materialized skills are in sync with skills/ source
+        run: |
+          ./target/debug/speccy init --force
+          if ! git diff --exit-code .claude/commands .speccy/skills; then
+            echo "::error::Materialized skills drift from skills/ source. Run 'speccy init --force' locally and commit the resulting changes."
+            exit 1
+          fi
