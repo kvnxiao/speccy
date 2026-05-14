@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 camino = { workspace = true }
+clap = { workspace = true }
 fs-err = { workspace = true }
 include_dir = { workspace = true }
 jiff = { workspace = true }

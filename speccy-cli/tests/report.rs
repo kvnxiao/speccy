@@ -587,6 +587,8 @@ fn prompt_renders_and_integration_cli_help_succeeds() -> TestResult {
     cmd.arg("report").arg("--help");
     cmd.assert()
         .success()
-        .stdout(contains("usage: speccy report SPEC-ID"));
+        .stdout(contains("Usage: speccy"))
+        .stdout(contains("report"))
+        .stdout(contains("SPEC_ID"));
     Ok(())
 }

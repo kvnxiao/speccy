@@ -403,6 +403,8 @@ fn error_paths_and_integration_help_succeeds() -> TestResult {
     cmd.arg("implement").arg("--help");
     cmd.assert()
         .success()
-        .stdout(contains("usage: speccy implement TASK-ID"));
+        .stdout(contains("Usage: speccy"))
+        .stdout(contains("implement"))
+        .stdout(contains("TASK_REF"));
     Ok(())
 }

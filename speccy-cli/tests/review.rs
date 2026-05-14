@@ -406,7 +406,9 @@ fn help_succeeds() -> TestResult {
     cmd.arg("review").arg("--help");
     cmd.assert()
         .success()
-        .stdout(contains("usage: speccy review TASK-ID --persona <name>"))
+        .stdout(contains("Usage: speccy"))
+        .stdout(contains("review"))
+        .stdout(contains("--persona"))
         .stdout(contains(
             "business, tests, security, style, architecture, docs",
         ));
