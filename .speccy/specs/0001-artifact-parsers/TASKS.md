@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0001
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: 55e4329d3aaa3ab7a89e36a095d4746a7384024799c452b54f2df3b426d30d80
+generated_at: 2026-05-14T03:00:26Z
 ---
 
 # Tasks: SPEC-0001 Artifact parsers

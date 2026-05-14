@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0012
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: c33690c3375444d7b6e662b6d80eee21c500029309134e1309c84adef5d614ed
+generated_at: 2026-05-14T03:00:28Z
 ---
 
 # Tasks: SPEC-0012 verify-command

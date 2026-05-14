@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0006
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: c90602ff63e75979d4144bb7c37c0642fee507916bf0c5fcd5c908cd5cabb490
+generated_at: 2026-05-14T03:00:27Z
 ---
 
 # Tasks: SPEC-0006 tasks-command

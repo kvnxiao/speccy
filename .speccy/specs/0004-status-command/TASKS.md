@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0004
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: 8f03434bdd41ea475fb3b45204c253cd7691e38632bbbb53c89b54feba2d1f4a
+generated_at: 2026-05-14T03:00:26Z
 ---
 
 # Tasks: SPEC-0004 status-command

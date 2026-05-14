@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0008
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: 2b8e9e14700a1bcb367dc878ebd1fc08c4644d3aea505f4ed41eb32acad09af9
+generated_at: 2026-05-14T03:00:27Z
 ---
 
 # Tasks: SPEC-0008 implement-command

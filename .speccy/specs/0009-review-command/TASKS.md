@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0009
-spec_hash_at_generation: bootstrap-pending
-generated_at: 2026-05-11T00:00:00Z
+spec_hash_at_generation: 5056c0bb5e7d921ff1a652e8b9641fc980e458f5380de878b137178f7838ea19
+generated_at: 2026-05-14T03:00:28Z
 ---
 
 # Tasks: SPEC-0009 review-command
