@@ -15,7 +15,7 @@ at the edges: in skills, prompts, and personas.
 
 ## Users
 
-- Solo developers (primarily Kevin) bootstrapping greenfield projects
+- Solo developers bootstrapping greenfield projects
   with AI assistance and wanting drift-detection without orchestration
   overhead.
 - AI coding agents driven by host skill packs (Claude Code, Codex)

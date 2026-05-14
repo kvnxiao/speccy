@@ -11,7 +11,7 @@ generated_at: 2026-05-14T03:25:15Z
 
 ## Phase 1: Implementer-note handoff template
 
-- [?] **T-001**: Embed the six-field handoff template in the implementer prompt
+- [x] **T-001**: Embed the six-field handoff template in the implementer prompt
   - Covers: REQ-001
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- implementer_prompt_handoff_template`
@@ -41,7 +41,7 @@ generated_at: 2026-05-14T03:25:15Z
     - Discovered issues: (none)
     - Procedural compliance: (none)
 
-- [?] **T-002**: Rewrite the prompt's `## Your task` step that produces the note
+- [x] **T-002**: Rewrite the prompt's `## Your task` step that produces the note
   - Covers: REQ-001
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- implementer_prompt_handoff_referenced_in_task_steps`
@@ -73,7 +73,7 @@ generated_at: 2026-05-14T03:25:15Z
 
 ## Phase 2: Friction-to-skill-update pattern
 
-- [?] **T-003**: Add the `## When you hit friction` section to the implementer prompt
+- [x] **T-003**: Add the `## When you hit friction` section to the implementer prompt
   - Covers: REQ-002
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- implementer_prompt_friction_section`
@@ -101,7 +101,7 @@ generated_at: 2026-05-14T03:25:15Z
     - Discovered issues: (none)
     - Procedural compliance: (none)
 
-- [?] **T-004**: Mirror the friction pointer in the implementer persona
+- [x] **T-004**: Mirror the friction pointer in the implementer persona
   - Covers: REQ-002
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- implementer_persona_friction_reference`
@@ -131,7 +131,7 @@ generated_at: 2026-05-14T03:25:15Z
       whole phrase stays on one source line.
     - Procedural compliance: (none)
 
-- [?] **T-005**: Dogfood the pattern in speccy's own AGENTS.md
+- [x] **T-005**: Dogfood the pattern in speccy's own AGENTS.md
   - Covers: REQ-002
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- agents_md_friction_paragraph`
@@ -168,7 +168,7 @@ generated_at: 2026-05-14T03:25:15Z
 
 ## Phase 3: REPORT.md skill-updates surfacing
 
-- [?] **T-006**: Add `## Skill updates` to the report prompt
+- [x] **T-006**: Add `## Skill updates` to the report prompt
   - Covers: REQ-003
   - Tests to write:
     - `cargo test -p speccy-cli --test skill_packs -- report_prompt_skill_updates_section`
@@ -204,7 +204,7 @@ generated_at: 2026-05-14T03:25:15Z
 
 ## Phase 4: Wire-up and verification
 
-- [?] **T-007**: Run the full hygiene sweep
+- [x] **T-007**: Run the full hygiene sweep
   - Covers: REQ-001, REQ-002, REQ-003
   - Tests to write:
     - This task adds no new tests. It runs the four-command pre-commit

@@ -1,13 +1,16 @@
 //! Compile-time embedded skill bundle.
 //!
 //! `include_dir!` snapshots the workspace `skills/` tree into the binary
-//! at build time (per SPEC-0002 DEC-001). Layout under [`SKILLS`]:
+//! at build time (per SPEC-0002 DEC-001). Layout under [`SKILLS`],
+//! per SPEC-0015:
 //!
-//! - `claude-code/speccy/*.md` -- Claude Code recipes; copied to
-//!   `.claude/commands/speccy/` at init time so each recipe is invoked as
-//!   `/speccy:<verb>` via directory namespacing.
-//! - `codex/speccy/*.md` -- Codex recipes; copied to `.codex/skills/speccy/`.
-//!   Layout mirrors the Claude Code pack.
+//! - `claude-code/speccy-<verb>/SKILL.md` -- Claude Code skills; copied to
+//!   `.claude/skills/speccy-<verb>/SKILL.md` at init time so the pack is
+//!   discoverable as host-native skills (not slash commands).
+//! - `codex/speccy-<verb>/SKILL.md` -- Codex skills; copied to
+//!   `.agents/skills/speccy-<verb>/SKILL.md` (the project-local scan
+//!   path OpenAI's Codex docs list). Layout mirrors the Claude Code pack
+//!   1:1.
 //! - `shared/personas/*.md` -- persona definitions; copied to
 //!   `.speccy/skills/personas/` so SPEC-0009's reviewer-persona resolver can
 //!   find them as project-local overrides.
@@ -29,16 +32,18 @@ mod tests {
     #[test]
     fn claude_code_pack_contains_init_recipe() {
         assert!(
-            SKILLS.get_file("claude-code/speccy/init.md").is_some(),
-            "bundle should contain claude-code/speccy/init.md",
+            SKILLS
+                .get_file("claude-code/speccy-init/SKILL.md")
+                .is_some(),
+            "bundle should contain claude-code/speccy-init/SKILL.md",
         );
     }
 
     #[test]
     fn codex_pack_contains_init_recipe() {
         assert!(
-            SKILLS.get_file("codex/speccy/init.md").is_some(),
-            "bundle should contain codex/speccy/init.md",
+            SKILLS.get_file("codex/speccy-init/SKILL.md").is_some(),
+            "bundle should contain codex/speccy-init/SKILL.md",
         );
     }
 

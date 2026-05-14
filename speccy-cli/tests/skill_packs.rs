@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Skill-pack content tests for SPEC-0013 and SPEC-0014.
+//! Skill-pack content tests for SPEC-0013, SPEC-0014, and SPEC-0015.
 //!
 //! SPEC-0013 checks (`.speccy/specs/0013-skill-packs/spec.toml`):
 //!
@@ -24,6 +24,16 @@
 //! - CHK-004: [`implementer_persona_friction_reference`]
 //! - CHK-005: [`agents_md_friction_paragraph`]
 //! - CHK-006: [`report_prompt_skill_updates_section`]
+//!
+//! SPEC-0015 checks
+//! (`.speccy/specs/0015-host-skill-layout/spec.toml`):
+//!
+//! - CHK-001: [`bundle_layout_has_skill_md_per_host`]
+//! - CHK-002: [`bundle_legacy_flat_layout_absent`]
+//! - CHK-005: [`shipped_skill_md_frontmatter_shape`]
+//! - CHK-006: [`shipped_descriptions_natural_language_triggers`]
+//! - (CHK-003, CHK-004 live in `tests/init.rs`:
+//!   `copy_claude_code_pack_skill_md`, `copy_codex_pack_skill_md`.)
 
 use include_dir::Dir;
 use serde::Deserialize;
@@ -106,16 +116,32 @@ const PROMPT_FILES: &[&str] = &[
 ];
 
 const RECIPE_FILES: &[&str] = &[
-    "speccy/init.md",
-    "speccy/plan.md",
-    "speccy/tasks.md",
-    "speccy/work.md",
-    "speccy/review.md",
-    "speccy/amend.md",
-    "speccy/ship.md",
+    "speccy-init/SKILL.md",
+    "speccy-plan/SKILL.md",
+    "speccy-tasks/SKILL.md",
+    "speccy-work/SKILL.md",
+    "speccy-review/SKILL.md",
+    "speccy-amend/SKILL.md",
+    "speccy-ship/SKILL.md",
 ];
 
-const LOOP_RECIPES: &[&str] = &["speccy/work.md", "speccy/review.md", "speccy/amend.md"];
+const LOOP_RECIPES: &[&str] = &[
+    "speccy-work/SKILL.md",
+    "speccy-review/SKILL.md",
+    "speccy-amend/SKILL.md",
+];
+
+const SKILL_NAMES: &[&str] = &[
+    "speccy-init",
+    "speccy-plan",
+    "speccy-tasks",
+    "speccy-work",
+    "speccy-review",
+    "speccy-ship",
+    "speccy-amend",
+];
+
+const HOSTS: &[&str] = &["claude-code", "codex"];
 
 const SPECCY_COMMANDS: &[&str] = &[
     "speccy init",
@@ -317,7 +343,7 @@ fn assert_recipe_frontmatter(sub: &str, file_name: &str, require_name: bool) {
 #[test]
 fn claude_code_recipes() {
     for name in RECIPE_FILES {
-        assert_recipe_frontmatter("claude-code", name, false);
+        assert_recipe_frontmatter("claude-code", name, true);
     }
 }
 
@@ -650,4 +676,136 @@ fn report_prompt_skill_updates_section() {
         body.contains("git diff --name-only -- skills/"),
         "report prompt must reference `git diff --name-only -- skills/` as the derivation path for the skill-updates list",
     );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0015 CHK-001: bundle layout (per-host SKILL.md directories)
+// --------------------------------------------------------------------
+
+#[test]
+fn bundle_layout_has_skill_md_per_host() {
+    for host in HOSTS {
+        for skill in SKILL_NAMES {
+            let path = format!("{host}/{skill}/SKILL.md");
+            let entry = SKILLS.get_file(&path).unwrap_or_else(|| {
+                panic_with_test_message(&format!(
+                    "embedded bundle must contain `{path}` (SPEC-0015 REQ-001 + CHK-001)"
+                ))
+            });
+            let body = entry
+                .contents_utf8()
+                .expect("SKILL.md entries must be valid UTF-8");
+            assert!(!body.trim().is_empty(), "skill `{path}` must be non-empty");
+        }
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0015 CHK-002: legacy flat layout removed from the bundle
+// --------------------------------------------------------------------
+
+#[test]
+fn bundle_legacy_flat_layout_absent() {
+    for host in HOSTS {
+        let legacy_dir_path = format!("{host}/speccy");
+        assert!(
+            SKILLS.get_dir(&legacy_dir_path).is_none(),
+            "legacy directory `{legacy_dir_path}` must be gone from the bundle (SPEC-0015 REQ-001 + CHK-002); flat .md files are not Codex-discoverable as skills",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0015 CHK-005: SKILL.md frontmatter shape (name matches dir,
+// description is a single line)
+// --------------------------------------------------------------------
+
+#[test]
+fn shipped_skill_md_frontmatter_shape() {
+    for host in HOSTS {
+        for skill in SKILL_NAMES {
+            let sub = format!("{host}/{skill}");
+            let body = read_bundle_file(&sub, "SKILL.md");
+            let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+                panic_with_test_message(&format!(
+                    "`{sub}/SKILL.md` must have a `---` frontmatter fence"
+                ))
+            });
+
+            let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+                panic_with_test_message(&format!(
+                    "`{sub}/SKILL.md` frontmatter must be valid YAML: {err}"
+                ))
+            });
+
+            let name = fm.name.as_deref().unwrap_or("");
+            assert!(
+                !name.trim().is_empty(),
+                "`{sub}/SKILL.md` `name` field is required (SPEC-0015 REQ-003)",
+            );
+            assert_eq!(
+                name, *skill,
+                "`{sub}/SKILL.md` `name` field must equal the parent directory `{skill}` (SPEC-0015 REQ-003)",
+            );
+            assert!(
+                !fm.description.trim().is_empty(),
+                "`{sub}/SKILL.md` `description` field must be non-empty",
+            );
+            assert!(
+                !fm.description.contains('\n'),
+                "`{sub}/SKILL.md` `description` must be a single line (no embedded newlines) so both hosts' YAML loaders agree on its shape",
+            );
+        }
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0015 CHK-006: descriptions tuned for natural-language activation
+// --------------------------------------------------------------------
+
+#[test]
+fn shipped_descriptions_natural_language_triggers() {
+    const MAX_DESCRIPTION_CHARS: usize = 500;
+    for host in HOSTS {
+        for skill in SKILL_NAMES {
+            let sub = format!("{host}/{skill}");
+            let body = read_bundle_file(&sub, "SKILL.md");
+            let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+                panic_with_test_message(&format!(
+                    "`{sub}/SKILL.md` must have a `---` frontmatter fence"
+                ))
+            });
+            let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+                panic_with_test_message(&format!(
+                    "`{sub}/SKILL.md` frontmatter must be valid YAML: {err}"
+                ))
+            });
+            let desc = fm.description.trim();
+
+            // Anti-pattern: "Phase N." internal jargon at the start.
+            let phase_prefix = desc.starts_with("Phase ")
+                && desc
+                    .chars()
+                    .nth("Phase ".len())
+                    .is_some_and(|c| c.is_ascii_digit());
+            assert!(
+                !phase_prefix,
+                "`{sub}/SKILL.md` description must not start with `Phase <digit>` jargon (SPEC-0015 REQ-004); got: {desc:?}",
+            );
+
+            // Required trigger marker for natural-language activation.
+            assert!(
+                desc.to_lowercase().contains("use when"),
+                "`{sub}/SKILL.md` description must contain a `use when` trigger marker (case-insensitive); got: {desc:?}",
+            );
+
+            // Codex caps the skill list at ~2% of the context window, so
+            // every description has to stay tight.
+            let len = desc.chars().count();
+            assert!(
+                len <= MAX_DESCRIPTION_CHARS,
+                "`{sub}/SKILL.md` description must be at most {MAX_DESCRIPTION_CHARS} characters; got {len}",
+            );
+        }
+    }
 }

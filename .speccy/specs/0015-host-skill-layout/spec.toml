@@ -1,0 +1,53 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001", "CHK-002"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-003", "CHK-004"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-005"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-006"]
+
+[[checks]]
+id = "CHK-001"
+kind = "test"
+command = "cargo test -p speccy-cli --test skill_packs -- bundle_layout_has_skill_md_per_host"
+proves = "The embedded bundle exposes exactly 7 SKILL.md files under skills/claude-code/ and 7 under skills/codex/, named for the seven speccy verbs (speccy-init, speccy-plan, speccy-tasks, speccy-work, speccy-review, speccy-ship, speccy-amend)."
+
+[[checks]]
+id = "CHK-002"
+kind = "test"
+command = "cargo test -p speccy-cli --test skill_packs -- bundle_legacy_flat_layout_absent"
+proves = "The embedded bundle no longer contains the legacy flat-file layout (skills/claude-code/speccy/<verb>.md or skills/codex/speccy/<verb>.md)."
+
+[[checks]]
+id = "CHK-003"
+kind = "test"
+command = "cargo test -p speccy-cli --test init -- copy_claude_code_pack_skill_md"
+proves = "speccy init --host claude-code copies skills/claude-code/<name>/SKILL.md to .claude/skills/<name>/SKILL.md with byte-identical content; destination directories created recursively."
+
+[[checks]]
+id = "CHK-004"
+kind = "test"
+command = "cargo test -p speccy-cli --test init -- copy_codex_pack_skill_md"
+proves = "speccy init --host codex copies skills/codex/<name>/SKILL.md to .codex/skills/<name>/SKILL.md with byte-identical content; destination directories created recursively."
+
+[[checks]]
+id = "CHK-005"
+kind = "test"
+command = "cargo test -p speccy-cli --test skill_packs -- shipped_skill_md_frontmatter_shape"
+proves = "Every shipped SKILL.md (both hosts) parses as YAML frontmatter with required keys `name` (hyphenated, matching the parent directory) and `description` (single-line non-empty string)."
+
+[[checks]]
+id = "CHK-006"
+kind = "test"
+command = "cargo test -p speccy-cli --test skill_packs -- shipped_descriptions_natural_language_triggers"
+proves = "No shipped description starts with `Phase N`; each contains `Use when` (case-insensitive); each is at most 500 characters."

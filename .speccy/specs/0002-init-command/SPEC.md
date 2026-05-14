@@ -44,7 +44,8 @@ filesystem signals.
 - No host other than Claude Code and Codex in v1. `.cursor/` is
   detected but refuses cleanly; future specs add cursor support.
 - No mutation of project files outside `.speccy/` and the host's
-  native skill directory (`.claude/commands/` or `.codex/skills/`).
+  native skill directory (`.claude/skills/` for Claude Code or
+  `.agents/skills/` for Codex, per SPEC-0015).
 
 ## User stories
 
@@ -111,10 +112,11 @@ overwritten before mutating.
 - Given `.speccy/speccy.toml` exists, when `speccy init --force`
   runs, then `.speccy/speccy.toml` is overwritten with the fresh
   template content.
-- Given `.claude/commands/speccy/plan.md` and
-  `.claude/commands/my-personal-skill.md` both exist, when
-  `speccy init --force` runs, then `speccy/plan.md` is overwritten
-  (it's shipped) and `my-personal-skill.md` is left byte-identical.
+- Given `.claude/skills/speccy-plan/SKILL.md` and
+  `.claude/skills/my-personal-skill/SKILL.md` both exist, when
+  `speccy init --force` runs, then `speccy-plan/SKILL.md` is
+  overwritten (it's shipped) and `my-personal-skill/SKILL.md` is
+  left byte-identical.
 - Given any successful run, when `speccy init` finishes, then a
   "Created N files" or "Overwrote N files" summary appears on stdout.
 
@@ -157,11 +159,13 @@ override.
 ### REQ-004: Skill-pack copy
 
 Copy `skills/<host>/*` from the embedded bundle into the host-native
-location.
+*skills* location, preserving the per-skill `<name>/SKILL.md`
+directory shape so the pack is discoverable as host-native skills
+(SPEC-0015 supersedes the original flat `.claude/commands/` layout).
 
 **Done when:**
-- For host `claude-code`, files are copied to `.claude/commands/`.
-- For host `codex`, files are copied to `.codex/skills/`.
+- For host `claude-code`, files are copied to `.claude/skills/<name>/`.
+- For host `codex`, files are copied to `.agents/skills/<name>/`.
 - The destination directory is created (recursively) if missing.
 - File contents in the destination are byte-identical to the
   embedded bundle.
@@ -171,11 +175,12 @@ location.
 
 **Behavior:**
 - Given a fresh repo with `.claude/`, when `speccy init` runs, then
-  every `.md` file in the embedded `skills/claude-code/` tree has a
-  byte-identical counterpart under `.claude/commands/`.
+  every `SKILL.md` file in the embedded `skills/claude-code/` tree
+  has a byte-identical counterpart under
+  `.claude/skills/<name>/SKILL.md`.
 - Given a fresh repo with no `.codex/`, when
-  `speccy init --host codex` runs, then `.codex/skills/` is created
-  and populated.
+  `speccy init --host codex` runs, then `.agents/skills/` is
+  created and populated with `<name>/SKILL.md` per shipped skill.
 - Given the embedded bundle contains a file
   `skills/shared/personas/reviewer-security.md`, when `speccy init`
   runs, then a project-local override location holds that file (the
@@ -366,6 +371,7 @@ commit; no data migration since the command creates net-new files.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
+| 2026-05-14 | agent/claude | REQ-004 destinations updated by SPEC-0015. Claude Code pack moves from `.claude/commands/` to `.claude/skills/<name>/SKILL.md`; Codex pack moves from `.codex/skills/` to `.agents/skills/<name>/SKILL.md` per OpenAI's official Codex scan paths. Layout shifts from flat `<verb>.md` files to SKILL.md directory format. Pre-v1: no shipped-install migration needed. |
 
 ## Notes
 

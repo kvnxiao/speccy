@@ -17,10 +17,25 @@ use tempfile::TempDir;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-const SHIPPED_CLAUDE_SPECCY_INIT: &str = include_str!("../../skills/claude-code/speccy/init.md");
-const SHIPPED_CODEX_SPECCY_INIT: &str = include_str!("../../skills/codex/speccy/init.md");
+const SHIPPED_CLAUDE_SPECCY_INIT: &str =
+    include_str!("../../skills/claude-code/speccy-init/SKILL.md");
+const SHIPPED_CODEX_SPECCY_INIT: &str = include_str!("../../skills/codex/speccy-init/SKILL.md");
 const SHIPPED_PERSONA_SECURITY: &str =
     include_str!("../../skills/shared/personas/reviewer-security.md");
+
+/// Skill names shipped by both host packs, mirrored from
+/// `skill_packs::SKILL_NAMES`. Per SPEC-0015 each ships at
+/// `<host>/<name>/SKILL.md` in the bundle and at
+/// `<dest>/<name>/SKILL.md` in the user's project.
+const SKILL_NAMES: [&str; 7] = [
+    "speccy-init",
+    "speccy-plan",
+    "speccy-tasks",
+    "speccy-work",
+    "speccy-review",
+    "speccy-ship",
+    "speccy-amend",
+];
 
 struct ProjectFixture {
     _dir: TempDir,
@@ -125,7 +140,7 @@ fn force_overwrites_shipped_files() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/commands/speccy/init.md",
+        ".claude/skills/speccy-init/SKILL.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -145,10 +160,10 @@ fn force_overwrites_shipped_files() -> TestResult {
         "refreshed speccy.toml should match template",
     );
 
-    let shipped = read_file(&fx.root, ".claude/commands/speccy/init.md")?;
+    let shipped = read_file(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
     assert_eq!(
         shipped, SHIPPED_CLAUDE_SPECCY_INIT,
-        "--force should restore .claude/commands/speccy/init.md to embedded content",
+        "--force should restore .claude/skills/speccy-init/SKILL.md to embedded content",
     );
     Ok(())
 }
@@ -160,7 +175,7 @@ fn force_preserves_user_files() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/commands/my-personal-skill.md",
+        ".claude/skills/my-personal-skill/SKILL.md",
         "USER-AUTHORED-DO-NOT-TOUCH",
     )?;
 
@@ -170,10 +185,10 @@ fn force_preserves_user_files() -> TestResult {
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let preserved = read_file(&fx.root, ".claude/commands/my-personal-skill.md")?;
+    let preserved = read_file(&fx.root, ".claude/skills/my-personal-skill/SKILL.md")?;
     assert_eq!(
         preserved, "USER-AUTHORED-DO-NOT-TOUCH",
-        "user-authored files in .claude/commands/ must survive --force",
+        "user-authored files in .claude/skills/ must survive --force",
     );
     Ok(())
 }
@@ -192,8 +207,10 @@ fn host_detection_precedence() -> TestResult {
             .current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".codex/skills/speccy/init.md").exists(),
-            "--host codex must populate .codex/skills/ regardless of .claude/ presence",
+            fx.root
+                .join(".agents/skills/speccy-init/SKILL.md")
+                .exists(),
+            "--host codex must populate .agents/skills/ regardless of .claude/ presence",
         );
     }
 
@@ -206,12 +223,14 @@ fn host_detection_precedence() -> TestResult {
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".claude/commands/speccy/init.md").exists(),
+            fx.root.join(".claude/skills/speccy-init/SKILL.md").exists(),
             ".claude/ should win autodetect when both present",
         );
         assert!(
-            !fx.root.join(".codex/skills/speccy/init.md").exists(),
-            ".codex/ should NOT be populated when .claude/ won detection",
+            !fx.root
+                .join(".agents/skills/speccy-init/SKILL.md")
+                .exists(),
+            ".agents/ should NOT be populated when .claude/ won detection",
         );
     }
 
@@ -247,34 +266,34 @@ fn host_detection_precedence() -> TestResult {
 }
 
 #[test]
-fn copy_claude_code_pack() -> TestResult {
+fn copy_claude_code_pack_skill_md() -> TestResult {
     let fx = project_with_name("copy-claude")?;
     mkdir(&fx.root, ".claude")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let expected_names = [
-        "speccy/init.md",
-        "speccy/plan.md",
-        "speccy/tasks.md",
-        "speccy/work.md",
-        "speccy/review.md",
-        "speccy/amend.md",
-        "speccy/ship.md",
-    ];
-    for name in expected_names {
-        let rel = format!(".claude/commands/{name}");
+    for skill in SKILL_NAMES {
+        let rel = format!(".claude/skills/{skill}/SKILL.md");
         assert!(
             fx.root.join(&rel).exists(),
-            "claude-code pack should drop {rel}",
+            "claude-code pack should drop {rel} (SPEC-0015 REQ-002 + CHK-003)",
+        );
+        let dest = read_file(&fx.root, &rel)?;
+        let src_rel = format!("../skills/claude-code/{skill}/SKILL.md");
+        // Re-read the bundle source through the test binary's own
+        // filesystem rather than `include_str!`-ing all 7 because rust
+        // requires the macro argument to be a literal. We rely on the
+        // project layout that `Command::cargo_bin` runs against.
+        let src_abs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(&src_rel)
+            .canonicalize()?;
+        let src = fs_err::read_to_string(&src_abs)?;
+        assert_eq!(
+            dest, src,
+            "copied {rel} must be byte-identical to the embedded source at {src_rel}",
         );
     }
-    let shipped = read_file(&fx.root, ".claude/commands/speccy/init.md")?;
-    assert_eq!(
-        shipped, SHIPPED_CLAUDE_SPECCY_INIT,
-        "copied speccy/init.md should be byte-identical to embedded content",
-    );
 
     let persona = read_file(&fx.root, ".speccy/skills/personas/reviewer-security.md")?;
     assert_eq!(
@@ -285,7 +304,7 @@ fn copy_claude_code_pack() -> TestResult {
 }
 
 #[test]
-fn copy_codex_pack() -> TestResult {
+fn copy_codex_pack_skill_md() -> TestResult {
     let fx = project_with_name("copy-codex")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -295,13 +314,34 @@ fn copy_codex_pack() -> TestResult {
     cmd.assert().success();
 
     assert!(
-        fx.root.join(".codex/skills").is_dir(),
-        ".codex/skills/ must be created when --host codex is passed",
+        fx.root.join(".agents/skills").is_dir(),
+        ".agents/skills/ must be created when --host codex is passed",
     );
-    let shipped = read_file(&fx.root, ".codex/skills/speccy/init.md")?;
+    for skill in SKILL_NAMES {
+        let rel = format!(".agents/skills/{skill}/SKILL.md");
+        assert!(
+            fx.root.join(&rel).exists(),
+            "codex pack should drop {rel} (SPEC-0015 REQ-002 + CHK-004)",
+        );
+        let dest = read_file(&fx.root, &rel)?;
+        let src_rel = format!("../skills/codex/{skill}/SKILL.md");
+        let src_abs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(&src_rel)
+            .canonicalize()?;
+        let src = fs_err::read_to_string(&src_abs)?;
+        assert_eq!(
+            dest, src,
+            "copied {rel} must be byte-identical to the embedded source at {src_rel}",
+        );
+    }
+
+    // Sanity check: the include_str!-pulled init.md is byte-identical to
+    // the on-disk file. If this trips, the bundle and the include_str!
+    // path are out of sync, which a stale path-edit would cause.
+    let init_dest = read_file(&fx.root, ".agents/skills/speccy-init/SKILL.md")?;
     assert_eq!(
-        shipped, SHIPPED_CODEX_SPECCY_INIT,
-        "codex pack copy must be byte-identical to embedded content",
+        init_dest, SHIPPED_CODEX_SPECCY_INIT,
+        "speccy-init/SKILL.md (codex) must match the include_str! constant",
     );
     Ok(())
 }
