@@ -1,8 +1,9 @@
 ---
+name: speccy:review
 description: Phase 4. Review loop. Run the four-persona fan-out on every awaiting-review task until each is fully reviewed.
 ---
 
-# /speccy-review
+# speccy:review
 
 Drives the Phase 4 review loop. For each `[?]` task, the main agent
 spawns one reviewer sub-agent per persona in parallel; collects their
@@ -11,7 +12,7 @@ inline notes; and flips the task to `[x]` (all pass) or back to `[ ]`
 
 ## When to use
 
-After `/speccy-work` has flipped tasks to `[?]`. Re-enter after retry
+After `speccy:work` has flipped tasks to `[?]`. Re-enter after retry
 implementations complete.
 
 ## Steps
@@ -47,5 +48,5 @@ implementations complete.
 - `speccy next --kind review --json` returns empty.
 - The user interrupts.
 
-After exit, if any tasks are `[ ]` (retries), suggest `/speccy-work
-SPEC-NNNN` again. Otherwise suggest `/speccy-ship SPEC-NNNN`.
+After exit, if any tasks are `[ ]` (retries), suggest `speccy:work
+SPEC-NNNN` again. Otherwise suggest `speccy:ship SPEC-NNNN`.

@@ -14,8 +14,8 @@ created: 2026-05-11
 a developer from `cd new-repo` to ready-to-run. It scaffolds the
 `.speccy/` workspace, detects which host (Claude Code, Codex) the
 project is set up for, and copies the matching skill pack to the
-host-native location so the user can invoke `/speccy-plan`,
-`/speccy-work`, etc. immediately.
+host-native location so the user can invoke `/speccy:plan`,
+`/speccy:work`, etc. immediately.
 
 The command is idempotent-friendly: it refuses to run on an existing
 `.speccy/` workspace unless `--force` is passed, and even with
@@ -112,9 +112,9 @@ overwritten before mutating.
 - Given `.speccy/speccy.toml` exists, when `speccy init --force`
   runs, then `.speccy/speccy.toml` is overwritten with the fresh
   template content.
-- Given `.claude/commands/speccy-plan.md` and
+- Given `.claude/commands/speccy/plan.md` and
   `.claude/commands/my-personal-skill.md` both exist, when
-  `speccy init --force` runs, then `speccy-plan.md` is overwritten
+  `speccy init --force` runs, then `speccy/plan.md` is overwritten
   (it's shipped) and `my-personal-skill.md` is left byte-identical.
 - Given any successful run, when `speccy init` finishes, then a
   "Created N files" or "Overwrote N files" summary appears on stdout.
@@ -344,7 +344,7 @@ commit; no data migration since the command creates net-new files.
 ## Open questions
 
 - [ ] Should `speccy init` print a "next steps" hint after success
-  (e.g. "Run /speccy-plan in your host to start")? Likely yes;
+  (e.g. "Run /speccy:plan in your host to start")? Likely yes;
   defer the exact wording to first dogfood pass.
 - [ ] Should `--force` regenerate `VISION.md` if it already exists?
   Pragmatic answer: only if the existing file is byte-identical to

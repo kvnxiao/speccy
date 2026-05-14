@@ -1,18 +1,18 @@
 ---
-name: speccy-ship
+name: speccy:ship
 description: Phase 5. Render the report prompt, write REPORT.md, and open a PR.
 ---
 
-# speccy-ship
+# speccy:ship
 
 Renders the Phase 5 report prompt, writes `REPORT.md`, runs
 `speccy verify` once more as a CI dry-run, and opens the pull request.
 
 ## When to use
 
-After `speccy-review` has flipped every task to `[x]`. If any task is
+After `speccy:review` has flipped every task to `[x]`. If any task is
 still `[ ]`, `[~]`, or `[?]`, `speccy report` refuses with the offending
-IDs -- pick up `speccy-work` or `speccy-review` first.
+IDs -- pick up `speccy:work` or `speccy:review` first.
 
 ## Steps
 

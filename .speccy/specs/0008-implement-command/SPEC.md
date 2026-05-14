@@ -55,7 +55,7 @@ reuses.
 
 ## User stories
 
-- As `/speccy-work` (the implementation-loop skill), I want
+- As `/speccy:work` (the implementation-loop skill), I want
   `speccy implement T-003` to give me a prompt I can hand to an
   implementer sub-agent with full context.
 - As a developer with a multi-spec workspace where T-001 exists

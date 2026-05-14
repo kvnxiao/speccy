@@ -232,7 +232,7 @@ new ones for new requirements.
 
 ## Phase 3: Implementation loop (skill-orchestrated)
 
-The `/speccy-work` skill, run by the main agent, executes this loop:
+The `/speccy:work` skill, run by the main agent, executes this loop:
 
 ```text
 loop:
@@ -256,7 +256,7 @@ they touch the same files. Speccy does not lock.
 
 ## Phase 4: Review loop (skill-orchestrated)
 
-The `/speccy-review` skill, run by the main agent, executes this:
+The `/speccy:review` skill, run by the main agent, executes this:
 
 ```text
 loop:
@@ -586,7 +586,7 @@ implemented -> superseded       A later spec declared `supersedes` pointing here
 in-progress -> superseded       Rare; replaced before completion.
 ```
 
-Skills (specifically `/speccy-ship` and `/speccy-amend`) update `status`.
+Skills (specifically `/speccy:ship` and `/speccy:amend`) update `status`.
 The CLI doesn't auto-transition state — it surfaces inconsistencies via lint
 (e.g. `status: implemented` but tasks aren't all `[x]`).
 
@@ -607,7 +607,7 @@ changed; the Changelog summarizes *why* and is loaded into every prompt
 that reads SPEC.md.
 
 Reviewer personas read the Changelog to understand recent intent
-shifts. The skill prompt for `/speccy-amend` instructs the agent to
+shifts. The skill prompt for `/speccy:amend` instructs the agent to
 append a Changelog row whenever it edits SPEC.md.
 
 ### Lint behavior
@@ -1031,7 +1031,7 @@ Or:
 
 The reviewer sub-agent **does not** flip the task's checkbox. That
 would create a race when multiple persona reviewers run in
-parallel. The main agent's `/speccy-review` skill flips state
+parallel. The main agent's `/speccy:review` skill flips state
 after all persona reviews have completed for the task:
 
 - All `pass` -> `[?]` becomes `[x]`.
@@ -1064,7 +1064,7 @@ primitives.
 
 ## What happens when SPEC.md needs to change
 
-The `/speccy-amend SPEC-001` skill orchestrates:
+The `/speccy:amend SPEC-001` skill orchestrates:
 
 ```sh
 speccy plan SPEC-001         # renders "amend this SPEC.md" prompt
@@ -1131,7 +1131,7 @@ If either drifts, `speccy status` reports:
 ```text
 SPEC-001: TASKS.md may be stale.
   Hash drift: SPEC.md sha256 changed since tasks were generated.
-  Run /speccy-amend to reconcile.
+  Run /speccy:amend to reconcile.
 ```
 
 This is a soft warning. The user / skill decides what to do. No
@@ -1150,13 +1150,13 @@ to-end without each project inventing its own integration.
 ```
 skills/
   claude-code/
-    speccy-init.md
-    speccy-plan.md
-    speccy-tasks.md
-    speccy-work.md           Implementation loop
-    speccy-review.md         Review loop
-    speccy-amend.md          SPEC.md + TASKS.md surgical edit
-    speccy-ship.md           Run report, open PR
+    speccy/init.md
+    speccy/plan.md
+    speccy/tasks.md
+    speccy/work.md           Implementation loop
+    speccy/review.md         Review loop
+    speccy/amend.md          SPEC.md + TASKS.md surgical edit
+    speccy/ship.md           Run report, open PR
   codex/
     (parallel structure)
   shared/
@@ -1192,39 +1192,39 @@ Init copies `skills/<host>/*` into the host-native location:
 - Claude Code: `.claude/commands/*.md`
 - Codex: `.codex/skills/*.md`
 
-The user gets immediate access to `/speccy-plan`, `/speccy-work`,
-`/speccy-review`, `/speccy-amend`, `/speccy-ship` in their host
+The user gets immediate access to `/speccy:plan`, `/speccy:work`,
+`/speccy:review`, `/speccy:amend`, `/speccy:ship` in their host
 without any further setup.
 
 ## Workflow recipes
 
 Each top-level skill is a recipe:
 
-- `/speccy-init` -- bootstrap the project
-- `/speccy-plan` -- Phase 1 (Vision -> SPEC)
-- `/speccy-tasks` -- Phase 2 (SPEC -> TASKS)
-- `/speccy-work` -- Phase 3 (impl loop)
-- `/speccy-review` -- Phase 4 (review loop)
-- `/speccy-amend` -- Mid-loop spec change
-- `/speccy-ship` -- Phase 5 (report + PR)
+- `/speccy:init` -- bootstrap the project
+- `/speccy:plan` -- Phase 1 (Vision -> SPEC)
+- `/speccy:tasks` -- Phase 2 (SPEC -> TASKS)
+- `/speccy:work` -- Phase 3 (impl loop)
+- `/speccy:review` -- Phase 4 (review loop)
+- `/speccy:amend` -- Mid-loop spec change
+- `/speccy:ship` -- Phase 5 (report + PR)
 
 A typical full-loop session in Claude Code looks like:
 
 ```
-/speccy-plan
+/speccy:plan
 [agent writes SPEC.md + spec.toml]
 
-/speccy-tasks SPEC-001
+/speccy:tasks SPEC-001
 [agent writes TASKS.md, then speccy tasks --commit]
 
-/speccy-work SPEC-001
+/speccy:work SPEC-001
 [main agent loops, spawning impl sub-agents until all tasks are [?]]
 
-/speccy-review SPEC-001
+/speccy:review SPEC-001
 [main agent loops, spawning review sub-agents per persona per task;
- flips state; loop alternates with /speccy-work until all tasks [x]]
+ flips state; loop alternates with /speccy:work until all tasks [x]]
 
-/speccy-ship SPEC-001
+/speccy:ship SPEC-001
 [agent writes REPORT.md, opens PR]
 ```
 

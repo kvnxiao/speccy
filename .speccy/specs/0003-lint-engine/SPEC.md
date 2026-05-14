@@ -66,7 +66,7 @@ regex set rather than a heuristic.
   unchecked open questions surfaced (QST-001) so I notice them
   before approving the spec.
 - As a spec author, I want a clear "your TASKS.md is stale" signal
-  (TSK-003) so I know when to run `/speccy-amend`.
+  (TSK-003) so I know when to run `/speccy:amend`.
 
 ## Requirements
 
@@ -186,7 +186,7 @@ Emit TSK-001 through TSK-004 against parsed `TasksMd`.
 The `bootstrap-pending` sentinel for `spec_hash_at_generation` is a
 specific TSK-003 variant: same code, severity = Info, and the
 message advises `speccy tasks SPEC-NNNN --commit` rather than
-`/speccy-amend`. Lint distinguishes the cases via message text only.
+`/speccy:amend`. Lint distinguishes the cases via message text only.
 
 **Behavior:**
 - Given a TASKS.md with a task `Covers: REQ-099` where REQ-099 isn't
@@ -363,7 +363,7 @@ ascending before returning. `None` sorts before `Some`.
 **Context:** The `bootstrap-pending` sentinel for
 `spec_hash_at_generation` is meaningfully different from real
 staleness (the remediation is `speccy tasks --commit`, not
-`/speccy-amend`). A separate code would be cleaner.
+`/speccy:amend`). A separate code would be cleaner.
 **Decision:** Use TSK-003 with a different message text and
 severity = Info (not Warn). One code, two messages.
 **Alternatives:**

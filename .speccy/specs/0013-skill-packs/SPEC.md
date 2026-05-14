@@ -35,7 +35,7 @@ is iteratable.
 - Personas (planner, implementer, six reviewers) follow a
   consistent content shape so agents can reliably consume them.
 - Host recipe skills orchestrate the multi-step loops
-  (`speccy-work`, `speccy-review`) correctly per DESIGN.md's
+  (`speccy:work`, `speccy:review`) correctly per DESIGN.md's
   workflow phases.
 - Each top-level recipe is loadable by its host without parse
   errors.
@@ -51,7 +51,7 @@ is iteratable.
 
 ## User stories
 
-- As a developer who ran `speccy init`, I want `/speccy-plan` in
+- As a developer who ran `speccy init`, I want `/speccy:plan` in
   my host to load and produce the expected agent behaviour
   (call `speccy plan`, read VISION.md, propose the first SPEC
   slice).
@@ -131,13 +131,13 @@ frontmatter.
 **Done when:**
 - The following files exist with valid Claude Code skill
   frontmatter:
-  - `speccy-init.md`
-  - `speccy-plan.md`
-  - `speccy-tasks.md`
-  - `speccy-work.md`
-  - `speccy-review.md`
-  - `speccy-amend.md`
-  - `speccy-ship.md`
+  - `speccy/init.md`
+  - `speccy/plan.md`
+  - `speccy/tasks.md`
+  - `speccy/work.md`
+  - `speccy/review.md`
+  - `speccy/amend.md`
+  - `speccy/ship.md`
 - Each file's frontmatter follows Claude Code's convention
   (at minimum: `---\ndescription: ...\n---` opening; YAML
   parseable).
@@ -208,8 +208,8 @@ Each top-level recipe skill follows a consistent shape.
   3. A "When to use" section.
   4. A numbered step-by-step list of CLI invocations and agent
      actions. CLI commands are wrapped in fenced code blocks.
-  5. (For loop recipes -- `speccy-work`, `speccy-review`,
-     `speccy-amend`) -- explicit loop conditions and exit
+  5. (For loop recipes -- `speccy:work`, `speccy:review`,
+     `speccy:amend`) -- explicit loop conditions and exit
      criteria.
 - The CLI commands referenced in the steps match the v1
   CLI surface (the ten commands from DESIGN.md).
@@ -353,7 +353,7 @@ load these files).
   yes; their roles are positive (do the work) vs the
   reviewers' adversarial (find issues). Defer to content
   author.
-- [ ] Should `speccy-amend.md` orchestrate both `speccy plan
+- [ ] Should `speccy/amend.md` orchestrate both `speccy plan
   SPEC-ID` and `speccy tasks SPEC-ID`, or only one? Per
   DESIGN.md "Amendment": both. The recipe should reflect this.
 - [ ] Should the report prompt template (`report.md`) suggest

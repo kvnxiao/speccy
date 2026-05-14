@@ -56,13 +56,13 @@ proves = "Each template contains the placeholders its corresponding CLI command 
 id = "CHK-005"
 kind = "test"
 command = "cargo test -p speccy-cli --test skill_packs -- claude_code_recipes"
-proves = "skills/claude-code/ contains the 7 expected recipes (speccy-init/plan/tasks/work/review/amend/ship) with valid YAML frontmatter and non-empty description fields."
+proves = "skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, work, review, amend, ship) with valid YAML frontmatter and non-empty description fields."
 
 [[checks]]
 id = "CHK-006"
 kind = "test"
 command = "cargo test -p speccy-cli --test skill_packs -- codex_recipes"
-proves = "skills/codex/ contains the 7 parallel recipes with valid Codex frontmatter."
+proves = "skills/codex/speccy/ contains the 7 parallel recipes with valid Codex frontmatter."
 
 [[checks]]
 id = "CHK-007"
@@ -79,5 +79,5 @@ proves = "Each top-level recipe has an intro paragraph, a 'When to use' heading,
 [[checks]]
 id = "CHK-009"
 kind = "manual"
-prompt = "Manually verify each shipped recipe loads in its host: (1) Run speccy init in a fresh repo with .claude/ present. (2) Invoke each of /speccy-init, /speccy-plan, /speccy-tasks, /speccy-work, /speccy-review, /speccy-amend, /speccy-ship in Claude Code; confirm each loads without parse errors and executes its first documented CLI invocation. (3) Repeat with .codex/ and Codex as the host. Pass criterion: every recipe loads and the first step runs."
+prompt = "Manually verify each shipped recipe loads in its host: (1) Run speccy init in a fresh repo with .claude/ present. (2) Invoke each of /speccy:init, /speccy:plan, /speccy:tasks, /speccy:work, /speccy:review, /speccy:amend, /speccy:ship in Claude Code; confirm each loads without parse errors and executes its first documented CLI invocation. (3) Repeat with .codex/ and Codex as the host. Pass criterion: every recipe loads and the first step runs."
 proves = "Shipped content is loadable and functional in both Claude Code and Codex hosts end-to-end."

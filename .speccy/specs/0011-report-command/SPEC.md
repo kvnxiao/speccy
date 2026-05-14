@@ -34,7 +34,7 @@ command.
 
 ## Non-goals
 
-- No PR opening. The orchestrating skill (`/speccy-ship`) calls
+- No PR opening. The orchestrating skill (`/speccy:ship`) calls
   `gh` after the report is written.
 - No partial-report mode in v1. Abandoned specs use
   `status: dropped`.
@@ -45,7 +45,7 @@ command.
 
 ## User stories
 
-- As `/speccy-ship`, I want `speccy report SPEC-0001` to render
+- As `/speccy:ship`, I want `speccy report SPEC-0001` to render
   a prompt that asks the agent to summarize what happened in
   one loop -- requirements satisfied, tasks completed,
   out-of-scope items absorbed, deferred limitations.
@@ -182,7 +182,7 @@ elsewhere). The CLI refuses to render otherwise.
 - `--allow-incomplete` flag -- rejected for v1. Adds a knob
   without a strong motivating use case; the dropped status
   already covers abandoned work.
-**Consequences:** The orchestrating skill (`/speccy-ship`) can
+**Consequences:** The orchestrating skill (`/speccy:ship`) can
 trust that "if `speccy report` succeeds, the spec is done."
 
 #### DEC-002: Retry count = `Retry:` marker occurrences in notes

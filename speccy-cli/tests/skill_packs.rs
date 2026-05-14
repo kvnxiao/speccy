@@ -106,16 +106,16 @@ const PROMPT_FILES: &[&str] = &[
 ];
 
 const RECIPE_FILES: &[&str] = &[
-    "speccy-init.md",
-    "speccy-plan.md",
-    "speccy-tasks.md",
-    "speccy-work.md",
-    "speccy-review.md",
-    "speccy-amend.md",
-    "speccy-ship.md",
+    "speccy/init.md",
+    "speccy/plan.md",
+    "speccy/tasks.md",
+    "speccy/work.md",
+    "speccy/review.md",
+    "speccy/amend.md",
+    "speccy/ship.md",
 ];
 
-const LOOP_RECIPES: &[&str] = &["speccy-work.md", "speccy-review.md", "speccy-amend.md"];
+const LOOP_RECIPES: &[&str] = &["speccy/work.md", "speccy/review.md", "speccy/amend.md"];
 
 const SPECCY_COMMANDS: &[&str] = &[
     "speccy init",

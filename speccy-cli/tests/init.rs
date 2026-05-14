@@ -17,8 +17,8 @@ use tempfile::TempDir;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-const SHIPPED_CLAUDE_SPECCY_INIT: &str = include_str!("../../skills/claude-code/speccy-init.md");
-const SHIPPED_CODEX_SPECCY_INIT: &str = include_str!("../../skills/codex/speccy-init.md");
+const SHIPPED_CLAUDE_SPECCY_INIT: &str = include_str!("../../skills/claude-code/speccy/init.md");
+const SHIPPED_CODEX_SPECCY_INIT: &str = include_str!("../../skills/codex/speccy/init.md");
 const SHIPPED_PERSONA_SECURITY: &str =
     include_str!("../../skills/shared/personas/reviewer-security.md");
 
@@ -129,7 +129,7 @@ fn force_overwrites_shipped_files() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/commands/speccy-init.md",
+        ".claude/commands/speccy/init.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -149,10 +149,10 @@ fn force_overwrites_shipped_files() -> TestResult {
         "refreshed speccy.toml should match template",
     );
 
-    let shipped = read_file(&fx.root, ".claude/commands/speccy-init.md")?;
+    let shipped = read_file(&fx.root, ".claude/commands/speccy/init.md")?;
     assert_eq!(
         shipped, SHIPPED_CLAUDE_SPECCY_INIT,
-        "--force should restore .claude/commands/speccy-init.md to embedded content",
+        "--force should restore .claude/commands/speccy/init.md to embedded content",
     );
     Ok(())
 }
@@ -196,7 +196,7 @@ fn host_detection_precedence() -> TestResult {
             .current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".codex/skills/speccy-init.md").exists(),
+            fx.root.join(".codex/skills/speccy/init.md").exists(),
             "--host codex must populate .codex/skills/ regardless of .claude/ presence",
         );
     }
@@ -210,11 +210,11 @@ fn host_detection_precedence() -> TestResult {
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".claude/commands/speccy-init.md").exists(),
+            fx.root.join(".claude/commands/speccy/init.md").exists(),
             ".claude/ should win autodetect when both present",
         );
         assert!(
-            !fx.root.join(".codex/skills/speccy-init.md").exists(),
+            !fx.root.join(".codex/skills/speccy/init.md").exists(),
             ".codex/ should NOT be populated when .claude/ won detection",
         );
     }
@@ -259,13 +259,13 @@ fn copy_claude_code_pack() -> TestResult {
     cmd.assert().success();
 
     let expected_names = [
-        "speccy-init.md",
-        "speccy-plan.md",
-        "speccy-tasks.md",
-        "speccy-work.md",
-        "speccy-review.md",
-        "speccy-amend.md",
-        "speccy-ship.md",
+        "speccy/init.md",
+        "speccy/plan.md",
+        "speccy/tasks.md",
+        "speccy/work.md",
+        "speccy/review.md",
+        "speccy/amend.md",
+        "speccy/ship.md",
     ];
     for name in expected_names {
         let rel = format!(".claude/commands/{name}");
@@ -274,10 +274,10 @@ fn copy_claude_code_pack() -> TestResult {
             "claude-code pack should drop {rel}",
         );
     }
-    let shipped = read_file(&fx.root, ".claude/commands/speccy-init.md")?;
+    let shipped = read_file(&fx.root, ".claude/commands/speccy/init.md")?;
     assert_eq!(
         shipped, SHIPPED_CLAUDE_SPECCY_INIT,
-        "copied speccy-init.md should be byte-identical to embedded content",
+        "copied speccy/init.md should be byte-identical to embedded content",
     );
 
     let persona = read_file(&fx.root, ".speccy/skills/personas/reviewer-security.md")?;
@@ -302,7 +302,7 @@ fn copy_codex_pack() -> TestResult {
         fx.root.join(".codex/skills").is_dir(),
         ".codex/skills/ must be created when --host codex is passed",
     );
-    let shipped = read_file(&fx.root, ".codex/skills/speccy-init.md")?;
+    let shipped = read_file(&fx.root, ".codex/skills/speccy/init.md")?;
     assert_eq!(
         shipped, SHIPPED_CODEX_SPECCY_INIT,
         "codex pack copy must be byte-identical to embedded content",

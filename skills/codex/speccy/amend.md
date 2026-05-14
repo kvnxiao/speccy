@@ -1,9 +1,9 @@
 ---
-name: speccy-amend
+name: speccy:amend
 description: Mid-loop SPEC change. Renders the amendment prompts for SPEC.md and TASKS.md and re-commits the spec hash.
 ---
 
-# speccy-amend
+# speccy:amend
 
 Orchestrates a mid-loop SPEC change. Edits SPEC.md surgically via the
 plan-amend prompt, then reconciles TASKS.md via the tasks-amend prompt,
@@ -50,5 +50,5 @@ reconciliation are not forgotten.
 This recipe is a single pass, not a loop -- but step 6 is the gate. If
 the lint still fires, repeat from step 1 (something was missed).
 
-Suggest the next step: `speccy-work SPEC-0007` to pick up any tasks
+Suggest the next step: `speccy:work SPEC-0007` to pick up any tasks
 that flipped back to `[ ]`.

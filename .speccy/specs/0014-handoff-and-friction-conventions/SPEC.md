@@ -217,7 +217,7 @@ spec.
 **Consequences:** The report prompt must instruct the agent to derive
 the skill-updates list from inline notes (already in context) +
 `git diff --name-only -- skills/` if available. The prompt change is
-minor; the orchestrating skill (`/speccy-ship`) already has git access.
+minor; the orchestrating skill (`/speccy:ship`) already has git access.
 
 #### DEC-003: AGENTS.md edit is in scope; user-project AGENTS.md is not
 

@@ -13,7 +13,9 @@ use crate::host::HostChoice;
 use crate::host::detect_host;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use include_dir::Dir;
 use std::io::Write;
+use std::path::Component;
 use thiserror::Error;
 
 const SPECCY_TOML_TEMPLATE: &str = include_str!("templates/speccy.toml.tmpl");
@@ -238,19 +240,11 @@ fn append_bundle_items(
     let Some(dir) = SKILLS.get_dir(subpath) else {
         return Err(InitError::BundleSubpathMissing { subpath });
     };
-    let mut entries: Vec<(&'static str, &'static [u8])> = Vec::new();
-    for file in dir.files() {
-        let Some(name) = file.path().file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !has_md_extension(name) {
-            continue;
-        }
-        entries.push((name, file.contents()));
-    }
-    entries.sort_by_key(|(name, _)| *name);
-    for (name, content) in entries {
-        let dest = dest_root.join(name);
+    let mut entries: Vec<(Utf8PathBuf, &'static [u8])> = Vec::new();
+    collect_bundle_files(dir, subpath, &mut entries);
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    for (rel, content) in entries {
+        let dest = dest_root.join(&rel);
         let action = classify(&dest, kind);
         plan.push(PlanItem {
             destination: dest,
@@ -259,6 +253,40 @@ fn append_bundle_items(
         });
     }
     Ok(())
+}
+
+fn collect_bundle_files(
+    dir: &Dir<'static>,
+    prefix: &str,
+    out: &mut Vec<(Utf8PathBuf, &'static [u8])>,
+) {
+    for file in dir.files() {
+        let path = file.path();
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !has_md_extension(file_name) {
+            continue;
+        }
+        let Ok(rel) = path.strip_prefix(prefix) else {
+            continue;
+        };
+        let mut rel_buf = Utf8PathBuf::new();
+        for comp in rel.components() {
+            if let Component::Normal(seg) = comp
+                && let Some(s) = seg.to_str()
+            {
+                rel_buf.push(s);
+            }
+        }
+        if rel_buf.as_str().is_empty() {
+            continue;
+        }
+        out.push((rel_buf, file.contents()));
+    }
+    for sub in dir.dirs() {
+        collect_bundle_files(sub, prefix, out);
+    }
 }
 
 fn classify(dest: &Utf8Path, kind: FileKind) -> Action {

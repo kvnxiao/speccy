@@ -1,17 +1,18 @@
 ---
-description: Bootstrap a Speccy workspace and copy the Claude Code skill pack.
+name: speccy:init
+description: Bootstrap a Speccy workspace and copy the Codex skill pack.
 ---
 
-# /speccy-init
+# speccy:init
 
 Bootstraps a Speccy workspace by scaffolding `.speccy/` and copying the
-Claude Code recipe pack into `.claude/commands/`.
+Codex recipe pack into `.codex/skills/`.
 
 ## When to use
 
-Run once per project, before any other Speccy slash-command. Re-run
-with `--force` after upgrading `speccy` to refresh shipped recipes
-while preserving user-authored files.
+Run once per project, before any other Speccy skill. Re-run with
+`--force` after upgrading `speccy` to refresh shipped recipes while
+preserving user-authored files.
 
 ## Steps
 
@@ -28,8 +29,8 @@ while preserving user-authored files.
    preserved if it already exists.
 4. Report the final counts (`N created, N overwritten, N preserved`)
    to the user.
-5. Suggest the next step: `/speccy-plan` if `VISION.md` was just
-   scaffolded, otherwise `/speccy-plan SPEC-NNNN` to amend an existing
+5. Suggest the next step: `speccy:plan` if `VISION.md` was just
+   scaffolded, otherwise `speccy:plan SPEC-NNNN` to amend an existing
    spec.
 
 This recipe does not loop.

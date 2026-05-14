@@ -16,7 +16,7 @@ an inline review note on one task, scoped to one persona's
 perspective.
 
 The fan-out across multiple personas is the **orchestrating
-skill's** job (`/speccy-review` in SPEC-0013), not the CLI's. The
+skill's** job (`/speccy:review` in SPEC-0013), not the CLI's. The
 CLI per-invocation renders exactly one persona's prompt. This
 keeps the CLI deterministic: no concurrency, no parallel
 processes, no shared state.
@@ -59,7 +59,7 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 
 ## User stories
 
-- As `/speccy-review` (the review-loop skill), I want to invoke
+- As `/speccy:review` (the review-loop skill), I want to invoke
   `speccy review T-003 --persona security` for each persona in
   the fan-out list and get back a prompt per persona.
 - As a project that wants stricter security review, I want to

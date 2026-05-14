@@ -400,7 +400,7 @@ frontmatter). No normalisation.
 
 **Consequences:** Any SPEC.md byte change invalidates the hash.
 Whitespace-only edits trigger staleness warnings. We accept this;
-the remedy is `/speccy-amend` (covered by SPEC-0005, SPEC-0006).
+the remedy is `/speccy:amend` (covered by SPEC-0005, SPEC-0006).
 
 #### DEC-005: Single-direction supersession (no stored `superseded_by`)
 

@@ -78,12 +78,12 @@ generated_at: 2026-05-13T23:31:02Z
 - [x] **T-008**: Write Claude Code top-level recipes
   - Covers: REQ-003, REQ-006
   - Tests to write:
-    - Seven files exist under `skills/claude-code/`: `speccy-init.md`, `speccy-plan.md`, `speccy-tasks.md`, `speccy-work.md`, `speccy-review.md`, `speccy-amend.md`, `speccy-ship.md`.
+    - Seven files exist under `skills/claude-code/`: `speccy/init.md`, `speccy/plan.md`, `speccy/tasks.md`, `speccy/work.md`, `speccy/review.md`, `speccy/amend.md`, `speccy/ship.md`.
     - Each has Claude Code frontmatter parseable as YAML with a non-empty `description` field.
     - Each body has an intro paragraph, a `## When to use` heading, and at least one fenced code block with a `speccy` command from the v1 surface.
-    - Loop recipes (`speccy-work`, `speccy-review`, `speccy-amend`) include explicit loop conditions and exit criteria.
-  - Suggested files: `skills/claude-code/speccy-init.md`, `skills/claude-code/speccy-plan.md`, `skills/claude-code/speccy-tasks.md`, `skills/claude-code/speccy-work.md`, `skills/claude-code/speccy-review.md`, `skills/claude-code/speccy-amend.md`, `skills/claude-code/speccy-ship.md`
-  - Implementer note: replaced all seven stubs with `description:`-frontmatter recipes including intro paragraph, `## When to use`, numbered steps with fenced `speccy ...` commands, and (for `speccy-work` / `speccy-review` / `speccy-amend`) explicit "Loop exit criteria" sections. CHK-005 (`claude_code_recipes`) parses each frontmatter via `serde-saphyr`; CHK-008 (`recipe_content_shape`) covers intro / heading / fenced-command / loop-exit assertions.
+    - Loop recipes (`speccy:work`, `speccy:review`, `speccy:amend`) include explicit loop conditions and exit criteria.
+  - Suggested files: `skills/claude-code/speccy/init.md`, `skills/claude-code/speccy/plan.md`, `skills/claude-code/speccy/tasks.md`, `skills/claude-code/speccy/work.md`, `skills/claude-code/speccy/review.md`, `skills/claude-code/speccy/amend.md`, `skills/claude-code/speccy/ship.md`
+  - Implementer note: replaced all seven stubs with `description:`-frontmatter recipes including intro paragraph, `## When to use`, numbered steps with fenced `speccy ...` commands, and (for `speccy:work` / `speccy:review` / `speccy:amend`) explicit "Loop exit criteria" sections. CHK-005 (`claude_code_recipes`) parses each frontmatter via `serde-saphyr`; CHK-008 (`recipe_content_shape`) covers intro / heading / fenced-command / loop-exit assertions.
 
 ## Phase 4: Codex recipes
 
@@ -93,7 +93,7 @@ generated_at: 2026-05-13T23:31:02Z
     - Same seven file names under `skills/codex/`.
     - Each has Codex-conforming frontmatter (parseable YAML; required fields per Codex's skill convention).
     - Body shape matches the Claude Code counterpart, adapted for Codex's invocation idioms where they differ.
-  - Suggested files: `skills/codex/speccy-init.md`, `skills/codex/speccy-plan.md`, `skills/codex/speccy-tasks.md`, `skills/codex/speccy-work.md`, `skills/codex/speccy-review.md`, `skills/codex/speccy-amend.md`, `skills/codex/speccy-ship.md`
+  - Suggested files: `skills/codex/speccy/init.md`, `skills/codex/speccy/plan.md`, `skills/codex/speccy/tasks.md`, `skills/codex/speccy/work.md`, `skills/codex/speccy/review.md`, `skills/codex/speccy/amend.md`, `skills/codex/speccy/ship.md`
   - Implementer note: each Codex recipe ships with `name:` + `description:` frontmatter (the conservative shape Codex's skill loader expects), the same intro / `## When to use` / steps / loop-exit shape as its Claude Code counterpart, and references the un-slashed `speccy-<name>` form Codex uses to invoke skills. CHK-006 (`codex_recipes`) enforces both fields are non-empty.
 
 ## Phase 5: Cross-host manual verification

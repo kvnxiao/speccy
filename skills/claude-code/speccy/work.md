@@ -1,9 +1,8 @@
 ---
-name: speccy-work
 description: Phase 3. Implementation loop. Spawn one implementer sub-agent per open task until none remain.
 ---
 
-# speccy-work
+# /speccy:work
 
 Drives the Phase 3 implementation loop. The main agent repeatedly asks
 the CLI for the next `[ ]` task and spawns an implementer sub-agent
@@ -11,8 +10,8 @@ with the rendered prompt until no open tasks remain.
 
 ## When to use
 
-After `speccy-tasks` has written `TASKS.md` and the spec hash has been
-committed. Can be rerun after `speccy-review` flips tasks back to
+After `/speccy:tasks` has written `TASKS.md` and the spec hash has been
+committed. Can be rerun after `/speccy:review` flips tasks back to
 `[ ]` (retry path).
 
 ## Steps
@@ -41,4 +40,4 @@ committed. Can be rerun after `speccy-review` flips tasks back to
 - `speccy next --kind implement --json` returns empty or `blocked`.
 - The user interrupts the loop.
 
-After exit, suggest `speccy-review SPEC-NNNN` to start Phase 4.
+After exit, suggest `/speccy:review SPEC-NNNN` to start Phase 4.

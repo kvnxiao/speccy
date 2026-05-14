@@ -55,18 +55,18 @@ right specific command.
 
 ## User stories
 
-- As `/speccy-work` (the implementation-loop skill), I want
+- As `/speccy:work` (the implementation-loop skill), I want
   `speccy next --kind implement --json` to give me one
   `T-NNN` to dispatch a sub-agent against, or `kind: blocked` if
   nothing is ready.
-- As `/speccy-review` (the review-loop skill), I want
+- As `/speccy:review` (the review-loop skill), I want
   `speccy next --kind review --json` to give me one `T-NNN` plus
   the persona fan-out list so I can spawn parallel reviewer
   sub-agents.
 - As a developer scanning manually, I want plain
   `speccy next` to tell me the single highest-priority thing
   across the whole workspace.
-- As `/speccy-ship` (the report skill), I want to detect that
+- As `/speccy:ship` (the report skill), I want to detect that
   "all tasks are `[x]` and REPORT.md is missing" so I know to
   generate the report.
 
@@ -311,7 +311,7 @@ work left").
 - Soft fallback to the other kind -- rejected. Surprising
   semantics for skill writers.
 **Consequences:** Skills can rely on the kind matching their
-filter. `/speccy-work` knows it won't accidentally get a review
+filter. `/speccy:work` knows it won't accidentally get a review
 task.
 
 ### Interfaces
@@ -409,7 +409,7 @@ Greenfield. Rollback via `git revert`. Depends on SPEC-0001
 
 `speccy next` is the smallest spec in the workflow-query side of
 the CLI, but the JSON contract is the most-consumed by skills:
-`/speccy-work` and `/speccy-review` both loop on its output.
+`/speccy:work` and `/speccy:review` both loop on its output.
 The four `kind` variants and their field shapes are part of the
 durable contract; adding fields is non-breaking, removing or
 renaming bumps `schema_version`.
