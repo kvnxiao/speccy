@@ -8,6 +8,7 @@
 #![deny(unsafe_code)]
 
 pub mod check;
+pub mod check_selector;
 pub mod embedded;
 pub mod git;
 pub mod host;

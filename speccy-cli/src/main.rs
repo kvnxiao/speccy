@@ -83,8 +83,14 @@ enum Command {
     },
     /// Run command-form proofs from spec.toml.
     Check {
-        /// Restrict to one check by `CHK-ID`; omit to run all.
-        id: Option<String>,
+        /// Polymorphic selector; omit to run every check across every spec.
+        /// Accepted shapes: `SPEC-NNNN` (all checks in spec),
+        /// `SPEC-NNNN/CHK-NNN` (one spec-qualified check),
+        /// `SPEC-NNNN/T-NNN` (checks proving the task's covered
+        /// requirements), `CHK-NNN` (every spec's `CHK-NNN`), or
+        /// `T-NNN` (unqualified task).
+        #[arg(value_name = "SELECTOR")]
+        selector: Option<String>,
     },
     /// CI gate: lint + check execution with a binary exit code.
     Verify {
@@ -109,7 +115,7 @@ fn dispatch(command: Command) -> u8 {
         Command::Report { spec_id } => run_report(spec_id),
         Command::Status { json } => run_status(json),
         Command::Next { kind, json } => run_next(kind.as_deref(), json),
-        Command::Check { id } => run_check(id),
+        Command::Check { selector } => run_check(selector),
         Command::Verify { json } => run_verify(json),
     }
 }
@@ -506,7 +512,10 @@ fn run_next(kind: Option<&str>, json: bool) -> u8 {
     }
 }
 
-fn run_check(id: Option<String>) -> u8 {
+fn run_check(selector: Option<String>) -> u8 {
+    use speccy_cli::check::CheckError;
+    use speccy_core::task_lookup::LookupError;
+
     let cwd = match speccy_cli::check::resolve_cwd() {
         Ok(p) => p,
         Err(e) => {
@@ -517,7 +526,7 @@ fn run_check(id: Option<String>) -> u8 {
     let mut stdout = std::io::stdout().lock();
     let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::check::run(
-        speccy_cli::check::CheckArgs { id },
+        speccy_cli::check::CheckArgs { selector },
         &cwd,
         &mut stdout,
         &mut stderr,
@@ -527,9 +536,33 @@ fn run_check(id: Option<String>) -> u8 {
     }
     match result {
         Ok(code) => clamp_exit(code),
-        Err(speccy_cli::check::CheckError::ChildSpawn { check_id, source }) => {
+        Err(CheckError::ChildSpawn { check_id, source }) => {
             eprintln!("speccy check: failed to spawn shell for {check_id}: {source}");
             2
+        }
+        Err(CheckError::TaskLookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy check: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            1
+        }
+        Err(CheckError::TaskLookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy check: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            1
+        }
+        Err(CheckError::TaskLookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy check: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy check {spec_id}/{task_id}");
+            }
+            1
         }
         Err(e) => {
             eprintln!("speccy check: {e}");

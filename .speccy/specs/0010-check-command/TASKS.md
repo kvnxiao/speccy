@@ -85,7 +85,7 @@ generated_at: 2026-05-14T03:25:14Z
 
 ## Phase 6: CLI wiring
 
-- [x] **T-008**: Wire `speccy check [CHK-ID]` into the binary
+- [x] **T-008**: Wire `speccy check [SELECTOR]` into the binary
   - Covers: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006
   - Tests to write:
     - `speccy check` runs from any cwd inside a speccy workspace.

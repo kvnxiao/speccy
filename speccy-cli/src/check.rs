@@ -8,12 +8,19 @@
 //!
 //! See `.speccy/specs/0010-check-command/SPEC.md`.
 
+use crate::check_selector::CheckSelector;
+use crate::check_selector::SelectorError;
+use crate::check_selector::parse_selector;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::exec::shell_command;
+use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::CheckEntry;
 use speccy_core::parse::CheckPayload;
 use speccy_core::parse::SpecStatus;
+use speccy_core::task_lookup::LookupError;
+use speccy_core::task_lookup::TaskRef;
+use speccy_core::task_lookup::find as find_task;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
@@ -25,12 +32,16 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CheckError {
-    /// The CHK-ID argument did not match the `CHK-NNN` (>= 3 digits) shape.
-    #[error("invalid check ID format `{arg}`; expected CHK- followed by 3 or more digits")]
-    InvalidCheckIdFormat {
-        /// Raw argument the user supplied.
-        arg: String,
-    },
+    /// Selector parsing or resolution failure (see [`SelectorError`]).
+    #[error(transparent)]
+    Selector(#[from] SelectorError),
+    /// Task-form selector failed to resolve via `task_lookup::find`. The
+    /// wrapped error carries the existing `LookupError` `Display` wording
+    /// (e.g. `Ambiguous`, `NotFound`) byte-for-byte so the message is
+    /// identical to `speccy implement` / `speccy review` against the same
+    /// task reference.
+    #[error(transparent)]
+    TaskLookup(#[from] LookupError),
     /// No spec.toml across the workspace contained a `[[checks]]` entry
     /// with the requested ID.
     #[error("no check with id `{id}` found in workspace; run `speccy status` to list specs")]
@@ -58,8 +69,11 @@ pub enum CheckError {
 /// `speccy check` arguments.
 #[derive(Debug, Clone, Default)]
 pub struct CheckArgs {
-    /// Optional `CHK-NNN` filter. When `None`, every discovered check runs.
-    pub id: Option<String>,
+    /// Optional polymorphic positional selector. When `None`, every
+    /// discovered check runs. Accepted shapes: `SPEC-NNNN`,
+    /// `SPEC-NNNN/CHK-NNN`, `SPEC-NNNN/T-NNN`, `CHK-NNN`, `T-NNN`. See
+    /// [`crate::check_selector::parse_selector`].
+    pub selector: Option<String>,
 }
 
 /// One check enriched with the `spec_id` and parent-spec lifecycle
@@ -108,7 +122,7 @@ pub fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let CheckArgs { id } = args;
+    let CheckArgs { selector } = args;
 
     let project_root = match find_root(cwd) {
         Ok(p) => p,
@@ -119,30 +133,265 @@ pub fn run(
         }
     };
 
-    if let Some(arg) = id.as_deref() {
-        validate_chk_id_format(arg)?;
-    }
+    let parsed = parse_selector(selector.as_deref())?;
 
-    let ws = scan(&project_root);
+    match parsed {
+        CheckSelector::All => run_all(&project_root, out, err),
+        CheckSelector::UnqualifiedCheck { check_id } => {
+            run_unqualified_check(&check_id, &project_root, out, err)
+        }
+        CheckSelector::Spec { spec_id } => run_spec(&spec_id, &project_root, out, err),
+        CheckSelector::QualifiedCheck { spec_id, check_id } => {
+            run_qualified_check(&spec_id, &check_id, &project_root, out, err)
+        }
+        CheckSelector::Task(task_ref) => run_task(&task_ref, &project_root, out, err),
+    }
+}
+
+fn run_all(
+    project_root: &Utf8Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32, CheckError> {
+    let ws = scan(project_root);
     let (all_checks, malformed) = collect_checks(&ws, err)?;
 
-    let filtered: Vec<CollectedCheck> = match id.as_deref() {
-        Some(arg) => all_checks
-            .into_iter()
-            .filter(|c| c.entry.id == arg)
-            .collect(),
-        None => all_checks,
-    };
-
-    if filtered.is_empty() {
-        if let Some(arg) = id {
-            return Err(CheckError::NoCheckMatching { id: arg });
-        }
+    if all_checks.is_empty() {
         writeln!(out, "No checks defined.")?;
         return Ok(i32::from(malformed > 0));
     }
 
-    execute_checks(&filtered, &project_root, out, malformed)
+    execute_checks(&all_checks, project_root, out, malformed)
+}
+
+fn run_unqualified_check(
+    check_id: &str,
+    project_root: &Utf8Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32, CheckError> {
+    let ws = scan(project_root);
+    let (all_checks, malformed) = collect_checks(&ws, err)?;
+
+    let filtered: Vec<CollectedCheck> = all_checks
+        .into_iter()
+        .filter(|c| c.entry.id == check_id)
+        .collect();
+
+    if filtered.is_empty() {
+        return Err(CheckError::NoCheckMatching {
+            id: check_id.to_owned(),
+        });
+    }
+
+    execute_checks(&filtered, project_root, out, malformed)
+}
+
+fn run_spec(
+    spec_id: &str,
+    project_root: &Utf8Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32, CheckError> {
+    let ws = scan(project_root);
+    let spec = resolve_spec(&ws, spec_id)?;
+
+    let spec_status = spec
+        .spec_md
+        .as_ref()
+        .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+
+    // When the user names the spec directly, make the skip explicit
+    // (run_all silently skips dropped / superseded; here we surface it).
+    if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
+        writeln!(
+            out,
+            "spec {spec_id} is `{}`; no checks executed",
+            spec_status.as_str(),
+        )?;
+        return Ok(0);
+    }
+
+    let label = spec
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| display_spec_label(&spec.dir));
+    let (checks, malformed) = collect_for_spec(spec, &label, spec_status, err)?;
+
+    if checks.is_empty() {
+        writeln!(out, "No checks defined.")?;
+        return Ok(i32::from(malformed > 0));
+    }
+
+    execute_checks(&checks, project_root, out, malformed)
+}
+
+fn run_qualified_check(
+    spec_id: &str,
+    check_id: &str,
+    project_root: &Utf8Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32, CheckError> {
+    let ws = scan(project_root);
+    let spec = resolve_spec(&ws, spec_id)?;
+
+    let spec_status = spec
+        .spec_md
+        .as_ref()
+        .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+
+    // Mirror run_spec: when the user names a dropped / superseded spec
+    // directly, surface the skip explicitly instead of silently running
+    // its checks. The status filter is a property of the parent spec,
+    // not of the invocation form (see SPEC-0017 Assumptions).
+    if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
+        writeln!(
+            out,
+            "spec {spec_id} is `{}`; no checks executed",
+            spec_status.as_str(),
+        )?;
+        return Ok(0);
+    }
+
+    let label = spec
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| display_spec_label(&spec.dir));
+    let (spec_checks, malformed) = collect_for_spec(spec, &label, spec_status, err)?;
+
+    let matched: Vec<CollectedCheck> = spec_checks
+        .into_iter()
+        .filter(|c| c.entry.id == check_id)
+        .collect();
+
+    if matched.is_empty() {
+        return Err(CheckError::Selector(
+            SelectorError::NoQualifiedCheckMatching {
+                spec_id: spec_id.to_owned(),
+                check_id: check_id.to_owned(),
+            },
+        ));
+    }
+
+    execute_checks(&matched, project_root, out, malformed)
+}
+
+/// Resolve a task selector via `task_lookup::find`, collect every check
+/// proving the requirements the task covers (deduplicated, first-occurrence
+/// declared order), and delegate to [`execute_checks`].
+///
+/// Empty-covers is treated as informational (exit 0) per SPEC-0017's
+/// Open-Question "Lean 0" decision: the line names the task ref and states
+/// it covers no requirements; no subprocess spawns. CHK-IDs listed in
+/// `[[requirements]].checks` but absent from `[[checks]]` are silently
+/// skipped at this layer — the lint engine (SPEC-0003) is the right
+/// surface for the absence.
+fn run_task(
+    task_ref: &TaskRef,
+    project_root: &Utf8Path,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32, CheckError> {
+    let ws = scan(project_root);
+    let location = find_task(&ws, task_ref)?;
+
+    if location.task.covers.is_empty() {
+        writeln!(
+            out,
+            "task `{task_ref}` covers no requirements; no checks to run",
+            task_ref = task_ref.as_arg(),
+        )?;
+        return Ok(0);
+    }
+
+    let spec = resolve_spec(&ws, &location.spec_id)?;
+    let spec_status = spec
+        .spec_md
+        .as_ref()
+        .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+
+    // For each covered REQ-ID, walk its [[requirements]].checks list and
+    // accumulate CHK-IDs in declared order, deduplicating on first
+    // occurrence so a CHK proving multiple covered REQs appears once.
+    let Ok(spec_toml) = spec.spec_toml.as_ref() else {
+        // Parent spec.toml failed to parse; the task ref resolved against
+        // SPEC.md / TASKS.md, so surface the warning via collect_for_spec
+        // and let it return an empty check set.
+        let label = spec
+            .spec_id
+            .clone()
+            .unwrap_or_else(|| display_spec_label(&spec.dir));
+        let (_checks, malformed) = collect_for_spec(spec, &label, spec_status, err)?;
+        writeln!(out, "No checks defined.")?;
+        return Ok(i32::from(malformed > 0));
+    };
+
+    let mut ordered_check_ids: Vec<&str> = Vec::new();
+    for req_id in &location.task.covers {
+        let Some(req_entry) = spec_toml.requirements.iter().find(|r| &r.id == req_id) else {
+            // Covered REQ-ID is not present in [[requirements]] — a lint
+            // engine concern (SPEC-0003), silently skipped here.
+            continue;
+        };
+        for chk_id in &req_entry.checks {
+            if !ordered_check_ids.contains(&chk_id.as_str()) {
+                ordered_check_ids.push(chk_id.as_str());
+            }
+        }
+    }
+
+    let label = spec
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| display_spec_label(&spec.dir));
+
+    // Resolve each surviving CHK-ID against [[checks]]; drop any that the
+    // [[requirements]] block referenced but [[checks]] does not define
+    // (lint-engine concern, silently skipped here).
+    let mut collected: Vec<CollectedCheck> = Vec::new();
+    for chk_id in &ordered_check_ids {
+        if let Some(entry) = spec_toml.checks.iter().find(|c| c.id == *chk_id) {
+            collected.push(CollectedCheck {
+                spec_id: label.clone(),
+                spec_status,
+                entry: entry.clone(),
+            });
+        }
+    }
+
+    if collected.is_empty() {
+        writeln!(out, "No checks defined.")?;
+        return Ok(0);
+    }
+
+    execute_checks(&collected, project_root, out, 0)
+}
+
+/// Locate a spec in the workspace by its `SPEC-NNNN` identifier.
+///
+/// Matches against [`ParsedSpec::spec_id`] (pulled from SPEC.md
+/// frontmatter when parsing succeeded; falls back to the directory-derived
+/// label otherwise), so a malformed SPEC.md still resolves through the
+/// directory name.
+///
+/// # Errors
+///
+/// Returns [`SelectorError::NoSpecMatching`] when no spec under
+/// `.speccy/specs/` matches the requested identifier.
+fn resolve_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Result<&'w ParsedSpec, SelectorError> {
+    ws.specs
+        .iter()
+        .find(|s| {
+            let label = s
+                .spec_id
+                .clone()
+                .unwrap_or_else(|| display_spec_label(&s.dir));
+            label == spec_id
+        })
+        .ok_or_else(|| SelectorError::NoSpecMatching {
+            spec_id: spec_id.to_owned(),
+        })
 }
 
 fn execute_checks(
@@ -252,87 +501,52 @@ fn collect_checks(
         if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
             continue;
         }
-        match &parsed.spec_toml {
-            Ok(toml) => {
-                for check in &toml.checks {
-                    out.push(CollectedCheck {
-                        spec_id: label.clone(),
-                        spec_status,
-                        entry: check.clone(),
-                    });
-                }
-            }
-            Err(e) => {
-                writeln!(
-                    err,
-                    "speccy check: warning: {label} spec.toml failed to parse: {e}; skipping",
-                )?;
-                malformed = malformed.saturating_add(1);
-            }
-        }
+        let (mut spec_checks, spec_malformed) = collect_for_spec(parsed, &label, spec_status, err)?;
+        out.append(&mut spec_checks);
+        malformed = malformed.saturating_add(spec_malformed);
     }
     Ok((out, malformed))
+}
+
+/// Collect every `[[checks]]` entry from one spec.toml, tagged with the
+/// parent spec's label and lifecycle status. Returns the collected checks
+/// plus a 1-or-0 malformed count (so callers can fold it into a workspace
+/// total).
+///
+/// Caller is responsible for dropped / superseded status filtering: this
+/// helper is reused by `run_all` (which already filters them out before
+/// calling) and `run_spec` (which prints an explicit skip line and never
+/// reaches this helper for defunct specs).
+fn collect_for_spec(
+    spec: &ParsedSpec,
+    label: &str,
+    spec_status: SpecStatus,
+    err: &mut dyn Write,
+) -> Result<(Vec<CollectedCheck>, u32), CheckError> {
+    match &spec.spec_toml {
+        Ok(toml) => {
+            let collected = toml
+                .checks
+                .iter()
+                .map(|check| CollectedCheck {
+                    spec_id: label.to_owned(),
+                    spec_status,
+                    entry: check.clone(),
+                })
+                .collect();
+            Ok((collected, 0))
+        }
+        Err(e) => {
+            writeln!(
+                err,
+                "speccy check: warning: {label} spec.toml failed to parse: {e}; skipping",
+            )?;
+            Ok((Vec::new(), 1))
+        }
+    }
 }
 
 fn display_spec_label(dir: &Utf8Path) -> String {
     dir.file_name()
         .map_or_else(|| dir.to_string(), ToOwned::to_owned)
-}
-
-fn validate_chk_id_format(arg: &str) -> Result<(), CheckError> {
-    let Some(suffix) = arg.strip_prefix("CHK-") else {
-        return Err(CheckError::InvalidCheckIdFormat {
-            arg: arg.to_owned(),
-        });
-    };
-    if suffix.len() < 3 || !suffix.chars().all(|c| c.is_ascii_digit()) {
-        return Err(CheckError::InvalidCheckIdFormat {
-            arg: arg.to_owned(),
-        });
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::CheckError;
-    use super::validate_chk_id_format;
-
-    #[test]
-    fn validate_accepts_three_digit_id() {
-        validate_chk_id_format("CHK-001").expect("CHK-001 should be valid");
-    }
-
-    #[test]
-    fn validate_accepts_more_than_three_digits() {
-        validate_chk_id_format("CHK-1234").expect("CHK-1234 should be valid");
-    }
-
-    #[test]
-    fn validate_rejects_too_few_digits() {
-        let err =
-            validate_chk_id_format("CHK-12").expect_err("CHK-12 should be rejected (need >=3)");
-        assert!(matches!(
-            err,
-            CheckError::InvalidCheckIdFormat { ref arg } if arg == "CHK-12"
-        ));
-    }
-
-    #[test]
-    fn validate_rejects_missing_prefix() {
-        let err = validate_chk_id_format("FOO").expect_err("FOO should be rejected");
-        assert!(matches!(err, CheckError::InvalidCheckIdFormat { .. }));
-    }
-
-    #[test]
-    fn validate_rejects_lowercase_prefix() {
-        let err = validate_chk_id_format("chk-001").expect_err("chk-001 should be rejected (case)");
-        assert!(matches!(err, CheckError::InvalidCheckIdFormat { .. }));
-    }
-
-    #[test]
-    fn validate_rejects_non_digit_suffix() {
-        let err = validate_chk_id_format("CHK-00A").expect_err("CHK-00A should be rejected");
-        assert!(matches!(err, CheckError::InvalidCheckIdFormat { .. }));
-    }
 }

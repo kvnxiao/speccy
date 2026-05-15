@@ -138,7 +138,13 @@ speccy next [--kind K]            Next actionable thing      (--json)
                                     --kind implement -> next [ ] task
                                     --kind review    -> next [?] task
                                     default          -> highest-priority
-speccy check [CHK-ID]             Run check(s); non-zero on failure
+speccy check [SELECTOR]           Run check(s); non-zero on failure
+                                    no arg:            all checks across all specs
+                                    SPEC-NNNN:         every check under one spec
+                                    SPEC-NNNN/CHK-NNN: one check, disambiguated by spec
+                                    SPEC-NNNN/T-NNN:   checks covering a qualified task
+                                    CHK-NNN:           every spec's CHK-NNN (DEC-003)
+                                    T-NNN:             checks covering an unqualified task
 speccy verify                     CI gate: lint + speccy check
 ```
 
@@ -1000,8 +1006,11 @@ proves = "End-to-end signup UX surfaces duplicate-email error."
 ## Execution
 
 ```sh
-speccy check               # run all checks across all specs
-speccy check CHK-001       # run one check
+speccy check                       # run all checks across all specs
+speccy check SPEC-0001             # run every check under SPEC-0001
+speccy check SPEC-0001/CHK-001     # run one spec-scoped check
+speccy check SPEC-0001/T-002       # run checks covering one task
+speccy check CHK-001               # run CHK-001 across every spec (DEC-003)
 ```
 
 Behavior:

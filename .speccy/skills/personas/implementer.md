@@ -66,7 +66,7 @@ with the note:
     bcrypt hashes so the existing suite compiles.
   - Undone: (none)
   - Commands run: `cargo test -p auth --test migrations`,
-    `speccy check SPEC-NNNN T-002`
+    `speccy check SPEC-NNNN/T-002`
   - Exit codes: pass, pass
   - Discovered issues: `tests/migration_helpers.ts` assumed plaintext
     passwords; fixed inline since the migration test wouldn't compile
