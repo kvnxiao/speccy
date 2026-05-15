@@ -27,7 +27,7 @@ checks = ["CHK-009", "CHK-010"]
 [[checks]]
 id = "CHK-001"
 kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- modules_are_single_source"
+command = "cargo test -p speccy-cli --test skill_packs -- t002_ t008_legacy"
 proves = "resources/modules/{personas,prompts,skills}/ are the only source-of-truth bodies for personas, prompts, and skill bodies; no per-host file under resources/agents/ duplicates a module body verbatim outside its `{% include %}` directive."
 
 [[checks]]
@@ -39,25 +39,25 @@ proves = "The embedded RESOURCES bundle exposes both `modules/` (with `personas/
 [[checks]]
 id = "CHK-003"
 kind = "test"
-command = "cargo test -p speccy-cli --test init -- render_claude_code_skill_pack"
+command = "cargo test -p speccy-cli --test skill_packs -- t005_claude_code"
 proves = "speccy init --host claude-code renders the seven SKILL.md files at `.claude/skills/speccy-<verb>/SKILL.md` with slash-prefixed command references (e.g. `/speccy-tasks`); does not create any path under `.agents/` or `.codex/`."
 
 [[checks]]
 id = "CHK-004"
 kind = "test"
-command = "cargo test -p speccy-cli --test init -- render_codex_skill_pack"
+command = "cargo test -p speccy-cli --test skill_packs -- t006_codex"
 proves = "speccy init --host codex renders the seven SKILL.md files at `.agents/skills/speccy-<verb>/SKILL.md` with unprefixed command references; does not create any path under `.claude/`. Codex subagent files land under `.codex/agents/` in the same run."
 
 [[checks]]
 id = "CHK-005"
 kind = "test"
-command = "cargo test -p speccy-cli --test init -- render_claude_code_reviewer_subagents"
+command = "cargo test -p speccy-cli --test skill_packs -- t009_claude_code_reviewer"
 proves = "speccy init --host claude-code renders six files at `.claude/agents/reviewer-{business,tests,security,style,architecture,docs}.md`, each with YAML frontmatter declaring `name: reviewer-<persona>` and a `description:` string, followed by the matching persona body content from resources/modules/personas/."
 
 [[checks]]
 id = "CHK-006"
 kind = "test"
-command = "cargo test -p speccy-cli --test init -- render_codex_reviewer_subagents_parse_as_toml"
+command = "cargo test -p speccy-cli --test skill_packs -- t010_codex_reviewer t010_persona"
 proves = "speccy init --host codex renders six files at `.codex/agents/reviewer-{business,tests,security,style,architecture,docs}.toml`, each parses as TOML and contains string-typed top-level keys `name`, `description`, and `developer_instructions`; persona body files contain no `\"\"\"` substring (TOML-safety invariant)."
 
 [[checks]]
