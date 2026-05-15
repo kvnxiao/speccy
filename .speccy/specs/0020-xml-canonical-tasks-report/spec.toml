@@ -1,0 +1,123 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-002"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-003"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-005"]
+
+[[checks]]
+id = "CHK-001"
+kind = "manual"
+prompt = """
+Given a TASKS.md with a speccy task marker containing id, state, and
+covers attributes,
+when the task marker parser runs,
+then it returns a typed task with the expected id, state, and covered
+requirements.
+
+Given a task marker with an invalid state,
+when parsing runs,
+then parsing fails and lists the valid task states.
+
+Given a task marker without a task-scenarios block,
+when parsing runs,
+then parsing fails and names the task.
+"""
+proves = "TASKS.md marker grammar captures task state, requirement coverage, and task-local validation prose."
+
+[[checks]]
+id = "CHK-002"
+kind = "manual"
+prompt = """
+Given a REPORT.md coverage marker with a valid requirement id, result,
+and scenario list,
+when the report marker parser runs,
+then it returns a typed coverage row.
+
+Given a coverage marker with an invalid result value,
+when parsing runs,
+then parsing fails and lists the valid results.
+
+Given a coverage marker that references a scenario not nested under
+the matching requirement in SPEC.md,
+when workspace loading runs,
+then it fails with a dangling scenario reference.
+"""
+proves = "REPORT.md marker grammar captures requirement outcomes and scenario coverage."
+
+[[checks]]
+id = "CHK-003"
+kind = "manual"
+prompt = """
+Given canonical TASKS.md and REPORT.md fixtures,
+when parse, render, and parse run in sequence,
+then the typed models are structurally equivalent.
+
+Given a speccy marker inside a fenced code block,
+when parsing runs,
+then the marker is treated as Markdown body content rather than
+structure.
+
+Given post-spec public APIs,
+when inspected,
+then next, status, implement, review, report, and verify read from
+the marker-backed typed models without changing their external CLI
+behavior.
+"""
+proves = "Task and report parsers/renderers reuse the shared marker infrastructure and preserve public behavior."
+
+[[checks]]
+id = "CHK-004"
+kind = "manual"
+prompt = """
+Given the pre-migration TASKS.md files,
+when the migration tool runs,
+then checkbox tasks become speccy task marker blocks with mapped state,
+covers, and task-scenarios content.
+
+Given a task with no validation prose,
+when migration runs,
+then migration fails and names the task instead of inventing a
+scenario.
+
+Given the pre-migration REPORT.md files,
+when migration runs,
+then requirements coverage table rows become speccy coverage markers.
+"""
+proves = "Migration rewrites in-tree TASKS.md and REPORT.md to marker structure without guessing."
+
+[[checks]]
+id = "CHK-005"
+kind = "manual"
+prompt = """
+Given post-spec ARCHITECTURE.md and shipped skill prompts,
+when active guidance is read,
+then TASKS.md and REPORT.md are documented as marker-structured
+Markdown.
+
+Given active guidance,
+when searched,
+then it does not require first-class implementer handoff fields or
+review-note schemas.
+
+Given newly generated TASKS.md and REPORT.md files,
+when inspected,
+then they use speccy marker comments for task state, task scenarios,
+and report coverage.
+"""
+proves = "Docs and shipped skills use marker-structured tasks and reports while deferring handoffs."

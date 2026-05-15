@@ -1,0 +1,111 @@
+schema_version = 1
+
+[[requirements]]
+id = "REQ-001"
+checks = ["CHK-001"]
+
+[[requirements]]
+id = "REQ-002"
+checks = ["CHK-002"]
+
+[[requirements]]
+id = "REQ-003"
+checks = ["CHK-003"]
+
+[[requirements]]
+id = "REQ-004"
+checks = ["CHK-004"]
+
+[[requirements]]
+id = "REQ-005"
+checks = ["CHK-005"]
+
+[[checks]]
+id = "CHK-001"
+kind = "manual"
+prompt = """
+Given a SPEC.md with line-isolated speccy requirement and scenario
+marker comments,
+when the marker parser runs,
+then it returns a typed requirement with nested scenarios.
+
+Given a scenario marker outside any requirement marker,
+when parsing runs,
+then parsing fails and names the misplaced scenario.
+
+Given Markdown content inside a scenario containing XML-looking text
+such as <T> or A & B,
+when parsing runs,
+then the content is preserved as Markdown and is not XML-decoded.
+"""
+proves = "SPEC.md marker grammar is strict while preserving normal Markdown bodies."
+
+[[checks]]
+id = "CHK-002"
+kind = "manual"
+prompt = """
+Given the migrated workspace,
+when the workspace loader scans .speccy/specs,
+then no per-spec spec.toml files are present.
+
+Given a stray per-spec spec.toml file,
+when the workspace loader runs,
+then it returns a StraySpecToml error naming the file.
+
+Given a requirement marker containing two scenario markers,
+when Speccy computes requirement coverage,
+then both scenarios are linked to that requirement by containment.
+"""
+proves = "Per-spec spec.toml is removed and REQ-to-scenario linkage comes from SPEC.md containment."
+
+[[checks]]
+id = "CHK-003"
+kind = "manual"
+prompt = """
+Given a canonical marker-structured SPEC.md,
+when parse, render, and parse run in sequence,
+then the resulting SpecDoc is structurally equivalent to the first.
+
+Given a speccy marker inside a fenced code block,
+when parsing runs,
+then the marker is treated as code content, not structure.
+
+Given a marker with an unknown attribute,
+when parsing runs,
+then the error names the attribute, marker name, file, and byte offset.
+"""
+proves = "The parser and deterministic renderer are backed by typed Rust structs."
+
+[[checks]]
+id = "CHK-004"
+kind = "manual"
+prompt = """
+Given a post-SPEC-0018 workspace with SPEC.md plus spec.toml files,
+when the migration tool runs,
+then each spec is rewritten to marker-structured SPEC.md and the
+spec.toml file is deleted.
+
+Given a check row that is not referenced by any requirement,
+when migration runs,
+then migration fails and names the orphan check.
+
+Given the migrated workspace,
+when speccy verify runs,
+then it exits zero.
+"""
+proves = "Migration rewrites all in-tree specs without silently inventing structure."
+
+[[checks]]
+id = "CHK-005"
+kind = "manual"
+prompt = """
+Given a task covering REQ-002,
+when implementer or reviewer prompt slicing runs,
+then the prompt includes REQ-002 and its scenario marker bodies but
+excludes unrelated requirements.
+
+Given the post-spec docs and shipped skills,
+when active guidance is searched,
+then per-spec spec.toml appears only in historical or migration notes.
+"""
+proves = "Prompts, docs, check rendering, and verify consume the marker tree instead of spec.toml."
