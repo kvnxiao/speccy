@@ -774,3 +774,175 @@ fn assert_no_unsubstituted_token(body: &str, label: &str, needle: &str) {
         );
     }
 }
+
+// --------------------------------------------------------------------
+// SPEC-0018 T-006 / REQ-005: shipped host packs teach the new
+// scenario-only check schema. The renderer outputs must contain no
+// legacy check-authoring examples (`kind =`, `command =`, `prompt =`,
+// `proves =`) so downstream agents cannot copy-paste the pre-SPEC-0018
+// shape into a fresh `spec.toml`. Historical SPEC.md / TASKS.md /
+// REPORT.md records under `.speccy/specs/` are excluded from this
+// guard — those carry the audit trail of the migration itself.
+// --------------------------------------------------------------------
+
+/// Field-assignment needles for legacy `[[checks]]` rows that
+/// SPEC-0018 retired. Each one is tight enough that it only matches
+/// example code (the trailing `"` on `command = "` / `prompt = "`
+/// avoids prose like "prompt for the user", and the historical-note
+/// blockquotes in `.speccy/ARCHITECTURE.md` use backticks rather than
+/// the literal quoted assignment).
+const SPEC_0018_LEGACY_NEEDLES: [&str; 6] = [
+    "kind = \"test\"",
+    "kind = \"command\"",
+    "kind = \"manual\"",
+    "proves =",
+    "command = \"",
+    "prompt = \"",
+];
+
+#[test]
+fn rendered_outputs_have_no_legacy_check_authoring_examples() -> TestResult {
+    // CHK-005 sweep: walk every file rendered by `render_host_pack`
+    // (both hosts) and assert it does not contain a legacy
+    // check-authoring assignment. The needles are the field names
+    // SPEC-0018 retired from `[[checks]]` rows. They never appear in
+    // post-migration `spec.toml` files, so any hit in the shipped
+    // prompts/personas/skills means stale guidance leaked through.
+    for host in [HostChoice::ClaudeCode, HostChoice::Codex] {
+        let rendered = render_host_pack(host)
+            .map_err(|err| format!("render_host_pack({host:?}) should succeed: {err}"))?;
+        for file in &rendered {
+            for needle in SPEC_0018_LEGACY_NEEDLES {
+                assert!(
+                    !file.contents.contains(needle),
+                    "rendered `{}` for host {host:?} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
+                    file.rel_path,
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `.speccy/ARCHITECTURE.md` is not rendered through host packs, so
+/// `rendered_outputs_have_no_legacy_check_authoring_examples` does not
+/// cover it. Lint it directly: the design doc must teach the
+/// post-SPEC-0018 `{id, scenario}` shape, and the only legitimate
+/// mentions of the retired field names live inside `> Historical
+/// note:` blockquotes that name them in prose with backticks, not as
+/// quoted-literal assignments. The tight needles in
+/// `SPEC_0018_LEGACY_NEEDLES` only fire on example code.
+#[test]
+fn architecture_doc_has_no_legacy_check_authoring_examples() {
+    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    for needle in SPEC_0018_LEGACY_NEEDLES {
+        assert!(
+            !ARCHITECTURE.contains(needle),
+            ".speccy/ARCHITECTURE.md contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields; historical notes should use backticked prose, not literal assignments)",
+        );
+    }
+}
+
+/// Source-of-truth sweep over `resources/modules/personas/**` and
+/// `resources/modules/prompts/**`. The host-pack-rendered guard above
+/// catches what reaches `.claude/` / `.codex/` / `.speccy/skills/`,
+/// but only via the renderer; this test pins the upstream sources
+/// directly so a regression that adds a legacy example in a persona
+/// or prompt body fails before any `speccy init` runs.
+#[test]
+fn persona_and_prompt_sources_have_no_legacy_check_authoring_examples() {
+    for entry in PERSONAS.files() {
+        let path = entry.path().display();
+        let body = entry.contents_utf8().unwrap_or("");
+        for needle in SPEC_0018_LEGACY_NEEDLES {
+            assert!(
+                !body.contains(needle),
+                "resources/modules/personas/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
+            );
+        }
+    }
+    for entry in PROMPTS.files() {
+        let path = entry.path().display();
+        let body = entry.contents_utf8().unwrap_or("");
+        for needle in SPEC_0018_LEGACY_NEEDLES {
+            assert!(
+                !body.contains(needle),
+                "resources/modules/prompts/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
+            );
+        }
+    }
+}
+
+/// Positive content pins for SPEC-0018 / T-005. These assert that
+/// the load-bearing post-migration sentences survive in their source
+/// files verbatim. A regression that silently softens or removes any
+/// of them flips the suite red.
+///
+/// The reviewer-tests anti-instruction is the most load-bearing: it
+/// is the new reviewer contract that replaced "run `speccy check` and
+/// trust the exit code". The ARCHITECTURE.md pins lock the "Feedback,
+/// Not Enforcement" stance, the render-only `check` row, and the
+/// shape-only `verify` row.
+#[test]
+fn reviewer_tests_persona_pins_no_check_exit_code_evidence() {
+    const REVIEWER_TESTS: &str = include_str!("../../resources/modules/personas/reviewer-tests.md");
+    // Verbatim sentence from `reviewer-tests.md:33-37`. The leading
+    // dash + space are the literal markdown bullet glyph; if the
+    // paragraph is rewrapped or rephrased this assertion fails and
+    // the reviewer must re-pin it explicitly.
+    let needle = "Do not treat `speccy check` exit codes (or any command exit code)\n  as evidence that a scenario is satisfied.";
+    assert!(
+        REVIEWER_TESTS.contains(needle),
+        "reviewer-tests persona must keep the post-SPEC-0018 anti-instruction \
+         that `speccy check` exit codes are not evidence; the load-bearing \
+         sentence at lines 33-37 is missing or has drifted",
+    );
+}
+
+#[test]
+fn architecture_doc_pins_feedback_not_enforcement_contract() {
+    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    // Heading that names the stance.
+    assert!(
+        ARCHITECTURE.contains("# Stance: Feedback, Not Enforcement"),
+        ".speccy/ARCHITECTURE.md is missing the `Stance: Feedback, Not Enforcement` heading",
+    );
+    // CI-owns-tests clause.
+    assert!(
+        ARCHITECTURE.contains("**Speccy does not run project tests.**"),
+        ".speccy/ARCHITECTURE.md is missing the `Speccy does not run project tests` clause",
+    );
+    // Reviewer-personas-own-semantic-judgment clause.
+    assert!(
+        ARCHITECTURE.contains("**Reviewer personas own semantic judgment.**"),
+        ".speccy/ARCHITECTURE.md is missing the `Reviewer personas own semantic judgment` clause",
+    );
+}
+
+#[test]
+fn architecture_doc_pins_check_command_is_render_only() {
+    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    // CLI Surface row for `speccy check`: must describe it as
+    // scenario rendering with no execution.
+    assert!(
+        ARCHITECTURE
+            .contains("speccy check [SELECTOR]           Render check scenarios (no execution)"),
+        ".speccy/ARCHITECTURE.md `speccy check` row must describe it as render-only (no execution)",
+    );
+}
+
+#[test]
+fn architecture_doc_pins_verify_command_is_shape_only() {
+    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    // CLI Surface row for `speccy verify`: must scope it to proof
+    // shape only and explicitly disclaim running project tests.
+    assert!(
+        ARCHITECTURE
+            .contains("speccy verify                     CI gate: proof-shape validation only"),
+        ".speccy/ARCHITECTURE.md `speccy verify` row must describe it as proof-shape validation only",
+    );
+    assert!(
+        ARCHITECTURE.contains("Does NOT run project tests; that's CI's job."),
+        ".speccy/ARCHITECTURE.md `speccy verify` row must disclaim running project tests",
+    );
+}

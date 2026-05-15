@@ -1,22 +1,19 @@
 //! `speccy verify` command logic.
 //!
-//! Composes SPEC-0003's lint engine with SPEC-0012's captured check
-//! execution into a single CI gate. Live output (per-check headers,
-//! child stdout/stderr, footers, malformed-spec.toml warnings) streams
-//! to stderr; stdout is reserved for the final summary (text mode) or
-//! the structured JSON envelope (`--json`).
+//! Shape-only validator. SPEC-0018 REQ-003: walks parsed specs and
+//! surfaces lint diagnostics (parse errors, requirement-to-scenario
+//! cross-references, stale tasks, open questions); never executes
+//! scenarios or spawns child processes. Check execution is deliberately
+//! gone — scenarios are English claims for reviewers and humans, not
+//! commands speccy runs.
 //!
-//! See `.speccy/specs/0012-verify-command/SPEC.md`.
+//! See `.speccy/specs/0018-remove-check-execution/SPEC.md` REQ-003.
 
 use crate::git::repo_sha;
 use crate::verify_output::write_json;
 use crate::verify_output::write_text;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use speccy_core::exec::CheckOutcome;
-use speccy_core::exec::CheckResult;
-use speccy_core::exec::CheckSpec;
-use speccy_core::exec::run_checks_captured;
 use speccy_core::lint;
 use speccy_core::lint::Diagnostic;
 use speccy_core::lint::Level;
@@ -40,7 +37,7 @@ pub enum VerifyError {
     /// directory metadata).
     #[error("workspace discovery failed")]
     Workspace(#[from] WorkspaceError),
-    /// I/O failure while streaming live output or writing the summary.
+    /// I/O failure while writing the summary.
     #[error("I/O error during verify")]
     Io(#[from] std::io::Error),
     /// Working directory could not be resolved.
@@ -57,23 +54,33 @@ pub enum VerifyError {
 /// `speccy verify` arguments.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct VerifyArgs {
-    /// Emit JSON instead of the three-line text summary.
+    /// Emit JSON instead of the text summary.
     pub json: bool,
 }
 
-/// Aggregated lint + check outcomes assembled by [`run`] and consumed
-/// by the renderers in [`crate::verify_output`].
+/// Shape-only counts aggregated by [`run`] and consumed by the
+/// renderers in [`crate::verify_output`].
+///
+/// Every count covers specs that are not `dropped` or `superseded` (those
+/// remain non-gating, matching the pre-SPEC-0018 distinction). Workspace-
+/// level diagnostics that are not tied to a spec keep their full severity.
 #[derive(Debug)]
 pub struct VerifyReport {
-    /// `Level::Error` lint diagnostics.
+    /// `Level::Error` lint diagnostics (after in-progress demotion).
     pub lint_errors: Vec<Diagnostic>,
     /// `Level::Warn` lint diagnostics.
     pub lint_warnings: Vec<Diagnostic>,
-    /// `Level::Info` lint diagnostics.
+    /// `Level::Info` lint diagnostics (includes errors demoted on
+    /// in-progress specs).
     pub lint_info: Vec<Diagnostic>,
-    /// Per-check results in execution order (which is workspace order
-    /// then declared check order).
-    pub checks: Vec<CheckResult>,
+    /// Number of specs walked (all statuses).
+    pub specs_total: usize,
+    /// Total `[[requirements]]` rows across every parsed spec.toml that
+    /// belongs to a non-defunct spec.
+    pub requirements_total: usize,
+    /// Total `[[checks]]` rows (scenarios) across every parsed spec.toml
+    /// that belongs to a non-defunct spec.
+    pub scenarios_total: usize,
     /// `HEAD` SHA from `git rev-parse HEAD`, or `""` if unavailable.
     pub repo_sha: String,
 }
@@ -81,63 +88,28 @@ pub struct VerifyReport {
 impl VerifyReport {
     /// Whether the workspace passes the gate.
     ///
-    /// `true` iff no `Level::Error` lint diagnostics fired and every
-    /// `Fail` outcome came from an `in-progress` spec (work-in-flight,
-    /// not a regression). `Fail` outcomes on `implemented` specs gate
-    /// the exit code.
+    /// `true` iff no `Level::Error` lint diagnostics remain after the
+    /// in-progress demotion pass.
     #[must_use = "the pass/fail signal drives the exit code"]
     pub fn passed(&self) -> bool {
-        self.lint_errors.is_empty() && !self.checks.iter().any(CheckResult::is_gating_failure)
-    }
-
-    /// Number of checks with outcome [`CheckOutcome::Pass`].
-    #[must_use = "the count is part of the summary output"]
-    pub fn passed_checks(&self) -> usize {
-        self.checks
-            .iter()
-            .filter(|r| matches!(r.outcome, CheckOutcome::Pass))
-            .count()
-    }
-
-    /// Number of checks with outcome [`CheckOutcome::Fail`] on
-    /// `implemented` specs — the "real" failure count that gates the
-    /// exit code.
-    #[must_use = "the count is part of the summary output"]
-    pub fn failed_checks(&self) -> usize {
-        self.checks.iter().filter(|r| r.is_gating_failure()).count()
-    }
-
-    /// Number of checks with outcome [`CheckOutcome::Fail`] on
-    /// `in-progress` specs — informational only, does not gate.
-    #[must_use = "the count is part of the summary output"]
-    pub fn in_flight_checks(&self) -> usize {
-        self.checks.iter().filter(|r| r.is_in_flight()).count()
-    }
-
-    /// Number of checks with outcome [`CheckOutcome::Manual`].
-    #[must_use = "the count is part of the summary output"]
-    pub fn manual_checks(&self) -> usize {
-        self.checks
-            .iter()
-            .filter(|r| matches!(r.outcome, CheckOutcome::Manual))
-            .count()
+        self.lint_errors.is_empty()
     }
 }
 
-/// Run `speccy verify` from `cwd`. Live output (per-check headers,
-/// child stdio, footers, malformed-spec warnings) goes to `err`; the
-/// final summary or JSON goes to `out`. Returns the process exit code
-/// (0 on pass, 1 on fail).
+/// Run `speccy verify` from `cwd`. The text summary or JSON envelope goes
+/// to `out`; nothing streams to `err` in normal flow (it remains for
+/// future diagnostic surfaces). Returns the process exit code (0 on
+/// pass, 1 on fail).
 ///
 /// # Errors
 ///
-/// Returns [`VerifyError`] when discovery or I/O fails. Check failures
+/// Returns [`VerifyError`] when discovery or I/O fails. Shape failures
 /// are surfaced via the exit code, not the `Result`.
 pub fn run(
     args: VerifyArgs,
     cwd: &Utf8Path,
     out: &mut dyn Write,
-    err: &mut dyn Write,
+    _err: &mut dyn Write,
 ) -> Result<i32, VerifyError> {
     let VerifyArgs { json } = args;
     let project_root = match find_root(cwd) {
@@ -150,15 +122,15 @@ pub fn run(
     let diagnostics = lint::run(&workspace.as_lint_workspace());
     let status_by_spec = build_status_map(&workspace);
     let (lint_errors, lint_warnings, lint_info) = partition_lint(diagnostics, &status_by_spec);
-
-    let check_specs = collect_check_specs(&workspace, err)?;
-    let checks = run_checks_captured(&check_specs, &project_root, err)?;
+    let (requirements_total, scenarios_total) = shape_totals(&workspace);
 
     let report = VerifyReport {
         lint_errors,
         lint_warnings,
         lint_info,
-        checks,
+        specs_total: workspace.specs.len(),
+        requirements_total,
+        scenarios_total,
         repo_sha: repo_sha(&project_root),
     };
 
@@ -183,13 +155,12 @@ pub fn resolve_cwd() -> Result<Utf8PathBuf, VerifyError> {
 }
 
 /// Partition diagnostics into severity buckets, demoting `Level::Error`
-/// diagnostics on `in-progress` specs to `Level::Info`.
-///
-/// Mirrors the check-side filter introduced in commit a5b5fea: drafted
-/// specs (those still being authored) should not gate `speccy verify`
-/// when their TASKS.md or SPEC.md hasn't been polished yet. Workspace-
-/// level diagnostics (no `spec_id`) and diagnostics on `implemented` /
-/// `dropped` / `superseded` specs keep their original severity.
+/// diagnostics on non-`implemented` specs to `Level::Info`. Workspace-
+/// level diagnostics (no `spec_id`) keep their original severity, and
+/// diagnostics on `implemented` specs keep theirs too — those gate the
+/// exit code. `in-progress` specs are work-in-flight; `dropped` and
+/// `superseded` specs replicate the pre-SPEC-0018 non-gating contract
+/// (their checks never ran, so their shape errors do not gate either).
 fn partition_lint(
     diagnostics: Vec<Diagnostic>,
     status_by_spec: &HashMap<String, SpecStatus>,
@@ -198,13 +169,17 @@ fn partition_lint(
     let mut warnings = Vec::new();
     let mut info = Vec::new();
     for mut d in diagnostics {
-        if matches!(d.level, Level::Error)
-            && d.spec_id
+        if matches!(d.level, Level::Error) {
+            let spec_status = d
+                .spec_id
                 .as_deref()
-                .and_then(|id| status_by_spec.get(id).copied())
-                == Some(SpecStatus::InProgress)
-        {
-            d.level = Level::Info;
+                .and_then(|id| status_by_spec.get(id).copied());
+            if matches!(
+                spec_status,
+                Some(SpecStatus::InProgress | SpecStatus::Dropped | SpecStatus::Superseded)
+            ) {
+                d.level = Level::Info;
+            }
         }
         match d.level {
             Level::Error => errors.push(d),
@@ -226,45 +201,27 @@ fn build_status_map(ws: &Workspace) -> HashMap<String, SpecStatus> {
         .collect()
 }
 
-fn collect_check_specs(ws: &Workspace, err: &mut dyn Write) -> Result<Vec<CheckSpec>, VerifyError> {
-    let mut out = Vec::new();
+/// Total `[[requirements]]` and `[[checks]]` rows across non-defunct
+/// specs whose `spec.toml` parsed cleanly. Dropped and superseded specs
+/// contribute zero, matching the pre-SPEC-0018 "their checks never ran"
+/// distinction.
+fn shape_totals(ws: &Workspace) -> (usize, usize) {
+    let mut requirements = 0usize;
+    let mut scenarios = 0usize;
     for parsed in &ws.specs {
-        let label = parsed
-            .spec_id
-            .clone()
-            .unwrap_or_else(|| display_spec_label(&parsed.dir));
         let spec_status = parsed
             .spec_md
             .as_ref()
             .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
-        // Skip defunct specs entirely: their checks should never run.
         if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
             continue;
         }
-        match &parsed.spec_toml {
-            Ok(toml) => {
-                for check in &toml.checks {
-                    out.push(CheckSpec::from_entry(
-                        label.clone(),
-                        spec_status.as_str(),
-                        check,
-                    ));
-                }
-            }
-            Err(e) => {
-                writeln!(
-                    err,
-                    "speccy verify: warning: {label} spec.toml failed to parse: {e}; skipping",
-                )?;
-            }
+        if let Ok(toml) = &parsed.spec_toml {
+            requirements = requirements.saturating_add(toml.requirements.len());
+            scenarios = scenarios.saturating_add(toml.checks.len());
         }
     }
-    Ok(out)
-}
-
-fn display_spec_label(dir: &Utf8Path) -> String {
-    dir.file_name()
-        .map_or_else(|| dir.to_string(), ToOwned::to_owned)
+    (requirements, scenarios)
 }
 
 #[cfg(test)]
@@ -275,8 +232,6 @@ mod tests {
     use super::SpecStatus;
     use super::VerifyReport;
     use super::partition_lint;
-    use speccy_core::exec::CheckOutcome;
-    use speccy_core::exec::CheckResult;
 
     fn diag(code: &'static str, level: Level) -> Diagnostic {
         Diagnostic::spec_only(code, level, None, "test")
@@ -286,23 +241,15 @@ mod tests {
         Diagnostic::spec_only(code, level, Some(spec_id.to_owned()), "test")
     }
 
-    fn check(outcome: CheckOutcome) -> CheckResult {
-        check_with_status(outcome, "implemented")
-    }
-
-    fn check_with_status(outcome: CheckOutcome, status: &str) -> CheckResult {
-        CheckResult {
-            spec_id: "SPEC-0001".into(),
-            spec_status: status.into(),
-            check_id: "CHK-001".into(),
-            kind: "test".into(),
-            outcome,
-            exit_code: match outcome {
-                CheckOutcome::Pass => Some(0),
-                CheckOutcome::Fail => Some(1),
-                CheckOutcome::Manual => None,
-            },
-            duration_ms: None,
+    fn empty_report(errors: Vec<Diagnostic>) -> VerifyReport {
+        VerifyReport {
+            lint_errors: errors,
+            lint_warnings: vec![],
+            lint_info: vec![],
+            specs_total: 0,
+            requirements_total: 0,
+            scenarios_total: 0,
+            repo_sha: String::new(),
         }
     }
 
@@ -347,7 +294,6 @@ mod tests {
 
     #[test]
     fn partition_lint_keeps_workspace_level_errors_gating() {
-        // Diagnostics with no spec_id (workspace-level) keep Error.
         let diagnostics = vec![diag("SPC-001", Level::Error)];
         let mut status_map: HashMap<String, SpecStatus> = HashMap::new();
         status_map.insert("SPEC-0001".to_owned(), SpecStatus::InProgress);
@@ -359,102 +305,13 @@ mod tests {
 
     #[test]
     fn passed_requires_no_lint_errors() {
-        let report = VerifyReport {
-            lint_errors: vec![diag("SPC-001", Level::Error)],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![check(CheckOutcome::Pass)],
-            repo_sha: String::new(),
-        };
+        let report = empty_report(vec![diag("SPC-001", Level::Error)]);
         assert!(!report.passed());
-    }
-
-    #[test]
-    fn passed_requires_no_failing_checks() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![check(CheckOutcome::Pass), check(CheckOutcome::Fail)],
-            repo_sha: String::new(),
-        };
-        assert!(!report.passed());
-    }
-
-    #[test]
-    fn passed_allows_warnings_and_info() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![diag("SPC-006", Level::Warn)],
-            lint_info: vec![diag("QST-001", Level::Info)],
-            checks: vec![check(CheckOutcome::Pass)],
-            repo_sha: String::new(),
-        };
-        assert!(report.passed());
-    }
-
-    #[test]
-    fn manual_checks_do_not_block_pass() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![check(CheckOutcome::Pass), check(CheckOutcome::Manual)],
-            repo_sha: String::new(),
-        };
-        assert!(report.passed());
-        assert_eq!(report.passed_checks(), 1);
-        assert_eq!(report.failed_checks(), 0);
-        assert_eq!(report.manual_checks(), 1);
     }
 
     #[test]
     fn empty_workspace_passes() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![],
-            repo_sha: String::new(),
-        };
+        let report = empty_report(vec![]);
         assert!(report.passed());
-    }
-
-    #[test]
-    fn in_progress_fail_is_in_flight_not_gating() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![
-                check(CheckOutcome::Pass),
-                check_with_status(CheckOutcome::Fail, "in-progress"),
-            ],
-            repo_sha: String::new(),
-        };
-        assert!(
-            report.passed(),
-            "Fail on in-progress spec must not gate verify",
-        );
-        assert_eq!(report.passed_checks(), 1);
-        assert_eq!(report.failed_checks(), 0, "implemented-failures count");
-        assert_eq!(report.in_flight_checks(), 1, "in-progress failures count");
-    }
-
-    #[test]
-    fn implemented_fail_still_gates() {
-        let report = VerifyReport {
-            lint_errors: vec![],
-            lint_warnings: vec![],
-            lint_info: vec![],
-            checks: vec![check_with_status(CheckOutcome::Fail, "implemented")],
-            repo_sha: String::new(),
-        };
-        assert!(
-            !report.passed(),
-            "Fail on implemented spec must gate verify"
-        );
-        assert_eq!(report.failed_checks(), 1);
-        assert_eq!(report.in_flight_checks(), 0);
     }
 }

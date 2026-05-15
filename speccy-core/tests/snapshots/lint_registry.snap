@@ -1,6 +1,7 @@
 QST-001	info
 REQ-001	error
 REQ-002	error
+REQ-003	error
 SPC-001	error
 SPC-002	error
 SPC-003	error
@@ -12,7 +13,3 @@ TSK-001	error
 TSK-002	error
 TSK-003	warn
 TSK-004	error
-VAL-001	error
-VAL-002	error
-VAL-003	error
-VAL-004	warn

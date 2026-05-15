@@ -87,9 +87,7 @@ fn spc_003_fires_when_req_only_in_spec_toml() -> TestResult {
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "cargo test"
-        proves = "x"
+        scenario = "x"
     "#};
     let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
     let diags = lint_fixture(&fx);

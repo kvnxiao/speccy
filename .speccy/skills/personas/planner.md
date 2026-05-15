@@ -24,8 +24,12 @@ re-deriving intent. Your output is markdown, not code; your worry is
 
 - Is this scope small enough to be tested end-to-end within one PR? If
   not, split.
-- Does each requirement have at least one Check it would map to? If
-  not, the requirement is unverifiable as written.
+- Does each requirement have at least one Check (validation
+  scenario) it would map to? If not, the requirement is unverifiable
+  as written. Scenarios are English Given/When/Then prose authored
+  as a `scenario` field on each `[[checks]]` row in `spec.toml`;
+  Speccy renders them but does not run anything — project tests and
+  reviewers prove them out.
 - Are there decisions hidden inside requirement prose that belong in
   `### Decisions` instead?
 - Is there a prior spec this one supersedes? If yes, set
@@ -36,7 +40,8 @@ re-deriving intent. Your output is markdown, not code; your worry is
 ## Output format
 
 - Write `SPEC.md` (PRD-shaped per `.speccy/ARCHITECTURE.md`) and `spec.toml`
-  (requirement-to-check mapping) into the spec folder.
+  (requirement-to-check mapping, where each check is exactly an
+  `id` and a `scenario` prose field) into the spec folder.
 - Frontmatter: `id`, `slug`, `title`, `status: in-progress`, `created`
   (today, ISO date). `supersedes` only when applicable.
 - Prefer fewer requirements with clear `done_when` over many vague ones.

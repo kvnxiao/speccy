@@ -36,7 +36,9 @@ committed. Can be rerun after `/speccy-review` flips tasks back to
 
 4. Spawn an implementer sub-agent with that prompt. The sub-agent
    flips the task `[ ]` -> `[~]` on start, writes tests + code, runs
-   `speccy check` locally, and flips `[~]` -> `[?]` on finish.
+   the project's own test command (`cargo test`, `pnpm test`, etc.)
+   locally (using `speccy check SPEC-NNNN/T-NNN` to re-read the
+   scenarios it is satisfying), and flips `[~]` -> `[?]` on finish.
 5. After the sub-agent returns, go back to step 1.
 
 ### Loop exit criteria

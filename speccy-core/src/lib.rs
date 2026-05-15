@@ -2,7 +2,6 @@
 #![deny(unsafe_code)]
 
 pub mod error;
-pub mod exec;
 pub mod lint;
 pub mod next;
 pub mod parse;

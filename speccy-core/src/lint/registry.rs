@@ -20,10 +20,7 @@ pub const REGISTRY: &[(&str, Level)] = &[
     ("SPC-007", Level::Info),
     ("REQ-001", Level::Error),
     ("REQ-002", Level::Error),
-    ("VAL-001", Level::Error),
-    ("VAL-002", Level::Error),
-    ("VAL-003", Level::Error),
-    ("VAL-004", Level::Warn),
+    ("REQ-003", Level::Error),
     ("TSK-001", Level::Error),
     ("TSK-002", Level::Error),
     ("TSK-003", Level::Warn),
@@ -73,7 +70,7 @@ mod tests {
 
     #[test]
     fn lookup_severity_known_code() {
-        assert_eq!(lookup_severity("VAL-004"), Some(Level::Warn));
+        assert_eq!(lookup_severity("TSK-003"), Some(Level::Warn));
         assert_eq!(lookup_severity("SPC-001"), Some(Level::Error));
         assert_eq!(lookup_severity("QST-001"), Some(Level::Info));
     }

@@ -59,9 +59,7 @@ fn ordering_is_by_spec_then_code_then_file_then_line() -> TestResult {
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "cargo test"
-        proves = ""
+        scenario = "scenario placeholder"
     "#};
     let lower = write_spec_fixture(&valid_spec_md("SPEC-0001"), &valid_spec_toml(), None)?;
     let higher = write_spec_fixture(spec_md, spec_toml, None)?;

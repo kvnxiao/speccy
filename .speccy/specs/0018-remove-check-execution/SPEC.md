@@ -2,7 +2,7 @@
 id: SPEC-0018
 slug: remove-check-execution
 title: Remove check execution; checks become validation scenarios
-status: in-progress
+status: implemented
 created: 2026-05-15
 supersedes: []
 ---

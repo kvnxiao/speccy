@@ -6,7 +6,12 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy verify`. Covers SPEC-0012 CHK-001..CHK-007.
+//! Integration tests for `speccy verify`.
+//!
+//! SPEC-0018 REQ-003 contract: verify is shape-only. It does not
+//! execute scenarios, does not spawn `speccy check`, and does not call
+//! into the (now-deleted-by-T-004) execution layer. Coverage is mapped
+//! one-to-one to the bullets under T-003 "Tests to write".
 
 mod common;
 
@@ -23,19 +28,12 @@ use serde_json::Value;
 use speccy_cli::verify::VerifyArgs;
 use speccy_cli::verify::run;
 
-/// `Value::Null` as a static so [`field`] can hand out a borrow when a key
-/// is missing without allocating per call.
 static JSON_NULL: Value = Value::Null;
 
-/// Borrow a key from a JSON object, falling back to [`JSON_NULL`] when
-/// the key is missing. Keeps test code free of `value[idx]` indexing
-/// (forbidden by `clippy::indexing_slicing`) without sacrificing
-/// readability.
 fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
     v.get(key).unwrap_or(&JSON_NULL)
 }
 
-/// Convenience: walk a chain of keys (`field(field(json, "a"), "b")`).
 fn at<'a>(v: &'a Value, keys: &[&str]) -> &'a Value {
     keys.iter().fold(v, |acc, k| field(acc, k))
 }
@@ -51,86 +49,69 @@ fn invoke(root: &Utf8Path, json: bool) -> TestResult<(i32, String, String)> {
     Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
 }
 
-fn spec_toml_passing(check_command: &str) -> String {
-    format!(
-        indoc! {r#"
-            schema_version = 1
-
-            [[requirements]]
-            id = "REQ-001"
-            checks = ["CHK-001"]
-
-            [[checks]]
-            id = "CHK-001"
-            kind = "test"
-            command = {cmd:?}
-            proves = "covers REQ-001"
-        "#},
-        cmd = check_command,
-    )
-}
-
-fn spec_toml_three_outcomes() -> String {
+/// A well-formed spec.toml referencing one scenario. Uses the new
+/// `scenario` field so REQ-003 (unreferenced scenario) cannot fire.
+fn spec_toml_one_scenario() -> String {
     indoc! {r#"
         schema_version = 1
 
         [[requirements]]
         id = "REQ-001"
-        checks = ["CHK-001", "CHK-002", "CHK-003"]
+        checks = ["CHK-001"]
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "exit 0"
-        proves = "first passes"
-
-        [[checks]]
-        id = "CHK-002"
-        kind = "test"
-        command = "exit 1"
-        proves = "second fails"
-
-        [[checks]]
-        id = "CHK-003"
-        kind = "test"
-        command = "exit 0"
-        proves = "third passes again"
+        scenario = "Given a workspace, when verify runs, then it exits 0."
     "#}
     .to_owned()
 }
 
-fn spec_toml_with_manual() -> String {
+/// REQ-001 trigger: requirement with an empty `checks` array.
+fn spec_toml_empty_checks_array() -> String {
     indoc! {r#"
         schema_version = 1
 
         [[requirements]]
         id = "REQ-001"
-        checks = ["CHK-001", "CHK-002", "CHK-003"]
-
-        [[checks]]
-        id = "CHK-001"
-        kind = "test"
-        command = "exit 0"
-        proves = "executable pass"
-
-        [[checks]]
-        id = "CHK-002"
-        kind = "manual"
-        prompt = "Click signup; confirm no errors appear."
-        proves = "manual claim"
-
-        [[checks]]
-        id = "CHK-003"
-        kind = "test"
-        command = "exit 0"
-        proves = "executable pass 2"
+        checks = []
     "#}
     .to_owned()
 }
 
-/// SPEC.md missing the required `id` frontmatter field. SPC-004 fires at
-/// `Error` level, so this fixture is a clean way to inject a lint error
-/// without inventing a malformed spec.toml.
+/// REQ-002 trigger: requirement references CHK-099 with no matching row.
+fn spec_toml_unknown_check_reference() -> String {
+    indoc! {r#"
+        schema_version = 1
+
+        [[requirements]]
+        id = "REQ-001"
+        checks = ["CHK-099"]
+    "#}
+    .to_owned()
+}
+
+/// REQ-003 trigger: a scenario row exists but no requirement references it.
+fn spec_toml_unreferenced_scenario() -> String {
+    indoc! {r#"
+        schema_version = 1
+
+        [[requirements]]
+        id = "REQ-001"
+        checks = ["CHK-001"]
+
+        [[checks]]
+        id = "CHK-001"
+        scenario = "covers REQ-001"
+
+        [[checks]]
+        id = "CHK-077"
+        scenario = "orphaned scenario nobody references"
+    "#}
+    .to_owned()
+}
+
+/// SPC-004 trigger: SPEC.md missing required `id` frontmatter field. Used
+/// to inject a workspace-level / spec-level lint error.
 fn spec_md_missing_id() -> String {
     indoc! {r"
         ---
@@ -145,6 +126,24 @@ fn spec_md_missing_id() -> String {
     .to_owned()
 }
 
+fn assert_no_execution_keys(v: &Value) {
+    if let Some(map) = v.as_object() {
+        for forbidden in ["outcome", "exit_code", "duration_ms"] {
+            assert!(
+                !map.contains_key(forbidden),
+                "execution-shaped field `{forbidden}` must not appear in verify --json",
+            );
+        }
+        for child in map.values() {
+            assert_no_execution_keys(child);
+        }
+    } else if let Some(arr) = v.as_array() {
+        for child in arr {
+            assert_no_execution_keys(child);
+        }
+    }
+}
+
 fn last_n_lines(s: &str, n: usize) -> Vec<&str> {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
@@ -152,435 +151,230 @@ fn last_n_lines(s: &str, n: usize) -> Vec<&str> {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-001: lint integration
+// Bullet 1: requirement with empty `checks` array
 // ---------------------------------------------------------------------------
 
 #[test]
-fn lint_integration_partitions_errors_warnings_info() -> TestResult {
+fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> TestResult {
     let ws = Workspace::new()?;
-    // Spec A: lint error (missing frontmatter id).
     write_spec(
         &ws.root,
-        "0001-bad",
-        &spec_md_missing_id(),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-    // Spec B: clean (all passing).
-    write_spec(
-        &ws.root,
-        "0002-good",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_passing("exit 0"),
+        "0001-empty",
+        // Implemented so REQ-001 stays at Error (no in-progress demotion).
+        &spec_md_template("SPEC-0001", "implemented"),
+        &spec_toml_empty_checks_array(),
         None,
     )?;
 
-    let (code, out, err) = invoke(&ws.root, true)?;
-    assert_eq!(code, 1, "lint error must drive exit 1; stderr:\n{err}");
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "REQ-001 (empty checks) must gate verify");
 
     let json: Value = serde_json::from_str(&out)?;
     let errors = at(&json, &["lint", "errors"])
         .as_array()
         .expect("lint.errors array");
-    // Warnings/info buckets exist as arrays (may be empty).
-    assert!(at(&json, &["lint", "warnings"]).is_array());
-    assert!(at(&json, &["lint", "info"]).is_array());
-
-    assert!(
-        !errors.is_empty(),
-        "expected at least one lint error; got json:\n{out}",
-    );
-    // Each diagnostic is a structured object (not a string).
-    let first_err = errors.first().expect("at least one error");
-    assert!(
-        first_err.is_object(),
-        "diagnostic must be structured object"
-    );
-    assert!(field(first_err, "code").is_string());
-    assert!(field(first_err, "message").is_string());
-    Ok(())
-}
-
-#[test]
-fn lint_integration_runs_on_empty_workspace() -> TestResult {
-    let ws = Workspace::new()?;
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    assert_eq!(code, 0);
-
-    let json: Value = serde_json::from_str(&out)?;
-    assert!(
-        at(&json, &["lint", "errors"])
-            .as_array()
-            .expect("errors")
-            .is_empty(),
-    );
-    assert!(
-        field(&json, "checks")
-            .as_array()
-            .expect("checks")
-            .is_empty()
-    );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// CHK-002: check execution streams to stderr
-// ---------------------------------------------------------------------------
-
-#[test]
-fn check_execution_streams_to_stderr() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-stream",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("echo hello-from-check"),
-        None,
-    )?;
-
-    let (code, out, err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 0, "all green => exit 0; stderr:\n{err}");
-
-    // Headers, child output, footer all on stderr.
-    assert!(err.contains("==> CHK-001 (SPEC-0001):"));
-    assert!(
-        err.contains("hello-from-check"),
-        "child output must stream to stderr; got:\n{err}",
-    );
-    assert!(err.contains("<-- CHK-001 PASS"));
-
-    // Headers and child output must NOT contaminate stdout (which carries
-    // the three-line summary only).
-    assert!(
-        !out.contains("==> CHK-001"),
-        "stdout should not carry per-check framing; got:\n{out}"
-    );
-    assert!(!out.contains("hello-from-check"));
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// CHK-003: run-all (not fail-fast); manual checks don't affect exit code
-// ---------------------------------------------------------------------------
-
-#[test]
-fn run_all_not_fail_fast() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-mixed",
-        // Implemented: the failure must gate so exit code is 1.
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_three_outcomes(),
-        None,
-    )?;
-
-    let (code, _out, err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 1, "one failing check => exit 1");
-
-    // All three executable checks must have run.
-    assert!(err.contains("<-- CHK-001 PASS"));
-    assert!(err.contains("<-- CHK-002 FAIL"));
-    assert!(err.contains("<-- CHK-003 PASS"));
-    Ok(())
-}
-
-#[test]
-fn spec_scoped_chk_ids_duplicate_across_specs_both_run() -> TestResult {
-    let ws = Workspace::new()?;
-    // Two specs both define CHK-001 (legitimate scoping per SPEC-0010
-    // DEC-003). Both must execute.
-    write_spec(
-        &ws.root,
-        "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-    write_spec(
-        &ws.root,
-        "0002-beta",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-
-    let (code, _out, err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 0);
-    assert!(err.contains("==> CHK-001 (SPEC-0001)"));
-    assert!(err.contains("==> CHK-001 (SPEC-0002)"));
-    Ok(())
-}
-
-#[test]
-fn manual_check_does_not_affect_exit_code() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-manual",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_with_manual(),
-        None,
-    )?;
-
-    let (code, out, err) = invoke(&ws.root, false)?;
-    // Two passing + one manual + zero failing => exit 0.
-    assert_eq!(code, 0);
-    assert!(err.contains("==> CHK-002 (SPEC-0001, manual):"));
-    assert!(err.contains("Click signup"));
-    assert!(err.contains("<-- CHK-002 MANUAL (verify and proceed)"));
-
-    // Summary on stdout reflects the manual count.
-    assert!(out.contains("Checks: 2 passed, 0 failed, 0 in-flight, 1 manual"));
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// CHK-004: binary exit code
-// ---------------------------------------------------------------------------
-
-#[test]
-fn binary_exit_code_clean_workspace() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-pass",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-
-    let (code, _out, _err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 0);
-    Ok(())
-}
-
-#[test]
-fn binary_exit_code_lint_only_failure() -> TestResult {
-    let ws = Workspace::new()?;
-    // Lint error (SPC-004 missing frontmatter id) + all passing checks.
-    write_spec(
-        &ws.root,
-        "0001-bad",
-        &spec_md_missing_id(),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-
-    let (code, _out, _err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 1, "lint error alone fails the gate");
-    Ok(())
-}
-
-#[test]
-fn in_progress_spec_lint_errors_do_not_gate_verify() -> TestResult {
-    let ws = Workspace::new()?;
-    // SPEC.md parses cleanly with status: in-progress, but TASKS.md
-    // references a REQ that doesn't exist in SPEC.md/spec.toml. That's a
-    // TSK-001 Level::Error — but on an in-progress spec, it must be
-    // demoted to info and not gate verify.
-    let tasks_md = indoc! {r"
-        ---
-        spec: SPEC-0001
-        spec_hash_at_generation: bootstrap-pending
-        generated_at: 2026-05-11T00:00:00Z
-        ---
-
-        - [ ] **T-001**: covers a non-existent REQ
-          - Covers: REQ-999
-    "};
-    write_spec(
-        &ws.root,
-        "0001-drafted",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
-        Some(tasks_md),
-    )?;
-
-    let (code, out, err) = invoke(&ws.root, true)?;
-    assert_eq!(
-        code, 0,
-        "TSK-001 on an in-progress spec must not gate; err:\n{err}",
-    );
-
-    let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(
-        at(&json, &["summary", "lint", "errors"]),
-        &Value::from(0),
-        "demoted TSK-001 must not count as an error; json:\n{out}",
-    );
-    assert_eq!(field(&json, "passed"), &Value::Bool(true));
-
-    let info = at(&json, &["lint", "info"])
-        .as_array()
-        .expect("lint.info array");
-    let demoted = info
+    let req1 = errors
         .iter()
-        .find(|d| field(d, "code").as_str() == Some("TSK-001"))
-        .expect("demoted TSK-001 must appear in info bucket");
-    assert_eq!(
-        field(demoted, "level"),
-        &Value::from("info"),
-        "demoted diagnostic must carry level=info",
+        .find(|d| field(d, "code").as_str() == Some("REQ-001"))
+        .expect("REQ-001 must appear in errors");
+    let message = field(req1, "message").as_str().unwrap_or("");
+    assert!(
+        message.contains("REQ-001"),
+        "REQ-001 diagnostic must name the requirement; got: {message}",
     );
     Ok(())
 }
 
-#[test]
-fn implemented_spec_lint_errors_still_gate_verify() -> TestResult {
-    let ws = Workspace::new()?;
-    // Same TSK-001 shape as the in-progress test above, but the parent
-    // spec is implemented; the error must remain gating.
-    let tasks_md = indoc! {r"
-        ---
-        spec: SPEC-0001
-        spec_hash_at_generation: bootstrap-pending
-        generated_at: 2026-05-11T00:00:00Z
-        ---
+// ---------------------------------------------------------------------------
+// Bullet 2: requirement references CHK-099 with no matching row
+// ---------------------------------------------------------------------------
 
-        - [x] **T-001**: covers a non-existent REQ
-          - Covers: REQ-999
-    "};
+#[test]
+fn requirement_referencing_unknown_scenario_exits_one_and_names_both_ids() -> TestResult {
+    let ws = Workspace::new()?;
     write_spec(
         &ws.root,
-        "0001-shipped",
+        "0001-unknown-ref",
         &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_passing("exit 0"),
-        Some(tasks_md),
+        &spec_toml_unknown_check_reference(),
+        None,
     )?;
 
-    let (code, _out, _err) = invoke(&ws.root, false)?;
-    assert_eq!(
-        code, 1,
-        "TSK-001 on an implemented spec must still gate verify",
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1);
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    let req2 = errors
+        .iter()
+        .find(|d| field(d, "code").as_str() == Some("REQ-002"))
+        .expect("REQ-002 must appear in errors");
+    let message = field(req2, "message").as_str().unwrap_or("");
+    assert!(
+        message.contains("REQ-001") && message.contains("CHK-099"),
+        "REQ-002 diagnostic must name both REQ and CHK ids; got: {message}",
     );
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Bullet 3: scenario unreferenced by any requirement
+// ---------------------------------------------------------------------------
+
 #[test]
-fn binary_exit_code_check_only_failure() -> TestResult {
+fn unreferenced_scenario_reports_shape_error() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
-        "0001-fail",
-        // Implemented status: failing checks gate the exit code.
+        "0001-orphan",
         &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_passing("exit 1"),
+        &spec_toml_unreferenced_scenario(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "unreferenced scenario must gate verify");
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    let req3 = errors
+        .iter()
+        .find(|d| field(d, "code").as_str() == Some("REQ-003"))
+        .expect("REQ-003 must appear in errors");
+    let message = field(req3, "message").as_str().unwrap_or("");
+    assert!(
+        message.contains("CHK-077"),
+        "REQ-003 diagnostic must name the orphaned scenario id; got: {message}",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Bullet 4: clean workspace passes, no child process spawned
+// ---------------------------------------------------------------------------
+
+#[test]
+fn clean_workspace_exits_zero_without_spawning_child_processes() -> TestResult {
+    let ws = Workspace::new()?;
+    // The scenario carries a string that, were it ever executed as a
+    // shell command, would create a sentinel file. After verify runs,
+    // that file must not exist — proving no child ran.
+    let sentinel = ws.root.join("verify-sentinel");
+    let sentinel_str = sentinel.as_str();
+    let toml = format!(
+        indoc! {r#"
+            schema_version = 1
+
+            [[requirements]]
+            id = "REQ-001"
+            checks = ["CHK-001"]
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "touch {sentinel}"
+        "#},
+        sentinel = sentinel_str,
+    );
+    write_spec(
+        &ws.root,
+        "0001-no-spawn",
+        &spec_md_template("SPEC-0001", "implemented"),
+        &toml,
         None,
     )?;
 
     let (code, _out, _err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 1, "failing check alone fails the gate");
+    assert_eq!(code, 0, "clean workspace must exit 0");
+    assert!(
+        !sentinel.as_std_path().exists(),
+        "verify must not spawn child processes; sentinel file exists",
+    );
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Bullet 5: text output last line shape
+// ---------------------------------------------------------------------------
+
 #[test]
-fn binary_exit_code_empty_workspace_passes() -> TestResult {
+fn text_output_ends_with_shape_summary_line() -> TestResult {
     let ws = Workspace::new()?;
-    let (code, _out, _err) = invoke(&ws.root, false)?;
+    write_spec(
+        &ws.root,
+        "0001-one",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_toml_one_scenario(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, false)?;
     assert_eq!(code, 0);
-    Ok(())
-}
-
-#[test]
-fn binary_exit_code_is_deterministic_across_runs() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-pass",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-
-    let (code1, _, _) = invoke(&ws.root, false)?;
-    let (code2, _, _) = invoke(&ws.root, false)?;
-    assert_eq!(code1, code2);
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// CHK-005: text mode summary output (last three lines)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn text_summary_output_last_three_lines() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-pass",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("echo greeting"),
-        None,
-    )?;
-
-    let (_code, out, err) = invoke(&ws.root, false)?;
-    let last = last_n_lines(&out, 3);
+    let last = last_n_lines(&out, 1);
     assert_eq!(
         last,
-        vec![
-            "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 1 passed, 0 failed, 0 in-flight, 0 manual",
-            "verify: PASS",
-        ],
-        "expected the three summary lines; out:\n{out}\nerr:\n{err}",
+        vec!["verified 1 specs, 1 requirements, 1 scenarios; 0 errors"],
+        "text output must end with the shape summary; out:\n{out}",
     );
     Ok(())
 }
 
 #[test]
-fn text_summary_output_failure_shows_fail() -> TestResult {
+fn text_output_summary_counts_aggregate_across_specs() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
-        "0001-fail",
-        // Implemented: failure gates -> FAIL verdict.
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_passing("exit 1"),
+        "0001-a",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &spec_toml_one_scenario(),
+        None,
+    )?;
+    write_spec(
+        &ws.root,
+        "0002-b",
+        &spec_md_template("SPEC-0002", "in-progress"),
+        &spec_toml_one_scenario(),
         None,
     )?;
 
-    let (_code, out, _err) = invoke(&ws.root, false)?;
-    let last = last_n_lines(&out, 3);
+    let (code, out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0);
+    let last = last_n_lines(&out, 1);
     assert_eq!(
         last,
-        vec![
-            "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 1 failed, 0 in-flight, 0 manual",
-            "verify: FAIL",
-        ],
+        vec!["verified 2 specs, 2 requirements, 2 scenarios; 0 errors"],
     );
     Ok(())
 }
 
 #[test]
-fn text_summary_output_empty_workspace_passes() -> TestResult {
+fn text_output_summary_on_empty_workspace() -> TestResult {
     let ws = Workspace::new()?;
-    let (_code, out, _err) = invoke(&ws.root, false)?;
-    let last = last_n_lines(&out, 3);
+    let (code, out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0);
+    let last = last_n_lines(&out, 1);
     assert_eq!(
         last,
-        vec![
-            "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 0 failed, 0 in-flight, 0 manual",
-            "verify: PASS",
-        ],
+        vec!["verified 0 specs, 0 requirements, 0 scenarios; 0 errors"],
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// CHK-006: JSON contract
+// Bullet 6: JSON envelope is schema_version=2 and has no execution fields
 // ---------------------------------------------------------------------------
 
 #[test]
-fn json_contract_shape() -> TestResult {
+fn json_envelope_bumps_schema_to_two_and_drops_execution_fields() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
-        "0001-mix",
+        "0001-json",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_with_manual(),
+        &spec_toml_one_scenario(),
         None,
     )?;
 
@@ -588,174 +382,217 @@ fn json_contract_shape() -> TestResult {
     assert_eq!(code, 0);
 
     let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(field(&json, "schema_version"), &Value::from(1));
+    assert_eq!(field(&json, "schema_version"), &Value::from(2));
     assert!(field(&json, "repo_sha").is_string());
 
-    // Top-level lint block has all three arrays.
-    assert!(at(&json, &["lint", "errors"]).is_array());
-    assert!(at(&json, &["lint", "warnings"]).is_array());
-    assert!(at(&json, &["lint", "info"]).is_array());
+    // Structural counts must be present and match the text summary line.
+    assert_eq!(at(&json, &["summary", "shape", "specs"]), &Value::from(1));
+    assert_eq!(
+        at(&json, &["summary", "shape", "requirements"]),
+        &Value::from(1)
+    );
+    assert_eq!(
+        at(&json, &["summary", "shape", "scenarios"]),
+        &Value::from(1)
+    );
+    assert_eq!(at(&json, &["summary", "shape", "errors"]), &Value::from(0));
 
-    // checks array carries structured per-check objects.
-    let checks = field(&json, "checks").as_array().expect("checks array");
-    assert_eq!(checks.len(), 3);
-    let first = checks.first().expect("first check");
-    assert_eq!(field(first, "spec_id"), &Value::from("SPEC-0001"));
-    assert_eq!(field(first, "check_id"), &Value::from("CHK-001"));
-    assert_eq!(field(first, "kind"), &Value::from("test"));
-    assert_eq!(field(first, "outcome"), &Value::from("Pass"));
-
-    // Manual entry: no exit_code field.
-    let manual = checks.get(1).expect("manual check entry");
-    assert_eq!(field(manual, "check_id"), &Value::from("CHK-002"));
-    assert_eq!(field(manual, "outcome"), &Value::from("Manual"));
-    let exit_code = manual.get("exit_code");
+    // Execution-shaped fields must be absent at every level the legacy
+    // schema exposed them.
     assert!(
-        exit_code.is_none_or(Value::is_null),
-        "manual checks must not emit an exit_code; got: {manual}",
+        json.get("checks").is_none(),
+        "schema_version=2 must not carry a per-check execution array",
     );
+    assert_no_execution_keys(&json);
 
-    // Summary counts.
-    assert_eq!(at(&json, &["summary", "lint", "errors"]), &Value::from(0));
-    assert_eq!(at(&json, &["summary", "checks", "passed"]), &Value::from(2));
-    assert_eq!(at(&json, &["summary", "checks", "failed"]), &Value::from(0));
-    assert_eq!(
-        at(&json, &["summary", "checks", "in_flight"]),
-        &Value::from(0),
-        "JSON summary must expose the in-flight bucket",
-    );
-    assert_eq!(at(&json, &["summary", "checks", "manual"]), &Value::from(1));
-
-    // Each check entry now carries spec_status for harness filtering.
-    assert_eq!(
-        field(first, "spec_status"),
-        &Value::from("in-progress"),
-        "per-check JSON entries must include spec_status",
-    );
-
-    // passed bool mirrors exit code.
     assert_eq!(field(&json, "passed"), &Value::Bool(true));
     Ok(())
 }
 
 #[test]
-fn json_contract_is_pretty_printed_with_trailing_newline() -> TestResult {
+fn json_envelope_is_pretty_printed_with_trailing_newline() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
         "0001-pretty",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
+        &spec_toml_one_scenario(),
         None,
     )?;
 
     let (_code, out, _err) = invoke(&ws.root, true)?;
+    assert!(out.ends_with('\n'), "JSON output must end with newline");
     assert!(
-        out.ends_with('\n'),
-        "JSON output must end with a trailing newline",
-    );
-    assert!(
-        out.contains("\n  \"schema_version\": 1,") || out.contains("\n  \"schema_version\":1,"),
-        "JSON must be pretty-printed; got:\n{out}",
+        out.contains("\n  \"schema_version\": 2,"),
+        "JSON must be pretty-printed and declare schema_version 2; got:\n{out}",
     );
     Ok(())
 }
 
 #[test]
-fn json_contract_is_byte_identical_across_runs() -> TestResult {
+fn json_envelope_is_byte_identical_across_runs() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
         "0001-deterministic",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
+        &spec_toml_one_scenario(),
         None,
     )?;
 
     let (_c1, out1, _e1) = invoke(&ws.root, true)?;
     let (_c2, out2, _e2) = invoke(&ws.root, true)?;
+    assert_eq!(out1, out2, "verify --json must be deterministic");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Bullet 7: dropped/superseded non-gating; workspace-level parse errors gate
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dropped_spec_with_shape_errors_is_non_gating() -> TestResult {
+    let ws = Workspace::new()?;
+    // A dropped spec with an empty `checks` array would normally fire
+    // REQ-001 at Error. Dropped specs must not gate verify.
+    write_spec(
+        &ws.root,
+        "0001-dropped",
+        &spec_md_template("SPEC-0001", "dropped"),
+        &spec_toml_empty_checks_array(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0, "dropped spec shape errors must not gate verify");
+    let last = last_n_lines(&out, 1);
+    // The dropped spec still counts in specs_total (one walked) but its
+    // requirements/scenarios are excluded from the shape totals.
     assert_eq!(
-        out1, out2,
-        "verify --json must be byte-identical across runs with the same state",
+        last,
+        vec!["verified 1 specs, 0 requirements, 0 scenarios; 0 errors"],
     );
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// CHK-007: passed field mirrors exit code
-// ---------------------------------------------------------------------------
-
 #[test]
-fn json_passed_field_mirrors_exit_clean() -> TestResult {
+fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
     let ws = Workspace::new()?;
+    // Two specs: SPEC-0001 is superseded by SPEC-0002 (so SPC-006 is
+    // happy), and SPEC-0001 has an empty `checks` array that would
+    // otherwise gate.
     write_spec(
         &ws.root,
-        "0001-pass",
+        "0001-old",
+        &spec_md_template("SPEC-0001", "superseded"),
+        &spec_toml_empty_checks_array(),
+        None,
+    )?;
+    let supersedes_md = indoc! {r"
+        ---
+        id: SPEC-0002
+        slug: x
+        title: Example SPEC-0002
+        status: in-progress
+        created: 2026-05-11
+        supersedes: [SPEC-0001]
+        ---
+
+        # SPEC-0002
+
+        ### REQ-001: First
+        Body.
+    "};
+    write_spec(
+        &ws.root,
+        "0002-new",
+        supersedes_md,
+        &spec_toml_one_scenario(),
+        None,
+    )?;
+
+    let (code, _out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 0, "superseded spec shape errors must not gate verify");
+    Ok(())
+}
+
+#[test]
+fn workspace_level_parse_errors_still_gate_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    // SPEC.md missing `id` -> SPC-004 (Error) -> gating.
+    write_spec(
+        &ws.root,
+        "0001-bad",
+        &spec_md_missing_id(),
+        &spec_toml_one_scenario(),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "SPC-004 parse error must gate verify");
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    assert!(
+        errors
+            .iter()
+            .any(|d| field(d, "code").as_str() == Some("SPC-004")),
+        "SPC-004 must appear in lint.errors; got: {out}",
+    );
+    Ok(())
+}
+
+#[test]
+fn in_progress_spec_shape_errors_are_demoted_not_gating() -> TestResult {
+    let ws = Workspace::new()?;
+    // Empty `checks` array on an in-progress spec must be demoted to
+    // info (not gating).
+    write_spec(
+        &ws.root,
+        "0001-drafting",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
+        &spec_toml_empty_checks_array(),
         None,
     )?;
+
     let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(
+        code, 0,
+        "REQ-001 on an in-progress spec must not gate; out:\n{out}",
+    );
+
     let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(code, 0);
-    assert_eq!(field(&json, "passed"), &Value::Bool(true));
+    let info = at(&json, &["lint", "info"])
+        .as_array()
+        .expect("lint.info array");
+    assert!(
+        info.iter()
+            .any(|d| field(d, "code").as_str() == Some("REQ-001")),
+        "REQ-001 must be demoted to info on in-progress specs; got: {out}",
+    );
     Ok(())
 }
 
 #[test]
-fn json_passed_field_mirrors_exit_lint_only() -> TestResult {
+fn implemented_spec_shape_errors_still_gate() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
-        "0001-lint-only",
-        &spec_md_missing_id(),
-        &spec_toml_passing("exit 0"),
-        None,
-    )?;
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(code, 1);
-    assert_eq!(field(&json, "passed"), &Value::Bool(false));
-    Ok(())
-}
-
-#[test]
-fn json_passed_field_mirrors_exit_check_only() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-check-only",
-        // Implemented: failing check must gate (exit 1, passed=false).
+        "0001-shipped",
         &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_passing("exit 1"),
+        &spec_toml_empty_checks_array(),
         None,
     )?;
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(code, 1);
-    assert_eq!(field(&json, "passed"), &Value::Bool(false));
-    Ok(())
-}
 
-#[test]
-fn json_passed_field_mirrors_exit_both_failing() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-both",
-        &spec_md_missing_id(),
-        &spec_toml_passing("exit 1"),
-        None,
-    )?;
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(code, 1);
-    assert_eq!(field(&json, "passed"), &Value::Bool(false));
+    let (code, _out, _err) = invoke(&ws.root, false)?;
+    assert_eq!(code, 1, "REQ-001 on an implemented spec must gate verify");
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Binary dispatcher: outside workspace + flag handling
+// Binary dispatcher: outside workspace + flag handling (unchanged contract)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -774,78 +611,13 @@ fn verify_outside_workspace_fails() -> TestResult {
 }
 
 #[test]
-fn binary_propagates_exit_one_on_failure() -> TestResult {
+fn binary_rejects_unknown_flag() -> TestResult {
     let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-fail",
-        // Implemented: failing check must gate the exit code.
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_passing("exit 1"),
-        None,
-    )?;
-
     let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("verify").current_dir(ws.root.as_std_path());
-    cmd.assert().failure().code(1);
-    Ok(())
-}
-
-#[test]
-fn in_progress_spec_failures_do_not_gate_verify() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-flight",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 1"),
-        None,
-    )?;
-
-    let (code, out, err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 0, "in-progress failures must not gate; err:\n{err}");
-    assert!(
-        err.contains("IN-FLIGHT"),
-        "footer must use IN-FLIGHT wording: {err}",
-    );
-    let last = last_n_lines(&out, 3);
-    assert_eq!(
-        last,
-        vec![
-            "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 0 failed, 1 in-flight, 0 manual",
-            "verify: PASS",
-        ],
-    );
-    Ok(())
-}
-
-#[test]
-fn dropped_spec_checks_are_skipped_in_verify() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-dropped",
-        &spec_md_template("SPEC-0001", "dropped"),
-        &spec_toml_passing("exit 1"),
-        None,
-    )?;
-
-    let (code, out, err) = invoke(&ws.root, false)?;
-    assert_eq!(code, 0, "dropped spec checks must not run");
-    assert!(
-        !err.contains("CHK-001"),
-        "no per-check framing for dropped specs: {err}",
-    );
-    let last = last_n_lines(&out, 3);
-    assert_eq!(
-        last,
-        vec![
-            "Lint: 0 errors, 0 warnings, 0 info",
-            "Checks: 0 passed, 0 failed, 0 in-flight, 0 manual",
-            "verify: PASS",
-        ],
-    );
+    cmd.arg("verify")
+        .arg("--bogus")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert().failure().code(2);
     Ok(())
 }
 
@@ -856,7 +628,7 @@ fn binary_propagates_exit_zero_on_pass() -> TestResult {
         &ws.root,
         "0001-pass",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_passing("exit 0"),
+        &spec_toml_one_scenario(),
         None,
     )?;
 
@@ -865,17 +637,23 @@ fn binary_propagates_exit_zero_on_pass() -> TestResult {
     cmd.assert()
         .success()
         .code(0)
-        .stdout(contains("verify: PASS"));
+        .stdout(contains("verified 1 specs, 1 requirements, 1 scenarios"));
     Ok(())
 }
 
 #[test]
-fn binary_rejects_unknown_flag() -> TestResult {
+fn binary_propagates_exit_one_on_shape_failure() -> TestResult {
     let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-fail",
+        &spec_md_template("SPEC-0001", "implemented"),
+        &spec_toml_empty_checks_array(),
+        None,
+    )?;
+
     let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("verify")
-        .arg("--bogus")
-        .current_dir(ws.root.as_std_path());
-    cmd.assert().failure().code(2);
+    cmd.arg("verify").current_dir(ws.root.as_std_path());
+    cmd.assert().failure().code(1);
     Ok(())
 }

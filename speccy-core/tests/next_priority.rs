@@ -54,9 +54,7 @@ fn valid_spec_toml() -> &'static str {
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "cargo test"
-        proves = "covers REQ-001"
+        scenario = "covers REQ-001"
     "#}
 }
 

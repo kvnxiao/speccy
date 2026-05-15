@@ -59,7 +59,6 @@ pub fn cross_ref(spec: &SpecMd, toml: &SpecToml) -> CrossRef {
 mod tests {
     use super::cross_ref;
     use crate::parse::CheckEntry;
-    use crate::parse::CheckPayload;
     use crate::parse::RequirementEntry;
     use crate::parse::SpecMd;
     use crate::parse::SpecToml;
@@ -104,9 +103,7 @@ mod tests {
                 .collect(),
             checks: vec![CheckEntry {
                 id: "CHK-000".to_owned(),
-                kind: "test".to_owned(),
-                proves: "x".to_owned(),
-                payload: CheckPayload::Command("cargo test".to_owned()),
+                scenario: "x".to_owned(),
             }],
         }
     }

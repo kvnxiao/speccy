@@ -47,13 +47,69 @@ fn req_002_fires_when_check_id_does_not_exist() -> TestResult {
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "cargo test"
-        proves = "x"
+        scenario = "x"
     "#};
     let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
     let diags = lint_fixture(&fx);
     assert_eq!(count_code(&diags, "REQ-002"), 1);
+    Ok(())
+}
+
+#[test]
+fn req_003_fires_when_scenario_is_unreferenced() -> TestResult {
+    // CHK-001 is referenced by REQ-001; CHK-077 is orphaned. SPEC-0018
+    // REQ-003: every scenario row must be claimed by at least one
+    // requirement.
+    let spec_toml = indoc! {r#"
+        schema_version = 1
+
+        [[requirements]]
+        id = "REQ-001"
+        checks = ["CHK-001"]
+
+        [[checks]]
+        id = "CHK-001"
+        scenario = "covers REQ-001"
+
+        [[checks]]
+        id = "CHK-077"
+        scenario = "orphan"
+    "#};
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
+    let diags = lint_fixture(&fx);
+    assert_eq!(count_code(&diags, "REQ-003"), 1);
+    let req3 = diags
+        .iter()
+        .find(|d| d.code == "REQ-003")
+        .expect("REQ-003 diagnostic present");
+    assert!(
+        req3.message.contains("CHK-077"),
+        "REQ-003 message must name the orphan: {msg}",
+        msg = req3.message,
+    );
+    Ok(())
+}
+
+#[test]
+fn req_003_silent_when_every_scenario_is_referenced() -> TestResult {
+    let spec_toml = indoc! {r#"
+        schema_version = 1
+
+        [[requirements]]
+        id = "REQ-001"
+        checks = ["CHK-001", "CHK-002"]
+
+        [[checks]]
+        id = "CHK-001"
+        scenario = "covers REQ-001 in two ways"
+
+        [[checks]]
+        id = "CHK-002"
+        scenario = "second scenario"
+    "#};
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
+    let diags = lint_fixture(&fx);
+    assert_eq!(count_code(&diags, "REQ-003"), 0);
     Ok(())
 }
 

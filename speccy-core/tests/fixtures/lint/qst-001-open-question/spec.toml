@@ -6,6 +6,4 @@ checks = ["CHK-001"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test"
-proves = "covers REQ-001"
+scenario = "covers REQ-001"

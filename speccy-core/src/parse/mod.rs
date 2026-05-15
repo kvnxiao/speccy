@@ -35,7 +35,6 @@ pub use tasks_md::TasksFrontmatter;
 pub use tasks_md::TasksMd;
 pub use tasks_md::tasks_md;
 pub use toml_files::CheckEntry;
-pub use toml_files::CheckPayload;
 pub use toml_files::ProjectConfig;
 pub use toml_files::RequirementEntry;
 pub use toml_files::SpecToml;

@@ -22,32 +22,31 @@ checks = ["CHK-005"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-cli --test check_selector -- parser"
-proves = "parse_selector accepts the five valid shapes (None -> All, SPEC-NNNN, SPEC-NNNN/CHK-NNN, SPEC-NNNN/T-NNN, CHK-NNN, T-NNN) and rejects anything else with SelectorError::InvalidFormat naming the offending arg verbatim and listing the five valid shapes."
+scenario = '''
+parse_selector accepts the five valid shapes (None -> All, SPEC-NNNN, SPEC-NNNN/CHK-NNN, SPEC-NNNN/T-NNN, CHK-NNN, T-NNN) and rejects anything else with SelectorError::InvalidFormat naming the offending arg verbatim and listing the five valid shapes.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test check -- spec_selector"
-proves = "speccy check SPEC-NNNN runs every check under that spec in declared order; missing spec exits 1 with NoSpecMatching naming the spec; dropped/superseded specs print a skip message and exit 0; in-progress failures stay categorised as IN-FLIGHT (no gating); the summary line totals reflect only the selected spec."
+scenario = '''
+speccy check SPEC-NNNN runs every check under that spec in declared order; missing spec exits 1 with NoSpecMatching naming the spec; dropped/superseded specs print a skip message and exit 0; in-progress failures stay categorised as IN-FLIGHT (no gating); the summary line totals reflect only the selected spec.
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-cli --test check -- task_selector"
-proves = "speccy check T-NNN / SPEC-NNNN/T-NNN resolves the task via task_lookup::find; runs every CHK-ID under the requirements the task covers; deduplicates CHK-IDs that appear in multiple covered REQs; surfaces task_lookup's Ambiguous and NotFound errors with their existing wording; a task with covers=[] exits 0 with an informational message."
+scenario = '''
+speccy check T-NNN / SPEC-NNNN/T-NNN resolves the task via task_lookup::find; runs every CHK-ID under the requirements the task covers; deduplicates CHK-IDs that appear in multiple covered REQs; surfaces task_lookup's Ambiguous and NotFound errors with their existing wording; a task with covers=[] exits 0 with an informational message.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-cli --test check -- bare_chk_preserved"
-proves = "Bare speccy check CHK-NNN keeps SPEC-0010 DEC-003 cross-spec semantics (matching IDs across all specs run); new speccy check SPEC-NNNN/CHK-NNN scopes to one spec's CHK-NNN; missing qualified check exits 1 naming both the spec and the missing check; no deprecation warning is emitted for the bare form."
+scenario = '''
+Bare speccy check CHK-NNN keeps SPEC-0010 DEC-003 cross-spec semantics (matching IDs across all specs run); new speccy check SPEC-NNNN/CHK-NNN scopes to one spec's CHK-NNN; missing qualified check exits 1 naming both the spec and the missing check; no deprecation warning is emitted for the bare form.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "manual"
-prompt = """
+scenario = '''
 Inspect `.speccy/ARCHITECTURE.md`:
 
 1. CLI Surface row for `speccy check` (~line 141) now reads
@@ -59,8 +58,7 @@ Inspect `.speccy/ARCHITECTURE.md`:
    `speccy check CHK-NNN`.
 
 Then run `git grep -n "speccy check CHK-"` and `git grep -n "speccy
-check \\["` across the repo. Confirm no shipped skill prompt under
+check \["` across the repo. Confirm no shipped skill prompt under
 `.speccy/skills/` or `skills/` instructs an agent in a way the new
 docs would now contradict.
-"""
-proves = "ARCHITECTURE.md surface documentation and shipped skill prompts reflect the new selector shape; no stale references to the old CHK-only argument remain that would mislead a future reader or agent."
+'''

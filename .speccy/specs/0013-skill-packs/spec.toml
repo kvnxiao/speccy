@@ -30,54 +30,54 @@ checks = ["CHK-009"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- persona_files_present"
-proves = "skills/shared/personas/ contains the 8 expected files (planner, implementer, six reviewers) and each is non-empty."
+scenario = '''
+skills/shared/personas/ contains the 8 expected files (planner, implementer, six reviewers) and each is non-empty.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- persona_names_match_registry"
-proves = "Reviewer persona file names match personas::ALL exactly (business, tests, security, style, architecture, docs)."
+scenario = '''
+Reviewer persona file names match personas::ALL exactly (business, tests, security, style, architecture, docs).
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- prompt_templates_present"
-proves = "skills/shared/prompts/ contains the 11 expected templates (plan-greenfield/amend, tasks-generate/amend, implementer, six reviewers, report) and each is non-empty."
+scenario = '''
+skills/shared/prompts/ contains the 11 expected templates (plan-greenfield/amend, tasks-generate/amend, implementer, six reviewers, report) and each is non-empty.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- prompt_placeholders_match_commands"
-proves = "Each template contains the placeholders its corresponding CLI command (per REQs in SPEC-0005/0006/0008/0009/0011) substitutes; placeholder names are valid identifiers."
+scenario = '''
+Each template contains the placeholders its corresponding CLI command (per REQs in SPEC-0005/0006/0008/0009/0011) substitutes; placeholder names are valid identifiers.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- claude_code_recipes"
-proves = "skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, work, review, amend, ship) with valid YAML frontmatter and non-empty description fields."
+scenario = '''
+skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, work, review, amend, ship) with valid YAML frontmatter and non-empty description fields.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- codex_recipes"
-proves = "skills/codex/speccy/ contains the 7 parallel recipes with valid Codex frontmatter."
+scenario = '''
+skills/codex/speccy/ contains the 7 parallel recipes with valid Codex frontmatter.
+'''
 
 [[checks]]
 id = "CHK-007"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- persona_content_shape"
-proves = "Each reviewer persona file has the required headings in declared order: # Reviewer Persona, ## Role, ## Focus, ## What to look for that's easy to miss, ## Inline note format, ## Example."
+scenario = '''
+Each reviewer persona file has the required headings in declared order: # Reviewer Persona, ## Role, ## Focus, ## What to look for that's easy to miss, ## Inline note format, ## Example.
+'''
 
 [[checks]]
 id = "CHK-008"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- recipe_content_shape"
-proves = "Each top-level recipe has an intro paragraph, a 'When to use' heading, and at least one fenced code block with a speccy command from the v1 surface."
+scenario = '''
+Each top-level recipe has an intro paragraph, a 'When to use' heading, and at least one fenced code block with a speccy command from the v1 surface.
+'''
 
 [[checks]]
 id = "CHK-009"
-kind = "manual"
-prompt = "Manually verify each shipped recipe loads in its host: (1) Run speccy init in a fresh repo with .claude/ present. (2) Invoke each of /speccy:init, /speccy:plan, /speccy:tasks, /speccy:work, /speccy:review, /speccy:amend, /speccy:ship in Claude Code; confirm each loads without parse errors and executes its first documented CLI invocation. (3) Repeat with .codex/ and Codex as the host. Pass criterion: every recipe loads and the first step runs."
-proves = "Shipped content is loadable and functional in both Claude Code and Codex hosts end-to-end."
+scenario = '''
+Manually verify each shipped recipe loads in its host: (1) Run speccy init in a fresh repo with .claude/ present. (2) Invoke each of /speccy:init, /speccy:plan, /speccy:tasks, /speccy:work, /speccy:review, /speccy:amend, /speccy:ship in Claude Code; confirm each loads without parse errors and executes its first documented CLI invocation. (3) Repeat with .codex/ and Codex as the host. Pass criterion: every recipe loads and the first step runs.
+'''

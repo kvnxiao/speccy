@@ -14,36 +14,36 @@ checks = ["CHK-006"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- implementer_prompt_handoff_template"
-proves = "skills/shared/prompts/implementer.md embeds a fenced markdown template containing the six handoff field labels verbatim: Completed, Undone, Commands run, Exit codes, Discovered issues, Procedural compliance."
+scenario = '''
+skills/shared/prompts/implementer.md embeds a fenced markdown template containing the six handoff field labels verbatim: Completed, Undone, Commands run, Exit codes, Discovered issues, Procedural compliance.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- implementer_prompt_handoff_referenced_in_task_steps"
-proves = "The implementer prompt's '## Your task' section references the handoff template and requires every field be populated (empty fields written as '(none)')."
+scenario = '''
+The implementer prompt's '## Your task' section references the handoff template and requires every field be populated (empty fields written as '(none)').
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- implementer_prompt_friction_section"
-proves = "skills/shared/prompts/implementer.md contains a '## When you hit friction' heading with at least one fenced example referencing a skills/ path."
+scenario = '''
+skills/shared/prompts/implementer.md contains a '## When you hit friction' heading with at least one fenced example referencing a skills/ path.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- implementer_persona_friction_reference"
-proves = "skills/shared/personas/implementer.md references the friction-to-skill-update pattern under '## What to consider' and points back to the prompt section."
+scenario = '''
+skills/shared/personas/implementer.md references the friction-to-skill-update pattern under '## What to consider' and points back to the prompt section.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- agents_md_friction_paragraph"
-proves = "The project's own AGENTS.md documents the friction-to-skill-update loop in the 'Conventions for AI agents specifically' section."
+scenario = '''
+The project's own AGENTS.md documents the friction-to-skill-update loop in the 'Conventions for AI agents specifically' section.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-cli --test skill_packs -- report_prompt_skill_updates_section"
-proves = "skills/shared/prompts/report.md instructs the report-writing agent to emit a '## Skill updates' section between '## Out-of-scope items absorbed' and '## Deferred / known limitations'."
+scenario = '''
+skills/shared/prompts/report.md instructs the report-writing agent to emit a '## Skill updates' section between '## Out-of-scope items absorbed' and '## Deferred / known limitations'.
+'''

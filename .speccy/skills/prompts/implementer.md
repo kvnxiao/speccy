@@ -54,8 +54,11 @@ prompt, then record:
 3. Translate each `Tests to write:` bullet into an executable test
    in the project's framework. **Write the test before the code it
    exercises.**
-4. Implement the code path so the tests pass. Run `speccy check`
-   locally and fail fast on red.
+4. Implement the code path so the tests pass. Run the project's
+   own test command (`cargo test`, `pnpm test`, etc.) and fail fast
+   on red. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
+   `[[checks]]` scenarios you are satisfying; it renders them, it
+   does not run them.
 5. Add one implementer note to the task subtree using the six-field
    handoff template shown below. Every field must appear; write
    `(none)` for empty fields rather than omitting them. Out-of-scope

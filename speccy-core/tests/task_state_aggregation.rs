@@ -145,9 +145,7 @@ fn workspace_specs_without_tasks_md_have_zero_via_default() -> TestResult {
 
             [[checks]]
             id = "CHK-001"
-            kind = "test"
-            command = "cargo test"
-            proves = "x"
+            scenario = "x"
         "#},
     )?;
     let ws = scan(&root);

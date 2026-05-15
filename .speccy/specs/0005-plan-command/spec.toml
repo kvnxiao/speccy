@@ -30,54 +30,54 @@ checks = ["CHK-009"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-cli --test plan -- greenfield_renders"
-proves = "speccy plan (no arg) renders plan-greenfield.md with agents and next_spec_id placeholders substituted; no vision placeholder exists; output goes to stdout."
+scenario = '''
+speccy plan (no arg) renders plan-greenfield.md with agents and next_spec_id placeholders substituted; no vision placeholder exists; output goes to stdout.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test plan -- plan_outside_workspace"
-proves = "speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stating the workspace was not found walking up from cwd."
+scenario = '''
+speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stating the workspace was not found walking up from cwd.
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-cli --test plan -- amend_form"
-proves = "speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; the nearest parent MISSION.md is substituted at {{mission}} when present (or an ungrouped marker when absent); invalid ID format exits 1; missing spec exits 1 naming the ID; mission-grouped specs (e.g. .speccy/specs/auth/0042-signup/) resolve correctly."
+scenario = '''
+speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; the nearest parent MISSION.md is substituted at {{mission}} when present (or an ungrouped marker when absent); invalid ID format exits 1; missing spec exits 1 naming the ID; mission-grouped specs (e.g. .speccy/specs/auth/0042-signup/) resolve correctly.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-core --test id_alloc"
-proves = "allocate_next_spec_id walks specs/** recursively across mission folders and flat specs alike; returns max(existing) + 1 zero-padded to 4 digits; empty specs/ yields 0001; gaps left by dropped specs are not recycled; non-matching directories that are not mission folders are ignored."
+scenario = '''
+allocate_next_spec_id walks specs/** recursively across mission folders and flat specs alike; returns max(existing) + 1 zero-padded to 4 digits; empty specs/ yields 0001; gaps left by dropped specs are not recycled; non-matching directories that are not mission folders are ignored.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-core --test prompt_agents_md"
-proves = "load_agents_md returns file content when present; returns marker + stderr warning when missing; returns error-marker + stderr warning on I/O error."
+scenario = '''
+load_agents_md returns file content when present; returns marker + stderr warning when missing; returns error-marker + stderr warning on I/O error.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-core --test prompt_render -- happy_path"
-proves = "render substitutes every {{name}} placeholder; single-pass means substituted text is not re-scanned for further placeholders."
+scenario = '''
+render substitutes every {{name}} placeholder; single-pass means substituted text is not re-scanned for further placeholders.
+'''
 
 [[checks]]
 id = "CHK-007"
-kind = "test"
-command = "cargo test -p speccy-core --test prompt_render -- unknown_placeholders"
-proves = "render leaves unrecognised {{placeholders}} in place and prints a stderr warning naming each unique unmatched placeholder."
+scenario = '''
+render leaves unrecognised {{placeholders}} in place and prints a stderr warning naming each unique unmatched placeholder.
+'''
 
 [[checks]]
 id = "CHK-008"
-kind = "test"
-command = "cargo test -p speccy-core --test prompt_budget"
-proves = "trim_to_budget drops sections in ARCHITECTURE.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops."
+scenario = '''
+trim_to_budget drops sections in ARCHITECTURE.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops.
+'''
 
 [[checks]]
 id = "CHK-009"
-kind = "test"
-command = "cargo test -p speccy-core --test prompt_mission_md"
-proves = "find_nearest_mission_md returns parent MISSION.md content when present in the spec's mission folder; returns an ungrouped marker when no MISSION.md is found up to specs_root; returns an unreadable marker plus stderr warning on I/O error."
+scenario = '''
+find_nearest_mission_md returns parent MISSION.md content when present in the spec's mission folder; returns an ungrouped marker when no MISSION.md is found up to specs_root; returns an unreadable marker plus stderr warning on I/O error.
+'''

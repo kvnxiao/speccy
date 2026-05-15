@@ -30,54 +30,54 @@ checks = ["CHK-009"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-core --test workspace_scan -- discovers_specs"
-proves = "workspace::scan finds every NNNN-slug directory under .speccy/specs/, parses each artifact, and ignores non-matching subdirectories."
+scenario = '''
+workspace::scan finds every NNNN-slug directory under .speccy/specs/, parses each artifact, and ignores non-matching subdirectories.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-core --test workspace_scan -- parse_failure_non_fatal"
-proves = "Malformed individual specs produce ScannedSpec entries with parse errors; other specs still scan successfully; missing .speccy/specs/ yields an empty result without error."
+scenario = '''
+Malformed individual specs produce ScannedSpec entries with parse errors; other specs still scan successfully; missing .speccy/specs/ yields an empty result without error.
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-core --test stale_detection"
-proves = "stale_for returns HashDrift, MtimeDrift, or BootstrapPending appropriately; bootstrap-pending sentinel short-circuits other reasons; specs without TASKS.md are not stale."
+scenario = '''
+stale_for returns HashDrift, MtimeDrift, or BootstrapPending appropriately; bootstrap-pending sentinel short-circuits other reasons; specs without TASKS.md are not stale.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-core --test task_state_aggregation"
-proves = "Task state counts match the [ ] / [~] / [?] / [x] glyph distribution; missing TASKS.md yields zero counts."
+scenario = '''
+Task state counts match the [ ] / [~] / [?] / [x] glyph distribution; missing TASKS.md yields zero counts.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-core --test workspace_supersession"
-proves = "superseded_by per spec is computed via supersession_index inversion over successfully-parsed specs; specs with parse errors have empty superseded_by; dangling references are surfaced for lint."
+scenario = '''
+superseded_by per spec is computed via supersession_index inversion over successfully-parsed specs; specs with parse errors have empty superseded_by; dangling references are surfaced for lint.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-cli --test status_lint_integration"
-proves = "status partitions lint::run diagnostics by spec_id; workspace-level diagnostics (no spec_id) appear in the top-level lint block; each lint block has errors/warnings/info arrays."
+scenario = '''
+status partitions lint::run diagnostics by spec_id; workspace-level diagnostics (no spec_id) appear in the top-level lint block; each lint block has errors/warnings/info arrays.
+'''
 
 [[checks]]
 id = "CHK-007"
-kind = "test"
-command = "cargo test -p speccy-cli --test status_text_filter"
-proves = "Default text view shows in-progress specs plus any with errors / staleness / parse failures; clean implemented/dropped/superseded specs are excluded."
+scenario = '''
+Default text view shows in-progress specs plus any with errors / staleness / parse failures; clean implemented/dropped/superseded specs are excluded.
+'''
 
 [[checks]]
 id = "CHK-008"
-kind = "test"
-command = "cargo test -p speccy-cli --test status_text_render -- empty_and_single_spec"
-proves = "Empty workspace prints 'No specs in workspace.' and exits 0; single-spec workspace prints a one-line header plus per-line summaries."
+scenario = '''
+Empty workspace prints 'No specs in workspace.' and exits 0; single-spec workspace prints a one-line header plus per-line summaries.
+'''
 
 [[checks]]
 id = "CHK-009"
-kind = "test"
-command = "cargo test -p speccy-cli --test status_json -- contract"
-proves = "speccy status --json emits schema_version=1, repo_sha (empty if no git), every spec regardless of status, structured lint diagnostics, deterministic byte-identical output across runs with no filesystem change."
+scenario = '''
+speccy status --json emits schema_version=1, repo_sha (empty if no git), every spec regardless of status, structured lint diagnostics, deterministic byte-identical output across runs with no filesystem change.
+'''

@@ -156,9 +156,7 @@ pub fn valid_spec_toml() -> String {
 
         [[checks]]
         id = "CHK-001"
-        kind = "test"
-        command = "cargo test"
-        proves = "covers REQ-001"
+        scenario = "Given REQ-001, when the suite runs, then it covers REQ-001."
     "#}
     .to_owned()
 }

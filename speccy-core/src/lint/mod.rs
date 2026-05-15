@@ -32,7 +32,6 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
     for spec in workspace.specs {
         rules::spc::lint(spec, workspace, &mut diagnostics);
         rules::req::lint(spec, &mut diagnostics);
-        rules::val::lint(spec, &mut diagnostics);
         rules::tsk::lint(spec, &mut diagnostics);
         rules::qst::lint(spec, &mut diagnostics);
     }

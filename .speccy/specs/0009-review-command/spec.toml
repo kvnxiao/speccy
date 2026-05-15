@@ -26,42 +26,42 @@ checks = ["CHK-007"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-core --test personas -- registry"
-proves = "personas::ALL contains exactly six names in declared order; SPEC-0007's DEFAULT_PERSONAS is a strict prefix (first 4 elements); both lists derive from the same source."
+scenario = '''
+personas::ALL contains exactly six names in declared order; SPEC-0007's DEFAULT_PERSONAS is a strict prefix (first 4 elements); both lists derive from the same source.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-core --test personas -- resolve_local_first"
-proves = "resolve_file returns project-local override content when .speccy/skills/personas/reviewer-<name>.md exists; embedded bundle content when override absent."
+scenario = '''
+resolve_file returns project-local override content when .speccy/skills/personas/reviewer-<name>.md exists; embedded bundle content when override absent.
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-core --test personas -- resolve_empty_override_falls_through"
-proves = "An empty or unreadable project-local override warns on stderr and falls through to the embedded version; missing persona name returns PersonaError::NotFound."
+scenario = '''
+An empty or unreadable project-local override warns on stderr and falls through to the embedded version; missing persona name returns PersonaError::NotFound.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-cli --test review -- persona_arg_validation"
-proves = "Missing --persona exits 1 with usage listing valid names; unknown --persona value exits 1; case-sensitive match (Security != security)."
+scenario = '''
+Missing --persona exits 1 with usage listing valid names; unknown --persona value exits 1; case-sensitive match (Security != security).
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-cli --test review -- diff_fallback_chain"
-proves = "git diff HEAD output is captured first; if clean working tree, falls back to HEAD vs HEAD~1; if neither yields content or git is unavailable, uses the literal no-diff fallback note."
+scenario = '''
+git diff HEAD output is captured first; if clean working tree, falls back to HEAD vs HEAD~1; if neither yields content or git is unavailable, uses the literal no-diff fallback note.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-cli --test review -- prompt_renders"
-proves = "reviewer-<persona>.md template loaded; placeholders (spec_id, spec_md, task_id, task_entry, diff, persona, persona_content, agents) all substituted; budget trimming applied; output to stdout."
+scenario = '''
+reviewer-<persona>.md template loaded; placeholders (spec_id, spec_md, task_id, task_entry, diff, persona, persona_content, agents) all substituted; budget trimming applied; output to stdout.
+'''
 
 [[checks]]
 id = "CHK-007"
-kind = "test"
-command = "cargo test -p speccy-cli --test review -- shared_task_lookup_and_integration"
-proves = "speccy review uses SPEC-0008's task_lookup; lookup errors map to the same exit codes; ambiguity stderr suggests the speccy review SPEC-NNNN/T-NNN --persona <name> form."
+scenario = '''
+speccy review uses SPEC-0008's task_lookup; lookup errors map to the same exit codes; ambiguity stderr suggests the speccy review SPEC-NNNN/T-NNN --persona <name> form.
+'''

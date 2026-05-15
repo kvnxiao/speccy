@@ -536,10 +536,6 @@ fn run_check(selector: Option<String>) -> u8 {
     }
     match result {
         Ok(code) => clamp_exit(code),
-        Err(CheckError::ChildSpawn { check_id, source }) => {
-            eprintln!("speccy check: failed to spawn shell for {check_id}: {source}");
-            2
-        }
         Err(CheckError::TaskLookup(LookupError::InvalidFormat { arg })) => {
             eprintln!("speccy check: invalid task reference `{arg}`");
             eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");

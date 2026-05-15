@@ -41,9 +41,7 @@ const VALID_SPEC_TOML: &str = indoc! {r#"
 
     [[checks]]
     id = "CHK-001"
-    kind = "test"
-    command = "cargo test"
-    proves = "covers REQ-001"
+    scenario = "covers REQ-001"
 "#};
 
 fn utf8(dir: &TempDir) -> TestResult<Utf8PathBuf> {

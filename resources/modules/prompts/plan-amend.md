@@ -28,6 +28,9 @@ correct.
 3. Append a new row to the `## Changelog` table describing **why**
    the amendment was needed.
 4. If the amendment invalidates the requirement-to-check mapping,
-   update `spec.toml` accordingly.
+   update `spec.toml` accordingly. Each `[[checks]]` row is exactly
+   `id` and `scenario = """..."""` (English Given/When/Then). Do not
+   reintroduce `kind`, `command`, `prompt`, or `proves` fields —
+   they were removed in SPEC-0018.
 
 Do not regenerate TASKS.md; the next phase will reconcile it.

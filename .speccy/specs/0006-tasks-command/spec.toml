@@ -22,48 +22,48 @@ checks = ["CHK-007", "CHK-008"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "cargo test -p speccy-cli --test tasks -- initial_prompt"
-proves = "speccy tasks SPEC-NNNN with TASKS.md absent renders tasks-generate.md with spec_id, spec_md, and agents placeholders substituted; output goes to stdout."
+scenario = '''
+speccy tasks SPEC-NNNN with TASKS.md absent renders tasks-generate.md with spec_id, spec_md, and agents placeholders substituted; output goes to stdout.
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "cargo test -p speccy-cli --test tasks -- amendment_prompt"
-proves = "speccy tasks SPEC-NNNN with TASKS.md present renders tasks-amend.md with spec_id, spec_md, tasks_md, and agents placeholders substituted; amendment-mode template (not initial) is selected."
+scenario = '''
+speccy tasks SPEC-NNNN with TASKS.md present renders tasks-amend.md with spec_id, spec_md, tasks_md, and agents placeholders substituted; amendment-mode template (not initial) is selected.
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "cargo test -p speccy-core --test tasks_commit -- hash_and_timestamp"
-proves = "commit_frontmatter writes the SPEC.md sha256 as 64-char hex into spec_hash_at_generation and sets generated_at to the supplied UTC ISO 8601 timestamp."
+scenario = '''
+commit_frontmatter writes the SPEC.md sha256 as 64-char hex into spec_hash_at_generation and sets generated_at to the supplied UTC ISO 8601 timestamp.
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "test"
-command = "cargo test -p speccy-core --test tasks_commit -- bootstrap_pending_sentinel"
-proves = "commit_frontmatter overwrites the bootstrap-pending sentinel with the real sha256 hex on first invocation."
+scenario = '''
+commit_frontmatter overwrites the bootstrap-pending sentinel with the real sha256 hex on first invocation.
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "test"
-command = "cargo test -p speccy-core --test tasks_commit -- spec_id_mismatch_and_missing_frontmatter"
-proves = "commit_frontmatter returns SpecIdMismatch when frontmatter spec field differs from arg; prepends new frontmatter when entirely absent; preserves other frontmatter fields byte-identically when present."
+scenario = '''
+commit_frontmatter returns SpecIdMismatch when frontmatter spec field differs from arg; prepends new frontmatter when entirely absent; preserves other frontmatter fields byte-identically when present.
+'''
 
 [[checks]]
 id = "CHK-006"
-kind = "test"
-command = "cargo test -p speccy-core --test tasks_commit -- body_byte_preservation"
-proves = "Body bytes (everything after the closing --- fence) are byte-identical before and after commit_frontmatter; CRLF line endings, trailing whitespace, and arbitrary content are all preserved verbatim."
+scenario = '''
+Body bytes (everything after the closing --- fence) are byte-identical before and after commit_frontmatter; CRLF line endings, trailing whitespace, and arbitrary content are all preserved verbatim.
+'''
 
 [[checks]]
 id = "CHK-007"
-kind = "test"
-command = "cargo test -p speccy-cli --test tasks -- argument_validation"
-proves = "speccy tasks with invalid ID format exits 1; with unknown SPEC-NNNN exits 1; SPEC.md parse failure exits 1 with the parser error."
+scenario = '''
+speccy tasks with invalid ID format exits 1; with unknown SPEC-NNNN exits 1; SPEC.md parse failure exits 1 with the parser error.
+'''
 
 [[checks]]
 id = "CHK-008"
-kind = "test"
-command = "cargo test -p speccy-cli --test tasks -- commit_requires_tasks_md"
-proves = "speccy tasks SPEC-NNNN --commit with TASKS.md absent exits 1 with a TasksMdNotFound error naming the missing path; the same command without --commit succeeds (initial prompt rendered)."
+scenario = '''
+speccy tasks SPEC-NNNN --commit with TASKS.md absent exits 1 with a TasksMdNotFound error naming the missing path; the same command without --commit succeeds (initial prompt rendered).
+'''

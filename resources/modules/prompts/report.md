@@ -28,7 +28,9 @@ Every task in this spec is now `[x]`. Your job is to author
    order, under the literal headings shown:
    - `## Outcome` — one of `delivered`, `partial`, or `abandoned`.
    - `## Requirements coverage` — every REQ-NNN with the check IDs
-     that proved it and the result.
+     covering it and a short note on which project test(s) satisfy
+     each scenario. Speccy does not execute checks; do not write
+     `PASS` / `FAIL` here.
    - `## Task summary` — total tasks, count retried, anything that
      triggered a SPEC amendment.
    - `## Out-of-scope items absorbed` — edits implementers made for

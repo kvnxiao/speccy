@@ -41,29 +41,14 @@ pub struct RequirementEntry {
     pub checks: Vec<String>,
 }
 
-/// One `[[checks]]` row. The payload distinguishes executable checks
-/// (which carry a `command`) from manual checks (which carry a `prompt`).
+/// One `[[checks]]` row. Post-SPEC-0018 the schema collapses to exactly
+/// two fields: an identifier and an English validation scenario.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckEntry {
     /// Stable `CHK-NNN` identifier.
     pub id: String,
-    /// Free-form kind label (`test`, `command`, `manual`, …). The parser
-    /// does not constrain the value beyond surfacing it verbatim.
-    pub kind: String,
-    /// Human-readable claim of what the check proves.
-    pub proves: String,
-    /// Either an executable command or a manual prompt.
-    pub payload: CheckPayload,
-}
-
-/// Discriminated union: a check either has a `command` (executable) or a
-/// `prompt` (manual), never both, never neither.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CheckPayload {
-    /// Executable check; `command` is run by `speccy check`.
-    Command(String),
-    /// Manual check; `prompt` is shown to a human reviewer.
-    Prompt(String),
+    /// English validation scenario. Non-empty after trim.
+    pub scenario: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,12 +79,10 @@ struct RawRequirement {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawCheck {
     id: String,
-    kind: String,
-    proves: String,
-    command: Option<String>,
-    prompt: Option<String>,
+    scenario: String,
 }
 
 /// Parse a `speccy.toml` file.
@@ -130,9 +113,9 @@ pub fn speccy_toml(path: &Utf8Path) -> Result<SpeccyConfig, ParseError> {
 /// # Errors
 ///
 /// Returns any [`ParseError`] variant relevant to TOML parsing: I/O,
-/// non-UTF-8 file content, unsupported `schema_version`, malformed
-/// `[[checks]]` entries (neither or both of `command`/`prompt`), or
-/// missing required fields.
+/// non-UTF-8 file content, unsupported `schema_version`, an empty or
+/// whitespace-only `scenario` on a check row, an unknown field on any
+/// `[[checks]]` row, or missing required fields.
 pub fn spec_toml(path: &Utf8Path) -> Result<SpecToml, ParseError> {
     let content = read_to_string(path)?;
     let raw: RawSpecToml = toml::from_str(&content).map_err(|e| ParseError::Toml {
@@ -153,37 +136,27 @@ pub fn spec_toml(path: &Utf8Path) -> Result<SpecToml, ParseError> {
 
     let mut checks = Vec::with_capacity(raw.checks.len());
     for row in raw.checks {
-        let payload = match (row.command, row.prompt) {
-            (Some(cmd), None) => CheckPayload::Command(cmd),
-            (None, Some(prompt)) => CheckPayload::Prompt(prompt),
-            (None, None) => {
-                return Err(ParseError::InvalidCheckEntry {
-                    path: path.to_path_buf(),
-                    check_id: row.id,
-                    reason: "check has neither `command` nor `prompt`; exactly one is required"
-                        .to_owned(),
-                });
-            }
-            (Some(_), Some(_)) => {
-                return Err(ParseError::InvalidCheckEntry {
-                    path: path.to_path_buf(),
-                    check_id: row.id,
-                    reason: "check declares both `command` and `prompt`; exactly one is required"
-                        .to_owned(),
-                });
-            }
-        };
-        checks.push(CheckEntry {
-            id: row.id,
-            kind: row.kind,
-            proves: row.proves,
-            payload,
-        });
+        let entry = lower_check(row, path)?;
+        checks.push(entry);
     }
 
     Ok(SpecToml {
         requirements,
         checks,
+    })
+}
+
+fn lower_check(row: RawCheck, path: &Utf8Path) -> Result<CheckEntry, ParseError> {
+    if row.scenario.trim().is_empty() {
+        return Err(ParseError::InvalidCheckEntry {
+            path: path.to_path_buf(),
+            check_id: row.id,
+            reason: "`scenario` is empty or whitespace-only".to_owned(),
+        });
+    }
+    Ok(CheckEntry {
+        id: row.id,
+        scenario: row.scenario,
     })
 }
 
@@ -207,7 +180,6 @@ pub(crate) fn read_to_string(path: &Utf8Path) -> Result<String, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::CheckPayload;
     use super::spec_toml;
     use super::speccy_toml;
     use crate::error::ParseError;
@@ -273,15 +245,11 @@ mod tests {
 
             [[checks]]
             id = "CHK-001"
-            kind = "test"
-            command = "cargo test a"
-            proves = "covers REQ-001"
+            scenario = "Given the parser, when fed a row, then it returns CHK-001."
 
             [[checks]]
             id = "CHK-002"
-            kind = "manual"
-            prompt = "verify manually"
-            proves = "covers REQ-002"
+            scenario = "Given the parser, when fed a row, then it returns CHK-002."
         "#};
         let fx = write_tmp("spec.toml", src);
         let parsed = spec_toml(&fx.path).expect("parse should succeed");
@@ -292,67 +260,75 @@ mod tests {
         let check_ids: Vec<&str> = parsed.checks.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(check_ids, vec!["CHK-001", "CHK-002"]);
 
-        let first_payload = parsed
+        let first_scenario = parsed
             .checks
             .first()
-            .map(|c| c.payload.clone())
+            .map(|c| c.scenario.clone())
             .expect("at least one check");
-        assert_eq!(first_payload, CheckPayload::Command("cargo test a".into()));
-
-        let second_payload = parsed
-            .checks
-            .get(1)
-            .map(|c| c.payload.clone())
-            .expect("at least two checks");
         assert_eq!(
-            second_payload,
-            CheckPayload::Prompt("verify manually".into())
+            first_scenario,
+            "Given the parser, when fed a row, then it returns CHK-001."
         );
     }
 
     #[test]
-    fn rejects_check_missing_command_and_prompt() {
+    fn rejects_check_with_legacy_command_field() {
         let src = indoc! {r#"
             schema_version = 1
 
             [[checks]]
             id = "CHK-001"
-            kind = "test"
-            proves = "nothing"
-        "#};
-        let fx = write_tmp("spec.toml", src);
-        let err = spec_toml(&fx.path).expect_err("missing command/prompt must fail");
-        assert!(
-            matches!(
-                &err,
-                ParseError::InvalidCheckEntry { check_id, .. } if check_id == "CHK-001"
-            ),
-            "got: {err:?}",
-        );
-    }
-
-    #[test]
-    fn rejects_check_with_both_command_and_prompt() {
-        let src = indoc! {r#"
-            schema_version = 1
-
-            [[checks]]
-            id = "CHK-001"
-            kind = "test"
+            scenario = "Given X, when Y, then Z."
             command = "cargo test"
-            prompt = "verify"
-            proves = "covers REQ-001"
         "#};
         let fx = write_tmp("spec.toml", src);
-        let err = spec_toml(&fx.path).expect_err("both command/prompt must fail");
-        assert!(
-            matches!(
-                &err,
-                ParseError::InvalidCheckEntry { check_id, reason, .. }
-                    if check_id == "CHK-001" && reason.contains("both")
-            ),
-            "got: {err:?}",
-        );
+        let err = spec_toml(&fx.path).expect_err("legacy `command` must fail");
+        assert!(matches!(err, ParseError::Toml { .. }), "got: {err:?}");
+    }
+
+    #[test]
+    fn rejects_check_with_legacy_prompt_field() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "Given X, when Y, then Z."
+            prompt = "verify"
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let err = spec_toml(&fx.path).expect_err("legacy `prompt` must fail");
+        assert!(matches!(err, ParseError::Toml { .. }), "got: {err:?}");
+    }
+
+    #[test]
+    fn rejects_check_with_legacy_kind_field() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "Given X, when Y, then Z."
+            kind = "test"
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let err = spec_toml(&fx.path).expect_err("legacy `kind` must fail");
+        assert!(matches!(err, ParseError::Toml { .. }), "got: {err:?}");
+    }
+
+    #[test]
+    fn rejects_check_with_legacy_proves_field() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "Given X, when Y, then Z."
+            proves = "z"
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let err = spec_toml(&fx.path).expect_err("legacy `proves` must fail");
+        assert!(matches!(err, ParseError::Toml { .. }), "got: {err:?}");
     }
 
     #[test]
@@ -361,13 +337,71 @@ mod tests {
             schema_version = 1
 
             [[checks]]
-            kind = "test"
-            command = "cargo test"
-            proves = "covers REQ-001"
+            scenario = "Given X, when Y, then Z."
         "#};
         let fx = write_tmp("spec.toml", src);
         let err = spec_toml(&fx.path).expect_err("missing id must fail");
         assert!(matches!(err, ParseError::Toml { .. }), "got: {err:?}");
+    }
+
+    #[test]
+    fn parses_scenario_field_verbatim() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "Given a workspace, when verify runs, then it exits 0."
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let parsed = spec_toml(&fx.path).expect("parse should succeed");
+        let entry = parsed.checks.first().expect("one check");
+        assert_eq!(entry.id, "CHK-001");
+        assert_eq!(
+            entry.scenario,
+            "Given a workspace, when verify runs, then it exits 0."
+        );
+    }
+
+    #[test]
+    fn parses_multiline_scenario_verbatim() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = """
+            Given a workspace,
+            when verify runs,
+            then it exits 0.
+            """
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let parsed = spec_toml(&fx.path).expect("parse should succeed");
+        let entry = parsed.checks.first().expect("one check");
+        assert!(entry.scenario.contains("Given a workspace"));
+        assert!(entry.scenario.contains("then it exits 0."));
+    }
+
+    #[test]
+    fn rejects_empty_scenario() {
+        let src = indoc! {r#"
+            schema_version = 1
+
+            [[checks]]
+            id = "CHK-001"
+            scenario = "   "
+        "#};
+        let fx = write_tmp("spec.toml", src);
+        let err = spec_toml(&fx.path).expect_err("empty scenario must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::InvalidCheckEntry { check_id, reason, .. }
+                    if check_id == "CHK-001" && reason.contains("scenario")
+            ),
+            "got: {err:?}",
+        );
     }
 
     #[test]

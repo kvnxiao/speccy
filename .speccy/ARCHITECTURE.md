@@ -47,7 +47,18 @@ So Speccy is a **feedback engine**:
 
 - The CLI tells you what looks off; you decide.
 - `speccy verify` is the only command that exits non-zero on
-  problems. CI calls it. Local runs print findings and exit zero.
+  problems, and it only exits non-zero on broken **proof shape**
+  (parse errors, requirements with no scenarios, scenario refs that
+  don't resolve, internal inconsistency). CI calls it. Local runs
+  print findings and exit zero.
+- **Speccy does not run project tests.** Project CI owns test
+  execution: `cargo test`, `pnpm test`, lint, type-check, and
+  `cargo deny check` run alongside `speccy verify`, not through it.
+- **Reviewer personas own semantic judgment.** Whether a scenario
+  is meaningful, whether the diff actually satisfies it, and
+  whether the project tests cover the scenario meaningfully are
+  questions for the business / tests / security / style reviewer
+  loop, not for the CLI.
 - There is no `--strict` mode, no policy file, no configurable
   enforcement. Speccy is opinionated about what to surface and
   silent about what to do about it.
@@ -68,7 +79,7 @@ Speccy, not in the user's workflow.
 | **Spec** | One bounded behavior contract | `specs/[focus]/NNNN-slug/SPEC.md` + `spec.toml`, or `specs/NNNN-slug/...` when ungrouped |
 | **Requirement** | One observable behavior with a done condition | Heading in SPEC.md + entry in `spec.toml` |
 | **Task** | One implementation slice sized for one agent | Line in `TASKS.md` |
-| **Check** | One proof obligation (executable or manual) | Entry in `spec.toml` |
+| **Check** | One English validation scenario a requirement must satisfy | Entry in `spec.toml` |
 
 The project-wide product north star ("what we're building, why, who
 for, what 'good enough to ship v1' looks like") is **not** a Speccy
@@ -138,14 +149,17 @@ speccy next [--kind K]            Next actionable thing      (--json)
                                     --kind implement -> next [ ] task
                                     --kind review    -> next [?] task
                                     default          -> highest-priority
-speccy check [SELECTOR]           Run check(s); non-zero on failure
-                                    no arg:            all checks across all specs
-                                    SPEC-NNNN:         every check under one spec
-                                    SPEC-NNNN/CHK-NNN: one check, disambiguated by spec
-                                    SPEC-NNNN/T-NNN:   checks covering a qualified task
+speccy check [SELECTOR]           Render check scenarios (no execution)
+                                    no arg:            all scenarios across all specs
+                                    SPEC-NNNN:         every scenario under one spec
+                                    SPEC-NNNN/CHK-NNN: one scenario, disambiguated by spec
+                                    SPEC-NNNN/T-NNN:   scenarios covering a qualified task
                                     CHK-NNN:           every spec's CHK-NNN (DEC-003)
-                                    T-NNN:             checks covering an unqualified task
-speccy verify                     CI gate: lint + speccy check
+                                    T-NNN:             scenarios covering an unqualified task
+speccy verify                     CI gate: proof-shape validation only
+                                    parse errors, requirements with no scenarios,
+                                    unresolved scenario refs, unreferenced scenarios.
+                                    Does NOT run project tests; that's CI's job.
 ```
 
 The split between `implement` and `review` is deliberate: they are
@@ -302,7 +316,9 @@ loop:
   sub-agent:
     - flips [ ] -> [~] with session marker
     - implements the task
-    - runs `speccy check` locally (fail-fast on red)
+    - runs the project's own test command locally (fail-fast on red);
+      uses `speccy check SPEC-NNNN/T-NNN` only to render the
+      scenarios it is satisfying
     - leaves inline notes for out-of-scope work or unknowns
     - flips [~] -> [?]
 ```
@@ -721,15 +737,16 @@ Unit-level tests live in TASKS.md (see below) as `**Tests to write:**`
 bullets on each task. This split is intentional:
 
 - **SPEC.md behavior**: what the system does, observable from outside.
-  Maps to `kind = "test"` checks that exercise the integration surface.
+  Maps to `[[checks]]` scenarios that the project's integration tests
+  must satisfy.
 - **TASKS.md tests**: what each implementation slice must verify.
   Maps to unit tests the implementer writes before code.
 
 Agents writing implementation code translate these prose tests into
 executable tests in the project's framework, then implement to make
-them pass. Speccy does not enforce TDD ordering (red-before-green); it
-makes the test obligations visible and the reviewer-tests persona
-checks that they're meaningful.
+them pass. Speccy does not run those tests and does not enforce TDD
+ordering (red-before-green); it makes the test obligations visible
+and the reviewer-tests persona checks that they're meaningful.
 
 ### Brownfield posture
 
@@ -853,25 +870,37 @@ checks = ["CHK-003"]
 
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "npm test -- signup.spec.ts"
-proves = "Valid signup persists a user."
+scenario = """
+Given no account exists for alice@example.com, when the signup
+endpoint receives a valid request, then a user row is persisted and
+the response includes a session token.
+"""
 
 [[checks]]
 id = "CHK-002"
-kind = "test"
-command = "npm test -- signup-duplicate.spec.ts"
-proves = "Duplicate email returns 409."
+scenario = """
+Given an account already exists for alice@example.com, when a signup
+request submits the same email, then the response is HTTP 409 with
+an error message containing "already exists".
+"""
 
 [[checks]]
 id = "CHK-003"
-kind = "test"
-command = "npm test -- password-storage.spec.ts"
-proves = "Passwords are hashed before persistence."
+scenario = """
+Given a signup request persists a user, when the password column is
+read directly from storage, then it contains a hash and never the
+original plaintext.
+"""
 ```
 
 Notes:
 
+- Each `[[checks]]` row is exactly `{ id, scenario }`. `scenario` is
+  free-form prose describing the behavior the requirement must
+  satisfy; the project's own tests (and reviewers) judge whether
+  the implementation actually meets it.
+- No `kind`, `command`, `prompt`, or `proves` fields. The CLI does
+  not execute anything; see "Checks" below.
 - No `[spec]` block. Spec metadata (id, slug, title, status,
   created, supersedes) lives in SPEC.md frontmatter.
 - No `[tasks_generation]` block. Spec-hash freshness lives in
@@ -886,10 +915,14 @@ Notes:
 - No `[design]` block. Design lives in SPEC.md narrative.
 - No `[[tasks]]` table. Tasks live in TASKS.md.
 - No `[claim]` table. No leases in v1.
-- `kind` is a free-form string. Conventions: `test`, `command`,
-  `manual`. Projects may add others (`property`, `static`,
-  `schema`, `snapshot`, `migration`). Speccy does not parse the
-  value beyond display.
+
+> Historical note: before SPEC-0018, checks carried `kind`,
+> `command` or `prompt`, and `proves` fields, and `speccy check`
+> spawned subprocesses. That execution surface was removed in
+> SPEC-0018 because semantic judgment about whether a test
+> meaningfully proves behavior belongs to reviewers and project
+> CI, not to Speccy's deterministic core. The old schema and the
+> migration rules live in the SPEC-0018 history.
 
 ## REPORT.md
 
@@ -911,8 +944,8 @@ generated_at: 2026-05-11T19:00:00Z
 delivered | partial | abandoned
 
 ## Requirements coverage
-- REQ-001 Account creation -- CHK-001, CHK-002 PASS
-- REQ-002 Password storage -- CHK-003 PASS
+- REQ-001 Account creation -- CHK-001, CHK-002 (project tests in `tests/auth/signup.spec.ts`)
+- REQ-002 Password storage -- CHK-003 (project tests in `tests/auth/password.spec.ts`)
 
 ## Task summary
 - 6 tasks completed
@@ -985,77 +1018,55 @@ when an implementation has drifted from a decision the spec records.
 
 # Checks
 
-A Check is a proof obligation. The CLI executes checks but does
-not record execution results.
+A Check is an English validation scenario: a durable description of
+behavior a requirement must satisfy. The CLI renders scenarios; it
+does not execute them. Whether the project tests actually satisfy a
+scenario is a question for project CI and for the reviewer-tests
+persona.
 
 ## Definition
 
 ```toml
 [[checks]]
 id = "CHK-001"
-kind = "test"
-command = "npm test -- signup.spec.ts"
-proves = "Valid signup persists a user."
+scenario = """
+Given no account exists for alice@example.com, when the signup
+endpoint receives a valid request, then a user row is persisted and
+the response includes a session token.
+"""
 ```
 
-Required fields: `id`, `kind`, `proves`. Executable checks also
-require `command`. Manual checks require `prompt` instead of
-`command`:
+Required fields: exactly `id` and `scenario`. Unknown fields are
+rejected at parse via `#[serde(deny_unknown_fields)]`. Empty or
+whitespace-only `scenario` values are parse errors naming the
+containing `CHK-NNN`.
 
-```toml
-[[checks]]
-id = "CHK-MANUAL-001"
-kind = "manual"
-prompt = "Sign up via the UI; confirm duplicate email shows the
-         error toast."
-proves = "End-to-end signup UX surfaces duplicate-email error."
-```
+Scenarios are typically Given/When/Then prose, but the CLI does not
+parse the inner structure. Multi-line TOML literal strings
+(`'''...'''`) preserve backslashes and odd whitespace verbatim.
 
-## Execution
+## Rendering
 
 ```sh
-speccy check                       # run all checks across all specs
-speccy check SPEC-0001             # run every check under SPEC-0001
-speccy check SPEC-0001/CHK-001     # run one spec-scoped check
-speccy check SPEC-0001/T-002       # run checks covering one task
-speccy check CHK-001               # run CHK-001 across every spec (DEC-003)
+speccy check                       # render all scenarios across all specs
+speccy check SPEC-0001             # every scenario under SPEC-0001
+speccy check SPEC-0001/CHK-001     # one spec-scoped scenario
+speccy check SPEC-0001/T-002       # scenarios covering one task
+speccy check CHK-001               # CHK-001 across every spec (DEC-003)
 ```
 
 Behavior:
 
-- Executes the `command` from the project root.
-- Streams stdout / stderr live to the terminal.
-- Exits **non-zero** if any check fails.
-- Prints a summary at the end.
+- Prints one `==> CHK-NNN (SPEC-NNNN): <scenario first line>` header
+  per selected scenario, with continuation lines indented under it.
+- Spawns no child processes; writes to no files outside stdout.
+- Closes with `N scenarios rendered across M specs`.
+- Exits non-zero only for selector, lookup, parse, or workspace
+  errors — never because the project's own tests would fail.
 
-No record is written. CI (which calls `speccy verify`, which calls
-`speccy check`) is where execution artifacts live (job logs, test
-reports, etc.). Committing check records into the repo on every
-run was rejected as ceremony in earlier design iterations.
-
-For manual checks, `speccy check CHK-MANUAL-001` prints the prompt
-and exits zero with a "manual; verify and proceed" note. There is
-no manual-evidence file; the reviewer-business or reviewer-tests
-persona is expected to vouch for it.
-
-## No freshness, no records
-
-Speccy does not store hashes of inputs, environment, or definitions
-against check runs. The rationale:
-
-- Storing input globs requires agents to declare them correctly;
-  they don't. Wrong inputs lead to false-fresh and false-stale,
-  both of which mislead downstream prompts.
-- CI is the authoritative place for "did this pass on HEAD?" Local
-  runs are advisory.
-- The proof chain in v1 is: SPEC.md says what behavior matters;
-  spec.toml says what checks prove it; `speccy check` runs them
-  on demand. If you want to know "are the checks passing right
-  now?", you run `speccy check`.
-
-This is a deliberate simplification. The previous design's freshness
-machinery added complexity for negligible benefit in a feedback
-system.
+That is the whole command. Project tests run through the project's
+own test runner (e.g. `cargo test`, `pnpm test`); CI orchestrates
+both that runner and `speccy verify` side by side.
 
 ---
 
@@ -1406,7 +1417,7 @@ Two commands have stable JSON contracts.
       "open_questions": 1,
       "lint": {
         "errors": [],
-        "warnings": ["VAL-001: CHK-003 missing 'proves' field"]
+        "warnings": ["REQ-001: REQ-002 has no covering check"]
       }
     }
   ]
@@ -1488,8 +1499,7 @@ is text output to humans.
 
 Speccy emits a small set of deterministic lint codes. None depend
 on LLM judgment. All have stable prefixes (`SPC-` for spec
-structure, `REQ-` for requirements, `VAL-` for check definitions,
-`TSK-` for task structure).
+structure, `REQ-` for requirements, `TSK-` for task structure).
 
 ```text
 SPC-001  spec.toml missing required field
@@ -1504,11 +1514,7 @@ SPC-007  status = implemented but tasks are not all [x] (informational)
 
 REQ-001  Requirement has no covering check
 REQ-002  Requirement's check IDs reference non-existent checks
-
-VAL-001  Check missing 'proves' field
-VAL-002  Check kind 'test' or 'command' missing 'command' field
-VAL-003  Check kind 'manual' missing 'prompt' field
-VAL-004  Check command is a known no-op (e.g. 'true', ':', 'exit 0')
+REQ-003  spec.toml [[checks]] row is not referenced by any requirement
 
 TSK-001  TASKS.md task references non-existent REQ ID
 TSK-002  TASKS.md task ID format invalid (expected T-NNN)
@@ -1521,9 +1527,13 @@ QST-001  SPEC.md has unchecked open question (soft signal)
 JSON-001 status --json schema version mismatch (informational)
 ```
 
-VAL-004 (no-op command) is the **only** lint code that flags
-"weak proof" mechanically. Everything else about proof quality
-goes to review.
+Nothing here grades scenario quality mechanically. The CLI flags
+presence and reference shape only; whether a scenario is meaningful
+and whether the project tests actually cover it goes to review.
+
+> Historical note: the `VAL-*` lint family (missing `proves`,
+> kind/payload mismatch, no-op `command`) was retired in SPEC-0018
+> when execution-shaped check fields were removed.
 
 Lint codes are stable: changing a code's meaning between minor
 versions is a breaking change. Adding new codes is fine.
@@ -1550,8 +1560,9 @@ These are not v1 features. Each was considered and rejected.
 | TDD exception registry | Don't gate on TDD. Review's job. |
 | `critical` flag on requirements | All requirements equal. |
 | `origin` field | Brownfield context is the planner skill's responsibility, not a TOML field. |
-| Check `inputs` and freshness hashing | Wrong inputs poison the model worse than no inputs. CI runs checks. |
-| Check evidence records | CI captures execution; no need to commit. |
+| Check `inputs` and freshness hashing | Wrong inputs poison the model worse than no inputs. Project CI runs tests. |
+| Check evidence records | Project CI captures execution; no need to commit. |
+| Speccy executing project tests | SPEC-0018 removed this. Project CI runs `cargo test` / `pnpm test` directly; `speccy verify` only validates proof shape. |
 | `--strict` flag | Opinionated, not configurable. |
 | Validation kind enum | Free-form string with conventions. |
 | Solo review policy toggle | Different sessions / personas suffice. |
@@ -1597,9 +1608,9 @@ iteration. That is where drift gets caught in this system.
 V1 makes these failures loud:
 
 - Spec has no requirements
-- Requirement has no covering check
-- Check has no proof claim
-- Check command is a known no-op
+- Requirement has no covering scenario
+- A referenced `CHK-NNN` has no matching `[[checks]]` row
+- A `[[checks]]` row is unreferenced by any requirement
 - TASKS.md references requirements that don't exist
 - TASKS.md is stale relative to SPEC.md (hash or mtime drift)
 - Open question in SPEC.md is unchecked
@@ -1608,7 +1619,9 @@ V1 makes these failures loud:
 
 V1 intentionally does not catch:
 
-- Semantic correctness of any check
+- Semantic correctness of any scenario
+- Whether the project tests actually satisfy a scenario (project CI
+  and the reviewer-tests persona own this)
 - Whether the implementation actually meets `done_when`
 - Whether the reviewer was thorough
 - Whether the agent invented assumptions in implementer notes
@@ -1739,10 +1752,15 @@ values with a clear error.
 
 ## `speccy verify` exit code
 
-Binary. `0` if all checks pass and lint is clean; `1` otherwise.
-Detailed breakdown is available via `speccy verify --json`. CI
-scripts only check the exit code; downstream tooling parses the
-JSON if it needs structured failure info.
+Binary. `0` if proof shape is intact (specs parse, every requirement
+has at least one scenario, every referenced scenario resolves, no
+scenarios are unreferenced); `1` otherwise. `speccy verify` does
+not execute project tests; CI runs the project's own test commands
+alongside it. Detailed breakdown is available via
+`speccy verify --json` (`schema_version = 2`; no `outcome`,
+`exit_code`, or `duration_ms` fields). CI scripts only check the
+exit code; downstream tooling parses the JSON if it needs
+structured failure info.
 
 ## `speccy next` priority
 
@@ -1754,14 +1772,15 @@ When multiple specs have actionable work:
 3. `--kind implement` or `--kind review` overrides the within-spec
    preference and filters to the requested kind across all specs.
 
-## `speccy check` execution
+## `speccy check` rendering
 
-Serial. Each check runs through the project's default shell
-(`sh -c` on Unix, `cmd /c` on Windows). No timeout — the user
-Ctrl+Cs if something hangs. Working directory is the project root
-(the directory containing `.speccy/`). Stdout and stderr stream
-live to the terminal. Exit code is the first non-zero exit code
-encountered, or `0` if all checks pass.
+Serial. For each selected scenario, the command prints
+`==> CHK-NNN (SPEC-NNNN): <scenario first line>` followed by
+indented continuation lines, then closes with `N scenarios
+rendered across M specs`. The working directory is the project
+root (the directory containing `.speccy/`). No subprocesses are
+spawned; exit code is non-zero only for selector, lookup, parse,
+or workspace errors.
 
 ## `speccy review` diff scoping
 
@@ -1807,9 +1826,9 @@ In this order:
 8. `speccy next` (text + `--json`)
 9. `speccy implement` prompt rendering
 10. `speccy review` with persona rendering
-11. `speccy check` (executable, manual, no-op detection)
+11. `speccy check` (scenario rendering)
 12. `speccy report` prompt rendering
-13. `speccy verify` (lint + check)
+13. `speccy verify` (proof-shape validation)
 14. Skill packs: Claude Code, Codex, shared personas
 15. Worked example: dogfood Speccy's own development in
     `.speccy/specs/` once enough of the above lands

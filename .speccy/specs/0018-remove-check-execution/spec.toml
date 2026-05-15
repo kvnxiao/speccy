@@ -22,8 +22,7 @@ checks = ["CHK-005"]
 
 [[checks]]
 id = "CHK-001"
-kind = "manual"
-prompt = """
+scenario = '''
 Given a migrated spec.toml check row with only id and scenario,
 when the parser reads it,
 then it returns a CheckEntry containing exactly those two fields.
@@ -37,13 +36,11 @@ Given a post-migration check row with an empty or whitespace-only
 scenario,
 when the parser reads it,
 then parsing fails with an error naming the containing CHK id.
-"""
-proves = "The check schema collapses to id plus scenario and rejects the legacy executable fields."
+'''
 
 [[checks]]
 id = "CHK-002"
-kind = "manual"
-prompt = """
+scenario = '''
 Given a workspace with multiple specs and scenarios,
 when speccy check runs with no selector,
 then it prints one scenario header per selected scenario, prints no
@@ -56,13 +53,11 @@ then it renders only the scenarios covering that task's requirements.
 Given a missing selector target,
 when speccy check runs,
 then it exits non-zero with the existing selector error wording.
-"""
-proves = "speccy check renders selected scenarios and preserves selector semantics without execution."
+'''
 
 [[checks]]
 id = "CHK-003"
-kind = "manual"
-prompt = """
+scenario = '''
 Given a malformed Speccy artifact or dangling REQ to CHK reference,
 when speccy verify runs,
 then it exits non-zero and reports the shape error.
@@ -75,13 +70,11 @@ Given speccy verify --json,
 when the output is parsed,
 then schema_version is 2 and no execution-shaped fields such as
 outcome, exit_code, or duration_ms appear.
-"""
-proves = "speccy verify is a shape-only validator with a v2 JSON envelope."
+'''
 
 [[checks]]
 id = "CHK-004"
-kind = "manual"
-prompt = """
+scenario = '''
 Given the post-spec production source,
 when git grep searches for speccy_core::exec, run_checks_captured,
 CheckOutcome, CheckResult, CheckSpec, or the execution shell helper,
@@ -90,13 +83,11 @@ then there are no production-source hits.
 Given the post-spec test suite,
 when cargo test --workspace runs,
 then no test depends on Speccy spawning a shell command.
-"""
-proves = "The old execution module and its call sites are gone."
+'''
 
 [[checks]]
 id = "CHK-005"
-kind = "manual"
-prompt = """
+scenario = '''
 Given the post-spec ARCHITECTURE.md and shipped skills,
 when active guidance is searched,
 then it describes scenarios, render-only check, and shape-only verify.
@@ -105,5 +96,4 @@ Given active docs and prompts,
 when searched for kind =, command =, or prompt = check-authoring
 examples,
 then there are no hits except historical migration notes.
-"""
-proves = "Docs and shipped skills teach the new feedback-only scenario contract."
+'''

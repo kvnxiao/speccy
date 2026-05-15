@@ -26,7 +26,22 @@ Author the next slice as `SPEC-{{next_spec_id}}`.
 3. Create the SPEC.md using the PRD-shaped template in
    `.speccy/ARCHITECTURE.md`.
 4. Create `spec.toml` alongside, mapping each requirement to at
-   least one check.
+   least one check. Each `[[checks]]` row is exactly `id` and
+   `scenario` — an English Given/When/Then describing the behavior
+   the requirement must satisfy. Speccy renders these scenarios;
+   project tests and reviewers judge whether they're satisfied.
+
+   ```toml
+   [[checks]]
+   id = "CHK-001"
+   scenario = """
+   Given <preconditions>, when <action>, then <observable result>.
+   """
+   ```
+
+   Do not author `kind`, `command`, `prompt`, or `proves` fields;
+   they were removed in SPEC-0018. The CLI does not run project
+   tests — that is project CI's job.
 5. Surface any material questions inline in `## Open questions`.
 
 Do not write TASKS.md; the next phase will decompose it.
