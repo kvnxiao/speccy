@@ -16,29 +16,24 @@ IDs -- pick up `/speccy-work` or `/speccy-review` first.
 
 ## Steps
 
-1. Confirm all tasks are `[x]`:
+1. Confirm all tasks for the spec are `[x]` (workspace overview;
+   locate the spec row for SPEC-NNNN in the output):
 
    ```bash
-   speccy status SPEC-0007
+   speccy status
    ```
 
-2. Run the CI gate locally as a dry-run before report-writing:
+2. Render the report prompt:
 
    ```bash
-   speccy verify
+   speccy report SPEC-NNNN
    ```
 
-3. Render the report prompt:
-
-   ```bash
-   speccy report SPEC-0007
-   ```
-
-4. Follow the prompt: write `.speccy/specs/NNNN-slug/REPORT.md` with
+3. Follow the prompt: write `.speccy/specs/NNNN-slug/REPORT.md` with
    frontmatter (`spec`, `outcome`, `generated_at`), the requirements
    coverage table, retry counts, and any out-of-scope items
    implementers absorbed.
-5. Flip the SPEC's frontmatter status. Edit
+4. Flip the SPEC's frontmatter status. Edit
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what
    makes the SPEC implemented, so the status flip belongs in the
@@ -51,13 +46,22 @@ IDs -- pick up `/speccy-work` or `/speccy-review` first.
    ```
 
    `speccy status` should report no `TSK-003` mismatch for SPEC-NNNN.
+5. Run the CI gate locally as a dry-run *after* the status flip and
+   hash refresh so verify reads the post-ship tree:
+
+   ```bash
+   speccy verify
+   ```
+
 6. Commit SPEC.md, TASKS.md, REPORT.md, and the code changes from the
    loop. Then push:
 
-   - If this branch has no open PR yet, open one:
+   - If this branch has no open PR yet, open one. Note the
+     `REPORT.md` path is spec-local, not repo-root:
 
      ```bash
-     gh pr create --title "<spec id> <slug>" --body "$(cat REPORT.md)"
+     gh pr create --title "<spec id> <slug>" \
+       --body "$(cat .speccy/specs/NNNN-slug/REPORT.md)"
      ```
 
    - If a PR already exists for this branch (e.g., a long-running
@@ -67,7 +71,7 @@ IDs -- pick up `/speccy-work` or `/speccy-review` first.
      git push
      ```
 
-   The status flip in step 5 lands in the same PR — no follow-up
+   The status flip in step 4 lands in the same PR — no follow-up
    commit needed after merge.
 
 This recipe does not loop.

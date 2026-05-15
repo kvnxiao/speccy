@@ -189,12 +189,15 @@ AGENTS.md                Project-wide product north star + agent conventions
         SPEC.md
         ...
 
-skills/                  Shipped with Speccy; copied by `speccy init`
-  claude-code/
-  codex/
-  shared/
-    personas/
-    prompts/
+resources/               Shipped with Speccy; rendered/copied by `speccy init`
+  modules/               Single-source bodies (no host duplication)
+    personas/            Reviewer persona prompts
+    prompts/             Render-time prompt templates
+    skills/              Skill bodies for the speccy-* verbs
+  agents/                Per-host wrappers (MiniJinja-templated)
+    .claude/             Renders to <project>/.claude/{skills,agents}/
+    .agents/             Renders to <project>/.agents/skills/ (Codex)
+    .codex/              Renders to <project>/.codex/agents/ (Codex)
 ```
 
 `AGENTS.md` lives at project root, not inside `.speccy/`. Every
@@ -215,10 +218,15 @@ skill creates `.speccy/specs/[focus]/MISSION.md` and writes new
 specs into the focus folder. Existing flat specs may be moved into
 a focus folder retroactively; spec IDs do not change.
 
-`skills/` is a top-level directory in the Speccy workspace. `speccy
-init` copies the appropriate host pack into the user's project at
-the host-native location (e.g. `.claude/commands/` for Claude Code,
-`.codex/skills/` for Codex).
+`resources/` is the top-level directory in the Speccy workspace that
+holds shipped bodies: `resources/modules/{personas,prompts,skills}/`
+are the single source of truth, and `resources/agents/` carries the
+per-host wrappers as MiniJinja templates. `speccy init` renders those
+wrappers into the user's project at the host-native location:
+`.claude/skills/speccy-<verb>/` plus `.claude/agents/reviewer-*.md`
+for Claude Code; `.agents/skills/speccy-<verb>/` plus
+`.codex/agents/reviewer-*.toml` for Codex. Persona/prompt bodies the
+user may tune locally are copied once into `.speccy/skills/`.
 
 Decisions (ADRs) are not a separate folder. Each spec's `## Design
 > Decisions` subsection holds the architectural choices made for
@@ -1092,7 +1100,9 @@ Renders a prompt that includes:
 - the diff for the task's claimed work
 - `AGENTS.md`
 - the persona's review-style guidance from
-  `skills/shared/personas/reviewer-{persona}.md`
+  `resources/modules/personas/reviewer-{persona}.md` (shipped) or
+  `.speccy/skills/personas/reviewer-{persona}.md` (project-local
+  override after `speccy init`)
 
 The reviewer sub-agent reads the prompt, performs the review, and
 appends an inline note to the task in TASKS.md:
@@ -1230,18 +1240,16 @@ to-end without each project inventing its own integration.
 ## What ships in v1
 
 ```
-skills/
-  claude-code/
-    speccy/init.md
-    speccy/plan.md
-    speccy/tasks.md
-    speccy/work.md           Implementation loop
-    speccy/review.md         Review loop
-    speccy/amend.md          SPEC.md + TASKS.md surgical edit
-    speccy/ship.md           Run report, open PR
-  codex/
-    (parallel structure)
-  shared/
+resources/
+  modules/
+    skills/
+      speccy-init.md
+      speccy-plan.md
+      speccy-tasks.md
+      speccy-work.md         Implementation loop
+      speccy-review.md       Review loop
+      speccy-amend.md        SPEC.md + TASKS.md surgical edit
+      speccy-ship.md         Run report, open PR
     personas/
       planner.md
       implementer.md
@@ -1259,6 +1267,11 @@ skills/
       implementer.md
       reviewer-<persona>.md
       report.md
+  agents/
+    .claude/skills/speccy-<verb>/SKILL.md.tmpl
+    .claude/agents/reviewer-<persona>.md.tmpl
+    .agents/skills/speccy-<verb>/SKILL.md.tmpl
+    .codex/agents/reviewer-<persona>.toml.tmpl
 ```
 
 ## `speccy init` host detection
@@ -1269,14 +1282,16 @@ speccy init --host claude-code
 speccy init --host codex
 ```
 
-Init copies `skills/<host>/*` into the host-native location:
+Init renders the per-host wrappers into host-native locations:
 
-- Claude Code: `.claude/commands/*.md`
-- Codex: `.codex/skills/*.md`
+- Claude Code: `.claude/skills/speccy-<verb>/SKILL.md` plus
+  `.claude/agents/reviewer-<persona>.md`
+- Codex: `.agents/skills/speccy-<verb>/SKILL.md` plus
+  `.codex/agents/reviewer-<persona>.toml`
 
-The user gets immediate access to `/speccy:plan`, `/speccy:work`,
-`/speccy:review`, `/speccy:amend`, `/speccy:ship` in their host
-without any further setup.
+The user gets immediate access to the `speccy-*` skills in their host
+without any further setup. Reviewer personas register as native
+subagents on Claude Code and as agent definitions on Codex.
 
 ## Workflow recipes
 
@@ -1700,9 +1715,11 @@ empty lists or null. The parser does not distinguish.
 
 Lookup order:
 
-1. Project-local: `.speccy/skills/personas/reviewer-X.md`
-2. Shipped (copied at `speccy init` time): `.claude/commands/`
-   or equivalent host location
+1. Project-local: `.speccy/skills/personas/reviewer-X.md` (copied
+   to `.speccy/skills/` at `speccy init` time so users can tune
+   them)
+2. Shipped fallback compiled into the CLI binary:
+   `resources/modules/personas/reviewer-X.md`
 
 If the project-local override exists but is malformed, lint warns
 and the CLI falls through to the shipped version.

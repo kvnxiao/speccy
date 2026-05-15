@@ -187,6 +187,48 @@ fn specs_are_returned_in_ascending_id_order() -> TestResult {
 }
 
 #[test]
+fn discovers_specs_inside_mission_focus_folders() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+
+    // Ungrouped flat spec.
+    write_spec(&root, "0001-flat", VALID_SPEC_MD, VALID_SPEC_TOML)?;
+
+    // Mission-grouped specs under `auth/`.
+    let auth = root.join(".speccy").join("specs").join("auth");
+    fs_err::create_dir_all(auth.join("0002-signup").as_std_path())?;
+    fs_err::write(
+        auth.join("0002-signup").join("SPEC.md").as_std_path(),
+        VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0002"),
+    )?;
+    fs_err::write(
+        auth.join("0002-signup").join("spec.toml").as_std_path(),
+        VALID_SPEC_TOML,
+    )?;
+    fs_err::create_dir_all(auth.join("0003-reset").as_std_path())?;
+    fs_err::write(
+        auth.join("0003-reset").join("SPEC.md").as_std_path(),
+        VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0003"),
+    )?;
+    fs_err::write(
+        auth.join("0003-reset").join("spec.toml").as_std_path(),
+        VALID_SPEC_TOML,
+    )?;
+    // Optional MISSION.md alongside the specs — not a spec dir, must
+    // not be picked up.
+    fs_err::write(auth.join("MISSION.md").as_std_path(), "# Mission: auth\n")?;
+
+    let ws = scan(&root);
+    let ids: Vec<_> = ws.specs.iter().filter_map(|s| s.spec_id.clone()).collect();
+    assert_eq!(
+        ids,
+        vec!["SPEC-0001", "SPEC-0002", "SPEC-0003"],
+        "mission-grouped specs under .speccy/specs/auth/ must be discovered alongside flat ones",
+    );
+    Ok(())
+}
+
+#[test]
 fn tasks_md_optional() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;

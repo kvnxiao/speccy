@@ -63,7 +63,7 @@ fn envelope_and_variants() -> TestResult {
     );
     assert_eq!(
         parsed.get("prompt_command"),
-        Some(&serde_json::json!("speccy implement T-001")),
+        Some(&serde_json::json!("speccy implement SPEC-0001/T-001")),
     );
 
     // review
@@ -91,7 +91,7 @@ fn envelope_and_variants() -> TestResult {
     assert_eq!(
         parsed2.get("prompt_command_template"),
         Some(&serde_json::json!(
-            "speccy review T-002 --persona {persona}"
+            "speccy review SPEC-0001/T-002 --persona {persona}"
         )),
     );
 

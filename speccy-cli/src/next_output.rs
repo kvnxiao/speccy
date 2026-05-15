@@ -126,7 +126,7 @@ pub fn render_json(result: &NextResult) -> JsonOutput {
             task_line: task_line.clone(),
             covers: covers.clone(),
             suggested_files: suggested_files.clone(),
-            prompt_command: format!("speccy implement {task}"),
+            prompt_command: format!("speccy implement {spec}/{task}"),
         }),
         NextResult::Review {
             spec,
@@ -139,7 +139,7 @@ pub fn render_json(result: &NextResult) -> JsonOutput {
             task: task.clone(),
             task_line: task_line.clone(),
             personas: personas.iter().map(|p| (*p).to_owned()).collect(),
-            prompt_command_template: format!("speccy review {task} --persona {{persona}}"),
+            prompt_command_template: format!("speccy review {spec}/{task} --persona {{persona}}"),
         }),
         NextResult::Report { spec } => JsonOutput::Report(JsonReport {
             schema_version: 1,

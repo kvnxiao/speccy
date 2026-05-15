@@ -346,6 +346,39 @@ fn enumerate_spec_dirs(specs_dir: &Utf8Path) -> Vec<Utf8PathBuf> {
             continue;
         }
         let path = entry.path();
+        let Ok(utf8) = Utf8PathBuf::from_path_buf(path) else {
+            continue;
+        };
+        let Some(name) = utf8.file_name() else {
+            continue;
+        };
+        if pattern.is_match(name) {
+            // Ungrouped spec directly under `.speccy/specs/`.
+            out.push(utf8);
+        } else {
+            // Treat as a mission (focus) folder. Architecture allows
+            // exactly one level of grouping, so scan one level deeper
+            // for `NNNN-slug` children. Spec IDs remain globally unique
+            // across the workspace; the focus folder is purely a
+            // grouping device.
+            enumerate_focus_folder(&utf8, pattern, &mut out);
+        }
+    }
+    out
+}
+
+fn enumerate_focus_folder(focus_dir: &Utf8Path, pattern: &Regex, out: &mut Vec<Utf8PathBuf>) {
+    let Ok(entries) = fs_err::read_dir(focus_dir.as_std_path()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let path = entry.path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
@@ -357,7 +390,6 @@ fn enumerate_spec_dirs(specs_dir: &Utf8Path) -> Vec<Utf8PathBuf> {
         };
         out.push(utf8);
     }
-    out
 }
 
 fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {

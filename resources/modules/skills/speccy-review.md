@@ -44,10 +44,10 @@ implementations complete.
    directly:
 
    ```bash
-   speccy review T-003 --persona business
-   speccy review T-003 --persona tests
-   speccy review T-003 --persona security
-   speccy review T-003 --persona style
+   speccy review SPEC-NNNN/T-003 --persona business
+   speccy review SPEC-NNNN/T-003 --persona tests
+   speccy review SPEC-NNNN/T-003 --persona security
+   speccy review SPEC-NNNN/T-003 --persona style
    ```
 
 5. After all four return, read the appended notes. If every persona

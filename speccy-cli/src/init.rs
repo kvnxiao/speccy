@@ -95,6 +95,14 @@ enum Action {
     Create,
     /// Destination exists and is a shipped file; will be replaced.
     Overwrite,
+    /// Destination exists and is user-tunable; the user's bytes win.
+    ///
+    /// Used for `.speccy/skills/personas/` and `.speccy/skills/prompts/`
+    /// — README invites local customisation, so `--force` must not
+    /// stomp those edits. Re-running init refreshes shipped wrappers
+    /// (`.claude/skills/`, `.codex/agents/`, etc.) but leaves these
+    /// alone.
+    Skip,
 }
 
 impl Action {
@@ -102,6 +110,7 @@ impl Action {
         match self {
             Action::Create => "create",
             Action::Overwrite => "overwrite",
+            Action::Skip => "skip",
         }
     }
 }
@@ -153,9 +162,10 @@ pub fn run(
     let outcome = execute_plan(&plan)?;
     writeln!(
         out,
-        "Init complete: {created} created, {overwritten} overwritten.",
+        "Init complete: {created} created, {overwritten} overwritten, {skipped} skipped.",
         created = outcome.created,
         overwritten = outcome.overwritten,
+        skipped = outcome.skipped,
     )?;
 
     Ok(())
@@ -165,6 +175,7 @@ pub fn run(
 struct Outcome {
     created: u32,
     overwritten: u32,
+    skipped: u32,
 }
 
 fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>, InitError> {
@@ -182,11 +193,14 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 
     append_host_pack_items(project_root, host, &mut plan)?;
 
+    // Personas and prompts under `.speccy/skills/` are user-tunable
+    // bodies: copy them once, but leave existing files alone on
+    // subsequent `--force` runs so local edits survive upgrades.
     let personas_dest = project_root.join(".speccy").join("skills").join("personas");
-    append_dir_items(&PERSONAS, &personas_dest, &mut plan);
+    append_user_tunable_dir_items(&PERSONAS, &personas_dest, &mut plan);
 
     let prompts_dest = project_root.join(".speccy").join("skills").join("prompts");
-    append_dir_items(&PROMPTS, &prompts_dest, &mut plan);
+    append_user_tunable_dir_items(&PROMPTS, &prompts_dest, &mut plan);
 
     Ok(plan)
 }
@@ -225,17 +239,24 @@ fn append_host_pack_items(
 /// [`PlanItem`] per shipped markdown file to `plan`. Used for the
 /// shared persona and prompt bundles re-exported from `speccy-core`
 /// after the SPEC-0016 T-002 layout move.
-fn append_dir_items(dir: &'static Dir<'static>, dest_root: &Utf8Path, plan: &mut Vec<PlanItem>) {
-    // Strip the directory's own root segment so each entry lands flat
-    // under `dest_root`, matching the pre-T-002 behaviour of writing
-    // every persona / prompt straight into the destination folder.
+/// Append shipped persona/prompt bodies that the user is expected to
+/// tune locally. Pre-existing destinations stay untouched even under
+/// `--force`; only missing files are created.
+fn append_user_tunable_dir_items(
+    dir: &'static Dir<'static>,
+    dest_root: &Utf8Path,
+    plan: &mut Vec<PlanItem>,
+) {
     let prefix = dir.path().to_str().unwrap_or_default().to_owned();
     let mut entries: Vec<(Utf8PathBuf, &'static [u8])> = Vec::new();
     collect_bundle_files(dir, &prefix, &mut entries);
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     for (rel, content) in entries {
         let dest = dest_root.join(&rel);
-        let action = classify(&dest);
+        let action = match classify(&dest) {
+            Action::Create => Action::Create,
+            Action::Overwrite | Action::Skip => Action::Skip,
+        };
         plan.push(PlanItem {
             destination: dest,
             content: content.to_vec(),
@@ -319,13 +340,17 @@ fn display_relative(dest: &Utf8Path, project_root: &Utf8Path) -> String {
 fn execute_plan(plan: &[PlanItem]) -> Result<Outcome, InitError> {
     let mut outcome = Outcome::default();
     for item in plan {
-        write_item(item)?;
         match item.action {
             Action::Create => {
+                write_item(item)?;
                 outcome.created = outcome.created.saturating_add(1);
             }
             Action::Overwrite => {
+                write_item(item)?;
                 outcome.overwritten = outcome.overwritten.saturating_add(1);
+            }
+            Action::Skip => {
+                outcome.skipped = outcome.skipped.saturating_add(1);
             }
         }
     }
