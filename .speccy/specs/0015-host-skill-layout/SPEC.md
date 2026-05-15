@@ -2,7 +2,7 @@
 id: SPEC-0015
 slug: host-skill-layout
 title: Host skill packs use SKILL.md directory format
-status: in-progress
+status: implemented
 created: 2026-05-14
 supersedes: []
 ---

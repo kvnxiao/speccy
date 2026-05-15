@@ -2,7 +2,7 @@
 id: SPEC-0014
 slug: handoff-and-friction-conventions
 title: Handoff template + friction-to-skill-update conventions in shipped skills
-status: in-progress
+status: implemented
 created: 2026-05-13
 ---
 

@@ -2,7 +2,7 @@
 id: SPEC-0017
 slug: check-selector
 title: speccy check -- polymorphic positional selector (SPEC / task / CHK)
-status: in-progress
+status: implemented
 created: 2026-05-14
 supersedes: []
 ---
