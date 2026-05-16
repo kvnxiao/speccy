@@ -77,3 +77,71 @@ fn unknown_template_name_returns_template_not_found() {
         "expected TemplateNotFound{{ name: \"nonexistent.md\" }}, got {err:?}",
     );
 }
+
+// --------------------------------------------------------------------
+// SPEC-0020 T-007: the shipped plan-greenfield prompt must teach the
+// raw XML element grammar. The skill flow itself can only be executed
+// by an LLM agent, so this test lowers the bar to the underlying
+// contract: the template body must (a) contain a `<requirement` open
+// tag in its example fixture, (b) contain a `<scenario` open tag in
+// its example fixture, and (c) contain no `<!-- speccy:` substring
+// anywhere — the SPEC-0019 carrier was fully superseded.
+// --------------------------------------------------------------------
+
+#[test]
+fn spec_0020_plan_greenfield_template_teaches_xml_element_grammar() {
+    let body = load_template("plan-greenfield.md")
+        .expect("plan-greenfield.md must ship in the embedded bundle");
+    assert!(
+        body.contains("<requirement"),
+        "plan-greenfield template must teach the `<requirement` open tag \
+         after SPEC-0020 (raw XML element carrier)",
+    );
+    assert!(
+        body.contains("<scenario"),
+        "plan-greenfield template must teach the `<scenario` open tag \
+         after SPEC-0020 (raw XML element carrier)",
+    );
+    assert!(
+        !body.contains("<!-- speccy:"),
+        "plan-greenfield template must not teach the SPEC-0019 legacy \
+         `<!-- speccy:` marker form after SPEC-0020 superseded the carrier",
+    );
+}
+
+#[test]
+fn spec_0020_plan_amend_template_teaches_xml_element_grammar() {
+    let body =
+        load_template("plan-amend.md").expect("plan-amend.md must ship in the embedded bundle");
+    assert!(
+        body.contains("<requirement"),
+        "plan-amend template must teach the `<requirement` open tag \
+         after SPEC-0020 (raw XML element carrier)",
+    );
+    assert!(
+        body.contains("<scenario"),
+        "plan-amend template must teach the `<scenario` open tag \
+         after SPEC-0020 (raw XML element carrier)",
+    );
+    assert!(
+        !body.contains("<!-- speccy:"),
+        "plan-amend template must not teach the SPEC-0019 legacy \
+         `<!-- speccy:` marker form after SPEC-0020 superseded the carrier",
+    );
+}
+
+#[test]
+fn spec_0020_implementer_template_teaches_xml_element_grammar() {
+    let body =
+        load_template("implementer.md").expect("implementer.md must ship in the embedded bundle");
+    assert!(
+        body.contains("<scenario"),
+        "implementer template must teach the `<scenario` element form \
+         after SPEC-0020 (raw XML element carrier)",
+    );
+    assert!(
+        !body.contains("<!-- speccy:"),
+        "implementer template must not teach the SPEC-0019 legacy \
+         `<!-- speccy:` marker form after SPEC-0020 superseded the carrier",
+    );
+}

@@ -80,7 +80,7 @@ allocation.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Greenfield prompt rendering
 
 `speccy plan` with no arg renders the greenfield prompt.
@@ -119,14 +119,17 @@ allocation.
   exit code is 1 with a stderr message stating `.speccy/` was not
   found walking up from cwd.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 speccy plan (no arg) renders plan-greenfield.md with agents and next_spec_id placeholders substituted; no vision placeholder exists; output goes to stdout.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-002" -->
+</scenario>
+
+<scenario id="CHK-002">
 speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stating the workspace was not found walking up from cwd.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Amendment prompt rendering
 
 `speccy plan SPEC-NNNN` renders the amendment prompt.
@@ -171,7 +174,7 @@ speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stati
 - Given `speccy plan FOO`, then exit code is 1 with a format
   error naming the invalid argument.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given `speccy plan SPEC-0001` and
   `.speccy/specs/0001-artifact-parsers/` exists (flat), when the
   command runs, then the rendered output contains the full SPEC.md
@@ -187,9 +190,11 @@ speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stati
   error naming the invalid argument.
 
 speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; the nearest parent MISSION.md is substituted at {{mission}} when present (or an ungrouped marker when absent); invalid ID format exits 1; missing spec exits 1 naming the ID; mission-grouped specs (e.g. .speccy/specs/auth/0042-signup/) resolve correctly.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Spec ID allocation
 
 Allocate the next available `SPEC-NNNN` ID by walking `specs/`
@@ -220,7 +225,7 @@ recursively so flat and mission-grouped specs share one ID space.
 - Given a non-matching directory `_scratch` alongside `0001-foo`,
   the allocator returns `"0002"`.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given an empty `specs/`, the allocator returns `"0001"`.
 - Given flat `0001-foo` and `0003-bar`, the allocator returns
   `"0004"` (no gap recycling).
@@ -232,9 +237,11 @@ recursively so flat and mission-grouped specs share one ID space.
   the allocator returns `"0002"`.
 
 allocate_next_spec_id walks specs/** recursively across mission folders and flat specs alike; returns max(existing) + 1 zero-padded to 4 digits; empty specs/ yields 0001; gaps left by dropped specs are not recycled; non-matching directories that are not mission folders are ignored.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: AGENTS.md loading (cross-cutting helper)
 
 Load AGENTS.md from the project root for inclusion in every
@@ -259,7 +266,7 @@ prompt-rendering command's output.
 - Given AGENTS.md exists but is unreadable (permission denied),
   the function returns the error-marker and stderr warns.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - Given AGENTS.md exists with content `# Agents\n<rest>`, the
   function returns that content verbatim.
 - Given AGENTS.md is missing, the function returns the marker and
@@ -268,9 +275,11 @@ prompt-rendering command's output.
   the function returns the error-marker and stderr warns.
 
 load_agents_md returns file content when present; returns marker + stderr warning when missing; returns error-marker + stderr warning on I/O error.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: Template loading and placeholder substitution (cross-cutting helper)
 
 Load embedded prompt templates and substitute `{{NAME}}`
@@ -304,14 +313,17 @@ placeholders.
 - Given `load_template("nope.md")`, the result is
   `PromptError::TemplateNotFound { name: "nope.md" }`.
 
-<!-- speccy:scenario id="CHK-006" -->
+<scenario id="CHK-006">
 render substitutes every {{name}} placeholder; single-pass means substituted text is not re-scanned for further placeholders.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-007" -->
+</scenario>
+
+<scenario id="CHK-007">
 render leaves unrecognised {{placeholders}} in place and prints a stderr warning naming each unique unmatched placeholder.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-006" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-006">
 ### REQ-006: Context-budget trimming (cross-cutting helper)
 
 Drop low-priority sections from the rendered prompt when it
@@ -349,7 +361,7 @@ exceeds a budget threshold.
   leave the result at 150,000, `fits = false`, stderr warns about
   the overrun, and the 150,000-char output is emitted.
 
-<!-- speccy:scenario id="CHK-008" -->
+<scenario id="CHK-008">
 - Given a 60,000-char rendered prompt and an 80,000 budget,
   `output == rendered`, `dropped = []`, `fits = true`.
 - Given a 100,000-char rendered prompt with a 5,000-char `##
@@ -363,9 +375,11 @@ exceeds a budget threshold.
   the overrun, and the 150,000-char output is emitted.
 
 trim_to_budget drops sections in ARCHITECTURE.md order until under budget; sets fits=false and warns on stderr when output still exceeds budget after all drops.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-007" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-007">
 ### REQ-007: Nearest-parent MISSION.md walking (cross-cutting helper)
 
 Walk upward from a spec directory looking for the nearest parent
@@ -399,7 +413,7 @@ Walk upward from a spec directory looking for the nearest parent
 - Given a malformed unreadable `MISSION.md`, the function returns
   the unreadable marker and stderr is non-empty.
 
-<!-- speccy:scenario id="CHK-009" -->
+<scenario id="CHK-009">
 - Given `specs_root = .speccy/specs/` and
   `spec_dir = .speccy/specs/0001-foo/` with no MISSION.md anywhere,
   the function returns the ungrouped marker.
@@ -411,8 +425,10 @@ Walk upward from a spec directory looking for the nearest parent
   the unreadable marker and stderr is non-empty.
 
 find_nearest_mission_md returns parent MISSION.md content when present in the spec's mission folder; returns an ungrouped marker when no MISSION.md is found up to specs_root; returns an unreadable marker plus stderr warning on I/O error.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -443,7 +459,7 @@ Flow per invocation:
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Simple `{{NAME}}` placeholder substitution
 
 **Status:** Accepted
@@ -460,8 +476,9 @@ no filters.
 **Consequences:** Templates are dead-simple to author. If logic
 is needed, the CLI computes it ahead of time and passes the
 result as a variable.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Prompt templates ship embedded in the binary
 
 **Status:** Accepted
@@ -476,8 +493,9 @@ by name (file name within the bundle).
 - Runtime fetch -- rejected. No network access for the CLI.
 **Consequences:** Updating prompts requires a speccy release.
 Matches SPEC-0002 DEC-001 reasoning.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: AGENTS.md missing is a warning, not an error
 
 **Status:** Accepted
@@ -496,8 +514,9 @@ not loaded.
 work that doesn't follow conventions if AGENTS.md is missing.
 Acceptable; the marker makes the gap visible to both the agent
 and the developer.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: Hardcoded context budget at 80,000 characters in v1
 
 **Status:** Accepted
@@ -514,8 +533,9 @@ default across all modern hosts.
 **Consequences:** Users with smaller-context hosts may still hit
 limits; users with larger hosts get more aggressive trimming
 than needed. Documented as a known limitation.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-005" status="accepted" -->
+</decision>
+
+<decision id="DEC-005" status="accepted">
 #### DEC-005: Spec ID allocation is "max + 1"; no gap recycling
 
 **Status:** Accepted (per ARCHITECTURE.md "Spec ID allocation")
@@ -528,7 +548,8 @@ leave permanent gaps.
 **Alternatives:**
 - Recycle gaps -- rejected per historical-ambiguity reasoning.
 **Consequences:** Spec ID space grows monotonically. Acceptable.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -629,12 +650,12 @@ and SPEC-0002 (embedded-bundle mechanism).
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-14 | agent/claude | Vision noun retired. Greenfield path no longer reads `.speccy/VISION.md`; product north star now lives in `AGENTS.md`. Amendment path walks upward from the spec dir for the nearest parent `MISSION.md` (introduced REQ-007 + `prompt::find_nearest_mission_md`). REQ-003 spec-ID allocation now walks `specs/**` recursively so flat and mission-grouped specs share one ID space. `plan-greenfield.md` template loses the `{{vision}}` placeholder; `plan-amend.md` gains `{{mission}}`. `PlanError::VisionMissing` / `VisionIo` removed; missing AGENTS.md is a warning, not an error. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

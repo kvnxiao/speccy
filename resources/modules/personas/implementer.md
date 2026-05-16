@@ -15,7 +15,7 @@ into executable tests and write the code that makes them pass.
 - Running the project's own test command (`cargo test`, `pnpm test`,
   etc.) locally before flipping to `[?]` so reviewers see green-CI
   work, not "compiles on my machine". `speccy check` only renders
-  the `speccy:scenario` marker blocks you are satisfying; it does
+  the `<scenario>` element blocks you are satisfying; it does
   not run project tests.
 - Inline implementer notes that future reviewers (and future you) can
   read to reconstruct context.

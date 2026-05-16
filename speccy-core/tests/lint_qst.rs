@@ -32,23 +32,23 @@ const SPEC_BASE: &str = indoc! {r#"
 
     # Spec
 
-    <!-- speccy:requirement id="REQ-001" -->
+    <requirement id="REQ-001">
     ### REQ-001: First
     body
-    <!-- speccy:scenario id="CHK-001" -->
+    <scenario id="CHK-001">
     covers
-    <!-- /speccy:scenario -->
-    <!-- /speccy:requirement -->
+    </scenario>
+    </requirement>
 "#};
 
 const CHANGELOG: &str = indoc! {r"
     ## Changelog
 
-    <!-- speccy:changelog -->
+    <changelog>
     | Date | Author | Summary |
     |------|--------|---------|
     | 2026-05-11 | t | init |
-    <!-- /speccy:changelog -->
+    </changelog>
 "};
 
 #[test]

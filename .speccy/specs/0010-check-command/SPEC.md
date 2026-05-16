@@ -69,7 +69,7 @@ full picture in one invocation.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Check discovery
 
 Collect every check from every spec's `spec.toml`.
@@ -99,14 +99,17 @@ Collect every check from every spec's `spec.toml`.
   from the other two specs still run; the eventual exit code is
   non-zero (a malformed spec.toml is a real error).
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 speccy check enumerates every [[checks]] across all spec.toml files in (spec_id ascending, declared check order) order.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-002" -->
+</scenario>
+
+<scenario id="CHK-002">
 Empty workspace prints 'No checks defined.' and exits 0; malformed spec.toml is skipped with a stderr warning and contributes exit code 1.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: CHK-ID filtering
 
 Restrict execution to a single check ID when one is supplied.
@@ -132,7 +135,7 @@ Restrict execution to a single check ID when one is supplied.
   hint.
 - Given `speccy check FOO`, exit code is 1 with a format error.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given SPEC-0001 has CHK-001 and SPEC-0003 has CHK-001 (both
   legitimate; scoped per spec), when `speccy check CHK-001` runs,
   then both matching checks execute in spec-ID ascending order.
@@ -142,9 +145,11 @@ Restrict execution to a single check ID when one is supplied.
 - Given `speccy check FOO`, exit code is 1 with a format error.
 
 speccy check CHK-NNN runs only matching IDs (across all specs where that ID exists); unknown ID exits 1; malformed ID format exits 1.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Shell execution and live streaming
 
 Execute commands via the project shell with stdout/stderr inheriting
@@ -174,14 +179,17 @@ the parent.
 - Given a check exiting with code 2, the footer reads `<-- CHK-NNN
   FAIL (exit 2)`.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 Unix uses sh -c; Windows uses cmd /c; working directory is the project root containing .speccy/.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-005" -->
+</scenario>
+
+<scenario id="CHK-005">
 Child stdout/stderr stream live to the terminal via inherited stdio; speccy prints header (==>) and footer (<--) lines around each executable check.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Exit code semantics
 
 Run every check; exit with the first non-zero exit code encountered.
@@ -205,7 +213,7 @@ Run every check; exit with the first non-zero exit code encountered.
   both executable checks run, the manual check prints its prompt,
   and the exit code reflects only the executable checks.
 
-<!-- speccy:scenario id="CHK-006" -->
+<scenario id="CHK-006">
 - Given three checks (pass, fail-2, fail-1), then all three run and
   the final exit code is 2.
 - Given three passing checks, then exit code is 0.
@@ -214,9 +222,11 @@ Run every check; exit with the first non-zero exit code encountered.
   and the exit code reflects only the executable checks.
 
 All executable checks run regardless of earlier failures; exit code is the first non-zero exit code from any check; manual checks don't affect exit code.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: Manual check rendering
 
 Print the prompt for kind = `manual` (or any check with `prompt`
@@ -242,7 +252,7 @@ but no `command`); never execute them.
 - Given a check with `kind = "property"` (free-form) and a `prompt`
   field but no `command`, it is treated as manual.
 
-<!-- speccy:scenario id="CHK-007" -->
+<scenario id="CHK-007">
 - Given a check with `kind = "manual"` and `prompt = "Sign up via
   the UI; confirm duplicate email shows the error toast."`, when
   it runs, then stdout contains both the prompt text verbatim and
@@ -251,9 +261,11 @@ but no `command`); never execute them.
   field but no `command`, it is treated as manual.
 
 Manual checks (kind=manual or any kind with prompt but no command) print the prompt and a MANUAL footer; never spawn subprocesses; never affect exit code.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-006" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-006">
 ### REQ-006: Output format and summary
 
 Print a deterministic final summary after every run.
@@ -272,15 +284,17 @@ Print a deterministic final summary after every run.
 - Given zero checks, the only stdout line is `No checks defined.`
   and exit code is 0.
 
-<!-- speccy:scenario id="CHK-008" -->
+<scenario id="CHK-008">
 - Given five checks (3 pass, 1 fail, 1 manual), the last stdout
   line is `3 passed, 1 failed, 1 manual`.
 - Given zero checks, the only stdout line is `No checks defined.`
   and exit code is 0.
 
 Final summary '<N> passed, <M> failed, <K> manual' is the last stdout line regardless of pass/fail outcome; empty workspace prints 'No checks defined.' instead.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -297,7 +311,7 @@ The command produces no record. Output is the only artifact.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Compile-time shell selection
 
 **Status:** Accepted
@@ -313,8 +327,9 @@ runtime detection just adds cost without changing behaviour.
   surface bloat for v1.
 **Consequences:** Users on Windows who prefer PowerShell must write
 `cmd`-compatible commands or wait for a future override knob.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Run-all-then-report, not fail-fast
 
 **Status:** Accepted
@@ -328,8 +343,9 @@ recorded exit code is the first non-zero exit code observed.
 - Configurable -- rejected. Adds a knob without a clear use case.
 **Consequences:** Long invocations don't short-circuit. Users with
 slow check suites run `speccy check CHK-NNN` to scope to one.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: CHK IDs are spec-scoped; cross-spec collision is legitimate
 
 **Status:** Accepted
@@ -346,8 +362,9 @@ error.
   design.
 **Consequences:** A future flag (`--spec SPEC-NNNN`) could narrow
 selection; not needed for v1.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: No execution records (per ARCHITECTURE.md)
 
 **Status:** Accepted
@@ -360,7 +377,8 @@ terminal; CI artifact storage handles persistence.
 **Consequences:** The proof-chain in v1 is: SPEC.md says what
 matters; spec.toml says what checks prove it; running them is
 on-demand.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -420,12 +438,12 @@ landing first.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` checks are skipped; `Fail` outcomes on `in-progress` specs are reported as IN-FLIGHT and do not gate the exit code (only `implemented` failures gate). Summary line gains an `in-flight` count. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

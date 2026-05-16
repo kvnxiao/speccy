@@ -58,7 +58,7 @@ command.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: SPEC-ID validation and spec lookup
 
 Validate the argument and locate the spec.
@@ -78,16 +78,18 @@ Validate the argument and locate the spec.
 - `speccy report SPEC-0001` (TASKS.md missing) -> exit 1,
   TASKS.md-required error.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 - `speccy report FOO` -> exit 1, format error.
 - `speccy report SPEC-9999` -> exit 1, spec-not-found.
 - `speccy report SPEC-0001` (TASKS.md missing) -> exit 1,
   TASKS.md-required error.
 
 speccy report validates SPEC-ID format; spec-not-found exits 1; missing or malformed SPEC.md / TASKS.md exits 1 with clear error messages.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Completeness gate
 
 Refuse to render if any task is not `[x]`.
@@ -110,7 +112,7 @@ Refuse to render if any task is not `[x]`.
 - Given TASKS.md has no task lines at all, the prompt renders
   (vacuous completeness).
 
-<!-- speccy:scenario id="CHK-002" -->
+<scenario id="CHK-002">
 - Given SPEC-0001 with 5 `[x]` tasks and 1 `[ ]` task, exit
   code is 1 and stderr names the `[ ]` task.
 - Given SPEC-0001 with one `[~]` task, exit code 1; stderr
@@ -120,9 +122,11 @@ Refuse to render if any task is not `[x]`.
   (vacuous completeness).
 
 Refuses with exit 1 when any task is [ ], [~], or [?]; renders the prompt only when all tasks are [x]; empty TASKS.md (no tasks) is treated as vacuously complete.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Retry count computation per task
 
 Count `Retry:` markers per task from inline notes.
@@ -148,7 +152,7 @@ Count `Retry:` markers per task from inline notes.
   - T-002: 0 retries
   ```
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given T-001 has notes
   `["Implementer note: ...", "Review (business, pass): ...",
   "Retry: address bcrypt cost.", "Implementer note: ...",
@@ -161,9 +165,11 @@ Count `Retry:` markers per task from inline notes.
   ```
 
 Retry count per task equals the number of notes beginning with 'Retry:' (case-sensitive prefix); rendered as a markdown list under the retry_summary placeholder.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Render report prompt
 
 Render the Phase 5 prompt to stdout.
@@ -181,14 +187,16 @@ Render the Phase 5 prompt to stdout.
   all placeholders substituted.
 - Retry summary appears where `{{retry_summary}}` was.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given the completeness gate passes, the prompt renders with
   all placeholders substituted.
 - Retry summary appears where `{{retry_summary}}` was.
 
 When completeness passes, report.md template loaded with spec_id, spec_md, tasks_md, retry_summary, agents placeholders substituted; budget trimming applied; output to stdout.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -210,7 +218,7 @@ Flow per invocation:
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: All tasks must be `[x]`; no partial-report flag in v1
 
 **Status:** Accepted
@@ -225,8 +233,9 @@ elsewhere). The CLI refuses to render otherwise.
   already covers abandoned work.
 **Consequences:** The orchestrating skill (`/speccy:ship`) can
 trust that "if `speccy report` succeeds, the spec is done."
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Retry count = `Retry:` marker occurrences in notes
 
 **Status:** Accepted (per ARCHITECTURE.md "TASKS.md State Model")
@@ -244,8 +253,9 @@ proxy for "how many times did this task come back."
 **Consequences:** A task that's been retried but had its
 `Retry:` notes manually edited out wouldn't count -- which is
 fine; the agent can always edit the report.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: `status: dropped` does NOT bypass the completeness gate
 
 **Status:** Accepted for v1; revisitable
@@ -261,7 +271,8 @@ uniformly regardless of status.
 **Consequences:** Abandoned specs end at the SPEC.md changelog
 row noting why; no REPORT.md is written. Revisit if a real
 workflow needs the contrary.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -308,11 +319,11 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

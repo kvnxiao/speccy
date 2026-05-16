@@ -50,24 +50,24 @@ fn marker_spec_md_two_scenarios(spec_id: &str, status: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         Given the workspace, when CHK-001 is selected, then alpha is asserted.
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-002" -->
+        </scenario>
+        <scenario id="CHK-002">
         Given the workspace, when CHK-002 is selected, then beta is asserted.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template
         .replace("__ID__", spec_id)
@@ -88,27 +88,27 @@ fn marker_spec_md_three_scenarios(spec_id: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         first in __ID__
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-002" -->
+        </scenario>
+        <scenario id="CHK-002">
         second in __ID__
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-003" -->
+        </scenario>
+        <scenario id="CHK-003">
         third in __ID__
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template.replace("__ID__", spec_id)
 }
@@ -126,23 +126,23 @@ fn marker_spec_md_multiline_scenario(spec_id: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         Given a multi-line scenario,
         when CHK-001 is rendered,
         then continuation lines are indented.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template.replace("__ID__", spec_id)
 }
@@ -431,31 +431,31 @@ fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
 
         # SPEC-0010
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         covers REQ-001
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-002" -->
+        </scenario>
+        <scenario id="CHK-002">
         unrelated
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
-        <!-- speccy:requirement id="REQ-002" -->
+        </scenario>
+        </requirement>
+        <requirement id="REQ-002">
         ### REQ-002: Second
         body
-        <!-- speccy:scenario id="CHK-003" -->
+        <scenario id="CHK-003">
         covers REQ-002
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-001", "REQ-001"), ("T-002", "REQ-002")]);
     write_spec(&ws.root, "0010-task-coverage", spec_md, "", Some(&tasks))?;
@@ -485,21 +485,21 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
 
         # SPEC-0010
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         alpha scenario
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-007", "REQ-001")]);
     write_spec(&ws.root, "0010-alpha", spec_md, "", Some(&tasks))?;
@@ -535,31 +535,31 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
 
         # SPEC-0020
 
-        <!-- speccy:requirement id="REQ-100" -->
+        <requirement id="REQ-100">
         ### REQ-100: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         alpha
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-002" -->
+        </scenario>
+        <scenario id="CHK-002">
         beta
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
-        <!-- speccy:requirement id="REQ-200" -->
+        </scenario>
+        </requirement>
+        <requirement id="REQ-200">
         ### REQ-200: Second
         body
-        <!-- speccy:scenario id="CHK-003" -->
+        <scenario id="CHK-003">
         gamma
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100, REQ-200")]);
     write_spec(&ws.root, "0020-dedup", spec_md, "", Some(&tasks))?;
@@ -696,13 +696,13 @@ fn malformed_spec_toml_warns_and_other_specs_render() -> TestResult {
 
         # SPEC-0001
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         scenario
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
     "#};
     write_spec(&ws.root, "0001-broken", broken_spec_md, "", None)?;
     write_spec(
@@ -913,12 +913,12 @@ fn check_spec_0018_renders_scenarios_without_spawning_processes() -> TestResult 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn check_task_prints_scenario_body_bytes_from_marker_block() -> TestResult {
+fn check_task_prints_scenario_body_bytes_from_element_block() -> TestResult {
     // Construct a SPEC.md with a multi-line scenario body whose interior
-    // bytes are easy to assert verbatim. The marker parser preserves
-    // body bytes between the start and end markers (with whitespace-only
-    // boundary trim), so the stdout continuation lines must equal those
-    // bytes line-for-line.
+    // bytes are easy to assert verbatim. The XML element parser
+    // preserves body bytes between the open and close tags (with
+    // whitespace-only boundary trim), so the stdout continuation lines
+    // must equal those bytes line-for-line.
     let ws = Workspace::new()?;
     let spec_md = indoc! {r#"
         ---
@@ -931,58 +931,57 @@ fn check_task_prints_scenario_body_bytes_from_marker_block() -> TestResult {
 
         # SPEC-0099
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         Given a task covers REQ-001,
         when speccy check runs against that task,
-        then the marker body bytes are printed verbatim.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        then the scenario body bytes are printed verbatim.
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0099", &[("T-001", "REQ-001")]);
-    write_spec(&ws.root, "0099-marker-body", spec_md, "", Some(&tasks))?;
+    write_spec(&ws.root, "0099-element-body", spec_md, "", Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0099/T-001"))?;
     assert_eq!(code, 0);
 
-    // Locate the marker body in the source file. The body is the text
-    // between `<!-- speccy:scenario id="CHK-001" -->\n` and `\n<!--
-    // /speccy:scenario -->`.
-    let start_tag = "<!-- speccy:scenario id=\"CHK-001\" -->\n";
-    let end_tag = "<!-- /speccy:scenario -->";
+    // Locate the scenario body in the source file. The body is the text
+    // between `<scenario id="CHK-001">\n` and `\n</scenario>`.
+    let start_tag = "<scenario id=\"CHK-001\">\n";
+    let end_tag = "</scenario>";
     let after_start = spec_md
         .find(start_tag)
         .map(|i| i + start_tag.len())
-        .expect("fixture must contain CHK-001 start marker");
+        .expect("fixture must contain CHK-001 open tag");
     let tail = spec_md
         .get(after_start..)
         .expect("after_start must be a valid char boundary in fixture");
     let before_end = tail
         .find(end_tag)
         .map(|j| after_start + j)
-        .expect("fixture must contain matching end marker");
+        .expect("fixture must contain matching close tag");
     let body_bytes = spec_md
         .get(after_start..before_end)
         .expect("body slice must lie on valid char boundaries in fixture")
         .trim_end_matches('\n');
 
-    // Every non-empty line of the marker body must appear in the rendered
-    // output (header takes the first line; the rest are indented
-    // continuations, so we substring-match line-by-line).
+    // Every non-empty line of the scenario body must appear in the
+    // rendered output (header takes the first line; the rest are
+    // indented continuations, so we substring-match line-by-line).
     for line in body_bytes.lines() {
         assert!(
             out.contains(line),
-            "speccy check stdout must contain marker body line `{line}`; got:\n{out}",
+            "speccy check stdout must contain scenario body line `{line}`; got:\n{out}",
         );
     }
     Ok(())
@@ -1006,28 +1005,28 @@ fn check_duplicate_scenario_id_across_requirements_is_surfaced_as_parse_warning(
 
         # SPEC-0098
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         first
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
-        <!-- speccy:requirement id="REQ-002" -->
+        </scenario>
+        </requirement>
+        <requirement id="REQ-002">
         ### REQ-002: Second
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         duplicate
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
 

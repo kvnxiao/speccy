@@ -2,33 +2,28 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-#![allow(
-    clippy::string_slice,
-    reason = "test asserts byte-exact slices of the rendered ASCII output"
-)]
-#![allow(
-    clippy::indexing_slicing,
-    reason = "test asserts byte-exact slices of the rendered ASCII output"
-)]
-//! Integration tests for the SPEC-0019 T-002 deterministic renderer.
+//! Integration tests for the SPEC-0020 T-002 deterministic renderer.
 //!
-//! Covers REQ-003: parse/render/parse roundtrip equivalence, struct-order
+//! Covers REQ-002 (renderer never emits HTML-comment markers) and
+//! REQ-003 (parse/render/parse roundtrip equivalence, struct-order
 //! drives output order, stable attribute ordering, boundary whitespace
-//! normalization with verbatim interior bytes, and byte-identical
-//! double-render output.
+//! normalisation with verbatim interior bytes, byte-identical
+//! double-render, and the blank-line-after-close convention pinned by
+//! the canonical fixture).
 
 use camino::Utf8Path;
-use speccy_core::parse::Decision;
-use speccy_core::parse::DecisionStatus;
-use speccy_core::parse::OpenQuestion;
-use speccy_core::parse::Requirement;
-use speccy_core::parse::Scenario;
-use speccy_core::parse::SpecDoc;
-use speccy_core::parse::parse_spec_markers;
-use speccy_core::parse::render_spec_markers;
+use speccy_core::parse::parse_spec_xml;
+use speccy_core::parse::render_spec_xml;
+use speccy_core::parse::spec_xml::Decision;
+use speccy_core::parse::spec_xml::DecisionStatus;
+use speccy_core::parse::spec_xml::ElementSpan;
+use speccy_core::parse::spec_xml::OpenQuestion;
+use speccy_core::parse::spec_xml::Requirement;
+use speccy_core::parse::spec_xml::Scenario;
+use speccy_core::parse::spec_xml::SpecDoc;
 
 fn fixture_path() -> &'static Utf8Path {
-    Utf8Path::new("tests/fixtures/spec_markers/canonical.md")
+    Utf8Path::new("tests/fixtures/spec_xml/canonical.md")
 }
 
 fn load_fixture() -> String {
@@ -37,59 +32,28 @@ fn load_fixture() -> String {
 }
 
 fn parse(source: &str) -> SpecDoc {
-    parse_spec_markers(source, Utf8Path::new("fixture/SPEC.md"))
+    parse_spec_xml(source, Utf8Path::new("fixture/SPEC.md"))
         .expect("canonical fixture should parse")
 }
 
-fn assert_requirements_equal(a: &[Requirement], b: &[Requirement]) {
-    assert_eq!(
-        a.len(),
-        b.len(),
-        "requirement counts differ: {} vs {}",
-        a.len(),
-        b.len()
-    );
-    for (ra, rb) in a.iter().zip(b.iter()) {
-        assert_eq!(ra.id, rb.id, "requirement id mismatch");
-        assert_eq!(
-            ra.scenarios.len(),
-            rb.scenarios.len(),
-            "scenario count mismatch under {}",
-            ra.id
-        );
-        for (sa, sb) in ra.scenarios.iter().zip(rb.scenarios.iter()) {
-            assert_scenarios_equal(sa, sb);
-        }
-        // The parser stores `Requirement.body` as the verbatim source
-        // slice between the requirement's start and end markers, which
-        // includes nested scenario marker lines as literal text. The
-        // renderer re-emits scenarios from typed state, so we compare
-        // the *prose* portion (scenarios stripped) rather than the
-        // full body string.
-        assert_eq!(
-            requirement_prose(&ra.body),
-            requirement_prose(&rb.body),
-            "requirement prose mismatch under {}",
-            ra.id,
-        );
-    }
-}
-
-/// Strip nested `speccy:scenario` blocks from a requirement body and
-/// collapse outer whitespace, mirroring the renderer's canonical view
-/// of the requirement prose.
+/// Strip nested `<scenario>` blocks from a requirement body and trim
+/// outer whitespace, mirroring the renderer's canonical view of the
+/// requirement prose. Roundtrip tests compare this projection rather
+/// than the raw body, because the parser stores nested scenario tag
+/// lines as literal text inside `Requirement.body` while the renderer
+/// re-emits scenarios from typed state.
 fn requirement_prose(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
     let mut in_scenario = false;
     for line in body.split_inclusive('\n') {
         let trimmed = line.trim_start();
         if !in_scenario {
-            if trimmed.starts_with("<!-- speccy:scenario") {
+            if trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>") {
                 in_scenario = true;
                 continue;
             }
             out.push_str(line);
-        } else if trimmed.starts_with("<!-- /speccy:scenario") {
+        } else if trimmed.starts_with("</scenario>") {
             in_scenario = false;
         }
     }
@@ -111,6 +75,34 @@ fn assert_scenarios_equal(a: &Scenario, b: &Scenario) {
     );
 }
 
+fn assert_requirements_equal(a: &[Requirement], b: &[Requirement]) {
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "requirement counts differ: {} vs {}",
+        a.len(),
+        b.len(),
+    );
+    for (ra, rb) in a.iter().zip(b.iter()) {
+        assert_eq!(ra.id, rb.id, "requirement id mismatch");
+        assert_eq!(
+            ra.scenarios.len(),
+            rb.scenarios.len(),
+            "scenario count mismatch under {}",
+            ra.id,
+        );
+        for (sa, sb) in ra.scenarios.iter().zip(rb.scenarios.iter()) {
+            assert_scenarios_equal(sa, sb);
+        }
+        assert_eq!(
+            requirement_prose(&ra.body),
+            requirement_prose(&rb.body),
+            "requirement prose mismatch under {}",
+            ra.id,
+        );
+    }
+}
+
 fn assert_decisions_equal(a: &[Decision], b: &[Decision]) {
     assert_eq!(a.len(), b.len(), "decision counts differ");
     for (da, db) in a.iter().zip(b.iter()) {
@@ -118,7 +110,7 @@ fn assert_decisions_equal(a: &[Decision], b: &[Decision]) {
         assert_eq!(
             da.status, db.status,
             "decision status mismatch on {}",
-            da.id
+            da.id,
         );
         assert_eq!(
             da.body.trim(),
@@ -147,9 +139,9 @@ fn assert_specdocs_structurally_equal(a: &SpecDoc, b: &SpecDoc) {
     assert_decisions_equal(&a.decisions, &b.decisions);
     assert_open_questions_equal(&a.open_questions, &b.open_questions);
     assert_eq!(
-        a.summary.as_deref().map(str::trim),
-        b.summary.as_deref().map(str::trim),
-        "summary mismatch",
+        a.overview.as_deref().map(str::trim),
+        b.overview.as_deref().map(str::trim),
+        "overview mismatch",
     );
     assert_eq!(
         a.changelog_body.trim(),
@@ -162,7 +154,7 @@ fn assert_specdocs_structurally_equal(a: &SpecDoc, b: &SpecDoc) {
 fn parse_render_parse_roundtrip_is_structurally_equivalent() {
     let source = load_fixture();
     let doc1 = parse(&source);
-    let rendered = render_spec_markers(&doc1);
+    let rendered = render_spec_xml(&doc1);
     let doc2 = parse(&rendered);
     assert_specdocs_structurally_equal(&doc1, &doc2);
 }
@@ -179,7 +171,7 @@ fn render_emits_requirements_in_struct_order_not_source_order() {
         "test precondition: fixture should have >1 requirement",
     );
 
-    let rendered = render_spec_markers(&doc);
+    let rendered = render_spec_xml(&doc);
     let reparsed = parse(&rendered);
     let actual_ids: Vec<String> = reparsed.requirements.iter().map(|r| r.id.clone()).collect();
     assert_eq!(
@@ -189,17 +181,17 @@ fn render_emits_requirements_in_struct_order_not_source_order() {
 }
 
 #[test]
-fn decision_marker_attrs_emit_in_fixed_id_then_status_order() {
+fn decision_element_attrs_emit_in_fixed_id_then_status_order() {
     let source = load_fixture();
     let doc = parse(&source);
-    let rendered = render_spec_markers(&doc);
-    let expected = "<!-- speccy:decision id=\"DEC-001\" status=\"accepted\" -->";
+    let rendered = render_spec_xml(&doc);
+    let expected = "<decision id=\"DEC-001\" status=\"accepted\">";
     assert!(
         rendered.contains(expected),
-        "expected marker line `{expected}` in rendered output; got:\n{rendered}",
+        "expected open tag `{expected}` in rendered output; got:\n{rendered}",
     );
     // The reverse order must not appear.
-    let bad = "<!-- speccy:decision status=\"accepted\" id=\"DEC-001\" -->";
+    let bad = "<decision status=\"accepted\" id=\"DEC-001\">";
     assert!(
         !rendered.contains(bad),
         "attrs emitted in the wrong order; found `{bad}`",
@@ -207,13 +199,13 @@ fn decision_marker_attrs_emit_in_fixed_id_then_status_order() {
 }
 
 #[test]
-fn render_normalizes_boundary_whitespace_but_preserves_interior_bytes() {
+fn render_normalises_boundary_whitespace_but_preserves_interior_bytes() {
     // Construct a SpecDoc by hand whose scenario body has trailing
     // whitespace at both boundaries plus a load-bearing interior code
     // fence with `<T>` and `A & B`.
     let interior = "Given a fixture body containing `<T>` and `A & B`,\nwhen X,\nthen Y.\n\n```rust\nfn ok() {}\n```";
     let padded_body = format!("\n\n  \n{interior}\n\n   \n");
-    let span = speccy_core::parse::MarkerSpan { start: 0, end: 0 };
+    let span = ElementSpan { start: 0, end: 0 };
     let scenario = Scenario {
         id: "CHK-001".to_owned(),
         body: padded_body.clone(),
@@ -237,27 +229,32 @@ fn render_normalizes_boundary_whitespace_but_preserves_interior_bytes() {
         open_questions: Vec::new(),
         changelog_body: "| Date | Author | Summary |\n".to_owned(),
         changelog_span: span,
-        summary: None,
-        summary_span: None,
+        overview: None,
+        overview_span: None,
     };
 
-    let rendered = render_spec_markers(&doc);
+    let rendered = render_spec_xml(&doc);
 
-    let start = "<!-- speccy:scenario id=\"CHK-001\" -->\n";
-    let end = "\n<!-- /speccy:scenario -->\n";
+    let start = "<scenario id=\"CHK-001\">\n";
+    let end = "\n</scenario>\n";
     let start_pos = rendered
         .find(start)
-        .expect("rendered output should contain scenario start marker");
+        .expect("rendered output should contain scenario open tag");
     let after_start = start_pos + start.len();
-    let end_pos = rendered[after_start..]
+    let tail = rendered
+        .get(after_start..)
+        .expect("rendered output should be sliceable from after the scenario open tag");
+    let end_pos = tail
         .find(end)
         .map(|p| after_start + p)
-        .expect("rendered output should contain scenario end marker");
-    let emitted_interior = &rendered[after_start..end_pos];
+        .expect("rendered output should contain scenario close tag");
+    let emitted_interior = rendered
+        .get(after_start..end_pos)
+        .expect("rendered output should be sliceable between scenario open and close tags");
 
     assert_eq!(
         emitted_interior, interior,
-        "scenario interior bytes must match the source slice with normalized boundaries; \
+        "scenario interior bytes must match the source slice with normalised boundaries; \
          emitted={emitted_interior:?}, expected={interior:?}",
     );
 }
@@ -266,8 +263,8 @@ fn render_normalizes_boundary_whitespace_but_preserves_interior_bytes() {
 fn render_is_idempotent_byte_for_byte() {
     let source = load_fixture();
     let doc = parse(&source);
-    let first = render_spec_markers(&doc);
-    let second = render_spec_markers(&doc);
+    let first = render_spec_xml(&doc);
+    let second = render_spec_xml(&doc);
     assert_eq!(
         first, second,
         "render(doc) must produce byte-identical output across runs",
@@ -275,23 +272,67 @@ fn render_is_idempotent_byte_for_byte() {
 }
 
 #[test]
-fn rendered_output_is_parseable_and_has_expected_top_level_shape() {
+fn render_never_emits_html_comment_markers() {
     let source = load_fixture();
     let doc = parse(&source);
-    let rendered = render_spec_markers(&doc);
+    let rendered = render_spec_xml(&doc);
+    assert!(
+        !rendered.contains("<!-- speccy:"),
+        "REQ-002: renderer must never emit `<!-- speccy:` markers; got:\n{rendered}",
+    );
+}
+
+#[test]
+fn render_emits_blank_line_after_every_closing_element_tag() {
+    // Pins SPEC-0020 Open Question 2's resolution: every closing
+    // element tag is followed by a blank line. Asserting against the
+    // canonical fixture covers requirement, scenario, decision,
+    // open-question, overview, and changelog close tags in one pass.
+    let source = load_fixture();
+    let doc = parse(&source);
+    let rendered = render_spec_xml(&doc);
+
+    for close_tag in [
+        "</requirement>",
+        "</scenario>",
+        "</decision>",
+        "</open-question>",
+        "</overview>",
+        "</changelog>",
+    ] {
+        let probe = format!("{close_tag}\n\n");
+        assert!(
+            rendered.contains(&probe) || rendered.ends_with(&format!("{close_tag}\n")),
+            "every close tag must be followed by a blank line (or be the final line); \
+             `{close_tag}` was not. Rendered output:\n{rendered}",
+        );
+    }
+}
+
+#[test]
+fn render_emits_decision_with_status_attribute() {
+    // Sanity: decision status round-trips through DecisionStatus::as_str.
+    let source = load_fixture();
+    let doc = parse(&source);
+    let dec = doc.decisions.first().expect("fixture has one decision");
+    assert_eq!(dec.status, Some(DecisionStatus::Accepted));
+}
+
+#[test]
+fn rendered_output_has_expected_top_level_shape() {
+    let source = load_fixture();
+    let doc = parse(&source);
+    let rendered = render_spec_xml(&doc);
     assert!(
         rendered.starts_with("---\n"),
-        "must start with frontmatter fence"
+        "must start with frontmatter fence",
     );
     assert!(
         rendered.contains("\n# SPEC-0099: Canonical fixture\n"),
         "must include the level-1 heading from the fixture",
     );
     assert!(
-        rendered.contains("<!-- speccy:changelog -->"),
-        "must include the changelog marker",
+        rendered.contains("<changelog>"),
+        "must include the changelog open tag",
     );
-    // Decision status round-trips through DecisionStatus::as_str.
-    let dec = doc.decisions.first().expect("fixture has one decision");
-    assert_eq!(dec.status, Some(DecisionStatus::Accepted));
 }

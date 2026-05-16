@@ -1,0 +1,2380 @@
+//! Raw-XML-element-structured SPEC.md parser and renderer (SPEC-0020
+//! carrier).
+//!
+//! Reads a SPEC.md whose body is ordinary Markdown plus line-isolated raw
+//! XML open/close tag pairs drawn from a closed whitelist (`requirement`,
+//! `scenario`, `decision`, `open-question`, `changelog`, plus optional
+//! `spec` root and `overview` section) and returns a typed [`SpecDoc`].
+//!
+//! The element scanner is line-aware and treats element-looking content
+//! inside fenced code blocks as Markdown body — never structure. Body
+//! content between recognised tags is preserved byte-verbatim; it is not
+//! XML payload and `<`, `>`, `&` inside it remain ordinary Markdown
+//! characters.
+//!
+//! [`render`] is the deterministic projection of a [`SpecDoc`] back to
+//! Markdown source. It is canonical-not-lossless: only the typed model is
+//! emitted, so free Markdown prose that lived outside any element block
+//! in the source (Goals, Non-goals, Design narrative, Notes, etc.) does
+//! **not** roundtrip. Parse-then-render-then-parse on a rendered document
+//! is structurally equivalent (ids, parent links, element names, bodies);
+//! parse-then-render-then-parse on an arbitrary hand-authored SPEC.md
+//! drops free prose. The SPEC-0020 migration tool (T-003) preserves free
+//! prose by writing files directly rather than going through this
+//! renderer, mirroring the choice SPEC-0019 T-003 made for the marker
+//! renderer.
+//!
+//! See `.speccy/specs/0020-raw-xml-spec-carrier/SPEC.md` REQ-001/REQ-002/
+//! REQ-003 for the contract this module satisfies, and DEC-002/DEC-003
+//! for the disjointness invariant and the line-aware scanner decision.
+
+mod html5_names;
+
+use crate::error::ParseError;
+use crate::parse::frontmatter::Split;
+use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::markdown::parse_markdown;
+use camino::Utf8Path;
+use comrak::Arena;
+use comrak::nodes::AstNode;
+use comrak::nodes::NodeValue;
+pub use html5_names::HTML5_ELEMENT_NAMES;
+pub use html5_names::is_html5_element_name;
+use regex::Regex;
+use std::collections::HashSet;
+use std::sync::OnceLock;
+
+/// Parsed raw-XML-structured SPEC.md.
+///
+/// `frontmatter_raw` carries the YAML frontmatter payload verbatim. The
+/// frontmatter is **not** re-validated here; downstream code (workspace
+/// loader, T-005) reuses the existing `SpecFrontmatter` deserialisation.
+/// T-001 only validates the element tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpecDoc {
+    /// YAML frontmatter payload between the opening and closing `---`
+    /// fences, verbatim.
+    pub frontmatter_raw: String,
+    /// Text of the level-1 heading after the `# ` prefix, trimmed.
+    pub heading: String,
+    /// Raw source bytes, retained so [`ElementSpan`] indices remain valid.
+    pub raw: String,
+    /// Requirements declared by `<requirement>` elements in source order.
+    pub requirements: Vec<Requirement>,
+    /// Decisions declared by `<decision>` elements in source order.
+    pub decisions: Vec<Decision>,
+    /// Open questions declared by `<open-question>` elements in source
+    /// order.
+    pub open_questions: Vec<OpenQuestion>,
+    /// Body of the single required `<changelog>` element, verbatim.
+    pub changelog_body: String,
+    /// Span of the `<changelog>` open tag.
+    pub changelog_span: ElementSpan,
+    /// Body of the optional `<overview>` element, when present.
+    pub overview: Option<String>,
+    /// Span of the optional `<overview>` open tag.
+    pub overview_span: Option<ElementSpan>,
+}
+
+/// One requirement block (`<requirement>`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Requirement {
+    /// Id from the `id="..."` attribute (matches `REQ-\d{3,}`).
+    pub id: String,
+    /// Markdown body between open and close tags, verbatim (scenario tag
+    /// lines are included as literal text — T-002's renderer strips them
+    /// before re-emitting from typed state).
+    pub body: String,
+    /// Nested scenarios in source order.
+    pub scenarios: Vec<Scenario>,
+    /// Span of the open tag.
+    pub span: ElementSpan,
+}
+
+/// One scenario block (`<scenario>`), nested inside a requirement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scenario {
+    /// Id from the `id="..."` attribute (matches `CHK-\d{3,}`).
+    pub id: String,
+    /// Markdown body between open and close tags, verbatim.
+    pub body: String,
+    /// Id of the containing `<requirement>` element.
+    pub parent_requirement_id: String,
+    /// Span of the open tag.
+    pub span: ElementSpan,
+}
+
+/// One decision block (`<decision>`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decision {
+    /// Id from the `id="..."` attribute (matches `DEC-\d{3,}`).
+    pub id: String,
+    /// Optional `status="accepted|rejected|deferred|superseded"`.
+    pub status: Option<DecisionStatus>,
+    /// Markdown body between open and close tags, verbatim.
+    pub body: String,
+    /// Span of the open tag.
+    pub span: ElementSpan,
+}
+
+/// Closed set of decision statuses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecisionStatus {
+    /// `accepted`
+    Accepted,
+    /// `rejected`
+    Rejected,
+    /// `deferred`
+    Deferred,
+    /// `superseded`
+    Superseded,
+}
+
+impl DecisionStatus {
+    /// Render back to the on-disk string form.
+    #[must_use = "the rendered status is the on-disk form"]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DecisionStatus::Accepted => "accepted",
+            DecisionStatus::Rejected => "rejected",
+            DecisionStatus::Deferred => "deferred",
+            DecisionStatus::Superseded => "superseded",
+        }
+    }
+}
+
+/// One open-question element (`<open-question>`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenQuestion {
+    /// Optional `resolved="true|false"` attribute value.
+    pub resolved: Option<bool>,
+    /// Markdown body between open and close tags, verbatim.
+    pub body: String,
+    /// Span of the open tag.
+    pub span: ElementSpan,
+}
+
+/// Byte range covering an element's *open* tag in the source string.
+///
+/// `&source[start..end]` always begins with `<` followed by the recognised
+/// element name so diagnostics can re-point at the offending tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ElementSpan {
+    /// Inclusive byte offset of the leading `<` of the open tag.
+    pub start: usize,
+    /// Exclusive byte offset just past the trailing `>` of the open tag.
+    pub end: usize,
+}
+
+const ALLOWED_DECISION_STATUSES: &[&str] = &["accepted", "rejected", "deferred", "superseded"];
+const ALLOWED_RESOLVED_VALUES: &[&str] = &["true", "false"];
+
+/// Closed whitelist of Speccy structure element names. Must remain
+/// disjoint from [`HTML5_ELEMENT_NAMES`]; the disjointness unit test
+/// below enforces this at build time.
+pub const SPECCY_ELEMENT_NAMES: &[&str] = &[
+    "spec",
+    "overview",
+    "requirement",
+    "scenario",
+    "decision",
+    "open-question",
+    "changelog",
+];
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn open_tag_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        // `<NAME>` or `<NAME attr="value" ...>`. Attribute values must be
+        // double-quoted; unquoted values are a parse error and fall
+        // through the shape regex below for a clearer diagnostic.
+        Regex::new(r#"^<([a-z][a-z-]*)((?:\s+[A-Za-z_][\w-]*="[^"]*")*)\s*>$"#).unwrap()
+    })
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn close_tag_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^</([a-z][a-z-]*)\s*>$").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn shape_open_regex() -> &'static Regex {
+    // Detects a line that *looks* like an open tag (`<name...>`) so we
+    // can produce structured diagnostics for malformed cases (unquoted
+    // attribute values, junk after the closing `>`, etc.) instead of
+    // silently treating them as Markdown body.
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^<([a-z][a-z-]*)(\s|>)").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn shape_close_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^</([a-z][a-z-]*)").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn attribute_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r#"\s+([A-Za-z_][\w-]*)="([^"]*)""#).unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn req_id_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^REQ-\d{3,}$").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn chk_id_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^CHK-\d{3,}$").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn dec_id_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"^DEC-\d{3,}$").unwrap())
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn legacy_marker_regex() -> &'static Regex {
+    // Matches the SPEC-0019 HTML-comment marker form when it is the only
+    // non-whitespace content on a line. Capture 1: optional leading slash
+    // (close marker). Capture 2: element name. The leading `^` plus
+    // trailing `$` anchors keep inline-backtick legitimate documentation
+    // such as `<!-- speccy:requirement id="REQ-001" -->` (rendered inside
+    // prose, surrounded by backticks and parentheses) from tripping the
+    // diagnostic — only line-isolated legacy markers are flagged, matching
+    // the line-isolation rule the raw XML element scanner enforces.
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        Regex::new(r"(?m)^\s*<!--\s*(/?)speccy:([a-z][a-z-]*)(?:\s[^>]*)?-->\s*$").unwrap()
+    })
+}
+
+/// Parse a raw-XML-structured SPEC.md source string.
+///
+/// `source` is the file contents; `path` is used only to populate
+/// diagnostics — this function does no filesystem IO.
+///
+/// # Errors
+///
+/// Returns [`ParseError`] for missing frontmatter or level-1 heading,
+/// element-shape problems, unknown element names or attributes,
+/// id-pattern violations, duplicate ids, orphan scenarios, empty
+/// required bodies, invalid attribute values, or surviving SPEC-0019
+/// HTML-comment markers outside fenced code blocks.
+pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
+    let split = split_frontmatter(source, path)?;
+    let (frontmatter_raw, body, body_offset) = match split {
+        Split::Some { yaml, body } => {
+            let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
+                ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: 0,
+                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
+                }
+            })?;
+            (yaml.to_owned(), body, body_offset)
+        }
+        Split::None => {
+            return Err(ParseError::MissingField {
+                field: "frontmatter".to_owned(),
+                context: format!("SPEC.md at {path}"),
+            });
+        }
+    };
+
+    let heading = extract_level1_heading(body, path)?;
+
+    let code_fence_ranges = collect_code_fence_byte_ranges(source);
+
+    let raw_tags = scan_tags(source, body, body_offset, &code_fence_ranges, path)?;
+    let tree = assemble(raw_tags, source, path)?;
+
+    let mut ctx = ProcessCtx {
+        path,
+        requirements: Vec::new(),
+        decisions: Vec::new(),
+        open_questions: Vec::new(),
+        overview: None,
+        changelog: None,
+        req_ids: HashSet::new(),
+        chk_ids: HashSet::new(),
+        dec_ids: HashSet::new(),
+    };
+
+    for block in tree {
+        match block {
+            Block::Spec { children, .. } => process_blocks(children, &mut ctx)?,
+            other => process_block(other, &mut ctx)?,
+        }
+    }
+
+    let ProcessCtx {
+        requirements,
+        decisions,
+        open_questions,
+        overview,
+        changelog,
+        ..
+    } = ctx;
+
+    let (changelog_body, changelog_span) = changelog.ok_or_else(|| ParseError::MissingField {
+        field: "<changelog>".to_owned(),
+        context: format!("SPEC.md at {path}"),
+    })?;
+
+    if changelog_body.trim().is_empty() {
+        return Err(ParseError::EmptyMarkerBody {
+            path: path.to_path_buf(),
+            marker_name: "changelog".to_owned(),
+            id: None,
+            offset: changelog_span.start,
+        });
+    }
+
+    let (overview_body, overview_span) = match overview {
+        Some((b, s)) => (Some(b), Some(s)),
+        None => (None, None),
+    };
+
+    Ok(SpecDoc {
+        frontmatter_raw,
+        heading,
+        raw: source.to_owned(),
+        requirements,
+        decisions,
+        open_questions,
+        changelog_body,
+        changelog_span,
+        overview: overview_body,
+        overview_span,
+    })
+}
+
+/// Render a [`SpecDoc`] to its canonical raw-XML SPEC.md form.
+///
+/// The output is a Markdown document with raw XML element tags carrying
+/// Speccy structure:
+///
+/// 1. Frontmatter fence followed by [`SpecDoc::frontmatter_raw`].
+/// 2. A blank line, then the level-1 heading (`# {heading}`).
+/// 3. Optional `<overview>` block, if present.
+/// 4. Every [`Requirement`] in [`SpecDoc::requirements`] order. Each
+///    requirement renders its prose (with nested `<scenario>` tag lines
+///    stripped out), then every nested [`Scenario`] in
+///    [`Requirement::scenarios`] order.
+/// 5. Every [`Decision`] in [`SpecDoc::decisions`] order.
+/// 6. Every [`OpenQuestion`] in [`SpecDoc::open_questions`] order.
+/// 7. The required `<changelog>` block.
+///
+/// The renderer is canonical-not-lossless. Free Markdown prose between
+/// elements in a hand-authored source (Goals, Non-goals, Design,
+/// Migration, Notes, etc.) is **not** preserved — render emits only the
+/// typed model. The SPEC-0020 migration tool (T-003) is responsible for
+/// preserving free prose by rewriting source files directly rather than
+/// going through this renderer; see the module-level doc for the same
+/// trade-off SPEC-0019 T-002 documented for the marker renderer.
+///
+/// # Determinism contract
+///
+/// - Every element open and close tag occupies its own line. Nothing else
+///   shares the tag's line.
+/// - Element attributes are emitted in a fixed order. Today the only
+///   multi-attribute element is `<decision>`, which always emits `id` before
+///   `status`. `<open-question>` carries at most `resolved` only.
+/// - Block order follows struct field order ([`SpecDoc::requirements`],
+///   [`Requirement::scenarios`], [`SpecDoc::decisions`],
+///   [`SpecDoc::open_questions`]) — never source byte offsets.
+/// - Element bodies are emitted verbatim except that boundary whitespace is
+///   normalised: leading and trailing whitespace-only lines inside the body are
+///   dropped, then exactly one `\n` separates the open tag line from the first
+///   body byte and exactly one `\n` separates the last non-whitespace body byte
+///   from the close tag line. Interior bytes (including fenced code blocks,
+///   inline backticks, and literal `<` / `>` / `&`) are preserved
+///   byte-for-byte.
+/// - Every closing element tag is followed by a single blank line. This is the
+///   SPEC-0020 Open Question 2 resolution: the canonical fixture and shipped
+///   SPEC.md files all favour visual separation between top-level blocks over
+///   diff width, and applying the same rule between nested scenarios keeps the
+///   renderer's emission shape uniform (one rule, no special cases). Roundtrip
+///   equivalence is structural — not byte-identical — so the rule does not need
+///   to match the original source's whitespace.
+/// - `render(doc) == render(doc)` byte-for-byte for any valid `doc`.
+/// - The renderer never emits the SPEC-0019 `<!-- speccy:` HTML-comment marker
+///   form (REQ-002 contract).
+///
+/// This function cannot fail: a [`SpecDoc`] has already been validated
+/// by [`parse`], so every invariant the renderer relies on is
+/// guaranteed.
+#[must_use = "the rendered Markdown string is the canonical projection of the SpecDoc"]
+pub fn render(doc: &SpecDoc) -> String {
+    let mut out = String::new();
+    out.push_str("---\n");
+    out.push_str(&doc.frontmatter_raw);
+    if !doc.frontmatter_raw.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str("---\n\n");
+    out.push_str("# ");
+    out.push_str(&doc.heading);
+    out.push('\n');
+
+    if let Some(overview) = &doc.overview {
+        out.push('\n');
+        push_element_block(&mut out, "overview", &[], overview);
+    }
+
+    for req in &doc.requirements {
+        out.push('\n');
+        let attrs = [("id", req.id.as_str())];
+        push_element_open(&mut out, "requirement", &attrs);
+        // The parser stores `Requirement.body` as the verbatim slice
+        // between the requirement's open and close tags, which includes
+        // nested scenario tag lines as literal text. The renderer
+        // re-emits scenarios from typed state to honour
+        // `Requirement.scenarios` ordering, so strip nested scenario
+        // tag blocks out of the prose here.
+        let prose = strip_nested_scenario_blocks(&req.body);
+        push_body(&mut out, &prose);
+        for sc in &req.scenarios {
+            let sc_attrs = [("id", sc.id.as_str())];
+            push_element_open(&mut out, "scenario", &sc_attrs);
+            push_body(&mut out, &sc.body);
+            push_element_close(&mut out, "scenario");
+        }
+        push_element_close(&mut out, "requirement");
+    }
+
+    for dec in &doc.decisions {
+        out.push('\n');
+        let status_str = dec.status.map(DecisionStatus::as_str);
+        let mut attrs: Vec<(&str, &str)> = Vec::with_capacity(2);
+        attrs.push(("id", dec.id.as_str()));
+        if let Some(s) = status_str.as_ref() {
+            attrs.push(("status", s));
+        }
+        push_element_block(&mut out, "decision", &attrs, &dec.body);
+    }
+
+    for q in &doc.open_questions {
+        out.push('\n');
+        let resolved_str = q.resolved.map(|b| if b { "true" } else { "false" });
+        let mut attrs: Vec<(&str, &str)> = Vec::new();
+        if let Some(r) = resolved_str.as_ref() {
+            attrs.push(("resolved", r));
+        }
+        push_element_block(&mut out, "open-question", &attrs, &q.body);
+    }
+
+    out.push('\n');
+    push_element_block(&mut out, "changelog", &[], &doc.changelog_body);
+
+    out
+}
+
+/// Strip nested `<scenario>` blocks from a requirement body.
+///
+/// The parser stores `Requirement.body` as the verbatim source slice
+/// between the requirement's open and close tags, which includes nested
+/// scenario tag lines as literal text. [`render`] re-emits scenarios
+/// from typed state to honour [`Requirement::scenarios`] ordering, so
+/// the scenario tag lines must be stripped from the prose first.
+///
+/// We walk line-by-line and drop runs that begin with a scenario open
+/// tag and continue through the matching close tag. The parser has
+/// already validated tag shape and nesting, so this scan can rely on a
+/// balanced single-level structure (scenarios never nest scenarios).
+fn strip_nested_scenario_blocks(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut in_scenario = false;
+    for line in body.split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        if !in_scenario {
+            if trimmed.starts_with("<scenario")
+                && (trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>"))
+            {
+                in_scenario = true;
+                continue;
+            }
+            out.push_str(line);
+        } else if trimmed.starts_with("</scenario>") {
+            in_scenario = false;
+        }
+    }
+    out
+}
+
+fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
+    push_element_open(out, name, attrs);
+    push_body(out, body);
+    push_element_close(out, name);
+}
+
+fn push_element_open(out: &mut String, name: &str, attrs: &[(&str, &str)]) {
+    out.push('<');
+    out.push_str(name);
+    for (k, v) in attrs {
+        out.push(' ');
+        out.push_str(k);
+        out.push_str("=\"");
+        out.push_str(v);
+        out.push('"');
+    }
+    out.push_str(">\n");
+}
+
+fn push_element_close(out: &mut String, name: &str) {
+    out.push_str("</");
+    out.push_str(name);
+    out.push_str(">\n");
+    // Determinism contract: every closing element tag is followed by a
+    // single blank line. See [`render`] doc for the rationale.
+    out.push('\n');
+}
+
+/// Append `body` with normalised boundary whitespace: drop leading
+/// whitespace-only lines and trailing whitespace-only lines, then emit
+/// the interior bytes verbatim followed by exactly one `\n` before the
+/// trailing close tag line.
+///
+/// "Whitespace-only line" means a sequence of `' '`, `'\t'`, `'\r'`
+/// bytes terminated by `'\n'` — i.e. a blank or whitespace-padded blank
+/// line. Indentation on the first non-blank line is preserved (e.g. a
+/// body that starts with `    code-block-indent` keeps its leading
+/// spaces because that line is not whitespace-only).
+fn push_body(out: &mut String, body: &str) {
+    let interior = trim_blank_boundary_lines(body);
+    if interior.is_empty() {
+        // `parse` rejects empty required-element bodies, so this branch
+        // only fires for hand-built `SpecDoc`s with empty optional
+        // elements. Emit nothing between open and close tag lines.
+        return;
+    }
+    out.push_str(interior);
+    out.push('\n');
+}
+
+/// Return the slice of `body` with leading and trailing
+/// whitespace-only lines removed. See [`push_body`] for the definition
+/// of "whitespace-only line".
+fn trim_blank_boundary_lines(body: &str) -> &str {
+    let bytes = body.as_bytes();
+    let mut start: usize = 0;
+    let mut cursor: usize = 0;
+    while cursor < bytes.len() {
+        let line_start = cursor;
+        let mut all_ws = true;
+        while cursor < bytes.len() && bytes.get(cursor) != Some(&b'\n') {
+            match bytes.get(cursor) {
+                Some(b' ' | b'\t' | b'\r') => {}
+                _ => all_ws = false,
+            }
+            cursor = cursor.saturating_add(1);
+        }
+        if cursor < bytes.len() {
+            cursor = cursor.saturating_add(1);
+        }
+        if all_ws {
+            start = cursor;
+        } else {
+            start = line_start;
+            break;
+        }
+    }
+    if start >= bytes.len() {
+        return "";
+    }
+
+    let mut end: usize = bytes.len();
+    let mut cursor: usize = bytes.len();
+    while cursor > start {
+        let mut line_end = cursor;
+        let mut probe = cursor;
+        if probe > start && bytes.get(probe.saturating_sub(1)) == Some(&b'\n') {
+            probe = probe.saturating_sub(1);
+            line_end = probe;
+        }
+        let mut line_start = probe;
+        while line_start > start && bytes.get(line_start.saturating_sub(1)) != Some(&b'\n') {
+            line_start = line_start.saturating_sub(1);
+        }
+        let line = bytes.get(line_start..line_end).unwrap_or(&[]);
+        let all_ws = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
+        if all_ws {
+            end = line_start;
+            cursor = line_start;
+        } else {
+            end = line_end;
+            break;
+        }
+    }
+    body.get(start..end).unwrap_or("")
+}
+
+struct ProcessCtx<'a> {
+    path: &'a Utf8Path,
+    requirements: Vec<Requirement>,
+    decisions: Vec<Decision>,
+    open_questions: Vec<OpenQuestion>,
+    overview: Option<(String, ElementSpan)>,
+    changelog: Option<(String, ElementSpan)>,
+    req_ids: HashSet<String>,
+    chk_ids: HashSet<String>,
+    dec_ids: HashSet<String>,
+}
+
+fn process_blocks(blocks: Vec<Block>, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseError> {
+    for block in blocks {
+        process_block(block, ctx)?;
+    }
+    Ok(())
+}
+
+fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseError> {
+    match block {
+        Block::Spec { span, .. } => Err(ParseError::MalformedMarker {
+            path: ctx.path.to_path_buf(),
+            offset: span.start,
+            reason: "nested <spec> elements are not allowed".to_owned(),
+        }),
+        Block::Requirement {
+            id,
+            body,
+            children,
+            span,
+        } => process_requirement(id, body, children, span, ctx),
+        Block::Scenario { id, span, .. } => Err(ParseError::ScenarioOutsideRequirement {
+            path: ctx.path.to_path_buf(),
+            scenario_id: Some(id),
+            offset: span.start,
+        }),
+        Block::Decision {
+            id,
+            status,
+            body,
+            span,
+        } => {
+            if !ctx.dec_ids.insert(id.clone()) {
+                return Err(ParseError::DuplicateMarkerId {
+                    path: ctx.path.to_path_buf(),
+                    marker_name: "decision".to_owned(),
+                    id,
+                });
+            }
+            ctx.decisions.push(Decision {
+                id,
+                status,
+                body,
+                span,
+            });
+            Ok(())
+        }
+        Block::OpenQuestion {
+            resolved,
+            body,
+            span,
+        } => {
+            ctx.open_questions.push(OpenQuestion {
+                resolved,
+                body,
+                span,
+            });
+            Ok(())
+        }
+        Block::Overview { body, span } => {
+            if ctx.overview.is_some() {
+                return Err(ParseError::MalformedMarker {
+                    path: ctx.path.to_path_buf(),
+                    offset: span.start,
+                    reason: "more than one <overview> element".to_owned(),
+                });
+            }
+            ctx.overview = Some((body, span));
+            Ok(())
+        }
+        Block::Changelog { body, span } => {
+            if ctx.changelog.is_some() {
+                return Err(ParseError::MalformedMarker {
+                    path: ctx.path.to_path_buf(),
+                    offset: span.start,
+                    reason: "more than one <changelog> element".to_owned(),
+                });
+            }
+            ctx.changelog = Some((body, span));
+            Ok(())
+        }
+    }
+}
+
+fn process_requirement(
+    id: String,
+    body: String,
+    children: Vec<Block>,
+    span: ElementSpan,
+    ctx: &mut ProcessCtx<'_>,
+) -> Result<(), ParseError> {
+    if !ctx.req_ids.insert(id.clone()) {
+        return Err(ParseError::DuplicateMarkerId {
+            path: ctx.path.to_path_buf(),
+            marker_name: "requirement".to_owned(),
+            id,
+        });
+    }
+    let mut scenarios: Vec<Scenario> = Vec::new();
+    for child in children {
+        match child {
+            Block::Scenario {
+                id: child_id,
+                body: child_body,
+                span: child_span,
+            } => {
+                if !ctx.chk_ids.insert(child_id.clone()) {
+                    return Err(ParseError::DuplicateMarkerId {
+                        path: ctx.path.to_path_buf(),
+                        marker_name: "scenario".to_owned(),
+                        id: child_id,
+                    });
+                }
+                if child_body.trim().is_empty() {
+                    return Err(ParseError::EmptyMarkerBody {
+                        path: ctx.path.to_path_buf(),
+                        marker_name: "scenario".to_owned(),
+                        id: Some(child_id),
+                        offset: child_span.start,
+                    });
+                }
+                scenarios.push(Scenario {
+                    id: child_id,
+                    body: child_body,
+                    parent_requirement_id: id.clone(),
+                    span: child_span,
+                });
+            }
+            other => {
+                return Err(ParseError::MalformedMarker {
+                    path: ctx.path.to_path_buf(),
+                    offset: other.span().start,
+                    reason: format!(
+                        "element `{}` is not allowed inside `requirement`",
+                        other.element_name()
+                    ),
+                });
+            }
+        }
+    }
+    if scenarios.is_empty() {
+        return Err(ParseError::MalformedMarker {
+            path: ctx.path.to_path_buf(),
+            offset: span.start,
+            reason: format!("requirement `{id}` has no nested scenario elements"),
+        });
+    }
+    if body.trim().is_empty() {
+        return Err(ParseError::EmptyMarkerBody {
+            path: ctx.path.to_path_buf(),
+            marker_name: "requirement".to_owned(),
+            id: Some(id.clone()),
+            offset: span.start,
+        });
+    }
+    ctx.requirements.push(Requirement {
+        id,
+        body,
+        scenarios,
+        span,
+    });
+    Ok(())
+}
+
+#[derive(Debug)]
+enum Block {
+    Spec {
+        children: Vec<Block>,
+        span: ElementSpan,
+    },
+    Overview {
+        body: String,
+        span: ElementSpan,
+    },
+    Requirement {
+        id: String,
+        body: String,
+        children: Vec<Block>,
+        span: ElementSpan,
+    },
+    Scenario {
+        id: String,
+        body: String,
+        span: ElementSpan,
+    },
+    Decision {
+        id: String,
+        status: Option<DecisionStatus>,
+        body: String,
+        span: ElementSpan,
+    },
+    OpenQuestion {
+        resolved: Option<bool>,
+        body: String,
+        span: ElementSpan,
+    },
+    Changelog {
+        body: String,
+        span: ElementSpan,
+    },
+}
+
+impl Block {
+    fn span(&self) -> ElementSpan {
+        match self {
+            Block::Spec { span, .. }
+            | Block::Overview { span, .. }
+            | Block::Requirement { span, .. }
+            | Block::Scenario { span, .. }
+            | Block::Decision { span, .. }
+            | Block::OpenQuestion { span, .. }
+            | Block::Changelog { span, .. } => *span,
+        }
+    }
+
+    fn element_name(&self) -> &'static str {
+        match self {
+            Block::Spec { .. } => "spec",
+            Block::Overview { .. } => "overview",
+            Block::Requirement { .. } => "requirement",
+            Block::Scenario { .. } => "scenario",
+            Block::Decision { .. } => "decision",
+            Block::OpenQuestion { .. } => "open-question",
+            Block::Changelog { .. } => "changelog",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RawTag {
+    name: String,
+    is_close: bool,
+    attrs: Vec<(String, String)>,
+    span: ElementSpan,
+    /// Absolute byte offset where the body content begins (immediately
+    /// after the newline that terminates the open tag line). For close
+    /// tags this is the offset to use as the body's exclusive end —
+    /// matching the open tag's `body_start` semantics.
+    body_start: usize,
+    /// Absolute byte offset of this tag's start (used to bound the body
+    /// of the matching open tag when this is a close tag).
+    body_end_after_tag: usize,
+}
+
+fn scan_tags(
+    source: &str,
+    body: &str,
+    body_offset: usize,
+    code_fence_ranges: &[(usize, usize)],
+    path: &Utf8Path,
+) -> Result<Vec<RawTag>, ParseError> {
+    let mut tags: Vec<RawTag> = Vec::new();
+    let mut line_start_in_body: usize = 0;
+
+    while line_start_in_body <= body.len() {
+        let Some(line_info) = next_line(body, body_offset, line_start_in_body, path)? else {
+            break;
+        };
+
+        if !range_inside_any_fence(
+            line_info.abs_line_start,
+            line_info.abs_line_end_excl,
+            code_fence_ranges,
+        ) {
+            classify_line(source, body, body_offset, &line_info, &mut tags, path)?;
+        }
+
+        line_start_in_body = line_info.next_start_in_body;
+    }
+
+    Ok(tags)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LineInfo<'a> {
+    line: &'a str,
+    abs_line_start: usize,
+    abs_line_end_excl: usize,
+    next_start_in_body: usize,
+}
+
+fn next_line<'a>(
+    body: &'a str,
+    body_offset: usize,
+    line_start_in_body: usize,
+    path: &Utf8Path,
+) -> Result<Option<LineInfo<'a>>, ParseError> {
+    let remainder = body.get(line_start_in_body..).unwrap_or("");
+    let (line, next_start_in_body) = if let Some(nl) = remainder.find('\n') {
+        let line_end = line_start_in_body
+            .checked_add(nl)
+            .ok_or_else(|| overflow_error(path))?;
+        let next = line_end
+            .checked_add(1)
+            .ok_or_else(|| overflow_error(path))?;
+        (body.get(line_start_in_body..line_end).unwrap_or(""), next)
+    } else if remainder.is_empty() {
+        return Ok(None);
+    } else {
+        (remainder, body.len().saturating_add(1))
+    };
+
+    let abs_line_start = body_offset
+        .checked_add(line_start_in_body)
+        .ok_or_else(|| overflow_error(path))?;
+    let abs_line_end_excl = abs_line_start
+        .checked_add(line.len())
+        .ok_or_else(|| overflow_error(path))?;
+
+    Ok(Some(LineInfo {
+        line,
+        abs_line_start,
+        abs_line_end_excl,
+        next_start_in_body,
+    }))
+}
+
+fn overflow_error(path: &Utf8Path) -> ParseError {
+    ParseError::MalformedMarker {
+        path: path.to_path_buf(),
+        offset: 0,
+        reason: "byte arithmetic overflow during line scan".to_owned(),
+    }
+}
+
+fn classify_line(
+    source: &str,
+    body: &str,
+    body_offset: usize,
+    line_info: &LineInfo<'_>,
+    tags: &mut Vec<RawTag>,
+    path: &Utf8Path,
+) -> Result<(), ParseError> {
+    let line = line_info.line;
+    let abs_line_start = line_info.abs_line_start;
+    let abs_line_end_excl = line_info.abs_line_end_excl;
+    let next_start_in_body = line_info.next_start_in_body;
+
+    // Surface stray SPEC-0019 HTML-comment markers as a dedicated
+    // diagnostic before falling through to the XML element scanner.
+    if let Some(legacy) = detect_legacy_marker(line, abs_line_start, path) {
+        return Err(legacy);
+    }
+
+    let trimmed = line.trim_start();
+    let leading_ws = line.len().saturating_sub(trimmed.len());
+    let abs_tag_offset = abs_line_start
+        .checked_add(leading_ws)
+        .unwrap_or(abs_line_start);
+    let line_for_regex = trimmed.trim_end();
+
+    if let Some(caps) = open_tag_regex().captures(line_for_regex) {
+        let name = caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
+            return Ok(());
+        }
+        let attr_blob = caps.get(2).map_or("", |m| m.as_str());
+        let body_start = body_offset
+            .checked_add(next_start_in_body.min(body.len()))
+            .unwrap_or(source.len());
+        tags.push(build_open_tag(
+            name,
+            attr_blob,
+            abs_tag_offset,
+            abs_line_end_excl,
+            body_start,
+        ));
+        Ok(())
+    } else if let Some(caps) = close_tag_regex().captures(line_for_regex) {
+        let name = caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
+            return Ok(());
+        }
+        tags.push(RawTag {
+            name,
+            is_close: true,
+            attrs: Vec::new(),
+            span: ElementSpan {
+                start: abs_tag_offset,
+                end: abs_line_end_excl,
+            },
+            body_start: abs_line_end_excl,
+            body_end_after_tag: abs_tag_offset,
+        });
+        Ok(())
+    } else {
+        detect_malformed_tag(line, trimmed, abs_tag_offset, path)
+    }
+}
+
+fn build_open_tag(
+    name: String,
+    attr_blob: &str,
+    abs_tag_offset: usize,
+    abs_line_end_excl: usize,
+    body_start: usize,
+) -> RawTag {
+    let mut attrs: Vec<(String, String)> = Vec::new();
+    for ac in attribute_regex().captures_iter(attr_blob) {
+        let k = ac.get(1).map(|m| m.as_str().to_owned()).unwrap_or_default();
+        let v = ac.get(2).map(|m| m.as_str().to_owned()).unwrap_or_default();
+        attrs.push((k, v));
+    }
+    RawTag {
+        name,
+        is_close: false,
+        attrs,
+        span: ElementSpan {
+            start: abs_tag_offset,
+            end: abs_line_end_excl,
+        },
+        body_start,
+        body_end_after_tag: abs_tag_offset,
+    }
+}
+
+fn detect_legacy_marker(line: &str, abs_line_start: usize, path: &Utf8Path) -> Option<ParseError> {
+    let caps = legacy_marker_regex().captures(line)?;
+    // capture 0 includes the line's leading and trailing whitespace (the
+    // regex is anchored with `^\s*` ... `\s*$`); trim it for the diagnostic.
+    let raw_match = caps.get(0).map_or("", |m| m.as_str()).trim();
+    let leading_ws = line.len().saturating_sub(line.trim_start().len());
+    let abs_offset = abs_line_start
+        .checked_add(leading_ws)
+        .unwrap_or(abs_line_start);
+    let slash = caps.get(1).map_or("", |m| m.as_str());
+    let name = caps.get(2).map_or("", |m| m.as_str());
+    let suggested = if slash == "/" {
+        format!("</{name}>")
+    } else {
+        format!("<{name} ...>")
+    };
+    Some(ParseError::LegacyMarker {
+        path: path.to_path_buf(),
+        offset: abs_offset,
+        legacy_form: raw_match.to_owned(),
+        suggested_element: suggested,
+    })
+}
+
+fn detect_malformed_tag(
+    line: &str,
+    trimmed: &str,
+    abs_tag_offset: usize,
+    path: &Utf8Path,
+) -> Result<(), ParseError> {
+    if let Some(shape_caps) = shape_open_regex().captures(trimmed) {
+        let name = shape_caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        if SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
+            return Err(ParseError::MalformedMarker {
+                path: path.to_path_buf(),
+                offset: abs_tag_offset,
+                reason: diagnose_malformed_open(line, trimmed, &name),
+            });
+        }
+    } else if let Some(shape_caps) = shape_close_regex().captures(trimmed) {
+        let name = shape_caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        if SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
+            let reason = if line.trim() != line.trim_end() || line.trim_start() != trimmed {
+                "speccy XML close tags must appear on their own line".to_owned()
+            } else if !trimmed.trim_end().ends_with('>') {
+                "speccy XML close tag is missing the closing `>`".to_owned()
+            } else {
+                "speccy XML close tag is malformed".to_owned()
+            };
+            return Err(ParseError::MalformedMarker {
+                path: path.to_path_buf(),
+                offset: abs_tag_offset,
+                reason,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Build a human-readable reason for a malformed open tag line. We do
+/// best-effort classification (line-isolation vs unquoted attribute
+/// value vs missing `>`); the diagnostic surfaces the offending tag
+/// name and byte offset regardless.
+fn diagnose_malformed_open(line: &str, trimmed: &str, _name: &str) -> String {
+    let stripped = trimmed.trim_end();
+    if line.trim_start() != trimmed || line.trim_end() != line {
+        // Either the line had non-whitespace prefix before our match,
+        // or trailing prose after the tag.
+        return "speccy XML element tags must appear on their own line".to_owned();
+    }
+    if !stripped.ends_with('>') {
+        return "speccy XML open tag is missing the closing `>`".to_owned();
+    }
+    // The shape regex matched but the strict open-tag regex did not —
+    // the offender is almost always an unquoted attribute value.
+    "attribute values must be double-quoted".to_owned()
+}
+
+fn range_inside_any_fence(
+    line_start: usize,
+    line_end_excl: usize,
+    fences: &[(usize, usize)],
+) -> bool {
+    for (s, e) in fences {
+        if line_start >= *s && line_end_excl <= *e {
+            return true;
+        }
+    }
+    false
+}
+
+fn collect_code_fence_byte_ranges(source: &str) -> Vec<(usize, usize)> {
+    let arena = Arena::new();
+    let root = parse_markdown(&arena, source);
+
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    walk_for_code_fences(root, source, &mut ranges);
+    ranges
+}
+
+fn walk_for_code_fences<'a>(root: &'a AstNode<'a>, source: &str, out: &mut Vec<(usize, usize)>) {
+    for node in root.descendants() {
+        let ast = node.data.borrow();
+        if let NodeValue::CodeBlock(_) = &ast.value {
+            let start_line = ast.sourcepos.start.line;
+            let end_line = ast.sourcepos.end.line;
+            if let Some((s, e)) = line_range_to_byte_range(source, start_line, end_line) {
+                out.push((s, e));
+            }
+        }
+    }
+}
+
+fn line_range_to_byte_range(
+    source: &str,
+    start_line_1: usize,
+    end_line_1: usize,
+) -> Option<(usize, usize)> {
+    if start_line_1 == 0 || end_line_1 < start_line_1 {
+        return None;
+    }
+    let mut line_no: usize = 1;
+    let mut start_byte: Option<usize> = None;
+    let mut end_byte: Option<usize> = None;
+    let mut current_line_start: usize = 0;
+
+    for (idx, ch) in source.char_indices() {
+        if line_no == start_line_1 && start_byte.is_none() {
+            start_byte = Some(current_line_start);
+        }
+        if ch == '\n' {
+            if line_no == end_line_1 {
+                end_byte = Some(idx.checked_add(1)?);
+                break;
+            }
+            line_no = line_no.checked_add(1)?;
+            current_line_start = idx.checked_add(1)?;
+        }
+    }
+    if line_no == start_line_1 && start_byte.is_none() {
+        start_byte = Some(current_line_start);
+    }
+    if end_byte.is_none() {
+        end_byte = Some(source.len());
+    }
+    Some((start_byte?, end_byte?))
+}
+
+fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseError> {
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("# ") {
+            return Ok(rest.trim().to_owned());
+        }
+        if trimmed == "#" {
+            return Ok(String::new());
+        }
+    }
+    Err(ParseError::MissingField {
+        field: "level-1 heading".to_owned(),
+        context: format!("SPEC.md at {path}"),
+    })
+}
+
+fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block>, ParseError> {
+    for t in &raw {
+        validate_tag_shape(t, path)?;
+    }
+
+    let mut stack: Vec<PendingBlock> = Vec::new();
+    let mut top: Vec<Block> = Vec::new();
+
+    for t in raw {
+        if t.is_close {
+            let Some(open) = stack.pop() else {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: t.span.start,
+                    reason: format!("close tag `</{}>` without matching open", t.name),
+                });
+            };
+            if open.name != t.name {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: t.span.start,
+                    reason: format!(
+                        "close tag `</{}>` does not match open tag `<{}>`",
+                        t.name, open.name
+                    ),
+                });
+            }
+            let body = source
+                .get(open.body_start..t.body_end_after_tag)
+                .unwrap_or("")
+                .to_owned();
+            let block = open.finish(body, path)?;
+            if let Some(parent) = stack.last_mut() {
+                parent.children.push(block);
+            } else {
+                top.push(block);
+            }
+        } else {
+            stack.push(PendingBlock {
+                name: t.name,
+                attrs: t.attrs,
+                span: t.span,
+                body_start: t.body_start,
+                children: Vec::new(),
+            });
+        }
+    }
+
+    if let Some(open) = stack.first() {
+        return Err(ParseError::MalformedMarker {
+            path: path.to_path_buf(),
+            offset: open.span.start,
+            reason: format!("open tag `<{}>` is never closed", open.name),
+        });
+    }
+
+    Ok(top)
+}
+
+fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
+    if !SPECCY_ELEMENT_NAMES.contains(&t.name.as_str()) {
+        return Err(ParseError::UnknownMarkerName {
+            path: path.to_path_buf(),
+            marker_name: t.name.clone(),
+            offset: t.span.start,
+        });
+    }
+
+    if t.is_close {
+        return Ok(());
+    }
+
+    let allowed_attrs: &[&str] = match t.name.as_str() {
+        "requirement" | "scenario" => &["id"],
+        "decision" => &["id", "status"],
+        "open-question" => &["resolved"],
+        _ => &[],
+    };
+
+    for (k, v) in &t.attrs {
+        if !allowed_attrs.contains(&k.as_str()) {
+            return Err(ParseError::UnknownMarkerAttribute {
+                path: path.to_path_buf(),
+                marker_name: t.name.clone(),
+                attribute: k.clone(),
+                offset: t.span.start,
+            });
+        }
+        validate_attribute_value(&t.name, k, v, path)?;
+    }
+    Ok(())
+}
+
+fn validate_attribute_value(
+    element_name: &str,
+    attr: &str,
+    value: &str,
+    path: &Utf8Path,
+) -> Result<(), ParseError> {
+    match (element_name, attr) {
+        ("requirement", "id") if !req_id_regex().is_match(value) => {
+            Err(ParseError::InvalidMarkerId {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                id: value.to_owned(),
+                expected_pattern: r"REQ-\d{3,}".to_owned(),
+            })
+        }
+        ("scenario", "id") if !chk_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
+            path: path.to_path_buf(),
+            marker_name: element_name.to_owned(),
+            id: value.to_owned(),
+            expected_pattern: r"CHK-\d{3,}".to_owned(),
+        }),
+        ("decision", "id") if !dec_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
+            path: path.to_path_buf(),
+            marker_name: element_name.to_owned(),
+            id: value.to_owned(),
+            expected_pattern: r"DEC-\d{3,}".to_owned(),
+        }),
+        ("decision", "status") if !ALLOWED_DECISION_STATUSES.contains(&value) => {
+            Err(ParseError::InvalidMarkerAttributeValue {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                attribute: attr.to_owned(),
+                value: value.to_owned(),
+                allowed: ALLOWED_DECISION_STATUSES.join(", "),
+            })
+        }
+        ("open-question", "resolved") if !ALLOWED_RESOLVED_VALUES.contains(&value) => {
+            Err(ParseError::InvalidMarkerAttributeValue {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                attribute: attr.to_owned(),
+                value: value.to_owned(),
+                allowed: ALLOWED_RESOLVED_VALUES.join(", "),
+            })
+        }
+        _ => Ok(()),
+    }
+}
+
+#[derive(Debug)]
+struct PendingBlock {
+    name: String,
+    attrs: Vec<(String, String)>,
+    span: ElementSpan,
+    body_start: usize,
+    children: Vec<Block>,
+}
+
+impl PendingBlock {
+    fn finish(self, body: String, path: &Utf8Path) -> Result<Block, ParseError> {
+        let PendingBlock {
+            name,
+            attrs,
+            span,
+            body_start: _,
+            children,
+        } = self;
+
+        let get_attr = |key: &str| -> Option<String> {
+            attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+        };
+
+        match name.as_str() {
+            "spec" => Ok(Block::Spec { children, span }),
+            "overview" => Ok(Block::Overview { body, span }),
+            "requirement" => {
+                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
+                    field: "id".to_owned(),
+                    context: format!("<requirement> element in {path}"),
+                })?;
+                Ok(Block::Requirement {
+                    id,
+                    body,
+                    children,
+                    span,
+                })
+            }
+            "scenario" => {
+                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
+                    field: "id".to_owned(),
+                    context: format!("<scenario> element in {path}"),
+                })?;
+                Ok(Block::Scenario { id, body, span })
+            }
+            "decision" => {
+                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
+                    field: "id".to_owned(),
+                    context: format!("<decision> element in {path}"),
+                })?;
+                let status = match get_attr("status").as_deref() {
+                    Some("accepted") => Some(DecisionStatus::Accepted),
+                    Some("rejected") => Some(DecisionStatus::Rejected),
+                    Some("deferred") => Some(DecisionStatus::Deferred),
+                    Some("superseded") => Some(DecisionStatus::Superseded),
+                    Some(_) | None => None,
+                };
+                Ok(Block::Decision {
+                    id,
+                    status,
+                    body,
+                    span,
+                })
+            }
+            "open-question" => {
+                let resolved = match get_attr("resolved").as_deref() {
+                    Some("true") => Some(true),
+                    Some("false") => Some(false),
+                    Some(_) | None => None,
+                };
+                Ok(Block::OpenQuestion {
+                    resolved,
+                    body,
+                    span,
+                })
+            }
+            "changelog" => Ok(Block::Changelog { body, span }),
+            other => Err(ParseError::UnknownMarkerName {
+                path: path.to_path_buf(),
+                marker_name: other.to_owned(),
+                offset: span.start,
+            }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DecisionStatus;
+    use super::HTML5_ELEMENT_NAMES;
+    use super::SPECCY_ELEMENT_NAMES;
+    use super::is_html5_element_name;
+    use super::parse;
+    use crate::error::ParseError;
+    use camino::Utf8Path;
+    use indoc::indoc;
+
+    fn path() -> &'static Utf8Path {
+        Utf8Path::new("fixture/SPEC.md")
+    }
+
+    fn frontmatter() -> &'static str {
+        "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\n---\n\n# Title\n"
+    }
+
+    fn make(body_after_heading: &str) -> String {
+        format!("{}{}", frontmatter(), body_after_heading)
+    }
+
+    #[test]
+    fn happy_path_requirement_with_scenario() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            Requirement body prose.
+
+            <scenario id="CHK-001">
+            Given a thing, when X, then Y.
+            </scenario>
+            </requirement>
+
+            <changelog>
+            | Date | Author | Summary |
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        assert_eq!(doc.requirements.len(), 1);
+        let req = doc.requirements.first().expect("one requirement");
+        assert_eq!(req.id, "REQ-001");
+        assert_eq!(req.scenarios.len(), 1);
+        let sc = req.scenarios.first().expect("one scenario");
+        assert_eq!(sc.id, "CHK-001");
+        assert_eq!(sc.parent_requirement_id, "REQ-001");
+        assert!(sc.body.contains("Given a thing"));
+    }
+
+    #[test]
+    fn orphan_scenario_errors_with_id() {
+        let src = make(indoc! {r#"
+            <scenario id="CHK-001">
+            text
+            </scenario>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("orphan scenario must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::ScenarioOutsideRequirement { scenario_id, .. }
+                    if scenario_id.as_deref() == Some("CHK-001")
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn duplicate_chk_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            a
+            </scenario>
+            </requirement>
+
+            <requirement id="REQ-002">
+            body
+
+            <scenario id="CHK-001">
+            b
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("dup must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::DuplicateMarkerId { marker_name, id, .. }
+                    if marker_name == "scenario" && id == "CHK-001"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn duplicate_req_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            a
+            </scenario>
+            </requirement>
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-002">
+            b
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("dup must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::DuplicateMarkerId { marker_name, id, .. }
+                    if marker_name == "requirement" && id == "REQ-001"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn duplicate_dec_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            a
+            </scenario>
+            </requirement>
+
+            <decision id="DEC-001">
+            decision body
+            </decision>
+
+            <decision id="DEC-001">
+            decision body 2
+            </decision>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("dup must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::DuplicateMarkerId { marker_name, id, .. }
+                    if marker_name == "decision" && id == "DEC-001"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn unquoted_attribute_errors() {
+        let src = make(indoc! {r"
+            <requirement id=REQ-001>
+            body
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "});
+        let err = parse(&src, path()).expect_err("unquoted attr must fail");
+        assert!(
+            matches!(&err, ParseError::MalformedMarker { .. }),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn non_line_isolated_open_errors() {
+        let src = make(indoc! {r#"
+            prose <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("non-isolated open must fail");
+        // Prose-prefixed open tags don't match either the strict or the
+        // shape regex (the shape regex anchors at the line start), so
+        // the parser treats them as Markdown — but the close tag and
+        // changelog must still validate. With no recognised open tag,
+        // there's no scenario nest, and the `<requirement>` open below
+        // an emitted close tag would surface as a mismatch. To assert
+        // the error precisely, also test a clean case with `</requirement> prose`:
+        assert!(
+            matches!(&err, ParseError::MalformedMarker { .. }),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn non_line_isolated_close_errors() {
+        // Close tag with trailing prose is detected by the shape regex
+        // and surfaced as malformed.
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement> trailing prose
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("non-isolated close must fail");
+        assert!(
+            matches!(&err, ParseError::MalformedMarker { .. }),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn unknown_element_name_is_treated_as_markdown_body() {
+        // `<rationale>` is not in the whitelist; the scanner must skip
+        // it without producing structure, so the parse should succeed
+        // and yield only the explicit `<requirement>` element.
+        let src = make(indoc! {r#"
+            <rationale>
+            free prose
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let ids: Vec<&str> = doc.requirements.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["REQ-001"]);
+    }
+
+    #[test]
+    fn html5_element_name_on_own_line_is_markdown_body() {
+        let src = make(indoc! {r#"
+            <section>
+            <details>
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        assert_eq!(doc.requirements.len(), 1);
+    }
+
+    #[test]
+    fn unknown_attribute_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001" priority="high">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("unknown attr must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::UnknownMarkerAttribute { marker_name, attribute, .. }
+                    if marker_name == "requirement" && attribute == "priority"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn invalid_req_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-1">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("bad REQ id must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::InvalidMarkerId { marker_name, id, .. }
+                    if marker_name == "requirement" && id == "REQ-1"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn invalid_chk_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHECK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("bad CHK id must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::InvalidMarkerId { marker_name, .. } if marker_name == "scenario"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn invalid_dec_id_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <decision id="DECISION-1">
+            body
+            </decision>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("bad DEC id must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::InvalidMarkerId { marker_name, .. } if marker_name == "decision"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn empty_required_scenario_body_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            requirement prose
+
+            <scenario id="CHK-001">
+
+
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("empty scenario must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::EmptyMarkerBody { marker_name, .. } if marker_name == "scenario"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn requirement_body_without_prose_but_with_scenarios_parses() {
+        // The parser stores `Requirement.body` as the verbatim slice
+        // between open and close tags (including nested scenario tag
+        // text), matching the SPEC-0019 contract. A valid scenario
+        // therefore satisfies the "non-whitespace body" rule even when
+        // the requirement carries no free prose. The renderer (T-002)
+        // is responsible for stripping nested scenario tag lines when
+        // re-emitting the requirement prose.
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let req = doc.requirements.first().expect("one requirement");
+        assert_eq!(req.id, "REQ-001");
+        assert_eq!(req.scenarios.len(), 1);
+    }
+
+    #[test]
+    fn empty_required_changelog_body_errors() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("empty changelog must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::EmptyMarkerBody { marker_name, .. } if marker_name == "changelog"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn scenario_body_preserves_bytes_verbatim() {
+        let body = "Literal <thinking>, <example>, <T>, A & B, [link](https://example.com)\n\n```rust\nfn x() {}\n```";
+        let src = format!(
+            "{front}\n<requirement id=\"REQ-001\">\nintro prose\n\n<scenario id=\"CHK-001\">\n{body}\n</scenario>\n</requirement>\n\n<changelog>\nrow\n</changelog>\n",
+            front = frontmatter().trim_end(),
+            body = body,
+        );
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let sc = doc
+            .requirements
+            .first()
+            .and_then(|r| r.scenarios.first())
+            .expect("scenario should be present");
+        assert!(sc.body.contains("<thinking>"), "body: {:?}", sc.body);
+        assert!(sc.body.contains("<example>"));
+        assert!(sc.body.contains("<T>"));
+        assert!(sc.body.contains("A & B"));
+        assert!(sc.body.contains("```rust"));
+        assert!(sc.body.contains("[link](https://example.com)"));
+    }
+
+    #[test]
+    fn open_tag_inside_fenced_code_is_ignored() {
+        let src = make(indoc! {r#"
+            Example:
+
+            ```markdown
+            <requirement id="REQ-999">
+            should not be parsed
+            </requirement>
+            ```
+
+            <requirement id="REQ-001">
+            real body
+
+            <scenario id="CHK-001">
+            real scenario
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let ids: Vec<&str> = doc.requirements.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["REQ-001"]);
+    }
+
+    #[test]
+    fn inline_backticked_element_is_not_structure() {
+        // A structure-shaped line wrapped in inline backticks must be
+        // treated as Markdown body content, not a tag. The parser drops
+        // backtick code spans from its element scan because the line
+        // does not start with `<` after trimming.
+        let src = make(indoc! {r#"
+            Example inline: `<requirement id="REQ-999">` is not structure.
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let ids: Vec<&str> = doc.requirements.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["REQ-001"]);
+    }
+
+    #[test]
+    fn element_spans_slice_starts_with_lt_and_name() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <decision id="DEC-001" status="accepted">
+            decision body
+            </decision>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let check = |span: super::ElementSpan, name: &str| {
+            let slice = src.get(span.start..span.end).expect("span should slice");
+            assert!(
+                slice.trim_start().starts_with('<'),
+                "span slice did not start with `<`: {slice:?}",
+            );
+            assert!(
+                slice.contains(name),
+                "span slice for {name} did not contain the element name: {slice:?}",
+            );
+        };
+        for r in &doc.requirements {
+            check(r.span, "requirement");
+            for s in &r.scenarios {
+                check(s.span, "scenario");
+            }
+        }
+        for d in &doc.decisions {
+            check(d.span, "decision");
+        }
+        check(doc.changelog_span, "changelog");
+    }
+
+    #[test]
+    fn no_decision_elements_yields_empty_vec() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        assert!(doc.decisions.is_empty());
+    }
+
+    #[test]
+    fn open_question_resolved_must_be_true_or_false() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <open-question resolved="maybe">
+            text
+            </open-question>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("invalid resolved must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::InvalidMarkerAttributeValue { marker_name, attribute, value, .. }
+                    if marker_name == "open-question" && attribute == "resolved" && value == "maybe"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn open_question_resolved_true_is_recognized() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <open-question resolved="true">
+            text
+            </open-question>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let q = doc.open_questions.first().expect("open question present");
+        assert_eq!(q.resolved, Some(true));
+    }
+
+    #[test]
+    fn decision_status_is_recognized() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <decision id="DEC-001" status="accepted">
+            body
+            </decision>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        let dec = doc.decisions.first().expect("decision present");
+        assert_eq!(dec.status, Some(DecisionStatus::Accepted));
+    }
+
+    #[test]
+    fn missing_frontmatter_uses_existing_error_variant() {
+        let src = "# Heading only\n<changelog>\nrow\n</changelog>\n";
+        let err = parse(src, path()).expect_err("missing frontmatter must fail");
+        assert!(
+            matches!(&err, ParseError::MissingField { field, .. } if field == "frontmatter"),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn missing_level1_heading_uses_existing_error_variant() {
+        let src = "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\n---\n\nno heading\n<changelog>\nrow\n</changelog>\n";
+        let err = parse(src, path()).expect_err("missing heading must fail");
+        assert!(
+            matches!(
+                &err,
+                ParseError::MissingField { field, .. } if field == "level-1 heading"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn unterminated_frontmatter_surfaces_existing_variant() {
+        let src = "---\nid: SPEC-0001\nno closing fence\n";
+        let err = parse(src, path()).expect_err("unterminated must fail");
+        assert!(
+            matches!(&err, ParseError::UnterminatedFrontmatter { .. }),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn legacy_html_comment_marker_open_errors_with_dedicated_variant() {
+        let src = make(indoc! {r#"
+            <!-- speccy:requirement id="REQ-001" -->
+            body
+
+            <!-- speccy:scenario id="CHK-001" -->
+            text
+            <!-- /speccy:scenario -->
+            <!-- /speccy:requirement -->
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("legacy marker must fail");
+        assert!(
+            matches!(err, ParseError::LegacyMarker { .. }),
+            "expected LegacyMarker variant, got {err:?}",
+        );
+        if let ParseError::LegacyMarker {
+            ref legacy_form,
+            ref suggested_element,
+            ..
+        } = err
+        {
+            assert!(
+                legacy_form.contains("speccy:requirement"),
+                "legacy form did not mention `speccy:requirement`: {legacy_form:?}",
+            );
+            assert!(
+                suggested_element.contains("<requirement"),
+                "suggestion did not contain `<requirement`: {suggested_element:?}",
+            );
+        }
+        // The Display impl must also surface both pieces.
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("speccy:requirement") && rendered.contains("<requirement"),
+            "Display should mention legacy form and suggestion: {rendered}",
+        );
+    }
+
+    #[test]
+    fn legacy_html_comment_marker_close_errors_with_dedicated_variant() {
+        let src = make(indoc! {r#"
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            <!-- /speccy:requirement -->
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let err = parse(&src, path()).expect_err("legacy close marker must fail");
+        assert!(
+            matches!(err, ParseError::LegacyMarker { .. }),
+            "expected LegacyMarker variant, got {err:?}",
+        );
+        if let ParseError::LegacyMarker {
+            ref legacy_form,
+            ref suggested_element,
+            ..
+        } = err
+        {
+            assert!(legacy_form.contains("/speccy:requirement"));
+            assert_eq!(suggested_element, "</requirement>");
+        }
+    }
+
+    #[test]
+    fn legacy_marker_in_inline_prose_is_not_an_error() {
+        // Documentation prose that mentions the legacy form inline (for
+        // example wrapped in inline backticks and parentheses as part of
+        // ordinary Markdown sentence text) must not trip the LegacyMarker
+        // diagnostic. The scanner only flags line-isolated legacy markers
+        // — same line-isolation rule the raw XML element scanner enforces
+        // for new structure tags.
+        let src = make(indoc! {r#"
+            History note: SPEC-0019 used HTML-comment markers (e.g.
+            `<!-- speccy:requirement id="REQ-001" -->`) which SPEC-0020
+            replaces with raw XML element tags.
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        assert_eq!(doc.requirements.len(), 1);
+    }
+
+    #[test]
+    fn legacy_marker_inside_fenced_code_is_not_an_error() {
+        // Documentation about the legacy form inside a fenced code
+        // block must not trigger the LegacyMarker diagnostic; it is
+        // example text, not structure.
+        let src = make(indoc! {r#"
+            History note: the SPEC-0019 form looked like this:
+
+            ```markdown
+            <!-- speccy:requirement id="REQ-XXX" -->
+            ```
+
+            <requirement id="REQ-001">
+            body
+
+            <scenario id="CHK-001">
+            text
+            </scenario>
+            </requirement>
+
+            <changelog>
+            row
+            </changelog>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed");
+        assert_eq!(doc.requirements.len(), 1);
+    }
+
+    #[test]
+    fn canonical_fixture_parses_cleanly() {
+        // Sanity check that the checked-in canonical fixture (used by
+        // T-002's roundtrip test) is valid against the T-001 parser.
+        // If T-002 needs to evolve the fixture shape, this test is the
+        // first line of defence against accidental regressions.
+        let src = include_str!("../../../tests/fixtures/spec_xml/canonical.md");
+        let doc = parse(src, Utf8Path::new("tests/fixtures/spec_xml/canonical.md"))
+            .expect("canonical fixture should parse");
+        let ids: Vec<&str> = doc.requirements.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["REQ-001", "REQ-002"]);
+        let chk_ids: Vec<&str> = doc
+            .requirements
+            .iter()
+            .flat_map(|r| r.scenarios.iter().map(|s| s.id.as_str()))
+            .collect();
+        assert_eq!(chk_ids, vec!["CHK-001", "CHK-002", "CHK-003"]);
+        assert_eq!(doc.decisions.len(), 1);
+        assert_eq!(doc.open_questions.len(), 1);
+        assert!(doc.overview.is_some());
+        assert!(doc.changelog_body.contains("Initial canonical fixture"));
+    }
+
+    #[test]
+    fn speccy_whitelist_is_disjoint_from_html5_element_set() {
+        // The disjointness invariant from REQ-001 / DEC-002. Each
+        // Speccy structure element name must be absent from the
+        // checked-in HTML5 element set; future additions that collide
+        // surface as a build-time test failure.
+        for &name in SPECCY_ELEMENT_NAMES {
+            assert!(
+                !is_html5_element_name(name),
+                "Speccy element `{name}` collides with the HTML5 element name set",
+            );
+        }
+        // Sanity: ensure the HTML5 list contains the names called out
+        // in REQ-001 — if a future edit accidentally drops `summary`,
+        // the collision check above silently loses coverage.
+        for required in [
+            "html", "head", "body", "title", "summary", "details", "section", "table", "tr", "td",
+            "script", "style", "template", "svg", "math",
+        ] {
+            assert!(
+                HTML5_ELEMENT_NAMES.contains(&required),
+                "HTML5 element set is missing `{required}`",
+            );
+        }
+    }
+}

@@ -35,12 +35,12 @@ fn spc_001_spec_doc_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     if let Err(err) = &spec.spec_doc {
         let message = match err {
             ParseError::StraySpecToml { path } => format!(
-                "stray per-spec spec.toml at {path}: SPEC-0019 removed spec.toml; remove the file and rely on SPEC.md markers"
+                "stray per-spec spec.toml at {path}: SPEC-0019 removed spec.toml; remove the file and rely on SPEC.md elements"
             ),
             ParseError::Io { source, .. } => {
-                format!("SPEC.md marker tree could not be read: {source}")
+                format!("SPEC.md element tree could not be read: {source}")
             }
-            other => format!("SPEC.md marker tree is invalid: {other}"),
+            other => format!("SPEC.md element tree is invalid: {other}"),
         };
         out.push(Diagnostic::with_file(
             SPC_001,
@@ -140,7 +140,7 @@ fn spc_002_003_cross_ref(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             spec.spec_id.clone(),
             spec.spec_md_path.clone(),
             format!(
-                "SPEC.md heading declares `{id}` but no matching `speccy:requirement` marker exists"
+                "SPEC.md heading declares `{id}` but no matching `<requirement>` element exists"
             ),
         ));
     }
@@ -152,7 +152,7 @@ fn spc_002_003_cross_ref(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             spec.spec_id.clone(),
             spec.spec_md_path.clone(),
             format!(
-                "`speccy:requirement id=\"{id}\"` marker exists but SPEC.md has no matching `### REQ-NNN` heading"
+                "`<requirement id=\"{id}\">` element exists but SPEC.md has no matching `### REQ-NNN` heading"
             ),
         ));
     }

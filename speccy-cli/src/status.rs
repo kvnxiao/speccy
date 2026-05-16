@@ -244,7 +244,7 @@ fn first_parse_error(parsed: &speccy_core::lint::ParsedSpec) -> Option<String> {
         return Some(format!("SPEC.md: {e}"));
     }
     if let Err(e) = &parsed.spec_doc {
-        return Some(format!("SPEC.md (markers): {e}"));
+        return Some(format!("SPEC.md (elements): {e}"));
     }
     if let Some(Err(e)) = &parsed.tasks_md {
         return Some(format!("TASKS.md: {e}"));

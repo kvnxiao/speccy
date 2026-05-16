@@ -63,7 +63,7 @@ is iteratable.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Shared persona files
 
 `skills/shared/personas/` contains 8 files in pure markdown
@@ -91,14 +91,17 @@ is iteratable.
   sections (role, focus, what to look for that's easy to miss,
   inline note format, example).
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 skills/shared/personas/ contains the 8 expected files (planner, implementer, six reviewers) and each is non-empty.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-002" -->
+</scenario>
+
+<scenario id="CHK-002">
 Reviewer persona file names match personas::ALL exactly (business, tests, security, style, architecture, docs).
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Shared prompt templates
 
 `skills/shared/prompts/` contains 11 template files with
@@ -128,14 +131,17 @@ commands.
 - A negative test confirms unknown placeholders (typos like
   `{{spec_idd}}`) are NOT present.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 skills/shared/prompts/ contains the 11 expected templates (plan-greenfield/amend, tasks-generate/amend, implementer, six reviewers, report) and each is non-empty.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-004" -->
+</scenario>
+
+<scenario id="CHK-004">
 Each template contains the placeholders its corresponding CLI command (per REQs in SPEC-0005/0006/0008/0009/0011) substitutes; placeholder names are valid identifiers.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Claude Code recipe skills
 
 `skills/claude-code/` contains 7 recipe skills with Claude Code
@@ -161,15 +167,17 @@ frontmatter.
 - A frontmatter test parses each file's YAML frontmatter and
   asserts a non-empty `description` field.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - A presence test asserts each file exists.
 - A frontmatter test parses each file's YAML frontmatter and
   asserts a non-empty `description` field.
 
 skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, work, review, amend, ship) with valid YAML frontmatter and non-empty description fields.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Codex recipe skills
 
 `skills/codex/` contains 7 recipe skills with Codex frontmatter.
@@ -187,15 +195,17 @@ skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, w
 - A frontmatter test parses each file's YAML and asserts
   presence of Codex-required fields.
 
-<!-- speccy:scenario id="CHK-006" -->
+<scenario id="CHK-006">
 - A presence test asserts each file exists.
 - A frontmatter test parses each file's YAML and asserts
   presence of Codex-required fields.
 
 skills/codex/speccy/ contains the 7 parallel recipes with valid Codex frontmatter.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: Persona content shape
 
 Each reviewer persona file follows a consistent shape.
@@ -222,15 +232,17 @@ Each reviewer persona file follows a consistent shape.
   headings and asserts the required sections are present in
   declared order.
 
-<!-- speccy:scenario id="CHK-007" -->
+<scenario id="CHK-007">
 - A shape-checking test parses each persona file's markdown
   headings and asserts the required sections are present in
   declared order.
 
 Each reviewer persona file has the required headings in declared order: # Reviewer Persona, ## Role, ## Focus, ## What to look for that's easy to miss, ## Inline note format, ## Example.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-006" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-006">
 ### REQ-006: Recipe content shape
 
 Each top-level recipe skill follows a consistent shape.
@@ -253,15 +265,17 @@ Each top-level recipe skill follows a consistent shape.
   paragraph, a "When to use" heading, and at least one
   fenced code block with a `speccy` command.
 
-<!-- speccy:scenario id="CHK-008" -->
+<scenario id="CHK-008">
 - A test loads each recipe and asserts presence of an intro
   paragraph, a "When to use" heading, and at least one
   fenced code block with a `speccy` command.
 
 Each top-level recipe has an intro paragraph, a 'When to use' heading, and at least one fenced code block with a speccy command from the v1 surface.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-007" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-007">
 ### REQ-007: Files load in their host
 
 The shipped content is loadable by Claude Code and Codex
@@ -281,15 +295,17 @@ without errors.
 - Pass criterion: every recipe loads and runs the first CLI
   invocation it documents.
 
-<!-- speccy:scenario id="CHK-009" -->
+<scenario id="CHK-009">
 - The `manual` check prompt names each recipe and the verifier
   steps (run `speccy init`, then invoke each recipe in turn).
 - Pass criterion: every recipe loads and runs the first CLI
   invocation it documents.
 
 Manually verify each shipped recipe loads in its host: (1) Run speccy init in a fresh repo with .claude/ present. (2) Invoke each of /speccy:init, /speccy:plan, /speccy:tasks, /speccy:work, /speccy:review, /speccy:amend, /speccy:ship in Claude Code; confirm each loads without parse errors and executes its first documented CLI invocation. (3) Repeat with .codex/ and Codex as the host. Pass criterion: every recipe loads and the first step runs.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -304,7 +320,7 @@ quality are welcome after v1 ships.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Personas in `shared/` only; not duplicated per host
 
 **Status:** Accepted
@@ -319,8 +335,9 @@ bundle); project-local overrides go to
 - One copy per host -- rejected. Duplication.
 **Consequences:** SPEC-0009's persona resolver looks only in
 shared paths.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Prompt templates in `shared/prompts/` only
 
 **Status:** Accepted (same reasoning as DEC-001)
@@ -329,8 +346,9 @@ shared paths.
 skills.
 **Consequences:** Adding a new prompt-rendering command (e.g.
 a future `speccy amend-status`) only needs one template file.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Reviewer persona names mirror `personas::ALL`
 
 **Status:** Accepted (alignment with SPEC-0009 DEC-001)
@@ -343,8 +361,9 @@ a future `speccy amend-status`) only needs one template file.
 `docs`.
 **Consequences:** Adding a persona is a coordinated change
 across SPEC-0009 (registry) + SPEC-0013 (content).
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: Initial content prioritises clarity over polish
 
 **Status:** Accepted
@@ -360,8 +379,9 @@ robustness are explicitly welcome after v1 ships.
   returns; dogfooding is the better signal.
 **Consequences:** Reviewer agents in v1 may produce slightly
 generic reviews; iteration improves this over time.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-005" status="accepted" -->
+</decision>
+
+<decision id="DEC-005" status="accepted">
 #### DEC-005: One reviewer prompt template per persona, not one shared
 
 **Status:** Accepted
@@ -379,7 +399,8 @@ the six, but the door is open.
 **Consequences:** SPEC-0009's template lookup is
 `reviewer-<persona>.md` (not `reviewer.md`). Six files to
 maintain instead of one.
-<!-- /speccy:decision -->
+</decision>
+
 ### Data changes
 
 No Rust code. New markdown files only:
@@ -425,12 +446,12 @@ load these files).
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-14 | agent/claude | Noun swap (Vision → Mission) lands in ARCHITECTURE.md; planner user story re-points at `AGENTS.md` north star (VISION.md is deleted). Persona content unchanged. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

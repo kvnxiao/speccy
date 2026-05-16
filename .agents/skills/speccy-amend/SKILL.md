@@ -25,9 +25,9 @@ reconciliation are not forgotten.
    ```
 
 2. Follow the prompt: edit SPEC.md surgically (including its
-   `speccy:requirement` / `speccy:scenario` marker blocks if
-   requirements changed); append a `## Changelog` row explaining
-   *why* the amendment was needed.
+   `<requirement>` / `<scenario>` element blocks if requirements
+   changed); append a `## Changelog` row explaining *why* the
+   amendment was needed.
 3. Render the TASKS.md amendment prompt:
 
    ```bash

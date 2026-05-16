@@ -1,12 +1,14 @@
 //! Parser for Speccy's workspace-level `speccy.toml`.
 //!
 //! Per-spec `spec.toml` files were removed by SPEC-0019: requirement
-//! and scenario data now lives in the marker-structured SPEC.md
-//! (see [`crate::parse::spec_markers`]). Only the workspace
+//! and scenario data now lives in the raw-XML-element SPEC.md
+//! (see [`crate::parse::spec_xml`]). Only the workspace
 //! `speccy.toml` carrier remains.
 //!
 //! See `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-001 for the
-//! original two-file contract; SPEC-0019 narrowed it to one file.
+//! original two-file contract; SPEC-0019 narrowed it to one file and
+//! SPEC-0020 swapped the carrier shape from HTML-comment markers to
+//! raw XML element tags.
 
 use crate::error::ParseError;
 use camino::Utf8Path;

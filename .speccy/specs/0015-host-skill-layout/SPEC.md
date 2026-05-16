@@ -107,7 +107,7 @@ installs out there to migrate — the change is a straight cut-over.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Bundle source layout
 
 Restructure `skills/claude-code/` and `skills/codex/` so each
@@ -135,14 +135,17 @@ shipped host skill is a directory containing a `SKILL.md` file.
 - Given the embedded bundle, when walked, then no flat-file
   `<verb>.md` exists at `claude-code/speccy/` or `codex/speccy/`.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 The embedded bundle exposes exactly 7 SKILL.md files under skills/claude-code/ and 7 under skills/codex/, named for the seven speccy verbs (speccy-init, speccy-plan, speccy-tasks, speccy-work, speccy-review, speccy-ship, speccy-amend).
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-002" -->
+</scenario>
+
+<scenario id="CHK-002">
 The embedded bundle no longer contains the legacy flat-file layout (skills/claude-code/speccy/<verb>.md or skills/codex/speccy/<verb>.md).
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Install destinations
 
 `speccy init` copies each host pack into the host's published
@@ -177,14 +180,17 @@ directory layout.
   `speccy init --force` runs, then that file is byte-identical
   before and after.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 speccy init --host claude-code copies skills/claude-code/<name>/SKILL.md to .claude/skills/<name>/SKILL.md with byte-identical content; destination directories created recursively.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-004" -->
+</scenario>
+
+<scenario id="CHK-004">
 speccy init --host codex copies skills/codex/<name>/SKILL.md to .codex/skills/<name>/SKILL.md with byte-identical content; destination directories created recursively.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: SKILL.md frontmatter shape
 
 Every shipped SKILL.md declares `name` and `description` in YAML
@@ -214,7 +220,7 @@ skill.
 - Given a shipped SKILL.md, when the description is inspected,
   then it is a single-line non-empty string.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - Given a shipped SKILL.md, when parsed as YAML frontmatter, then
   the parser returns a mapping with the keys `name` and
   `description`.
@@ -224,9 +230,11 @@ skill.
   then it is a single-line non-empty string.
 
 Every shipped SKILL.md (both hosts) parses as YAML frontmatter with required keys `name` (hyphenated, matching the parent directory) and `description` (single-line non-empty string).
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Description quality for natural-language activation
 
 Each shipped description leads with what the skill does, then
@@ -252,7 +260,7 @@ descriptions.
 - Given any shipped SKILL.md, when the description's character
   count is measured, then it is at most 500.
 
-<!-- speccy:scenario id="CHK-006" -->
+<scenario id="CHK-006">
 - Given any shipped SKILL.md, when the description is inspected,
   then it does not match `^Phase \d` (Python regex).
 - Given any shipped SKILL.md, when the description is searched
@@ -261,8 +269,10 @@ descriptions.
   count is measured, then it is at most 500.
 
 No shipped description starts with `Phase N`; each contains `Use when` (case-insensitive); each is at most 500 characters.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -283,7 +293,7 @@ user phrases.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: SKILL.md directory format over flat .md files
 
 **Status:** Accepted
@@ -300,8 +310,9 @@ a `SKILL.md` file inside. The directory name is the skill name.
 **Consequences:** Bundle directory depth grows by one level per
 host. The bundle's `include_dir!` macro handles arbitrary depth,
 so the embedded copy path is unchanged.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: `.agents/skills/` for Codex (per official docs)
 
 **Status:** Accepted
@@ -330,8 +341,9 @@ broadest population of Codex users without a workaround.
 `.codex/skills/` and not `.agents/skills/`, that's a follow-up
 spec adding the secondary destination. Today's bias is toward
 the documented path.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Hyphenated names without `speccy:` namespace prefix
 
 **Status:** Accepted
@@ -355,7 +367,8 @@ the slash command form.
 get "unknown command". This is an incompatibility that must be
 called out in the changelog row and surfaced when SPEC-0002's
 Changelog is amended to point at this spec.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -459,11 +472,11 @@ Install destinations:
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-14 | agent/claude | Initial draft from skill-creator audit of speccy's own shipped packs. Replaces flat-file `<verb>.md` layout with SKILL.md directory format; moves Claude Code destination from `.claude/commands/` to `.claude/skills/`; moves Codex destination from `.codex/skills/` to `.agents/skills/` per OpenAI's official Codex docs (`developers.openai.com/codex/skills`). Pre-v1, so no shipped-install migration is in scope. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

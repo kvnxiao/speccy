@@ -25,30 +25,30 @@ Author the next slice as `SPEC-{{next_spec_id}}`.
      them together at plan time is cheaper than rediscovering it.
 3. Create the SPEC.md using the PRD-shaped template in
    `.speccy/ARCHITECTURE.md`. Each requirement is wrapped in a
-   `<!-- speccy:requirement id="REQ-NNN" -->` marker block; each
-   validation scenario lives in a nested
-   `<!-- speccy:scenario id="CHK-NNN" -->` marker block under the
-   requirement it proves. The scenario body is English
-   Given/When/Then prose describing the behavior the requirement
-   must satisfy. Speccy renders these scenarios; project tests and
-   reviewers judge whether they're satisfied.
+   `<requirement id="REQ-NNN">` element block; each validation
+   scenario lives in a nested `<scenario id="CHK-NNN">` element
+   block under the requirement it proves. The scenario body is
+   English Given/When/Then prose describing the behavior the
+   requirement must satisfy. Speccy renders these scenarios;
+   project tests and reviewers judge whether they're satisfied.
 
    ```markdown
-   <!-- speccy:requirement id="REQ-001" -->
+   <requirement id="REQ-001">
    ### REQ-001: <one-line behavior>
 
    <prose describing the requirement>
 
-   <!-- speccy:scenario id="CHK-001" -->
+   <scenario id="CHK-001">
    Given <preconditions>, when <action>, then <observable result>.
-   <!-- /speccy:scenario -->
-   <!-- /speccy:requirement -->
+   </scenario>
+   </requirement>
    ```
 
-   Wrap each `## Changelog` table in a
-   `<!-- speccy:changelog -->` block. Per-spec `spec.toml` is no
-   longer used (SPEC-0019 migration); the marker tree is the
-   machine contract.
+   Wrap each `## Changelog` table in a `<changelog>` element
+   block. Per-spec `spec.toml` is no longer used (SPEC-0019
+   migration) and HTML-comment markers (SPEC-0019) were
+   superseded by raw element tags in SPEC-0020; the element tree
+   is the machine contract.
 4. Surface any material questions inline in `## Open questions`.
 
 Do not write TASKS.md; the next phase will decompose it.

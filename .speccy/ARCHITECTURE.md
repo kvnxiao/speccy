@@ -77,9 +77,9 @@ Speccy, not in the user's workflow.
 |---|---|---|
 | **Mission** | Scope of one long-running initiative composed of 1+ specs | `specs/[focus]/MISSION.md` (optional grouping; omit for flat single-focus projects) |
 | **Spec** | One bounded behavior contract | `specs/[focus]/NNNN-slug/SPEC.md`, or `specs/NNNN-slug/SPEC.md` when ungrouped |
-| **Requirement** | One observable behavior with a done condition | `speccy:requirement` marker block in SPEC.md |
+| **Requirement** | One observable behavior with a done condition | `<requirement>` element block in SPEC.md |
 | **Task** | One implementation slice sized for one agent | Line in `TASKS.md` |
-| **Check** | One English validation scenario a requirement must satisfy | `speccy:scenario` marker block nested under a `speccy:requirement` in SPEC.md |
+| **Check** | One English validation scenario a requirement must satisfy | `<scenario>` element block nested under a `<requirement>` in SPEC.md |
 
 The project-wide product north star ("what we're building, why, who
 for, what 'good enough to ship v1' looks like") is **not** a Speccy
@@ -268,7 +268,7 @@ Renders a deterministic prompt that asks the agent to:
 - propose the next SPEC slice
 - write `specs/[focus]/NNNN-slug/SPEC.md` when targeting a focus
   area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template),
-  including `speccy:requirement` and nested `speccy:scenario` marker
+  including `<requirement>` and nested `<scenario>` element
   blocks for IDs and check scenarios
 - surface material questions inline in SPEC.md
 
@@ -720,8 +720,8 @@ append a Changelog row whenever it edits SPEC.md.
 Speccy lints three things in SPEC.md:
 
 1. Required frontmatter fields are present.
-2. The marker tree is well-formed: every `speccy:requirement` has at
-   least one nested `speccy:scenario`, every id matches its regex,
+2. The element tree is well-formed: every `<requirement>` has at
+   least one nested `<scenario>`, every id matches its regex,
    and no ids duplicate within a spec.
 3. Any unchecked `- [ ]` in the **Open questions** section is reported
    in `speccy status` as a soft signal.
@@ -740,7 +740,7 @@ Unit-level tests live in TASKS.md (see below) as `**Tests to write:**`
 bullets on each task. This split is intentional:
 
 - **SPEC.md behavior**: what the system does, observable from outside.
-  Maps to `speccy:scenario` marker blocks nested under each
+  Maps to `<scenario>` element blocks nested under each
   requirement; the project's integration tests must satisfy them.
 - **TASKS.md tests**: what each implementation slice must verify.
   Maps to unit tests the implementer writes before code.
@@ -853,92 +853,132 @@ Speccy parses TASKS.md only to:
 
 It does not validate note format or persona-review prose.
 
-## SPEC.md marker grammar
+## SPEC.md element grammar
 
 The machine-readable structure inside `SPEC.md` is carried by
-line-isolated XML-style HTML comment markers wrapping ordinary
-Markdown. The Markdown body remains valid Markdown: GitHub renders
-it, editors preview it, and `<T>` / `A & B` style content inside a
-scenario does not need XML escaping.
+line-isolated **raw XML element tags** wrapping ordinary Markdown.
+The Markdown body remains valid Markdown: `<T>` / `A & B` style
+content inside a scenario does not need XML escaping, fenced code
+blocks pass through verbatim, and the parser is line-aware rather
+than being a full XML document parser.
 
 ### Syntax
 
-Every marker comment occupies its own line. Opening markers may
-carry double-quoted attributes; closing markers carry only the
-marker name with a leading slash.
+Every Speccy element open tag and close tag occupies its own line.
+Opening tags may carry double-quoted attributes; closing tags carry
+only the element name with a leading slash.
 
 ```markdown
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Render selected scenarios
 
 Plain Markdown prose remains plain Markdown.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 Given a task covers REQ-001,
-when `speccy check SPEC-0019/T-001` runs,
+when `speccy check SPEC-0020/T-001` runs,
 then only REQ-001's scenarios are rendered.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+</requirement>
 ```
 
-A marker comment sharing a line with non-whitespace prose is a parse
-error; attribute values without surrounding double quotes are a parse
-error; unknown marker names or unknown attributes are parse errors.
+A Speccy element tag sharing a line with non-whitespace prose is a
+parse error. Attribute values without surrounding double quotes are
+a parse error. Unknown attributes on a known Speccy element are a
+parse error. Element-shaped text outside the whitelist on its own
+line is treated as Markdown body content (no parse error, no
+structural element).
 
-### Marker names
+### Element names
 
-| Marker | Cardinality | Attributes |
+| Element | Cardinality | Attributes |
 |---|---|---|
-| `speccy:spec` | optional root; emitted by the renderer | none |
-| `speccy:summary` | optional, single | none |
-| `speccy:requirement` | required, 1+ | `id="REQ-NNN"` |
-| `speccy:scenario` | required, 1+ inside each requirement | `id="CHK-NNN"` |
-| `speccy:decision` | optional, 0+ | `id="DEC-NNN"`, optional `status="accepted\|rejected\|deferred\|superseded"` |
-| `speccy:open-question` | optional, 0+ | optional `resolved="true\|false"` |
-| `speccy:changelog` | required, single | none |
+| `spec` | optional root; emitted by the renderer | none |
+| `overview` | optional, single | none |
+| `requirement` | required, 1+ | `id="REQ-NNN"` |
+| `scenario` | required, 1+ inside each requirement | `id="CHK-NNN"` |
+| `decision` | optional, 0+ | `id="DEC-NNN"`, optional `status="accepted\|rejected\|deferred\|superseded"` |
+| `open-question` | optional, 0+ | optional `resolved="true\|false"` |
+| `changelog` | required, single | none |
+
+Open-tag forms in canonical order:
+
+```markdown
+<spec>
+<overview>
+<requirement id="REQ-001">
+<scenario id="CHK-001">
+<decision id="DEC-001" status="accepted">
+<open-question resolved="false">
+<changelog>
+```
+
+The Speccy element whitelist is **disjoint from the HTML5 element
+name set** by construction (see SPEC-0020 DEC-002): a `<section>` or
+`<details>` line in a SPEC.md body is unambiguously prose, never
+Speccy structure. The disjointness invariant is enforced by a unit
+test against a checked-in copy of the WHATWG element index. New
+structural additions must avoid HTML5 element names; that test
+catches accidental collisions at build time.
 
 ### IDs and nesting
 
 - Requirement ids match `REQ-\d{3,}`.
 - Scenario ids match `CHK-\d{3,}`.
 - Decision ids match `DEC-\d{3,}`.
-- A `speccy:scenario` marker must be nested inside exactly one
-  `speccy:requirement` marker. Containment replaces the old
-  `[[requirements]].checks` TOML relation; the parent requirement is
-  recorded as `scenario.parent_requirement_id`.
-- Duplicate `REQ-`, `CHK-` (within one spec), or `DEC-` ids are parse
-  errors.
-- The body of each required marker (`requirement`, `scenario`,
+- A `<scenario>` element must be nested inside exactly one
+  `<requirement>` element. Containment replaces the old
+  `[[requirements]].checks` TOML relation; the parent requirement
+  is recorded as `scenario.parent_requirement_id`.
+- Duplicate `REQ-`, `CHK-` (within one spec), or `DEC-` ids are
+  parse errors.
+- The body of each required element (`requirement`, `scenario`,
   `changelog`) must contain non-whitespace Markdown.
-- Markers hidden inside fenced code blocks are treated as code
-  content, not structure.
+- Element-shaped lines hidden inside fenced code blocks or inline
+  backticks are treated as code content, not structure. SPEC.md
+  files that document Speccy's own grammar (this file included) put
+  example tags inside fenced code blocks so the scanner does not
+  promote them.
 
 ### Deterministic rendering
 
-`speccy-core::parse::spec_markers` exposes `SpecDoc`, `Requirement`,
-`Scenario`, `Decision`, `MarkerSpan`,
+`speccy-core::parse::spec_xml` exposes `SpecDoc`, `Requirement`,
+`Scenario`, `Decision`, `ElementSpan`,
 `parse(source, path) -> Result<SpecDoc, ParseError>`, and
 `render(&SpecDoc) -> String`. Rendering is deterministic:
 
-- marker comments are line-isolated;
-- marker attributes emit in a stable order;
+- element tags are line-isolated;
+- element attributes emit in a stable order;
 - requirement and scenario order follows the struct order;
 - Markdown bodies are preserved except for trailing whitespace
-  normalization at marker boundaries;
+  normalization at element boundaries;
 - parse / render / parse yields a structurally equivalent
   `SpecDoc`.
 
 The deterministic renderer is library-internal. Per DEC-003 of
-SPEC-0019 there is no public `speccy fmt` command; rendering is used
-by CLI internals, prompt slicing, and tests.
+SPEC-0019 there is no public `speccy fmt` command; rendering is
+used by CLI internals, prompt slicing, and tests.
 
-> Historical note (SPEC-0019 migration): before SPEC-0019, the
-> requirement-to-check graph and the scenario text lived in a
-> per-spec `spec.toml` (SPEC-0019) alongside `SPEC.md`. SPEC-0019
-> migration collapsed `spec.toml` into marker comments in `SPEC.md`; per-spec
-> `spec.toml` (SPEC-0019) is now a stray file and the workspace
-> loader rejects it. The only TOML left in the file layout is the
-> workspace-level `.speccy/speccy.toml`.
+> Historical note (SPEC-0019 → SPEC-0020 migration): SPEC-0019
+> shipped a line-isolated HTML-comment marker grammar
+> (`<!-- speccy:requirement id="REQ-001" -->`, paired
+> `<!-- /speccy:requirement -->` close) that wrapped the same
+> Markdown bodies. SPEC-0020 superseded that carrier with raw XML
+> element tags (`<requirement id="REQ-001">` / `</requirement>`)
+> for tighter alignment with vendor prompt-structuring conventions;
+> the typed model is unchanged. Post-SPEC-0020 the legacy comment
+> form is a parse error and surfaces a dedicated diagnostic that
+> names the offending marker line and suggests the equivalent
+> element tag.
+
+> Historical note (SPEC-0019 `spec.toml` migration): before
+> SPEC-0019, the requirement-to-check graph and the scenario text
+> lived in a per-spec `spec.toml` (SPEC-0019) alongside `SPEC.md`.
+> SPEC-0019 migration collapsed `spec.toml` into the in-band
+> structure inside `SPEC.md`; per-spec `spec.toml` (SPEC-0019) is
+> now a stray file and the workspace loader rejects it. The only
+> TOML left in the file layout is the workspace-level
+> `.speccy/speccy.toml`.
 
 > Historical note: before SPEC-0018, checks carried `kind`,
 > `command` or `prompt`, and `proves` fields, and `speccy check`
@@ -1540,7 +1580,7 @@ SPC-006  status = superseded but no other spec in the workspace
          declares `supersedes` pointing to this spec
 SPC-007  status = implemented but tasks are not all [x] (informational)
 
-REQ-001  Requirement has no nested speccy:scenario marker
+REQ-001  Requirement has no nested <scenario> element
 REQ-002  Reserved (formerly: requirement's check IDs reference
          non-existent checks — obsolete post-SPEC-0019; containment
          is now the only relation)

@@ -14,8 +14,8 @@
 use crate::lint::ParsedSpec;
 use crate::parse::SpecMd;
 use crate::parse::TasksMd;
-use crate::parse::spec_markers;
 use crate::parse::spec_md;
+use crate::parse::spec_xml;
 use crate::parse::supersession::SupersessionIndex;
 use crate::parse::supersession::supersession_index;
 use crate::parse::tasks_md;
@@ -447,14 +447,19 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     }
 }
 
-/// Parse the marker tree from a SPEC.md path, propagating I/O and
+/// Parse the typed `SpecDoc` from a SPEC.md path, propagating I/O and
 /// parser errors through the existing [`crate::error::ParseError`]
 /// channel.
+///
+/// After SPEC-0020 the carrier is raw XML element tags; the SPEC-0019
+/// HTML-comment marker form is rejected via
+/// [`crate::error::ParseError::LegacyMarker`] with a diagnostic that
+/// names the equivalent raw XML element form.
 fn parse_spec_doc(
     spec_md_path: &Utf8Path,
 ) -> Result<crate::parse::SpecDoc, crate::error::ParseError> {
     let source = crate::parse::toml_files::read_to_string(spec_md_path)?;
-    spec_markers::parse(&source, spec_md_path)
+    spec_xml::parse(&source, spec_md_path)
 }
 
 fn hex_of_sha256(bytes: &[u8; 32]) -> String {

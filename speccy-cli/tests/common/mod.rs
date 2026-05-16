@@ -73,21 +73,21 @@ pub fn spec_md_template(id: &str, status: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         Given REQ-001, when the suite runs, then it covers REQ-001.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template.replace("__ID__", id).replace("__STATUS__", status)
 }

@@ -43,21 +43,21 @@ fn spec_md_for(id: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         covers REQ-001
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     body.replace("__ID__", id)
 }

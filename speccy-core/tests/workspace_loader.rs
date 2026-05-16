@@ -51,21 +51,21 @@ const VALID_SPEC_MD: &str = indoc! {r#"
 
     # Example
 
-    <!-- speccy:requirement id="REQ-001" -->
+    <requirement id="REQ-001">
     ### REQ-001: First
     body
-    <!-- speccy:scenario id="CHK-001" -->
+    <scenario id="CHK-001">
     covers REQ-001
-    <!-- /speccy:scenario -->
-    <!-- /speccy:requirement -->
+    </scenario>
+    </requirement>
 
     ## Changelog
 
-    <!-- speccy:changelog -->
+    <changelog>
     | Date | Author | Summary |
     |------|--------|---------|
     | 2026-05-11 | t | init |
-    <!-- /speccy:changelog -->
+    </changelog>
 "#};
 
 /// Bullet 1: loader loads each spec as a `SpecDoc`, with the
@@ -136,23 +136,254 @@ fn stray_spec_toml_surfaces_as_loader_parse_error() -> TestResult {
 }
 
 /// Bullet 3: SPEC-0019 deleted types are gone from
-/// `speccy_core::parse`. Grep-style assertion over `parse/mod.rs`.
+/// `speccy_core::parse`. Grep-style assertion scoped to `pub use` /
+/// `pub mod` lines in `parse/mod.rs`. Doc comments and the SPEC-0020
+/// `compile_fail` doctest may mention deleted symbols by name; the
+/// invariant is that none of them are actually re-exported.
 #[test]
 fn deleted_symbols_are_not_re_exported_from_parse_module() -> TestResult {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let path = std::path::Path::new(manifest_dir).join("src/parse/mod.rs");
     let contents = fs_err::read_to_string(&path)?;
+    let export_lines: Vec<&str> = contents
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("pub use ") || t.starts_with("pub mod ")
+        })
+        .collect();
+    let exports = export_lines.join("\n");
     for forbidden in &[
-        "pub use toml_files::SpecToml",
-        "pub use toml_files::RequirementEntry",
-        "pub use toml_files::CheckEntry",
-        "pub use toml_files::spec_toml",
+        // SPEC-0019 deletions — per-spec TOML.
+        "SpecToml",
+        "RequirementEntry",
+        "CheckEntry",
+        "spec_toml",
+        // SPEC-0020 T-005: marker parser symbols.
+        "spec_markers",
+        "parse_spec_markers",
+        "render_spec_markers",
+        "MarkerSpan",
     ] {
         assert!(
-            !contents.contains(forbidden),
-            "`{forbidden}` must not be re-exported from speccy_core::parse after T-005",
+            !exports.contains(forbidden),
+            "`{forbidden}` must not be re-exported from speccy_core::parse after T-005; export block:\n{exports}",
         );
     }
+    Ok(())
+}
+
+/// SPEC-0020 T-005 extra coverage: the marker parser module file is
+/// gone from disk (REQ-002 "deleted, not feature-flagged"). A
+/// build-time grep guards against accidental resurrection.
+#[test]
+fn spec_markers_module_file_is_gone() {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let path = std::path::Path::new(manifest_dir).join("src/parse/spec_markers.rs");
+    assert!(
+        !path.exists(),
+        "speccy-core/src/parse/spec_markers.rs must be deleted after T-005; found at {}",
+        path.display(),
+    );
+    let dir = std::path::Path::new(manifest_dir).join("src/parse/spec_markers");
+    assert!(
+        !dir.exists(),
+        "speccy-core/src/parse/spec_markers/ directory must be deleted after T-005; found at {}",
+        dir.display(),
+    );
+}
+
+/// SPEC-0020 T-005: a stray SPEC.md that still contains the SPEC-0019
+/// HTML-comment marker form surfaces as `ParseError::LegacyMarker`,
+/// and `Display` carries the suggested raw-XML element form.
+#[test]
+fn stray_legacy_marker_spec_md_surfaces_as_legacy_marker_error() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    // Hand-authored marker-form SPEC.md (the form SPEC-0019 shipped).
+    let legacy = indoc! {r#"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # Example
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    write_spec_md(&root, "0001-legacy", legacy)?;
+
+    let ws = scan(&root);
+    let only = ws.specs.first().expect("one spec");
+    let err = only
+        .spec_doc
+        .as_ref()
+        .expect_err("legacy marker form must be rejected as a parse error");
+    assert!(
+        matches!(err, ParseError::LegacyMarker { .. }),
+        "expected ParseError::LegacyMarker, got {err:?}",
+    );
+    let rendered = format!("{err}");
+    assert!(
+        rendered.contains("<!-- speccy:requirement"),
+        "diagnostic must name the legacy marker form; got: {rendered}",
+    );
+    assert!(
+        rendered.contains("<requirement"),
+        "diagnostic must suggest the equivalent raw XML element form; got: {rendered}",
+    );
+    Ok(())
+}
+
+/// SPEC-0020 T-005: a stray legacy-marker SPEC.md surfaces as SPC-001
+/// through the lint engine (the workspace-level diagnostic channel
+/// users see via `speccy verify` / `speccy status`).
+#[test]
+fn legacy_marker_spec_md_surfaces_as_spc_001_diagnostic() -> TestResult {
+    use speccy_core::lint::Level;
+    use speccy_core::lint::run as lint_run;
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let legacy = indoc! {r#"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # Example
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    write_spec_md(&root, "0001-legacy", legacy)?;
+
+    let ws = scan(&root);
+    let lint_ws = ws.as_lint_workspace();
+    let diagnostics = lint_run(&lint_ws);
+    let spc_001: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code == "SPC-001" && matches!(d.level, Level::Error))
+        .collect();
+    assert!(
+        !spc_001.is_empty(),
+        "SPC-001 must fire for a legacy-marker SPEC.md; got diagnostics: {:?}",
+        diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+    );
+    let message = &spc_001
+        .first()
+        .expect("at least one SPC-001 diagnostic was asserted above")
+        .message;
+    assert!(
+        message.contains("<requirement"),
+        "SPC-001 message must carry the suggested raw XML element form from LegacyMarker `Display`; got: {message}",
+    );
+    Ok(())
+}
+
+/// SPEC-0020 T-005: duplicate `<scenario id="CHK-NNN">` ids inside one
+/// spec surface as `ParseError::DuplicateMarkerId` from the XML parser
+/// and are reported as SPC-001 by the lint engine.
+#[test]
+fn duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001() -> TestResult {
+    use speccy_core::lint::Level;
+    use speccy_core::lint::run as lint_run;
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # Example
+
+        <requirement id="REQ-001">
+        ### REQ-001: First
+        body
+        <scenario id="CHK-001">
+        first
+        </scenario>
+        </requirement>
+        <requirement id="REQ-002">
+        ### REQ-002: Second
+        body
+        <scenario id="CHK-001">
+        duplicate id
+        </scenario>
+        </requirement>
+
+        ## Changelog
+
+        <changelog>
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        </changelog>
+    "#};
+    write_spec_md(&root, "0001-dup", spec_md)?;
+
+    let ws = scan(&root);
+    let only = ws.specs.first().expect("one spec");
+    let err = only
+        .spec_doc
+        .as_ref()
+        .expect_err("duplicate CHK ids must reject the parse");
+    assert!(
+        matches!(err, ParseError::DuplicateMarkerId { .. }),
+        "expected ParseError::DuplicateMarkerId, got {err:?}",
+    );
+
+    let lint_ws = ws.as_lint_workspace();
+    let diagnostics = lint_run(&lint_ws);
+    let spc_001_dup: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code == "SPC-001" && matches!(d.level, Level::Error))
+        .filter(|d| d.message.contains("CHK-001"))
+        .collect();
+    assert!(
+        !spc_001_dup.is_empty(),
+        "SPC-001 must surface the duplicate-id error and name CHK-001; got: {:?}",
+        diagnostics
+            .iter()
+            .map(|d| (d.code, d.message.as_str()))
+            .collect::<Vec<_>>(),
+    );
     Ok(())
 }
 
@@ -195,24 +426,24 @@ fn requirement_with_two_scenarios_reports_two_proofs() -> TestResult {
 
         # Example
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         first
-        <!-- /speccy:scenario -->
-        <!-- speccy:scenario id="CHK-002" -->
+        </scenario>
+        <scenario id="CHK-002">
         second
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     write_spec_md(&root, "0001-foo", spec_md)?;
 

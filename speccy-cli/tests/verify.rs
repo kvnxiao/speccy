@@ -63,18 +63,18 @@ fn spec_md_empty_scenarios(spec_id: &str, status: &str) -> String {
 
         # __ID__
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body with no scenarios.
-        <!-- /speccy:requirement -->
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template
         .replace("__ID__", spec_id)
@@ -398,21 +398,21 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
 
         # SPEC-0002
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         covers REQ-001
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     write_spec(&ws.root, "0002-new", supersedes_md, "", None)?;
 
@@ -576,28 +576,28 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
 
         # SPEC-0098
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         first
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
-        <!-- speccy:requirement id="REQ-002" -->
+        </scenario>
+        </requirement>
+        <requirement id="REQ-002">
         ### REQ-002: Second
         body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         duplicate
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
 

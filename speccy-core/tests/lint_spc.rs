@@ -64,24 +64,24 @@ fn spc_002_fires_when_req_only_in_spec_md_heading() -> TestResult {
 
         # Spec
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         Body.
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         scenario body
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ### REQ-002: Second
         Body.
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let fx = write_spec_fixture(spec_md, None)?;
     let diags = lint_fixture(&fx);

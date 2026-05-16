@@ -4,10 +4,10 @@
 Renders the planning prompt: read `AGENTS.md` (which carries the
 project-wide product north star), propose the next SPEC slice, and
 write `SPEC.md` (requirements and validation scenarios live as
-marker-comment blocks inside SPEC.md itself). With a SPEC-ID
-argument, renders the
-amendment prompt instead and inlines the nearest parent
-`MISSION.md` so focus-area context is in scope.
+raw XML element blocks — `<requirement>` / `<scenario>` — inside
+SPEC.md itself). With a SPEC-ID argument, renders the amendment
+prompt instead and inlines the nearest parent `MISSION.md` so
+focus-area context is in scope.
 
 ## When to use
 

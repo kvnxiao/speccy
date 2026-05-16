@@ -154,6 +154,7 @@ Given a task element without a task-scenarios block,
 when parsing runs,
 then parsing fails and names the task.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -205,6 +206,7 @@ the matching requirement in SPEC.md,
 when workspace loading runs,
 then it fails with a dangling scenario reference.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -253,6 +255,7 @@ then next, status, implement, review, report, and verify read from
 the XML-backed typed models without changing their external CLI
 behavior.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -307,6 +310,7 @@ Given the pre-migration REPORT.md files,
 when migration runs,
 then requirements coverage table rows become coverage elements.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -355,6 +359,7 @@ when inspected,
 then they use speccy XML elements for task state, task scenarios,
 and report coverage.
 </scenario>
+
 </requirement>
 
 ## Design

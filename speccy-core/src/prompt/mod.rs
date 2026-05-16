@@ -13,7 +13,7 @@
 //!   `specs/**` recursively so flat and mission-grouped specs share one ID
 //!   space.
 //! - [`spec_slice`] -- emit a task-scoped Markdown slice of a `SpecDoc` driven
-//!   by the task's `Covers:` list (frontmatter + heading + summary + covered
+//!   by the task's `Covers:` list (frontmatter + heading + overview + covered
 //!   requirements with nested scenarios + decisions).
 //!
 //! See `.speccy/specs/0005-plan-command/SPEC.md` REQ-003..REQ-007.

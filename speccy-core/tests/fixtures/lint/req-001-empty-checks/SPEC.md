@@ -13,16 +13,16 @@ not: SPC-002
 
 # Fixture
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: First
 
 body with no scenarios
-<!-- /speccy:requirement -->
+</requirement>
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date | Author | Summary |
 |------|--------|---------|
 | 2026-05-11 | t | init |
-<!-- /speccy:changelog -->
+</changelog>

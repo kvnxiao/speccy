@@ -131,7 +131,7 @@ pub struct Workspace<'a> {
 ///
 /// `spec_md`, `spec_doc`, and `tasks_md` are stored as `Result` so the
 /// lint engine can emit diagnostics for parse failures (e.g. SPC-001 for
-/// a malformed SPEC.md marker tree, or a SPEC-0019 stray `spec.toml`).
+/// a malformed SPEC.md element tree, or a SPEC-0019 stray `spec.toml`).
 #[derive(Debug)]
 pub struct ParsedSpec {
     /// Stable `SPEC-NNNN` id pulled from the SPEC.md frontmatter when
@@ -146,9 +146,11 @@ pub struct ParsedSpec {
     pub tasks_md_path: Option<Utf8PathBuf>,
     /// Parsed SPEC.md frontmatter / heading view (or the parse error).
     pub spec_md: Result<SpecMd, ParseError>,
-    /// Parsed SPEC.md marker tree (or the parse error). After SPEC-0019
-    /// this carries the canonical requirement-to-scenario graph; the
-    /// stray `spec.toml` lint also surfaces here as a parse failure.
+    /// Parsed SPEC.md element tree (or the parse error). After
+    /// SPEC-0020 this carries the canonical requirement-to-scenario
+    /// graph derived from `<requirement>` / `<scenario>` elements;
+    /// the stray `spec.toml` lint also surfaces here as a parse
+    /// failure.
     pub spec_doc: Result<SpecDoc, ParseError>,
     /// Parsed TASKS.md (or the parse error), if a TASKS.md exists.
     pub tasks_md: Option<Result<TasksMd, ParseError>>,
@@ -168,7 +170,7 @@ impl ParsedSpec {
         self.spec_md.as_ref().ok()
     }
 
-    /// Convenience: return the parsed SPEC.md marker tree if parsing
+    /// Convenience: return the parsed SPEC.md element tree if parsing
     /// succeeded.
     #[must_use = "callers must handle the None case (parse failure)"]
     pub fn spec_doc_ok(&self) -> Option<&SpecDoc> {

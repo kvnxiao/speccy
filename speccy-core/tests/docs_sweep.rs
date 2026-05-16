@@ -9,13 +9,14 @@
 //! - `.speccy/ARCHITECTURE.md` mentions `spec.toml` only in lines that carry a
 //!   migration / historical marker ("migration", "SPEC-0019", or "history" /
 //!   "historical", case-insensitive).
-//! - `.speccy/ARCHITECTURE.md` documents the marker grammar by containing the
-//!   canonical marker names.
+//! - `.speccy/ARCHITECTURE.md` documents the raw XML element grammar by
+//!   containing the canonical element names (SPEC-0020 carrier).
 //! - `.speccy/ARCHITECTURE.md` pins DEC-003's "no public `speccy fmt` command"
 //!   contract by containing at least one line that mentions both `speccy fmt`
 //!   and `DEC-003`.
-//! - The ephemeral `xtask/migrate-spec-markers-0019` directory has been
-//!   deleted.
+//! - The ephemeral migration `xtask/` directory has been deleted (both the
+//!   SPEC-0019 carrier-migration tool and the SPEC-0020 element-migration
+//!   tool).
 //! - No active instruction in `resources/modules/` (the source-of-truth skill
 //!   pack) or any rendered host mirror (`.claude/skills/`, `.agents/skills/`,
 //!   `.codex/agents/`, `.speccy/skills/`) tells an agent to read or edit a
@@ -76,21 +77,28 @@ fn architecture_md_mentions_spec_toml_only_in_historical_context() {
 }
 
 #[test]
-fn architecture_md_documents_marker_grammar() {
+fn architecture_md_documents_xml_element_grammar() {
     let root = workspace_root();
     let arch = root.join(".speccy").join("ARCHITECTURE.md");
     let body = fs_err::read_to_string(arch.as_std_path()).expect("read .speccy/ARCHITECTURE.md");
 
+    // SPEC-0020 reversed SPEC-0019's HTML-comment marker carrier to raw
+    // XML element tags. ARCHITECTURE.md must teach the new grammar — both
+    // the open-tag form for every element in the closed whitelist and the
+    // HTML5-disjointness invariant from DEC-002.
     for needle in [
-        "speccy:requirement",
-        "speccy:scenario",
-        "speccy:decision",
-        "speccy:changelog",
+        "<requirement",
+        "<scenario",
+        "<decision",
+        "<changelog",
+        "<open-question",
+        "<overview",
+        "HTML5",
     ] {
         assert!(
             body.contains(needle),
-            "ARCHITECTURE.md must document the marker grammar by mentioning \
-             `{needle}`"
+            "ARCHITECTURE.md must document the raw XML element grammar by \
+             mentioning `{needle}`"
         );
     }
 }
@@ -115,12 +123,17 @@ fn architecture_md_pins_no_public_speccy_fmt_per_dec_003() {
 }
 
 #[test]
-fn migration_xtask_directory_is_deleted() {
+fn migration_xtask_directories_are_deleted() {
     let root = workspace_root();
-    let xtask = root.join("xtask").join("migrate-spec-markers-0019");
+    let spec_0019_xtask = root.join("xtask").join("migrate-spec-markers-0019");
     assert!(
-        !xtask.as_std_path().exists(),
-        "{xtask} must be deleted at the end of SPEC-0019"
+        !spec_0019_xtask.as_std_path().exists(),
+        "{spec_0019_xtask} must be deleted at the end of SPEC-0019"
+    );
+    let spec_0020_xtask = root.join("xtask").join("migrate-spec-xml-0020");
+    assert!(
+        !spec_0020_xtask.as_std_path().exists(),
+        "{spec_0020_xtask} must be deleted at the end of SPEC-0020 T-007"
     );
 }
 

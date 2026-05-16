@@ -1,9 +1,9 @@
-//! Symmetric REQ-ID diff between SPEC.md headings and SPEC.md marker tree.
+//! Symmetric REQ-ID diff between SPEC.md headings and SPEC.md element tree.
 //!
 //! Before SPEC-0019 this compared SPEC.md against per-spec `spec.toml`.
-//! After SPEC-0019 the requirement graph lives in the SPEC.md marker
-//! tree (see [`crate::parse::spec_markers`]); the heading view from
-//! [`SpecMd`] and the marker view from [`SpecDoc`] should agree on the
+//! After SPEC-0020 the requirement graph lives in the SPEC.md raw XML
+//! element tree (see [`crate::parse::spec_xml`]); the heading view from
+//! [`SpecMd`] and the element view from [`SpecDoc`] should agree on the
 //! same REQ-ID set.
 //!
 //! Pure, deterministic, idempotent. See
@@ -13,22 +13,22 @@ use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
 use std::collections::HashSet;
 
-/// Symmetric diff between SPEC.md REQ headings and `speccy:requirement`
-/// markers in the same SPEC.md.
+/// Symmetric diff between SPEC.md REQ headings and `<requirement>`
+/// elements in the same SPEC.md.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrossRef {
-    /// IDs that appear in SPEC.md headings but not in the marker tree,
+    /// IDs that appear in SPEC.md headings but not in the element tree,
     /// in heading-declared order.
     pub only_in_spec_md: Vec<String>,
-    /// IDs that appear in the marker tree but not in SPEC.md headings,
-    /// in marker-declared order.
+    /// IDs that appear in the element tree but not in SPEC.md headings,
+    /// in element-declared order.
     pub only_in_markers: Vec<String>,
     /// IDs present on both sides, in SPEC.md heading-declared order.
     pub in_both: Vec<String>,
 }
 
 /// Compute the symmetric REQ-ID diff between SPEC.md headings and the
-/// SPEC.md marker tree.
+/// SPEC.md element tree.
 #[must_use = "the diff is the entire purpose of this call"]
 pub fn cross_ref(spec: &SpecMd, doc: &SpecDoc) -> CrossRef {
     let md_ids: Vec<&str> = spec.requirements.iter().map(|r| r.id.as_str()).collect();

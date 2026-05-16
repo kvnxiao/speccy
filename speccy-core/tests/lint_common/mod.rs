@@ -16,8 +16,8 @@ use speccy_core::lint::ParsedSpec;
 use speccy_core::lint::Workspace;
 use speccy_core::lint::run;
 use speccy_core::lint::types::Diagnostic;
+use speccy_core::parse::parse_spec_xml;
 use speccy_core::parse::report_md;
-use speccy_core::parse::spec_markers;
 use speccy_core::parse::spec_md;
 use speccy_core::parse::supersession::SupersessionIndex;
 use speccy_core::parse::supersession::supersession_index;
@@ -30,7 +30,7 @@ pub type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 /// One on-disk spec fixture rooted at a `TempDir`. The legacy
 /// `spec_toml` field was removed by SPEC-0019; per-spec data lives in
-/// `SPEC.md` markers.
+/// `SPEC.md` raw XML elements (SPEC-0020).
 pub struct Fixture {
     pub _dir: TempDir,
     pub spec_md_path: Utf8PathBuf,
@@ -39,7 +39,7 @@ pub struct Fixture {
 }
 
 /// Write a single spec fixture into a tempdir. `spec_md` should be a
-/// canonical marker-structured SPEC.md (see [`valid_spec_md`]).
+/// canonical raw-XML-element-structured SPEC.md (see [`valid_spec_md`]).
 pub fn write_spec_fixture(spec_md: &str, tasks_md: Option<&str>) -> TestResult<Fixture> {
     let dir = tempfile::tempdir()?;
     let dir_path = Utf8PathBuf::from_path_buf(dir.path().to_path_buf())
@@ -66,7 +66,7 @@ pub fn write_spec_fixture(spec_md: &str, tasks_md: Option<&str>) -> TestResult<F
 }
 
 /// Build a `ParsedSpec` by parsing each artifact via SPEC-0001's
-/// parsers and SPEC-0019's marker parser.
+/// parsers and SPEC-0020's raw XML element parser.
 pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
     let spec_md_result = spec_md(&fx.spec_md_path);
     let spec_id = spec_md_result
@@ -84,7 +84,7 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
                 path: fx.spec_md_path.clone(),
                 source: e,
             })
-            .and_then(|src| spec_markers::parse(&src, &fx.spec_md_path))
+            .and_then(|src| parse_spec_xml(&src, &fx.spec_md_path))
     };
     let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| tasks_md(p));
 
@@ -130,9 +130,9 @@ pub fn lint_fixture(fx: &Fixture) -> Vec<Diagnostic> {
     run_lint(&[parsed])
 }
 
-/// Minimal valid marker-structured SPEC.md for tests that need a
-/// backdrop. Replace `__ID__` in the returned string to inject a spec
-/// id.
+/// Minimal valid raw-XML-element-structured SPEC.md for tests that
+/// need a backdrop. Replace `__ID__` in the returned string to inject a
+/// spec id.
 pub fn valid_spec_md(id: &str) -> String {
     let template = indoc! {r#"
         ---
@@ -145,30 +145,30 @@ pub fn valid_spec_md(id: &str) -> String {
 
         # Test spec
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
 
         Body.
 
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         Given REQ-001, when the suite runs, then it covers REQ-001.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date       | Author | Summary |
         |------------|--------|---------|
         | 2026-05-11 | tester | Initial. |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     template.replace("__ID__", id)
 }
 
-/// Minimal valid marker-structured SPEC.md, kept as a separate helper
-/// name so older test bodies that referenced `valid_spec_toml` for
-/// pairing can be adapted incrementally.
+/// Minimal valid raw-XML-element-structured SPEC.md, kept as a separate
+/// helper name so older test bodies that referenced `valid_spec_toml`
+/// for pairing can be adapted incrementally.
 pub fn valid_spec_md_default() -> String {
     valid_spec_md("SPEC-0001")
 }

@@ -217,6 +217,25 @@ pub enum ParseError {
         /// Comma-separated list of allowed values.
         allowed: String,
     },
+
+    /// A SPEC.md still carries a SPEC-0019 HTML-comment Speccy marker
+    /// (`<!-- speccy:NAME ... -->` or `<!-- /speccy:NAME -->`) outside any
+    /// fenced code block. After the SPEC-0020 migration the raw XML element
+    /// form is the only accepted carrier; surfacing this as a dedicated
+    /// variant lets the diagnostic suggest the equivalent element syntax.
+    #[error(
+        "legacy HTML-comment speccy marker in {path} at byte offset {offset}: {legacy_form} (rewrite as the raw XML element {suggested_element})"
+    )]
+    LegacyMarker {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Byte offset of the offending marker's start in the source.
+        offset: usize,
+        /// Legacy marker line as it appears in the source.
+        legacy_form: String,
+        /// Suggested raw XML element form that replaces the legacy marker.
+        suggested_element: String,
+    },
 }
 
 fn location_suffix(label: Option<&str>) -> String {

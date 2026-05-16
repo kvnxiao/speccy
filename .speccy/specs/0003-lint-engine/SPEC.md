@@ -70,7 +70,7 @@ regex set rather than a heuristic.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: SPC-* lint codes (spec structure)
 
 Emit SPC-001 through SPC-007 against parsed `SpecToml`, parsed
@@ -105,17 +105,21 @@ Emit SPC-001 through SPC-007 against parsed `SpecToml`, parsed
 - Given a fixture SPEC.md with `status: paused` (invalid), when
   linted, then SPC-005 is emitted naming the value.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 SPC-001 through SPC-005 fire for missing fields, mismatched REQ headings, and invalid status values.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-002" -->
+</scenario>
+
+<scenario id="CHK-002">
 SPC-006 fires when status=superseded but no other spec declares supersedes pointing here, computed via supersession_index.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-003" -->
+</scenario>
+
+<scenario id="CHK-003">
 SPC-007 fires at severity=Info when status=implemented but TASKS.md has any non-[x] task.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: REQ-* lint codes (requirement coverage)
 
 Emit REQ-001 and REQ-002 against the requirement-to-check graph in
@@ -134,7 +138,7 @@ spec.toml.
   no `[[checks]] id = "CHK-999"`, when linted, then REQ-002 is
   emitted naming both the requirement and the missing check.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given `[[requirements]] id = "REQ-001" checks = []`, when linted,
   then REQ-001 lint code is emitted naming `REQ-001`.
 - Given `[[requirements]] id = "REQ-001" checks = ["CHK-999"]` and
@@ -142,9 +146,11 @@ spec.toml.
   emitted naming both the requirement and the missing check.
 
 REQ-001 fires for empty checks arrays; REQ-002 fires for check-ID references that have no matching [[checks]] row.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: VAL-* lint codes (check definitions)
 
 Emit VAL-001 through VAL-004 against parsed `[[checks]]` entries.
@@ -184,14 +190,17 @@ no-ops only.
 - Given a check with `kind = "manual"` and no `prompt`, when linted,
   then VAL-003 is emitted naming the check ID.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 VAL-001 fires for missing proves; VAL-002 for missing command on test/command kinds; VAL-003 for missing prompt on manual kinds.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-006" -->
+</scenario>
+
+<scenario id="CHK-006">
 VAL-004 fires on the closed set of no-op patterns (true, :, exit 0, /bin/true, cmd /c exit 0, exit /b 0) with whitespace tolerance, and does not fire on no-op-prefixed compound commands.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: TSK-* lint codes (task structure)
 
 Emit TSK-001 through TSK-004 against parsed `TasksMd`.
@@ -226,14 +235,17 @@ message advises `speccy tasks SPEC-NNNN --commit` rather than
 - Given a TASKS.md without `generated_at` in its frontmatter, when
   linted, then TSK-004 is emitted naming the missing field.
 
-<!-- speccy:scenario id="CHK-007" -->
+<scenario id="CHK-007">
 TSK-001 fires for unknown REQ references; TSK-002 fires when the parser surfaced a malformed task ID warning; TSK-004 fires for missing frontmatter fields.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-008" -->
+</scenario>
+
+<scenario id="CHK-008">
 TSK-003 fires at severity=Warn for hash or mtime drift; bootstrap-pending sentinel produces TSK-003 at severity=Info with a remediation message naming speccy tasks --commit.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: QST-001 lint code (open questions)
 
 Emit QST-001 per unchecked open question in SPEC.md.
@@ -250,15 +262,17 @@ Emit QST-001 per unchecked open question in SPEC.md.
   questions, when linted, then exactly three QST-001 diagnostics are
   emitted, each carrying the corresponding question text.
 
-<!-- speccy:scenario id="CHK-009" -->
+<scenario id="CHK-009">
 - Given a SPEC.md with three unchecked and two checked open
   questions, when linted, then exactly three QST-001 diagnostics are
   emitted, each carrying the corresponding question text.
 
 QST-001 fires once per unchecked open question at severity=Info; checked questions produce nothing; question text is included in the diagnostic message.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-006" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-006">
 ### REQ-006: Public API and `lint::run` entry point
 
 Expose a single function consumed by SPEC-0004 and SPEC-0012.
@@ -288,7 +302,7 @@ Expose a single function consumed by SPEC-0004 and SPEC-0012.
   appears before any diagnostic from the higher spec ID, regardless
   of internal iteration order.
 
-<!-- speccy:scenario id="CHK-010" -->
+<scenario id="CHK-010">
 - Given two identical `Workspace` inputs, when `lint::run` is called
   twice, then the resulting vecs are byte-equal.
 - Given an empty workspace, when `lint::run` is called, then the
@@ -299,9 +313,11 @@ Expose a single function consumed by SPEC-0004 and SPEC-0012.
   of internal iteration order.
 
 lint::run is pure and deterministic; output ordering is (spec_id, code, file, line) ascending; empty workspace returns an empty vec without panics.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-007" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-007">
 ### REQ-007: Lint code stability contract
 
 Codes are stable across minor versions; severity is part of the
@@ -327,7 +343,7 @@ contract.
 - Given a developer changes `VAL-004` from Warn to Error, when the
   registry test runs, then it fails with the severity diff.
 
-<!-- speccy:scenario id="CHK-011" -->
+<scenario id="CHK-011">
 - Given a developer removes `SPC-007` from the engine, when the
   registry test runs, then it fails with a clear message naming the
   removed code.
@@ -338,8 +354,10 @@ contract.
   registry test runs, then it fails with the severity diff.
 
 Every code emitted by the engine appears in REGISTRY with its severity; the snapshot test breaks when a code is added, removed, renamed, or has its severity changed.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -360,7 +378,7 @@ and returns.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Pure library, no I/O
 
 **Status:** Accepted
@@ -374,8 +392,9 @@ filesystem access inside the lint engine.
   duplicates SPEC-0001's job.
 **Consequences:** Callers parse first. In-memory fixtures make
 testing trivial.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: VAL-004 closed pattern set, not heuristics
 
 **Status:** Accepted
@@ -392,8 +411,9 @@ Add patterns when new no-op idioms are observed in the wild.
 positives. Misses cleverer no-ops (e.g. `cargo --version`, which
 always exits 0 but proves nothing) -- those go to the
 reviewer-tests persona, where they belong.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Severity baked in, not configurable
 
 **Status:** Accepted
@@ -407,8 +427,9 @@ configuration knob.
   mode" stance; lets projects vote themselves into broken CI.
 **Consequences:** Predictable lint behaviour across projects.
 Severity changes require a speccy release and snapshot-test update.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: Deterministic diagnostic ordering
 
 **Status:** Accepted
@@ -421,8 +442,9 @@ ascending before returning. `None` sorts before `Some`.
 - Emission order -- rejected. Depends on internal iteration order,
   which varies with refactoring.
 **Consequences:** Diff-friendly output; stable snapshot tests.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-005" status="accepted" -->
+</decision>
+
+<decision id="DEC-005" status="accepted">
 #### DEC-005: TSK-003 `bootstrap-pending` as a message variant, not a separate code
 
 **Status:** Accepted
@@ -439,7 +461,8 @@ severity = Info (not Warn). One code, two messages.
   message-only distinction proves confusing.
 **Consequences:** Slightly subtle test setup (the test must inspect
 the message text, not just the code). Acceptable for v1.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -508,11 +531,11 @@ SPEC-0012 land.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

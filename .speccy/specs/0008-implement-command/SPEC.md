@@ -68,7 +68,7 @@ reuses.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Task reference parsing
 
 Parse the task argument into a typed `TaskRef` value.
@@ -90,7 +90,7 @@ Parse the task argument into a typed `TaskRef` value.
 - `"FOO"`, `"T-"`, `"SPEC-0001/FOO"` all return
   `InvalidFormat` naming the input verbatim.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 - `"T-001"` parses to `Unqualified { id: "T-001" }`.
 - `"SPEC-0001/T-001"` parses to `Qualified { spec_id:
   "SPEC-0001", task_id: "T-001" }`.
@@ -101,9 +101,11 @@ Parse the task argument into a typed `TaskRef` value.
   `InvalidFormat` naming the input verbatim.
 
 Task ref parser accepts unqualified T-NNN and qualified SPEC-NNNN/T-NNN; invalid formats return LookupError::InvalidFormat with the offending arg verbatim.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Workspace task lookup
 
 Locate the matching task across the workspace.
@@ -133,7 +135,7 @@ Locate the matching task across the workspace.
   returns `Ok(...)` (qualified bypasses ambiguity).
 - Given no spec has T-999, lookup returns `NotFound`.
 
-<!-- speccy:scenario id="CHK-002" -->
+<scenario id="CHK-002">
 - Given SPEC-0001 has T-001 and SPEC-0002 has T-002, when
   looking up `Unqualified { id: "T-001" }`, returns
   `Ok(TaskLocation { spec_id: "SPEC-0001", ... })`.
@@ -147,9 +149,11 @@ Locate the matching task across the workspace.
 - Given no spec has T-999, lookup returns `NotFound`.
 
 find returns TaskLocation for an unambiguous unqualified match; qualified form scopes to one spec and bypasses ambiguity; missing task returns NotFound; failed-parse specs are skipped silently.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Ambiguity error with candidate list
 
 Ambiguous unqualified IDs return a structured error.
@@ -177,7 +181,7 @@ Ambiguous unqualified IDs return a structured error.
     speccy implement SPEC-0005/T-001
   ```
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given T-001 exists in SPEC-0001, SPEC-0003, SPEC-0005, the
   error's `candidate_specs` is `["SPEC-0001", "SPEC-0003",
   "SPEC-0005"]`.
@@ -191,9 +195,11 @@ Ambiguous unqualified IDs return a structured error.
   ```
 
 Unqualified T-NNN matching multiple specs returns Ambiguous with candidate_specs in ascending spec-ID order; the CLI surfaces the candidates as copy-pasteable speccy implement commands.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Render implementer prompt
 
 Render the Phase 3 prompt to stdout.
@@ -225,7 +231,7 @@ Render the Phase 3 prompt to stdout.
   the rendered output includes those IDs (within the task_entry
   inline).
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given SPEC-0001 with T-001 and three sub-list notes under
   T-001, the rendered prompt contains all three notes in
   declared order where `{{task_entry}}` was.
@@ -236,9 +242,11 @@ Render the Phase 3 prompt to stdout.
   inline).
 
 speccy implement T-NNN loads implementer.md, substitutes spec_id, spec_md, task_id, task_entry (full sub-list), suggested_files, agents; budget trimming applied; output to stdout.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: Argument and state error handling
 
 Map all error paths to exit codes and informative stderr.
@@ -262,14 +270,16 @@ Map all error paths to exit codes and informative stderr.
   (names what's wrong and what to do next).
 - Exit codes are deterministic given identical inputs.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - Every exit-1 error path has an actionable stderr message
   (names what's wrong and what to do next).
 - Exit codes are deterministic given identical inputs.
 
 End-to-end via assert_cmd: valid task ref succeeds (exit 0); InvalidFormat / NotFound / Ambiguous each exit 1 with informative stderr; outside-workspace exits 1; template-not-found exits 2.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -294,7 +304,7 @@ Flow per invocation:
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Task lookup as a shared `speccy-core` helper
 
 **Status:** Accepted
@@ -306,8 +316,9 @@ spec. SPEC-0009 reuses it.
 **Alternatives:**
 - Per-command lookup -- rejected. Duplication risk.
 **Consequences:** SPEC-0009's deps include this spec.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Qualified form uses `/` as the separator
 
 **Status:** Accepted
@@ -321,8 +332,9 @@ is the "directory", `T-001` the "file").
 - `.` -- rejected. Less intuitive for "scope" semantics.
 **Consequences:** No shell escaping concerns; the form reads
 naturally.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Ambiguity is always an error; no auto-disambiguation
 
 **Status:** Accepted
@@ -339,8 +351,9 @@ auto-resolution.
 **Consequences:** Users with multi-spec workspaces who duplicate
 `T-NNN` IDs (legitimate per ARCHITECTURE.md) must always qualify or
 ensure each invocation is unambiguous in practice.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: Task entry inlines the full sub-list
 
 **Status:** Accepted
@@ -355,7 +368,8 @@ PLUS every sub-list bullet under it, in declared order.
   rigid; agents may add bullets in unstructured ways.
 **Consequences:** The template author can rely on `{{task_entry}}`
 being the complete picture for the task.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -427,11 +441,11 @@ SPEC-0004 (workspace::scan), SPEC-0005 (prompt helpers).
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

@@ -79,7 +79,7 @@ in-flight categorisation for in-progress specs) is unchanged. Only
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Selector parsing
 
 The CLI accepts five shapes and rejects anything else with a single,
@@ -107,7 +107,7 @@ informative error.
 - Given `speccy check SPEC-0010/T-002`, parsing succeeds and the
   task fragment is delegated to `task_lookup::parse_ref`.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 - Given `speccy check FOO`, exit code is 1 and stderr lists the five
   valid shapes plus the verbatim `FOO`.
 - Given `speccy check chk-001`, exit code is 1 (case mismatch ->
@@ -117,9 +117,11 @@ informative error.
   task fragment is delegated to `task_lookup::parse_ref`.
 
 parse_selector accepts the five valid shapes (None -> All, SPEC-NNNN, SPEC-NNNN/CHK-NNN, SPEC-NNNN/T-NNN, CHK-NNN, T-NNN) and rejects anything else with SelectorError::InvalidFormat naming the offending arg verbatim and listing the five valid shapes.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Spec selector executes one spec's checks
 
 A `SPEC-NNNN` selector runs every check (executable and manual)
@@ -151,7 +153,7 @@ defined in that spec's `spec.toml`.
   check, `speccy check SPEC-0017` exits 0 and the failing check is
   reported as IN-FLIGHT in the footer and summary.
 
-<!-- speccy:scenario id="CHK-002" -->
+<scenario id="CHK-002">
 - Given SPEC-0010 has 8 checks and SPEC-0011 has 5, `speccy check
   SPEC-0010` runs exactly 8.
 - Given SPEC-0010 has status `dropped`, `speccy check SPEC-0010`
@@ -163,9 +165,11 @@ defined in that spec's `spec.toml`.
   reported as IN-FLIGHT in the footer and summary.
 
 speccy check SPEC-NNNN runs every check under that spec in declared order; missing spec exits 1 with NoSpecMatching naming the spec; dropped/superseded specs print a skip message and exit 0; in-progress failures stay categorised as IN-FLIGHT (no gating); the summary line totals reflect only the selected spec.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: Task selector executes the task's covering checks
 
 A task selector runs every check that proves the requirements the
@@ -207,7 +211,7 @@ task covers, transitively via `spec.toml`.
 - Given SPEC-0010/T-Y covers `[]`, `speccy check SPEC-0010/T-Y`
   prints the informational message and exits 0.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given SPEC-0010/T-002 covers `REQ-002`, and `REQ-002` maps to
   `[CHK-003]`, then `speccy check SPEC-0010/T-002` runs exactly
   `CHK-003`.
@@ -224,9 +228,11 @@ task covers, transitively via `spec.toml`.
   prints the informational message and exits 0.
 
 speccy check T-NNN / SPEC-NNNN/T-NNN resolves the task via task_lookup::find; runs every CHK-ID under the requirements the task covers; deduplicates CHK-IDs that appear in multiple covered REQs; surfaces task_lookup's Ambiguous and NotFound errors with their existing wording; a task with covers=[] exits 0 with an informational message.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Bare CHK-NNN cross-spec semantics preserved
 
 The unqualified `CHK-NNN` form continues to match across all specs.
@@ -252,7 +258,7 @@ The new `SPEC-NNNN/CHK-NNN` form is an *addition*, not a replacement.
   `CHK-099`, exit 1 with stderr naming both the spec and the
   missing check.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given SPEC-0001 and SPEC-0003 both define `CHK-001`, `speccy check
   CHK-001` runs both (verbatim existing semantics).
 - Given `speccy check SPEC-0003/CHK-001`, only SPEC-0003's `CHK-001`
@@ -262,9 +268,11 @@ The new `SPEC-NNNN/CHK-NNN` form is an *addition*, not a replacement.
   missing check.
 
 Bare speccy check CHK-NNN keeps SPEC-0010 DEC-003 cross-spec semantics (matching IDs across all specs run); new speccy check SPEC-NNNN/CHK-NNN scopes to one spec's CHK-NNN; missing qualified check exits 1 naming both the spec and the missing check; no deprecation warning is emitted for the bare form.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: ARCHITECTURE.md and shipped skill docs reflect the new shape
 
 The CLI surface is canonically documented in
@@ -291,7 +299,7 @@ agents don't get a stale invocation from the doc surface.
 - The reviewer-docs and reviewer-architecture personas, given the
   diff, can trace every doc change to a REQ in this spec.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - `git grep -n "speccy check"` across the repo shows updated
   invocations in human-facing docs.
 - The reviewer-docs and reviewer-architecture personas, given the
@@ -311,8 +319,10 @@ Then run `git grep -n "speccy check CHK-"` and `git grep -n "speccy
 check \["` across the repo. Confirm no shipped skill prompt under
 `.speccy/skills/` or `skills/` instructs an agent in a way the new
 docs would now contradict.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -339,7 +349,7 @@ doc comment that lists the five shapes.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Polymorphic positional, not flags
 
 **Status:** Accepted
@@ -360,8 +370,9 @@ mild self-documentation gain of flags.
 **Consequences:** `clap --help` must describe all five shapes in
 one place. Error messages on parse failure must list the valid
 shapes, otherwise the failure mode is opaque.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Reuse `task_lookup`; do not generalise it
 
 **Status:** Accepted
@@ -382,8 +393,9 @@ fragment of the selector and delegating to `task_lookup::parse_ref`
 `parse_selector` is a thin wrapper. If future commands need
 spec-based resolution, the spec-resolution helper added here can be
 promoted to `speccy_core` then.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Bare `CHK-NNN` keeps cross-spec semantics
 
 **Status:** Accepted
@@ -409,8 +421,9 @@ without supersession.
 **Consequences:** No deprecation warning. SPEC-0010 DEC-003 requires
 no supersession row. Users who want spec-scoped CHK invocation use
 the new `SPEC-NNNN/CHK-NNN` form.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: Selector errors list valid shapes verbatim
 
 **Status:** Accepted
@@ -428,7 +441,8 @@ richer message.
   the wrong lesson.
 **Consequences:** `speccy check FOO` stderr is more informative than
 today's terse "expected CHK- followed by 3 or more digits."
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -546,11 +560,11 @@ Rollback is a `git revert`. No on-disk state changes.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-14 | human/kevin  | Initial draft. Polymorphic positional selector replaces CHK-only argument; SPEC-0010 DEC-003 preserved. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

@@ -95,7 +95,7 @@ including this one, to the new shape.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Check schema collapses to `id` and `scenario`
 
 `spec.toml` keeps its existing role for one more spec, but each
@@ -127,7 +127,7 @@ scenario.
 - Given a check row with `scenario = ""`, parsing fails with an
   empty-scenario error.
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 - Given a check row with `id = "CHK-001"` and
   `scenario = "Given ..."`, parsing succeeds.
 - Given a check row with a legacy `command` or `prompt` field after
@@ -148,9 +148,11 @@ Given a post-migration check row with an empty or whitespace-only
 scenario,
 when the parser reads it,
 then parsing fails with an error naming the containing CHK id.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: `speccy check` renders scenarios only
 
 `speccy check [SELECTOR]` keeps SPEC-0017's selector surface but
@@ -183,7 +185,7 @@ renders selected scenarios instead of executing commands.
   from the task's covered requirements exactly as SPEC-0017 did for
   executable checks.
 
-<!-- speccy:scenario id="CHK-002" -->
+<scenario id="CHK-002">
 - Given three specs with two checks each, `speccy check` prints six
   `==>` headers, no child process output, and the count summary.
 - Given `speccy check SPEC-9999`, the existing no-matching-spec error
@@ -204,9 +206,11 @@ then it renders only the scenarios covering that task's requirements.
 Given a missing selector target,
 when speccy check runs,
 then it exits non-zero with the existing selector error wording.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: `speccy verify` is shape-only
 
 `speccy verify` validates Speccy artifacts and cross-references. It
@@ -237,7 +241,7 @@ quality.
 - Given a clean workspace, verify exits 0 without spawning any child
   process.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 - Given a requirement with an empty `checks` array, verify exits 1 and
   names the requirement.
 - Given a requirement that references `CHK-099` with no corresponding
@@ -257,9 +261,11 @@ Given speccy verify --json,
 when the output is parsed,
 then schema_version is 2 and no execution-shaped fields such as
 outcome, exit_code, or duration_ms appear.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: Execution code and tests are deleted
 
 The old execution layer is removed rather than deprecated.
@@ -281,7 +287,7 @@ The old execution layer is removed rather than deprecated.
 - Given the post-spec test suite, no test depends on a shell command
   succeeding or failing through Speccy.
 
-<!-- speccy:scenario id="CHK-004" -->
+<scenario id="CHK-004">
 - Given the post-spec workspace, `git grep -n "speccy_core::exec"`
   returns no production-source hits.
 - Given the post-spec test suite, no test depends on a shell command
@@ -295,9 +301,11 @@ then there are no production-source hits.
 Given the post-spec test suite,
 when cargo test --workspace runs,
 then no test depends on Speccy spawning a shell command.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: Docs and shipped skills teach the new contract
 
 Architecture docs and skill prompts stop implying that Speccy runs or
@@ -320,7 +328,7 @@ grades tests.
 - Given reviewer-tests reads the post-spec prompt, it is instructed to
   compare tests against scenario prose, not command exit codes.
 
-<!-- speccy:scenario id="CHK-005" -->
+<scenario id="CHK-005">
 - Given a grep for legacy check-authoring snippets in active docs and
   shipped skills, there are no hits except historical migration notes.
 - Given reviewer-tests reads the post-spec prompt, it is instructed to
@@ -334,8 +342,10 @@ Given active docs and prompts,
 when searched for kind =, command =, or prompt = check-authoring
 examples,
 then there are no hits except historical migration notes.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -354,7 +364,7 @@ keeps SPEC-0019 free to remove `spec.toml` entirely later.
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Keep the `check` command name for now
 
 **Status:** Accepted
@@ -370,8 +380,9 @@ selector surface.
 **Consequences:** There is less CLI churn. A future rename to
 `scenario` or `assert` can be evaluated after the canonical carrier
 work lands.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Scenario quality remains reviewer-owned
 
 **Status:** Accepted
@@ -385,8 +396,9 @@ the implementation/tests satisfy it.
 
 **Consequences:** Speccy stays a feedback substrate instead of a weak
 test-quality classifier.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Hard break before v1
 
 **Status:** Accepted
@@ -398,7 +410,8 @@ accepting both schemas.
 
 **Consequences:** The parser surface shrinks immediately, and the
 docs do not need to teach two shapes.
-<!-- /speccy:decision -->
+</decision>
+
 ## Migration / Rollback
 
 Migration is a one-shot `xtask` or temporary binary that reads the
@@ -430,11 +443,11 @@ restores both.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-15 | human/kevin | Initial rewritten draft. Narrows SPEC-0018 to execution removal and scenario-shaped checks while keeping the current carrier. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

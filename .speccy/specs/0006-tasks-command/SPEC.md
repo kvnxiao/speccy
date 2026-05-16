@@ -71,7 +71,7 @@ rather than a generic helper.
 
 ## Requirements
 
-<!-- speccy:requirement id="REQ-001" -->
+<requirement id="REQ-001">
 ### REQ-001: Initial prompt rendering
 
 When TASKS.md is absent for the given spec, render the initial
@@ -96,7 +96,7 @@ Phase 2 prompt.
 - Given the SPEC.md parses without error, the initial-mode
   prompt language is rendered (not amendment-mode).
 
-<!-- speccy:scenario id="CHK-001" -->
+<scenario id="CHK-001">
 - Given `.speccy/specs/0001-foo/SPEC.md` exists and TASKS.md does
   not, when `speccy tasks SPEC-0001` runs, then the rendered
   prompt contains the SPEC.md content where `{{spec_md}}` was.
@@ -104,9 +104,11 @@ Phase 2 prompt.
   prompt language is rendered (not amendment-mode).
 
 speccy tasks SPEC-NNNN with TASKS.md absent renders tasks-generate.md with spec_id, spec_md, and agents placeholders substituted; output goes to stdout.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-002" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Amendment prompt rendering
 
 When TASKS.md is present for the given spec, render the
@@ -129,7 +131,7 @@ amendment Phase 2 prompt.
   completed tasks unless invalidated by spec changes; it does
   NOT ask for a fresh decomposition.
 
-<!-- speccy:scenario id="CHK-002" -->
+<scenario id="CHK-002">
 - Given both SPEC.md and TASKS.md exist for SPEC-0001, when
   `speccy tasks SPEC-0001` runs, then the rendered prompt
   contains the TASKS.md content where `{{tasks_md}}` was.
@@ -138,9 +140,11 @@ amendment Phase 2 prompt.
   NOT ask for a fresh decomposition.
 
 speccy tasks SPEC-NNNN with TASKS.md present renders tasks-amend.md with spec_id, spec_md, tasks_md, and agents placeholders substituted; amendment-mode template (not initial) is selected.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-003" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-003">
 ### REQ-003: `--commit` records spec hash and timestamp
 
 The `--commit` sub-action rewrites TASKS.md's frontmatter with
@@ -178,17 +182,21 @@ the current SPEC.md sha256 and UTC timestamp.
   command's SPEC-ID arg, exit code is 1 with a clear error
   naming both IDs.
 
-<!-- speccy:scenario id="CHK-003" -->
+<scenario id="CHK-003">
 commit_frontmatter writes the SPEC.md sha256 as 64-char hex into spec_hash_at_generation and sets generated_at to the supplied UTC ISO 8601 timestamp.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-004" -->
+</scenario>
+
+<scenario id="CHK-004">
 commit_frontmatter overwrites the bootstrap-pending sentinel with the real sha256 hex on first invocation.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-005" -->
+</scenario>
+
+<scenario id="CHK-005">
 commit_frontmatter returns SpecIdMismatch when frontmatter spec field differs from arg; prepends new frontmatter when entirely absent; preserves other frontmatter fields byte-identically when present.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-004" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-004">
 ### REQ-004: `--commit` preserves TASKS.md body bytes
 
 Body content (everything after the closing `---` frontmatter
@@ -215,7 +223,7 @@ fence) is preserved byte-identically across `--commit`.
   order), when `--commit` runs, then the field order is
   preserved (no canonicalisation in v1).
 
-<!-- speccy:scenario id="CHK-006" -->
+<scenario id="CHK-006">
 - Given a TASKS.md with CRLF line endings in the body, when
   `--commit` runs, then the body line endings remain CRLF.
 - Given a TASKS.md with trailing whitespace on some task lines,
@@ -226,9 +234,11 @@ fence) is preserved byte-identically across `--commit`.
   preserved (no canonicalisation in v1).
 
 Body bytes (everything after the closing --- fence) are byte-identical before and after commit_frontmatter; CRLF line endings, trailing whitespace, and arbitrary content are all preserved verbatim.
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
-<!-- speccy:requirement id="REQ-005" -->
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-005">
 ### REQ-005: SPEC-ID argument validation and state checks
 
 Validate the argument and the workspace state.
@@ -252,13 +262,16 @@ Validate the argument and the workspace state.
 - `speccy tasks SPEC-0001` (TASKS.md missing -- initial form) ->
   exit 0, renders the initial prompt (not an error).
 
-<!-- speccy:scenario id="CHK-007" -->
+<scenario id="CHK-007">
 speccy tasks with invalid ID format exits 1; with unknown SPEC-NNNN exits 1; SPEC.md parse failure exits 1 with the parser error.
-<!-- /speccy:scenario -->
-<!-- speccy:scenario id="CHK-008" -->
+</scenario>
+
+<scenario id="CHK-008">
 speccy tasks SPEC-NNNN --commit with TASKS.md absent exits 1 with a TasksMdNotFound error naming the missing path; the same command without --commit succeeds (initial prompt rendered).
-<!-- /speccy:scenario -->
-<!-- /speccy:requirement -->
+</scenario>
+
+</requirement>
+
 ## Design
 
 ### Approach
@@ -285,7 +298,7 @@ Flow per invocation:
 
 ### Decisions
 
-<!-- speccy:decision id="DEC-001" status="accepted" -->
+<decision id="DEC-001" status="accepted">
 #### DEC-001: `--commit` is a sub-action, not a separate verb
 
 **Status:** Accepted (per ARCHITECTURE.md "CLI Surface")
@@ -304,8 +317,9 @@ frontmatter. The two modes are mutually exclusive in effect.
 **Consequences:** Skills that orchestrate both phases call
 `speccy tasks SPEC-NNN` then `speccy tasks SPEC-NNN --commit`.
 Clear and consistent.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-002" status="accepted" -->
+</decision>
+
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Body-byte-preserving frontmatter rewrite
 
 **Status:** Accepted
@@ -325,8 +339,9 @@ frontmatter + closing fence + original body bytes verbatim.
 **Consequences:** The implementation needs careful byte-level
 handling. The trade-off is a no-diff guarantee for the body,
 which is what users care about.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-003" status="accepted" -->
+</decision>
+
+<decision id="DEC-003" status="accepted">
 #### DEC-003: Form auto-detected by TASKS.md presence
 
 **Status:** Accepted
@@ -342,8 +357,9 @@ amendment template. No flag.
   state belongs at the CLI, not in the user's hands.
 **Consequences:** Skills don't need to track state externally;
 the filesystem is the source of truth.
-<!-- /speccy:decision -->
-<!-- speccy:decision id="DEC-004" status="accepted" -->
+</decision>
+
+<decision id="DEC-004" status="accepted">
 #### DEC-004: UTC ISO 8601 timestamps; second precision
 
 **Status:** Accepted
@@ -361,7 +377,8 @@ offset variants.
 **Consequences:** Two `--commit` invocations within the same
 second produce byte-identical frontmatter -- a nice property for
 testing.
-<!-- /speccy:decision -->
+</decision>
+
 ### Interfaces
 
 ```rust
@@ -443,11 +460,11 @@ SPEC-0005 (prompt helpers) -- all deepened.
 
 ## Changelog
 
-<!-- speccy:changelog -->
+<changelog>
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
-<!-- /speccy:changelog -->
+</changelog>
 
 ## Notes
 

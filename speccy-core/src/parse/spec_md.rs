@@ -1,10 +1,19 @@
 //! SPEC.md parser.
 //!
 //! Returns frontmatter (validated against the closed `status` set), the
-//! list of REQ headings (extracted from comrak's heading nodes so fenced
-//! code blocks never poison the result), the `## Changelog` table (if
-//! present), and a sha256 over the raw file bytes for staleness
-//! detection. See `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-003.
+//! list of REQ headings (line-based scan that skips fenced code blocks
+//! so embedded `### REQ-NNN:` examples never poison the result), the
+//! `## Changelog` table (if present), and a sha256 over the raw file
+//! bytes for staleness detection. See
+//! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-003.
+//!
+//! The line-based heading scan was introduced as part of SPEC-0020
+//! T-005: after the carrier switched to raw XML element tags
+//! (`<requirement>` etc.), comrak parses the body of each element as
+//! an opaque raw-HTML block, so headings nested inside the element
+//! never surface via `AstNode::descendants`. Line-based scanning over
+//! the raw bytes — with code-fence awareness — keeps SPC-002/SPC-003
+//! cross-reference working without coupling `spec_md` to `spec_xml`.
 
 use crate::error::ParseError;
 use crate::parse::frontmatter::Split;
@@ -123,9 +132,9 @@ const ALLOWED_STATUSES: &[&str] = &["in-progress", "implemented", "dropped", "su
     clippy::unwrap_used,
     reason = "compile-time literal regex; covered by unit tests"
 )]
-fn req_id_regex() -> &'static Regex {
+fn req_heading_line_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^(REQ-\d{3}):\s*(.*)$").unwrap())
+    CELL.get_or_init(|| Regex::new(r"^#{1,6}\s+(REQ-\d{3}):\s*(.*?)\s*$").unwrap())
 }
 
 /// Parse a SPEC.md file.
@@ -199,32 +208,70 @@ fn parse_body(raw: &str) -> (Vec<ReqHeading>, Vec<ChangelogRow>) {
     let arena = Arena::new();
     let root = parse_markdown(&arena, raw);
 
+    let code_fence_lines = collect_code_fence_line_ranges(root);
     let mut requirements = Vec::new();
-    collect_req_headings(root, &mut requirements);
+    collect_req_headings_line_based(raw, &code_fence_lines, &mut requirements);
 
     let changelog = collect_changelog(root);
 
     (requirements, changelog)
 }
 
-fn collect_req_headings<'a>(root: &'a AstNode<'a>, out: &mut Vec<ReqHeading>) {
+/// Collect 1-indexed `(start_line, end_line)` ranges for every fenced
+/// code block in the source. Inclusive on both ends. Used by
+/// [`collect_req_headings_line_based`] to skip example REQ headings
+/// embedded inside code blocks.
+fn collect_code_fence_line_ranges<'a>(root: &'a AstNode<'a>) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
     for node in root.descendants() {
         let ast = node.data.borrow();
-        if matches!(ast.value, NodeValue::Heading(_)) {
-            let text = inline_text(node);
-            if let Some(caps) = req_id_regex().captures(text.trim()) {
-                let id = caps
-                    .get(1)
-                    .map(|m| m.as_str().to_owned())
-                    .unwrap_or_default();
-                let title = caps
-                    .get(2)
-                    .map(|m| m.as_str().trim().to_owned())
-                    .unwrap_or_default();
-                let line = ast.sourcepos.start.line;
-                out.push(ReqHeading { id, title, line });
-            }
+        if let NodeValue::CodeBlock(_) = &ast.value {
+            let start = ast.sourcepos.start.line;
+            let end = ast.sourcepos.end.line;
+            out.push((start, end));
         }
+    }
+    out
+}
+
+/// Scan `raw` line-by-line for `### REQ-NNN: title` headings (any
+/// heading level 1..6). Skip lines that fall inside any fenced code
+/// block listed in `code_fence_lines`. This decouples REQ-heading
+/// discovery from comrak's HTML-block opacity, which was introduced
+/// when SPEC-0020 swapped the SPEC.md carrier from HTML-comment
+/// markers (transparent to comrak) to raw XML element tags (treated
+/// as opaque raw-HTML blocks).
+fn collect_req_headings_line_based(
+    raw: &str,
+    code_fence_lines: &[(usize, usize)],
+    out: &mut Vec<ReqHeading>,
+) {
+    let in_code_fence = |line_1: usize| -> bool {
+        code_fence_lines
+            .iter()
+            .any(|&(s, e)| line_1 >= s && line_1 <= e)
+    };
+    for (idx, line) in raw.lines().enumerate() {
+        let line_1 = idx.saturating_add(1);
+        if in_code_fence(line_1) {
+            continue;
+        }
+        let Some(caps) = req_heading_line_regex().captures(line) else {
+            continue;
+        };
+        let id = caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        let title = caps
+            .get(2)
+            .map(|m| m.as_str().trim().to_owned())
+            .unwrap_or_default();
+        out.push(ReqHeading {
+            id,
+            title,
+            line: line_1,
+        });
     }
 }
 

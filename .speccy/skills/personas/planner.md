@@ -27,10 +27,9 @@ re-deriving intent. Your output is markdown, not code; your worry is
 - Does each requirement have at least one Check (validation
   scenario) it would map to? If not, the requirement is unverifiable
   as written. Scenarios are English Given/When/Then prose authored
-  inside a `<!-- speccy:scenario id="CHK-NNN" -->` marker block
-  nested under the requirement they prove. Speccy renders them but
-  does not run anything — project tests and reviewers prove them
-  out.
+  inside a `<scenario id="CHK-NNN">` element block nested under
+  the requirement they prove. Speccy renders them but does not run
+  anything — project tests and reviewers prove them out.
 - Are there decisions hidden inside requirement prose that belong in
   `### Decisions` instead?
 - Is there a prior spec this one supersedes? If yes, set
@@ -42,10 +41,9 @@ re-deriving intent. Your output is markdown, not code; your worry is
 
 - Write `SPEC.md` (PRD-shaped per `.speccy/ARCHITECTURE.md`) into
   the spec folder. Each requirement is wrapped in a
-  `<!-- speccy:requirement id="REQ-NNN" -->` marker block; each
-  validation scenario lives in a nested
-  `<!-- speccy:scenario id="CHK-NNN" -->` marker block under the
-  requirement it proves.
+  `<requirement id="REQ-NNN">` element block; each validation
+  scenario lives in a nested `<scenario id="CHK-NNN">` element
+  block under the requirement it proves.
 - Frontmatter: `id`, `slug`, `title`, `status: in-progress`, `created`
   (today, ISO date). `supersedes` only when applicable.
 - Prefer fewer requirements with clear `done_when` over many vague ones.

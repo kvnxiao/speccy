@@ -456,30 +456,30 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
 
         # SPEC-0099
 
-        <!-- speccy:requirement id="REQ-001" -->
+        <requirement id="REQ-001">
         ### REQ-001: First
         unrelated body
-        <!-- speccy:scenario id="CHK-001" -->
+        <scenario id="CHK-001">
         unrelated scenario
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
-        <!-- speccy:requirement id="REQ-002" -->
+        </scenario>
+        </requirement>
+        <requirement id="REQ-002">
         ### REQ-002: Second
         body for REQ-002
-        <!-- speccy:scenario id="CHK-002" -->
+        <scenario id="CHK-002">
         Given REQ-002,
         when the reviewer reads the prompt,
         then the scenario body bytes equal this text.
-        <!-- /speccy:scenario -->
-        <!-- /speccy:requirement -->
+        </scenario>
+        </requirement>
 
         ## Changelog
 
-        <!-- speccy:changelog -->
+        <changelog>
         | Date | Author | Summary |
         |------|--------|---------|
         | 2026-05-11 | t | init |
-        <!-- /speccy:changelog -->
+        </changelog>
     "#};
     let tasks = tasks_md_with(
         containing_spec,
@@ -489,31 +489,31 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
 
     let out = capture_stdout(&ws, "T-001", "tests")?;
 
-    // Extract the CHK-002 marker body bytes from the source.
-    let start_tag = "<!-- speccy:scenario id=\"CHK-002\" -->\n";
-    let end_tag = "<!-- /speccy:scenario -->";
+    // Extract the CHK-002 scenario body bytes from the source.
+    let start_tag = "<scenario id=\"CHK-002\">\n";
+    let end_tag = "</scenario>";
     let after_start = spec_md
         .find(start_tag)
         .map(|i| i + start_tag.len())
-        .expect("fixture must contain CHK-002 start marker");
+        .expect("fixture must contain CHK-002 open tag");
     let tail = spec_md
         .get(after_start..)
         .expect("after_start must be a valid char boundary in fixture");
     let before_end = tail
         .find(end_tag)
         .map(|j| after_start + j)
-        .expect("fixture must contain matching end marker");
+        .expect("fixture must contain matching close tag");
     let body_bytes = spec_md
         .get(after_start..before_end)
         .expect("body slice must lie on valid char boundaries in fixture")
         .trim_end_matches('\n');
 
-    // The full marker body (multi-line) must appear in the rendered
+    // The full scenario body (multi-line) must appear in the rendered
     // prompt as a contiguous substring — that's how the reviewer sees
     // the validation scenario.
     assert!(
         out.contains(body_bytes),
-        "reviewer prompt must include the CHK-002 marker body bytes verbatim;\n\
+        "reviewer prompt must include the CHK-002 scenario body bytes verbatim;\n\
          body_bytes={body_bytes:?}\n\
          out={out}",
     );
@@ -523,6 +523,155 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
     assert!(
         !out.contains("unrelated scenario"),
         "uncovered REQ-001's scenario body must be excluded from slice:\n{out}",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0020 T-006: when the scenario body spans multiple Markdown
+// paragraphs and includes a fenced code block plus literal `<` / `>`
+// characters, the reviewer prompt must surface the full body bytes
+// verbatim and contiguous with the source.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reviewer_tests_multi_paragraph_scenario_body_renders_verbatim() -> TestResult {
+    let ws = Workspace::new()?;
+    write_agents(&ws, "# Agents\n")?;
+    // Multi-paragraph scenario body. Contains:
+    // - A fenced code block (with literal `<thinking>` inside, which the line-aware
+    //   scanner must NOT promote to structure).
+    // - Literal `<` / `>` Markdown characters in prose.
+    // - Multiple paragraphs separated by blank lines.
+    // These are exactly the inputs SPEC-0020 DEC-003 calls out as
+    // requiring byte-verbatim preservation.
+    let spec_md = indoc::indoc! {r#"
+        ---
+        id: SPEC-0099
+        slug: x
+        title: Reviewer multi-paragraph fixture
+        status: in-progress
+        created: 2026-05-15
+        ---
+
+        # SPEC-0099
+
+        <requirement id="REQ-002">
+        ### REQ-002: Reviewer surfaces multi-paragraph bodies verbatim
+        body for REQ-002.
+        <scenario id="CHK-002">
+        Given a scenario whose body contains literal `<thinking>` and
+        comparison expressions like `a < b > c`,
+
+        when the reviewer reads the rendered prompt,
+
+        then the body bytes must round-trip verbatim:
+
+        ```rust
+        fn assert_lt<T: Ord>(a: T, b: T) {
+            assert!(a < b, "<expected> a < b");
+        }
+        ```
+
+        And the trailing prose paragraph too.
+        </scenario>
+        </requirement>
+
+        ## Changelog
+
+        <changelog>
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-15 | t | init |
+        </changelog>
+    "#};
+    let tasks = tasks_md_with(
+        "SPEC-0099",
+        "- [?] **T-001**: only req2\n  - Covers: REQ-002\n  - Implementer note: done.\n",
+    );
+    write_spec(&ws.root, "0099-reviewer-multi", spec_md, "", Some(&tasks))?;
+
+    let out = capture_stdout(&ws, "T-001", "tests")?;
+
+    // Extract the CHK-002 scenario body bytes from the source verbatim.
+    let start_tag = "<scenario id=\"CHK-002\">\n";
+    let end_tag = "</scenario>";
+    let after_start = spec_md
+        .find(start_tag)
+        .map(|i| i + start_tag.len())
+        .expect("fixture must contain CHK-002 open tag");
+    let tail = spec_md
+        .get(after_start..)
+        .expect("after_start must be a valid char boundary in fixture");
+    let before_end = tail
+        .find(end_tag)
+        .map(|j| after_start + j)
+        .expect("fixture must contain matching close tag");
+    let body_bytes = spec_md
+        .get(after_start..before_end)
+        .expect("body slice must lie on valid char boundaries in fixture")
+        .trim_end_matches('\n');
+
+    // Sanity: the fixture really does contain the load-bearing pieces.
+    assert!(body_bytes.contains("`<thinking>`"));
+    assert!(body_bytes.contains("```rust"));
+    assert!(body_bytes.contains("a < b > c"));
+
+    // The full multi-paragraph scenario body must appear in the rendered
+    // prompt as a contiguous substring: byte-for-byte preservation
+    // across the fenced code block, the literal `<`/`>` characters, and
+    // the paragraph breaks.
+    assert!(
+        out.contains(body_bytes),
+        "reviewer prompt must include the CHK-002 multi-paragraph body bytes verbatim;\n\
+         body_bytes={body_bytes:?}\n\
+         out={out}",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0020 T-006: when the SpecDoc parse fails (legacy comment marker
+// outside any fenced code block), the reviewer slicer must fall back to
+// the raw SPEC.md bytes so the reviewer prompt is never silently empty.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reviewer_prompt_falls_back_to_raw_spec_md_when_parse_fails() -> TestResult {
+    let ws = Workspace::new()?;
+    write_agents(&ws, "# Agents\n")?;
+    let legacy_spec_md = indoc::indoc! {r#"
+        ---
+        id: SPEC-0099
+        slug: x
+        title: Legacy fallback fixture
+        status: in-progress
+        created: 2026-05-15
+        ---
+
+        # SPEC-0099
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        REVIEWER_FALLBACK_REQ_001_unique_marker
+        <!-- /speccy:requirement -->
+    "#};
+    let tasks = tasks_md_with(
+        "SPEC-0099",
+        "- [?] **T-001**: covers req1\n  - Covers: REQ-001\n  - Implementer note: done.\n",
+    );
+    write_spec(
+        &ws.root,
+        "0099-rev-fallback",
+        legacy_spec_md,
+        "",
+        Some(&tasks),
+    )?;
+
+    let out = capture_stdout(&ws, "T-001", "tests")?;
+    assert!(
+        out.contains("REVIEWER_FALLBACK_REQ_001_unique_marker"),
+        "reviewer fallback path must inline the raw SPEC.md body when parse fails:\n{out}",
     );
     Ok(())
 }

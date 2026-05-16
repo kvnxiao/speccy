@@ -2,7 +2,7 @@
 id: SPEC-0020
 slug: raw-xml-spec-carrier
 title: Raw XML element tags for canonical SPEC.md
-status: in-progress
+status: implemented
 created: 2026-05-15
 supersedes: []
 ---
@@ -224,6 +224,7 @@ Given two scenario elements with the same id within one spec,
 when parsing runs,
 then parsing fails with a duplicate-id error naming the id.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -267,6 +268,7 @@ Given the renderer is invoked on a typed SpecDoc,
 when its output is inspected,
 then it contains no HTML-comment Speccy markers.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -330,6 +332,7 @@ when the workspace builds against the new XML element parser,
 then they consume the same typed SpecDoc model with no behavioural
 change beyond carrier form.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -380,6 +383,7 @@ Given the migrated workspace,
 when speccy verify runs,
 then it exits zero.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -430,6 +434,7 @@ when the file is inspected,
 then it uses raw speccy XML element tags and contains no
 HTML-comment Speccy markers.
 </scenario>
+
 </requirement>
 
 ## Design
