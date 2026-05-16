@@ -58,11 +58,14 @@ This is the second step in the sequence:
   using HTML-comment markers.
 - **SPEC-0020:** SPEC.md switches from HTML-comment markers to raw
   XML element tags so vendor-recommended prompt structure applies.
-- **SPEC-0021:** TASKS.md and REPORT.md adopt the same raw XML
+- **SPEC-0021:** the SPEC.md element whitelist expands with semantic
+  section tags around intent-bearing prose surfaces.
+- **SPEC-0022:** TASKS.md and REPORT.md adopt the same raw XML
   element style, without adding first-class handoff structure.
 
 ## Goals
 
+<goals>
 - Every spec directory has `SPEC.md` as the single source for
   requirements and validation scenarios.
 - Per-spec `spec.toml` files are removed and rejected as stray state.
@@ -73,9 +76,11 @@ This is the second step in the sequence:
 - Rendering from Rust structs produces deterministic marker placement.
 - Prompt slicing reads the typed marker tree instead of combining
   `SPEC.md` and `spec.toml`.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No raw XML tree containing Markdown. Marker comments are deliberate:
   they provide source-level XML-style anchors without making Markdown
   body text XML payload.
@@ -87,9 +92,11 @@ This is the second step in the sequence:
   parts orchestration needs: requirements, scenarios, decisions where
   marked, changelog entries, and open questions.
 - No back-compat shim for per-spec `spec.toml` after migration.
+</non-goals>
 
 ## User Stories
 
+<user-stories>
 - As an implementer agent, I want one SPEC.md to contain the product
   intent, requirement text, and validation scenarios for my task.
 - As a reviewer-tests persona, I want each validation scenario to sit
@@ -100,6 +107,7 @@ This is the second step in the sequence:
 - As a harness author, I want a typed parser and deterministic renderer
   so agent edits can be validated and re-rendered without inventing
   project-specific rules.
+</user-stories>
 
 ## Requirements
 
@@ -110,7 +118,7 @@ SPEC.md remains a Markdown document with YAML frontmatter and a level-1
 heading. Machine structure is carried by line-isolated Speccy marker
 comments.
 
-**Done when:**
+<done-when>
 - Marker syntax is exactly an HTML comment whose body starts with
   `speccy:<name>` for opens (with optional `attr="value"` pairs) and
   `/speccy:<name>` for closes. Marker comments occupy their own line.
@@ -141,8 +149,9 @@ comments.
 - Markdown inside markers is not XML-escaped and is not parsed as XML.
   Code fences, Markdown links, `<T>`, `&`, and arbitrary prose remain
   valid Markdown content.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md with a requirement marker containing a scenario
   marker, parsing returns a typed requirement with one scenario.
 - Given a scenario marker outside any requirement, parsing fails.
@@ -151,6 +160,7 @@ comments.
 - Given prose inside a scenario containing `<html>` or `A & B`,
   parsing preserves it as Markdown text instead of requiring XML
   escaping.
+</behavior>
 
 <scenario id="CHK-001">
 - Given a SPEC.md with a requirement marker containing a scenario
@@ -185,7 +195,7 @@ then the content is preserved as Markdown and is not XML-decoded.
 After this spec lands, requirement-to-scenario linkage is represented
 only by marker containment in SPEC.md.
 
-**Done when:**
+<done-when>
 - No `.speccy/specs/**/spec.toml` files remain after migration.
 - The workspace loader rejects a per-spec `spec.toml` with
   `WorkspaceError::StraySpecToml`.
@@ -194,8 +204,9 @@ only by marker containment in SPEC.md.
 - `speccy.toml` workspace-config parsing remains.
 - The old `[[requirements]].checks` relation is replaced by:
   `scenario.parent_requirement_id`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a migrated workspace, each spec directory contains `SPEC.md`
   and optionally `TASKS.md` / `REPORT.md`, but no `spec.toml`.
 - Given a manually reintroduced `.speccy/specs/0001-foo/spec.toml`,
@@ -203,6 +214,7 @@ only by marker containment in SPEC.md.
 - Given a requirement marker with two nested scenario markers, status,
   check, verify, and prompt rendering all see two scenarios proving
   that requirement.
+</behavior>
 
 <scenario id="CHK-002">
 - Given a migrated workspace, each spec directory contains `SPEC.md`
@@ -234,7 +246,7 @@ then both scenarios are linked to that requirement by containment.
 The canonical carrier is not "whatever Markdown the agent wrote." It
 is a typed model that can be parsed, validated, sliced, and rendered.
 
-**Done when:**
+<done-when>
 - `speccy-core::parse::spec_markers` exposes:
   - `SpecDoc`;
   - `Requirement`;
@@ -256,14 +268,16 @@ is a typed model that can be parsed, validated, sliced, and rendered.
     normalization at marker boundaries.
 - Parse then render then parse produces a structurally equivalent
   `SpecDoc`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a hand-authored canonical SPEC.md, parse/render/parse yields
   equal ids, parent links, marker names, and Markdown bodies.
 - Given a marker hidden inside a fenced code block, it is treated as
   code content, not as structure.
 - Given an unknown marker attribute, the parse error names the marker,
   attribute, path, and byte offset.
+</behavior>
 
 <scenario id="CHK-003">
 - Given a hand-authored canonical SPEC.md, parse/render/parse yields
@@ -294,7 +308,7 @@ then the error names the attribute, marker name, file, and byte offset.
 An ephemeral migration tool rewrites the current two-file specs into
 canonical marker-structured SPEC.md files.
 
-**Done when:**
+<done-when>
 - `xtask/migrate-spec-markers-0019` exists during implementation and
   is deleted before the final commit.
 - The migration reads the post-SPEC-0018 shape:
@@ -314,14 +328,16 @@ canonical marker-structured SPEC.md files.
   marker block.
 - The migration emits warnings, not silent guesses, when a requirement
   lacks behavior prose or a scenario cannot be placed unambiguously.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a pre-migration requirement covered by `CHK-002` and
   `CHK-003`, the migrated requirement block contains two nested
   scenario markers in that order.
 - Given a pre-migration spec with a `spec.toml` check not referenced
   by any requirement, migration fails and names the orphan check.
 - Given the migrated workspace, `speccy verify` exits 0.
+</behavior>
 
 <scenario id="CHK-004">
 - Given a pre-migration requirement covered by `CHK-002` and
@@ -352,7 +368,7 @@ then it exits zero.
 
 Agent-facing prompts must stop loading two separate spec carriers.
 
-**Done when:**
+<done-when>
 - Implementer and reviewer prompt rendering reads `SpecDoc`.
 - Task-scoped slicing includes:
   - frontmatter summary;
@@ -367,14 +383,16 @@ Agent-facing prompts must stop loading two separate spec carriers.
   file layout and documents the marker grammar.
 - Shipped skills and prompts no longer instruct agents to read or
   edit per-spec `spec.toml`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a task covering `REQ-002`, the implementer prompt includes
   `REQ-002` and its scenarios but not unrelated requirements.
 - Given reviewer-tests reads a prompt for the same task, it sees the
   exact scenario text from SPEC.md markers.
 - Given active docs and shipped skills, `spec.toml` appears only in
   historical migration context.
+</behavior>
 
 <scenario id="CHK-005">
 - Given a task covering `REQ-002`, the implementer prompt includes
@@ -486,12 +504,14 @@ SPEC.md plus `spec.toml` shape remains in history.
 
 ## Assumptions
 
+<assumptions>
 - Existing specs use enough stable headings (`### REQ-NNN`,
   `**Covered by:**`, `### DEC-NNN`) for a structural migration.
 - The marker scanner can ignore fenced code blocks, either with
   `comrak` events or a small fence-aware line scanner.
 - GitHub hides HTML comments in rendered Markdown, which is
   acceptable because the source file is the agent-facing contract.
+</assumptions>
 
 ## Changelog
 

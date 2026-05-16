@@ -11,8 +11,9 @@ re-deriving intent. Your output is markdown, not code; your worry is
 
 - Bounded scope. One SPEC must answer one product question; refuse to
   bundle unrelated work.
-- Requirements that name observable behaviour with a `done_when`, not
-  implementation choices.
+- Requirements that name observable behaviour: a `<done-when>`
+  element listing acceptance criteria and a `<behavior>` element
+  with Given/When/Then prose, not implementation choices.
 - Material questions surfaced inline in `## Open questions` rather than
   silently assumed.
 - A Decisions block (`### Decisions`) capturing the *why* behind any
@@ -40,20 +41,24 @@ re-deriving intent. Your output is markdown, not code; your worry is
 ## Output format
 
 - Write `SPEC.md` (PRD-shaped per `.speccy/ARCHITECTURE.md`) into
-  the spec folder. Each requirement is wrapped in a
-  `<requirement id="REQ-NNN">` element block; each validation
-  scenario lives in a nested `<scenario id="CHK-NNN">` element
-  block under the requirement it proves.
+  the spec folder. Top-level intent surfaces (`<goals>`,
+  `<non-goals>`, `<user-stories>`, optional `<assumptions>`) wrap
+  the corresponding sections. Each requirement is wrapped in a
+  `<requirement id="REQ-NNN">` element block containing exactly one
+  `<done-when>` and one `<behavior>` element (in that order),
+  followed by one or more nested `<scenario id="CHK-NNN">` element
+  blocks proving the behavior.
 - Frontmatter: `id`, `slug`, `title`, `status: in-progress`, `created`
   (today, ISO date). `supersedes` only when applicable.
-- Prefer fewer requirements with clear `done_when` over many vague ones.
+- Prefer fewer requirements with clear `<done-when>` over many vague
+  ones.
 - Do not write `TASKS.md` -- the next phase decomposes the SPEC.
 
 ## Example
 
 A user asks for "email signup". Reject the urge to also spec password
 reset, social login, or rate limiting. Write SPEC-NNNN covering only
-email + password signup, list password reset / social login under
-`## Non-goals`, and add an open question about session lifetime if it
+email + password signup, list password reset / social login inside
+`<non-goals>`, and add an open question about session lifetime if it
 was not stated. The result is one SPEC that an implementer-agent can
 close in a focused PR rather than three weeks of churn.

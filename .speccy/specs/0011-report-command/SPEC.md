@@ -25,15 +25,18 @@ command.
 
 ## Goals
 
+<goals>
 - One CLI surface for the Phase 5 prompt.
 - Completeness gate forces all tasks to be `[x]` before the
   prompt renders.
 - Retry counts per task are computed deterministically from
   `Retry:` markers in already-parsed notes.
 - Reuse SPEC-0005's prompt infrastructure.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No PR opening. The orchestrating skill (`/speccy:ship`) calls
   `gh` after the report is written.
 - No partial-report mode in v1. Abandoned specs use
@@ -42,9 +45,11 @@ command.
   after reading the prompt.
 - No retry-cause analysis. The retry count is a number; agents
   reading review notes can deduce the cause.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As `/speccy:ship`, I want `speccy report SPEC-0001` to render
   a prompt that asks the agent to summarize what happened in
   one loop -- requirements satisfied, tasks completed,
@@ -55,6 +60,7 @@ command.
 - As a future SPEC-0007 (next) consumer, I want `speccy report`
   to be the ONLY way to transition a spec to "ready for PR" so
   the report kind is meaningful.
+</user-stories>
 
 ## Requirements
 
@@ -63,7 +69,7 @@ command.
 
 Validate the argument and locate the spec.
 
-**Done when:**
+<done-when>
 - `^SPEC-\d{4,}$` -> proceed; anything else returns exit code 1
   with a format-error message.
 - The matching spec directory is located via
@@ -71,12 +77,14 @@ Validate the argument and locate the spec.
   "spec not found" message naming the ID.
 - SPEC.md and TASKS.md are both required; either missing or
   failing to parse returns exit code 1 with a clear error.
+</done-when>
 
-**Behavior:**
+<behavior>
 - `speccy report FOO` -> exit 1, format error.
 - `speccy report SPEC-9999` -> exit 1, spec-not-found.
 - `speccy report SPEC-0001` (TASKS.md missing) -> exit 1,
   TASKS.md-required error.
+</behavior>
 
 <scenario id="CHK-001">
 - `speccy report FOO` -> exit 1, format error.
@@ -94,7 +102,7 @@ speccy report validates SPEC-ID format; spec-not-found exits 1; missing or malfo
 
 Refuse to render if any task is not `[x]`.
 
-**Done when:**
+<done-when>
 - The command counts tasks by state.
 - If any task has state `Open`, `InProgress`, or
   `AwaitingReview`, exit code is 1 with a stderr message
@@ -102,8 +110,9 @@ Refuse to render if any task is not `[x]`.
 - Only when every task is `Done` (`[x]`) does the prompt render.
 - Empty TASKS.md (no tasks) is treated as "complete" (vacuously
   true; the agent can still write a meaningful report).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 with 5 `[x]` tasks and 1 `[ ]` task, exit
   code is 1 and stderr names the `[ ]` task.
 - Given SPEC-0001 with one `[~]` task, exit code 1; stderr
@@ -111,6 +120,7 @@ Refuse to render if any task is not `[x]`.
 - Given all 6 tasks are `[x]`, the prompt renders.
 - Given TASKS.md has no task lines at all, the prompt renders
   (vacuous completeness).
+</behavior>
 
 <scenario id="CHK-002">
 - Given SPEC-0001 with 5 `[x]` tasks and 1 `[ ]` task, exit
@@ -131,7 +141,7 @@ Refuses with exit 1 when any task is [ ], [~], or [?]; renders the prompt only w
 
 Count `Retry:` markers per task from inline notes.
 
-**Done when:**
+<done-when>
 - For each task in TASKS.md, count notes (`Task.notes` from
   SPEC-0001 REQ-004) that begin with `Retry:` (case-sensitive,
   exact prefix after optional leading whitespace and bullet
@@ -139,8 +149,9 @@ Count `Retry:` markers per task from inline notes.
 - Surface as a `Vec<(task_id, retry_count)>` available to the
   prompt template via the `{{retry_summary}}` placeholder
   (rendered as a markdown list).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given T-001 has notes
   `["Implementer note: ...", "Review (business, pass): ...",
   "Retry: address bcrypt cost.", "Implementer note: ...",
@@ -151,6 +162,7 @@ Count `Retry:` markers per task from inline notes.
   - T-001: 2 retries
   - T-002: 0 retries
   ```
+</behavior>
 
 <scenario id="CHK-003">
 - Given T-001 has notes
@@ -174,18 +186,20 @@ Retry count per task equals the number of notes beginning with 'Retry:' (case-se
 
 Render the Phase 5 prompt to stdout.
 
-**Done when:**
+<done-when>
 - Loads `report.md` template via `prompt::load_template`.
 - Substitutes placeholders: `{{spec_id}}`, `{{spec_md}}`,
   `{{tasks_md}}` (full content), `{{retry_summary}}`,
   `{{agents}}`.
 - Trims to budget via `prompt::trim_to_budget`.
 - Writes the trimmed output to stdout; exit code 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given the completeness gate passes, the prompt renders with
   all placeholders substituted.
 - Retry summary appears where `{{retry_summary}}` was.
+</behavior>
 
 <scenario id="CHK-004">
 - Given the completeness gate passes, the prompt renders with
@@ -312,10 +326,12 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005.
 
 ## Assumptions
 
+<assumptions>
 - SPEC-0001's TASKS.md parser exposes task state and notes per
   REQ-004.
 - SPEC-0005's prompt helpers are available.
 - SPEC-0004's `workspace::scan` is available for spec lookup.
+</assumptions>
 
 ## Changelog
 

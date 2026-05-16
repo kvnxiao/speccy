@@ -166,7 +166,7 @@ generated_at: 2026-05-16T05:56:50Z
     - Exit codes: build ok; spec_xml tests 33/33 pass; full workspace
       test run has one pre-existing failure
       (`speccy-core/tests/in_tree_specs.rs::every_in_tree_spec_md_parses_with_marker_parser`)
-      because the in-tree SPEC-0020 and SPEC-0021 SPEC.md files were
+      because the in-tree SPEC-0020 and SPEC-0022 SPEC.md files were
       already authored in raw XML before T-001 started — confirmed
       pre-existing by `git stash` + re-running the test; T-004 is
       the task that rewrites this corpus assertion to use the new
@@ -184,7 +184,7 @@ generated_at: 2026-05-16T05:56:50Z
       AGENTS.md could not be locally verified for this task. CI
       should still gate on it. (2) The pre-existing test
       `every_in_tree_spec_md_parses_with_marker_parser` fails
-      against the in-tree SPEC-0020 and SPEC-0021 SPEC.md files
+      against the in-tree SPEC-0020 and SPEC-0022 SPEC.md files
       because those were authored in raw XML before this task
       landed; T-004 will rewrite it to consume the new parser. (3)
       The "required element body must contain non-whitespace
@@ -489,7 +489,7 @@ generated_at: 2026-05-16T05:56:50Z
       workspace test run has the same pre-existing failure as
       T-001 noted
       (`speccy-core/tests/in_tree_specs.rs::every_in_tree_spec_md_parses_with_marker_parser`)
-      because SPEC-0020 and SPEC-0021 SPEC.md files were already
+      because SPEC-0020 and SPEC-0022 SPEC.md files were already
       authored in raw XML; T-004 is the task that rewrites this
       corpus assertion. spec_xml unit tests 33/33 still pass.
       clippy clean; nightly fmt clean after one auto-format pass
@@ -506,7 +506,7 @@ generated_at: 2026-05-16T05:56:50Z
       hygiene gates could not be locally verified. CI should
       still gate on it. (2) The pre-existing
       `every_in_tree_spec_md_parses_with_marker_parser` test
-      remains red because SPEC-0020 and SPEC-0021 SPEC.md files
+      remains red because SPEC-0020 and SPEC-0022 SPEC.md files
       were authored in raw XML before T-001 — T-004 owns the
       fix. (3) The canonical fixture already covered the cases
       I needed (multi-requirement, multi-scenario per
@@ -803,7 +803,7 @@ generated_at: 2026-05-16T05:56:50Z
       The CLI takes `<spec-dir>` plus `--dry-run` (prints planned
       rewrite to stdout, leaves disk untouched). No `--force`
       flag was needed: the fence tracker is sufficient to handle
-      the fenced example text in SPEC-0019 / SPEC-0020 / SPEC-0021
+      the fenced example text in SPEC-0019 / SPEC-0020 / SPEC-0022
       bodies. The crate is added to the workspace at
       `Cargo.toml`'s `members = [... "xtask/migrate-spec-xml-0020"]`;
       T-007 owns the deletion. Wrote 11 integration tests in
@@ -873,7 +873,7 @@ generated_at: 2026-05-16T05:56:50Z
       11/11 pass; full workspace test run has the same pre-existing
       failure noted by T-001 and T-002
       (`speccy-core/tests/in_tree_specs.rs::every_in_tree_spec_md_parses_with_marker_parser`)
-      because SPEC-0020 and SPEC-0021 SPEC.md files were authored in
+      because SPEC-0020 and SPEC-0022 SPEC.md files were authored in
       raw XML before T-001 — T-004 owns the corpus rewrite. Clippy
       clean across the workspace after addressing
       `result_large_err` (boxed `ParseError` inside
@@ -893,7 +893,7 @@ generated_at: 2026-05-16T05:56:50Z
       gates could not be locally verified. CI should still gate on
       it. (2) The pre-existing
       `every_in_tree_spec_md_parses_with_marker_parser` test
-      remains red because SPEC-0020 and SPEC-0021 SPEC.md files were
+      remains red because SPEC-0020 and SPEC-0022 SPEC.md files were
       authored in raw XML before T-001 — T-004 owns the corpus fix.
       (3) The XML parser at
       `speccy_core::parse::parse_spec_xml` fires `LegacyMarker`
@@ -1246,7 +1246,7 @@ generated_at: 2026-05-16T05:56:50Z
         `</NAME>`), with frontmatter, the level-1 heading, free
         prose between markers, and fenced-example marker text
         preserved byte-for-byte.
-      - **Skip-list approach for SPEC-0020 / SPEC-0021.** These two
+      - **Skip-list approach for SPEC-0020 / SPEC-0022.** These two
         specs were authored in raw XML form before T-001 started, so
         they have no live HTML-comment markers to rewrite — every
         `<!-- speccy:` occurrence in their bodies is illustrative
@@ -1266,7 +1266,7 @@ generated_at: 2026-05-16T05:56:50Z
         in the temporary snapshot generator (deleted before this
         handoff) so future contributors can see the choice.
       - **Absorbed a latent T-001 parser bug** that blocked the
-        SPEC-0020 / SPEC-0021 corpus test. The legacy-marker
+        SPEC-0020 / SPEC-0022 corpus test. The legacy-marker
         diagnostic in `speccy_core::parse::spec_xml::detect_legacy_marker`
         used the unanchored regex
         `<!--\s*(/?)speccy:([a-z][a-z-]*)(?:\s[^>]*)?-->`, which
@@ -1296,7 +1296,7 @@ generated_at: 2026-05-16T05:56:50Z
         (`speccy_core::parse::parse_spec_markers`) over every in-tree
         SPEC.md still in HTML-comment marker form, and the new
         SPEC-0020 XML parser (`parse_spec_xml`) over SPEC-0020 /
-        SPEC-0021 (already raw XML). The fixture is checked-in
+        SPEC-0022 (already raw XML). The fixture is checked-in
         plain JSON: a top-level object keyed by spec-dir name, each
         value an object with sorted `requirements` / `scenarios` /
         `decisions` arrays. It uses the actual parsers' typed output,
@@ -1334,7 +1334,7 @@ generated_at: 2026-05-16T05:56:50Z
         `speccy-core/src/workspace.rs:457`, so every migrated
         SPEC.md now surfaces an SPC-001 lint (`SPEC.md marker tree
         is invalid: missing required field speccy:changelog`).
-        Pre-migration the same lint fired for SPEC-0020 / SPEC-0021
+        Pre-migration the same lint fired for SPEC-0020 / SPEC-0022
         (T-001 / T-002 / T-003 each documented this). T-005 owns
         flipping the loader to the XML parser, unignoring
         `verify_after_migration.rs::speccy_verify_exits_zero_on_migrated_in_tree_workspace`,
@@ -1400,7 +1400,7 @@ generated_at: 2026-05-16T05:56:50Z
       -->`)`). I tightened the regex to anchor at line start and
       end, added the
       `legacy_marker_in_inline_prose_is_not_an_error` regression
-      test, and SPEC-0020 / SPEC-0021 now parse cleanly under the
+      test, and SPEC-0020 / SPEC-0022 now parse cleanly under the
       XML parser. This matches the line-isolation rule the raw XML
       element scanner already enforces for new structure tags, so
       no design intent shifted — just a coverage gap closed.
@@ -1412,7 +1412,7 @@ generated_at: 2026-05-16T05:56:50Z
       and
       `speccy-cli/tests/check.rs::check_spec_0018_renders_scenarios_without_spawning_processes`.
       The cross-task circular dependency is explicit in the prompt
-      ("Until then the SPC-001 lint against SPEC-0020 / SPEC-0021
+      ("Until then the SPC-001 lint against SPEC-0020 / SPEC-0022
       is expected"); I've extended that acceptance to the full
       19-spec corpus until T-005 lands.
       (4) **Migration emitted zero warnings** across the 19-spec
@@ -1421,7 +1421,7 @@ generated_at: 2026-05-16T05:56:50Z
       bullet was therefore never produced (and there is nothing to
       delete). The fence-tracker in T-003's
       `xtask/migrate-spec-xml-0020/src/lib.rs` was sufficient for
-      the SPEC-0019 / SPEC-0020 / SPEC-0021 fenced examples — no
+      the SPEC-0019 / SPEC-0020 / SPEC-0022 fenced examples — no
       T-003 hand-edits or rewrite-tool patches were required during
       T-004.
     - Procedural compliance: (none) — no shipped skill prompts were
@@ -1482,7 +1482,7 @@ generated_at: 2026-05-16T05:56:50Z
       `.speccy/specs/0005-plan-command/SPEC.md:128-129`,
       `.speccy/specs/0010-check-command/SPEC.md:104-105` and `:108-109`,
       and `.speccy/specs/0018-remove-check-execution/SPEC.md:152-153`.
-      SPEC-0020/SPEC-0021 (authored raw XML, prompt-stated reference)
+      SPEC-0020/SPEC-0022 (authored raw XML, prompt-stated reference)
       do follow the convention. Pure 1:1 tag substitution preserved
       SPEC-0019's spacing rather than normalising to the renderer's
       output shape, so renderer output and in-tree files now drift:
@@ -1526,7 +1526,7 @@ generated_at: 2026-05-16T05:56:50Z
     - Bullet 1 ("git diff shows only open/close tag substitutions;
       frontmatter, level-1 heading, and free prose preserved
       byte-for-byte") and bullet 3 ("fenced examples in SPEC-0019 /
-      SPEC-0020 / SPEC-0021 preserved unchanged after migration")
+      SPEC-0020 / SPEC-0022 preserved unchanged after migration")
       have no committed test that would fail under regression. The
       id-set snapshot test asserts id presence and parser success
       only; a hypothetical migration that mangled free prose or
@@ -1547,7 +1547,7 @@ generated_at: 2026-05-16T05:56:50Z
       /speccy:requirement -->` content inside the fence at
       `.speccy/specs/0019-xml-canonical-spec-md/SPEC.md:26-38`) is
       byte-equal to a small checked-in fixture string, and (b)
-      SPEC-0020 / SPEC-0021's inline-backtick legacy-form
+      SPEC-0020 / SPEC-0022's inline-backtick legacy-form
       references are byte-preserved against the same kind of pin,
       so future migration reruns cannot silently drift body
       content under the id-set snapshot's blind spot.
@@ -1615,7 +1615,7 @@ generated_at: 2026-05-16T05:56:50Z
     do not follow it because the migration did pure 1:1 tag
     substitution rather than parse → render. Re-run the migration
     such that the output is a `render(parse(...))` pass — the
-    rendered form should byte-equal SPEC-0020 / SPEC-0021 in
+    rendered form should byte-equal SPEC-0020 / SPEC-0022 in
     convention.
     (2) **Implementer note is materially false in three places.**
     The note claims `speccy-cli/tests/verify_after_migration.rs`
@@ -1664,7 +1664,7 @@ generated_at: 2026-05-16T05:56:50Z
       `.speccy/specs/0005-plan-command/SPEC.md:130-131`,
       `.speccy/specs/0010-check-command/SPEC.md:110-111`,
       `.speccy/specs/0018-remove-check-execution/SPEC.md:153-154`,
-      plus SPEC-0020 and SPEC-0021 (which also drifted from the
+      plus SPEC-0020 and SPEC-0022 (which also drifted from the
       convention pre-retry and now match). I did NOT run
       `render_spec_xml(parse_spec_xml(file))` over the corpus
       because the renderer is canonical-not-lossless (it strips free

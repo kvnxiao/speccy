@@ -13,10 +13,31 @@ not: SPC-001, SPC-003
 
 # Fixture
 
+<goals>
+Fixture goals.
+</goals>
+
+<non-goals>
+Fixture non-goals.
+</non-goals>
+
+<user-stories>
+- Fixture user story.
+</user-stories>
+
 <requirement id="REQ-001">
 ### REQ-001: First
 
 body
+
+<done-when>
+- placeholder.
+</done-when>
+
+<behavior>
+- placeholder.
+</behavior>
+
 <scenario id="CHK-001">
 covers REQ-001
 </scenario>

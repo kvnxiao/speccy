@@ -34,6 +34,7 @@ SPEC-0010 (`check`) and SPEC-0012 (`verify`) reuse it.
 
 ## Goals
 
+<goals>
 - One-shot overview of every spec's state, suitable for both human
   scanning and harness parsing.
 - Stable JSON contract (`schema_version: 1`) that downstream tooling
@@ -43,18 +44,22 @@ SPEC-0010 (`check`) and SPEC-0012 (`verify`) reuse it.
 - Per-spec parse failures are surfaced, not fatal.
 - The shared workspace scanner lives in `speccy-core` so later
   specs don't duplicate it.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No mutation of any artifact. `status` is strictly read-only.
 - No execution of checks. Use `speccy check` (SPEC-0010).
 - No interactive UI. Plain text and JSON only.
 - No filtering flags in v1 beyond `--json`. Filtering is the
   harness's job once it has JSON.
 - No watch mode or polling. One-shot only.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a developer mid-loop, I want one command that tells me which
   specs are open, which tasks are next, and whether anything is
   stale or lint-broken.
@@ -63,6 +68,7 @@ SPEC-0010 (`check`) and SPEC-0012 (`verify`) reuse it.
   re-implementing artifact parsing.
 - As a reviewer, I want unchecked open questions on a spec to be
   visible in the overview so they're not missed at review time.
+</user-stories>
 
 ## Requirements
 
@@ -72,7 +78,7 @@ SPEC-0010 (`check`) and SPEC-0012 (`verify`) reuse it.
 Discover and parse every spec under `.speccy/specs/`. Surface
 per-spec parse failures inline rather than failing the whole scan.
 
-**Done when:**
+<done-when>
 - A scan starting from the project root finds every subdirectory of
   `.speccy/specs/` whose name matches `^\d{4}-[a-z0-9-]+$`.
 - For each match, the scan attempts to parse `SPEC.md`,
@@ -84,8 +90,9 @@ per-spec parse failures inline rather than failing the whole scan.
   are silently ignored.
 - A scan from a cwd inside a speccy workspace discovers the project
   root by walking up parent directories until `.speccy/` is found.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a workspace with `0001-foo/`, `0002-bar/`, and `_scratch/`,
   when scanned, then the result contains two specs and `_scratch`
   is absent.
@@ -97,6 +104,7 @@ per-spec parse failures inline rather than failing the whole scan.
 - Given cwd is `/foo/bar/some/nested/dir` and `/foo/bar/.speccy/`
   exists, when project-root discovery runs, then it returns
   `/foo/bar`.
+</behavior>
 
 <scenario id="CHK-001">
 workspace::scan finds every NNNN-slug directory under .speccy/specs/, parses each artifact, and ignores non-matching subdirectories.
@@ -113,7 +121,7 @@ Malformed individual specs produce ScannedSpec entries with parse errors; other 
 
 Compute whether each spec's TASKS.md is stale relative to SPEC.md.
 
-**Done when:**
+<done-when>
 - For each spec with a TASKS.md, compute
   `Staleness { stale: bool, reasons: Vec<StaleReason> }` where
   `StaleReason` is one of `HashDrift`, `MtimeDrift`,
@@ -127,8 +135,9 @@ Compute whether each spec's TASKS.md is stale relative to SPEC.md.
   added (the sentinel short-circuits the rest of the check).
 - `stale` is `true` if `reasons` is non-empty.
 - Specs without TASKS.md have `Staleness { stale: false, reasons: [] }`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given hash match AND TASKS.md mtime >= SPEC.md mtime, then
   `stale = false`.
 - Given hash mismatch, then `stale = true` with `HashDrift` in
@@ -137,6 +146,7 @@ Compute whether each spec's TASKS.md is stale relative to SPEC.md.
   `stale = true` with `MtimeDrift`.
 - Given `spec_hash_at_generation: bootstrap-pending`, then
   `stale = true` with `BootstrapPending` as the sole reason.
+</behavior>
 
 <scenario id="CHK-003">
 - Given hash match AND TASKS.md mtime >= SPEC.md mtime, then
@@ -158,17 +168,19 @@ stale_for returns HashDrift, MtimeDrift, or BootstrapPending appropriately; boot
 
 Count tasks per state for each spec.
 
-**Done when:**
+<done-when>
 - For each spec with a TASKS.md, compute `TaskCounts { open,
   in_progress, awaiting_review, done }` from the parsed task list.
 - Specs without TASKS.md have all counts at zero.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, one `[x]`
   task, then `TaskCounts { open: 2, in_progress: 1,
   awaiting_review: 1, done: 1 }`.
 - Given a TASKS.md with only phase headings and no task lines, then
   all counts are zero.
+</behavior>
 
 <scenario id="CHK-004">
 - Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, one `[x]`
@@ -188,7 +200,7 @@ Task state counts match the [ ] / [~] / [?] / [x] glyph distribution; missing TA
 Compute `superseded_by` per spec by inverting the supersedes graph
 via `supersession_index` (SPEC-0001 REQ-008).
 
-**Done when:**
+<done-when>
 - The scanner builds a `&[&SpecMd]` slice over successfully-parsed
   specs and calls `supersession_index`.
 - Each spec entry exposes `superseded_by: Vec<String>` from the
@@ -198,13 +210,15 @@ via `supersession_index` (SPEC-0001 REQ-008).
 - The supersession index's `dangling_references()` is also surfaced
   on the workspace result so SPEC-0003 lint can emit diagnostics
   about them.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0017 (no supersedes) and SPEC-0042
   (`supersedes: [SPEC-0017]`), then SPEC-0017's entry has
   `superseded_by: ["SPEC-0042"]` and SPEC-0042's entry has
   `superseded_by: []`.
 - Given a spec with `parse_error`, then its `superseded_by` is `[]`.
+</behavior>
 
 <scenario id="CHK-005">
 - Given SPEC-0017 (no supersedes) and SPEC-0042
@@ -224,7 +238,7 @@ superseded_by per spec is computed via supersession_index inversion over success
 Run `lint::run` from SPEC-0003 and surface diagnostics per spec and
 at workspace level.
 
-**Done when:**
+<done-when>
 - The command constructs a `lint::Workspace` (per SPEC-0003 REQ-006)
   from the parsed specs and the supersession index.
 - It calls `speccy_core::lint::run(&workspace)` and partitions the
@@ -233,8 +247,9 @@ at workspace level.
   three arrays grouped by `Level`.
 - Workspace-level diagnostics (those without a `spec_id`) appear in
   a top-level `lint: { errors, warnings, info }` block.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 emits one Error and one Warn diagnostic, then
   SPEC-0001's entry's `lint.errors` has one item and `lint.warnings`
   has one item, each as a structured object.
@@ -243,6 +258,7 @@ at workspace level.
 - Given a dangling supersedes reference (e.g. `supersedes:
   [SPEC-9999]`), then the workspace-level lint block contains a
   diagnostic naming SPEC-9999.
+</behavior>
 
 <scenario id="CHK-006">
 - Given SPEC-0001 emits one Error and one Warn diagnostic, then
@@ -264,7 +280,7 @@ status partitions lint::run diagnostics by spec_id; workspace-level diagnostics 
 
 Render a human-scannable view filtered to specs that need attention.
 
-**Done when:**
+<done-when>
 - Default text view shows specs with `status: in-progress` plus any
   spec where any of the following hold, regardless of status:
   - `lint.errors` is non-empty.
@@ -277,13 +293,15 @@ Render a human-scannable view filtered to specs that need attention.
   questions.
 - An empty workspace prints `No specs in workspace.` to stdout and
   exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given five specs (two `in-progress`, two clean `implemented`, one
   `implemented` with stale TASKS.md), then the text output shows
   three specs.
 - Given no specs, then stdout shows `No specs in workspace.` and
   exit code is 0.
+</behavior>
 
 <scenario id="CHK-007">
 Default text view shows in-progress specs plus any with errors / staleness / parse failures; clean implemented/dropped/superseded specs are excluded.
@@ -300,7 +318,7 @@ Empty workspace prints 'No specs in workspace.' and exits 0; single-spec workspa
 
 Render structured JSON for harness consumption.
 
-**Done when:**
+<done-when>
 - `--json` emits valid UTF-8 JSON beginning with `"schema_version":
   1` and including `"repo_sha": <string>` (the HEAD git SHA, or `""`
   if git is unavailable or the repo has no HEAD).
@@ -318,14 +336,16 @@ Render structured JSON for harness consumption.
   `stale_reasons` are in declared order (`HashDrift`, `MtimeDrift`,
   `BootstrapPending`).
 - Output is pretty-printed.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given any workspace, when `speccy status --json` runs twice with
   no intervening filesystem change, the outputs are byte-identical.
 - Given no git is installed (or no HEAD exists), then `repo_sha`
   is `""` and the command still succeeds.
 - Given a workspace with one spec, when `--json` runs, the output
   validates against the contract above.
+</behavior>
 
 <scenario id="CHK-009">
 - Given any workspace, when `speccy status --json` runs twice with
@@ -513,6 +533,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 
 ## Assumptions
 
+<assumptions>
 - `lint::run` from SPEC-0003 returns diagnostics sorted by
   `(spec_id, code, file, line)`. Status preserves that ordering
   when partitioning by spec.
@@ -523,6 +544,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 - Filesystem mtime is reliable enough for staleness detection.
   CI environments that mass-touch files at checkout time may
   produce false-positive staleness; that's acceptable in v1.
+</assumptions>
 
 ## Changelog
 

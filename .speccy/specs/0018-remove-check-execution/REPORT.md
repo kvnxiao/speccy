@@ -123,7 +123,7 @@ responsibility from Speccy. SPEC-0019 will remove the `spec.toml`
 carrier entirely by moving requirement/scenario structure into a
 canonical marker-structured `SPEC.md`. SPEC-0020 will then switch
 that carrier from HTML-comment markers to raw XML element tags, and
-SPEC-0021 will apply the same raw XML carrier to `TASKS.md` and
+SPEC-0022 will apply the same raw XML carrier to `TASKS.md` and
 `REPORT.md`. With execution semantics gone, those carrier moves no
 longer have to preserve any executable-command vocabulary.
 

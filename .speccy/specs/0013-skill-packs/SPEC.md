@@ -30,6 +30,7 @@ is iteratable.
 
 ## Goals
 
+<goals>
 - Every shipped file exists at the path SPEC-0002 / SPEC-0005 /
   SPEC-0008 / SPEC-0009 / SPEC-0011 expect.
 - Personas (planner, implementer, six reviewers) follow a
@@ -39,18 +40,22 @@ is iteratable.
   workflow phases.
 - Each top-level recipe is loadable by its host without parse
   errors.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No Rust code. The mechanism is already shipped.
 - No polish. Initial content prioritises functional clarity.
 - No host-specific GUI integrations (markdown is the surface).
 - No content for hosts beyond Claude Code and Codex in v1
   (cursor support deferred per SPEC-0002 DEC-002).
 - No marketing copy. Files are tactical, not promotional.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a developer who ran `speccy init`, I want `/speccy:plan` in
   my host to load and produce the expected agent behaviour
   (call `speccy plan`, read AGENTS.md's product north star,
@@ -60,6 +65,7 @@ is iteratable.
   miss, and what format to use for the inline note.
 - As a future spec author iterating on persona content, I want
   the file structure stable enough that PR diffs are coherent.
+</user-stories>
 
 ## Requirements
 
@@ -69,7 +75,7 @@ is iteratable.
 `skills/shared/personas/` contains 8 files in pure markdown
 (no host-specific frontmatter).
 
-**Done when:**
+<done-when>
 - The following files exist and are non-empty:
   - `planner.md`
   - `implementer.md`
@@ -83,13 +89,15 @@ is iteratable.
 - File names match `personas::ALL` (SPEC-0009 DEC-001) for the
   6 reviewer personas; planner and implementer follow the same
   prefix-free naming.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A presence test asserts each file exists and has non-zero
   byte length.
 - A shape test asserts each reviewer file contains the required
   sections (role, focus, what to look for that's easy to miss,
   inline note format, example).
+</behavior>
 
 <scenario id="CHK-001">
 skills/shared/personas/ contains the 8 expected files (planner, implementer, six reviewers) and each is non-empty.
@@ -108,7 +116,7 @@ Reviewer persona file names match personas::ALL exactly (business, tests, securi
 `{{NAME}}` placeholders for substitution by the prompt-rendering
 commands.
 
-**Done when:**
+<done-when>
 - The following files exist and are non-empty:
   - `plan-greenfield.md`, `plan-amend.md`
   - `tasks-generate.md`, `tasks-amend.md`
@@ -123,13 +131,15 @@ commands.
 - Templates contain at least one of each declared placeholder.
 - The placeholder names are valid identifiers
   (`[a-zA-Z_][a-zA-Z0-9_]*`).
+</done-when>
 
-**Behavior:**
+<behavior>
 - For each command's REQ that names placeholders, a smoke test
   loads the template and asserts every named placeholder is
   present at least once.
 - A negative test confirms unknown placeholders (typos like
   `{{spec_idd}}`) are NOT present.
+</behavior>
 
 <scenario id="CHK-003">
 skills/shared/prompts/ contains the 11 expected templates (plan-greenfield/amend, tasks-generate/amend, implementer, six reviewers, report) and each is non-empty.
@@ -147,7 +157,7 @@ Each template contains the placeholders its corresponding CLI command (per REQs 
 `skills/claude-code/` contains 7 recipe skills with Claude Code
 frontmatter.
 
-**Done when:**
+<done-when>
 - The following files exist with valid Claude Code skill
   frontmatter:
   - `speccy/init.md`
@@ -161,11 +171,13 @@ frontmatter.
   (at minimum: `---\ndescription: ...\n---` opening; YAML
   parseable).
 - Each file's body follows the recipe content shape (REQ-006).
+</done-when>
 
-**Behavior:**
+<behavior>
 - A presence test asserts each file exists.
 - A frontmatter test parses each file's YAML frontmatter and
   asserts a non-empty `description` field.
+</behavior>
 
 <scenario id="CHK-005">
 - A presence test asserts each file exists.
@@ -182,18 +194,20 @@ skills/claude-code/speccy/ contains the 7 expected recipes (init, plan, tasks, w
 
 `skills/codex/` contains 7 recipe skills with Codex frontmatter.
 
-**Done when:**
+<done-when>
 - The same 7 file names as REQ-003 exist under `skills/codex/`.
 - Each file's frontmatter follows Codex conventions (parseable
   YAML with the required fields per Codex docs).
 - Each file's body matches its Claude Code counterpart in
   structure, adapted for Codex's invocation idioms where they
   differ.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A presence test asserts each file exists.
 - A frontmatter test parses each file's YAML and asserts
   presence of Codex-required fields.
+</behavior>
 
 <scenario id="CHK-006">
 - A presence test asserts each file exists.
@@ -210,7 +224,7 @@ skills/codex/speccy/ contains the 7 parallel recipes with valid Codex frontmatte
 
 Each reviewer persona file follows a consistent shape.
 
-**Done when:**
+<done-when>
 - Each `reviewer-<name>.md` file contains, in order:
   1. `# Reviewer Persona: <Capitalised name>`.
   2. `## Role` -- one paragraph naming the persona's adversarial
@@ -226,11 +240,13 @@ Each reviewer persona file follows a consistent shape.
 - Planner and implementer personas follow an analogous shape
   adapted to their roles (Role / Focus / What to consider /
   Output format / Example).
+</done-when>
 
-**Behavior:**
+<behavior>
 - A shape-checking test parses each persona file's markdown
   headings and asserts the required sections are present in
   declared order.
+</behavior>
 
 <scenario id="CHK-007">
 - A shape-checking test parses each persona file's markdown
@@ -247,7 +263,7 @@ Each reviewer persona file has the required headings in declared order: # Review
 
 Each top-level recipe skill follows a consistent shape.
 
-**Done when:**
+<done-when>
 - Each `speccy-<name>.md` recipe file contains:
   1. Frontmatter (host-specific, per REQ-003 / REQ-004).
   2. A short intro paragraph naming what the recipe does.
@@ -259,11 +275,13 @@ Each top-level recipe skill follows a consistent shape.
      criteria.
 - The CLI commands referenced in the steps match the v1
   CLI surface (the ten commands from ARCHITECTURE.md).
+</done-when>
 
-**Behavior:**
+<behavior>
 - A test loads each recipe and asserts presence of an intro
   paragraph, a "When to use" heading, and at least one
   fenced code block with a `speccy` command.
+</behavior>
 
 <scenario id="CHK-008">
 - A test loads each recipe and asserts presence of an intro
@@ -281,19 +299,21 @@ Each top-level recipe has an intro paragraph, a 'When to use' heading, and at le
 The shipped content is loadable by Claude Code and Codex
 without errors.
 
-**Done when:**
+<done-when>
 - For Claude Code: a manual smoke test confirms each recipe
   loads in the host (file appears in the slash-command picker;
   invoking it runs the documented steps without parse errors).
 - For Codex: the same smoke test in the Codex host.
 - This requirement is a **manual** check; the kind is `manual`
   and the prompt instructs the verifier on the exact steps.
+</done-when>
 
-**Behavior:**
+<behavior>
 - The `manual` check prompt names each recipe and the verifier
   steps (run `speccy init`, then invoke each recipe in turn).
 - Pass criterion: every recipe loads and runs the first CLI
   invocation it documents.
+</behavior>
 
 <scenario id="CHK-009">
 - The `manual` check prompt names each recipe and the verifier
@@ -437,12 +457,14 @@ load these files).
 
 ## Assumptions
 
+<assumptions>
 - SPEC-0002's `include_dir!` bundle is set up to include the
   `skills/` tree at the workspace root.
 - SPEC-0009's `personas::ALL` is the source of truth for the
   six reviewer names; this spec mirrors it.
 - Each host's frontmatter conventions are stable enough at v1
   time to author against without breaking changes.
+</assumptions>
 
 ## Changelog
 

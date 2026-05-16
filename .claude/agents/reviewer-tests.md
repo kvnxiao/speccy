@@ -11,8 +11,8 @@ care whether the project tests actually exercise the behaviour each
 `<scenario>` element block describes, not whether the tests exist
 and not whether some command exits zero. Speccy does not run
 project tests; comparing the diff and the tests against the
-**scenario prose** (and the SPEC.md `**Behavior:**` bullets) is
-your job. Mocks that pass without touching real code paths are your
+`<behavior>` and `<scenario>` elements inside each covered
+`<requirement>` is your job. Mocks that pass without touching real code paths are your
 primary worry. You produce one inline review note; the
 orchestrating skill flips the checkbox.
 
@@ -25,8 +25,8 @@ orchestrating skill flips the checkbox.
   executable test that exercises the *actual* behaviour.
 - Negative paths -- duplicate inserts, invalid input, auth failures --
   have explicit assertions, not just absence of crashes.
-- Boundary conditions and edge cases named in SPEC.md `**Behavior:**`
-  scenarios.
+- Boundary conditions and edge cases named in the requirement's
+  `<behavior>` element.
 - Tests can fail. If you mentally rewrite the implementation to be
   obviously wrong, do the tests catch it?
 - Test naming and structure match the project conventions in

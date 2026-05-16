@@ -39,6 +39,7 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 
 ## Goals
 
+<goals>
 - One CLI surface per persona-per-task review.
 - Persona registry covers six names; project-local overrides
   work without rebuilding speccy.
@@ -46,9 +47,11 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
   whether the implementer committed or not.
 - Reuse SPEC-0008's `task_lookup` (no duplication).
 - Reuse SPEC-0005's prompt infrastructure.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No CLI-level fan-out. One persona per invocation.
 - No state mutation. The reviewer-agent writes inline notes to
   TASKS.md; the CLI never edits any file.
@@ -56,9 +59,11 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 - No host-native location in the persona lookup chain (see
   DEC-002).
 - No project-level fan-out config in v1.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As `/speccy:review` (the review-loop skill), I want to invoke
   `speccy review T-003 --persona security` for each persona in
   the fan-out list and get back a prompt per persona.
@@ -69,6 +74,7 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 - As a reviewer-agent, I want the rendered prompt to include the
   diff the implementer produced, so I'm reviewing the actual
   work, not just SPEC.md.
+</user-stories>
 
 ## Requirements
 
@@ -77,7 +83,7 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 
 The full set of six persona names is exposed as a constant.
 
-**Done when:**
+<done-when>
 - `speccy_core::personas::ALL` is a `&'static [&'static str]` with
   values `["business", "tests", "security", "style",
   "architecture", "docs"]`.
@@ -85,10 +91,12 @@ The full set of six persona names is exposed as a constant.
   `["business", "tests", "security", "style"]`.
 - The two lists are derived from the same source of truth (the
   full ALL list), not duplicated.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Adding a new persona means appending to one constant.
 - A test asserts `DEFAULT_PERSONAS` is a prefix of `ALL`.
+</behavior>
 
 <scenario id="CHK-001">
 - Adding a new persona means appending to one constant.
@@ -105,7 +113,7 @@ personas::ALL contains exactly six names in declared order; SPEC-0007's DEFAULT_
 Resolve persona content in order: project-local override first;
 embedded bundle second.
 
-**Done when:**
+<done-when>
 - `personas::resolve_file(name, project_root) -> Result<String,
   PersonaError>` resolves in this order:
   1. `<project_root>/.speccy/skills/personas/reviewer-<name>.md`
@@ -120,8 +128,9 @@ embedded bundle second.
   `PersonaError::NotFound`.
 - The host-native location (`.claude/commands/` etc.) is
   **not** in the resolution chain.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `.speccy/skills/personas/reviewer-security.md` exists
   with content `# Custom security`, `resolve_file("security",
   ...)` returns that content.
@@ -132,6 +141,7 @@ embedded bundle second.
   "security" }`.
 - Given the project-local override is an empty file, the
   function warns on stderr and returns the embedded content.
+</behavior>
 
 <scenario id="CHK-002">
 resolve_file returns project-local override content when .speccy/skills/personas/reviewer-<name>.md exists; embedded bundle content when override absent.
@@ -149,20 +159,22 @@ An empty or unreadable project-local override warns on stderr and falls through 
 `--persona` is required and must be one of the six registry
 names.
 
-**Done when:**
+<done-when>
 - Missing `--persona` returns exit code 1 with a usage message
   listing the registry names.
 - A `--persona` value not in `ALL` returns exit code 1 with a
   message naming the unknown value and listing the valid names.
 - Case-sensitive matching (e.g. `--persona Security` is
   rejected).
+</done-when>
 
-**Behavior:**
+<behavior>
 - `speccy review T-001 --persona security` -> succeeds (security
   is in ALL).
 - `speccy review T-001 --persona unknown` -> exit 1; stderr
   contains `unknown` and the six valid names.
 - `speccy review T-001` (no --persona) -> exit 1 with usage.
+</behavior>
 
 <scenario id="CHK-004">
 - `speccy review T-001 --persona security` -> succeeds (security
@@ -181,7 +193,7 @@ Missing --persona exits 1 with usage listing valid names; unknown --persona valu
 
 Compute the diff to inline into the prompt; fall back gracefully.
 
-**Done when:**
+<done-when>
 - The command shells out to `git diff HEAD` first.
 - If that command produces empty output AND exits 0 (working
   tree is clean), shell out to `git diff HEAD~1 HEAD`.
@@ -192,8 +204,9 @@ Compute the diff to inline into the prompt; fall back gracefully.
   use the same fallback note.
 - The diff content (or fallback note) is captured as a `String`
   and substituted into the template at `{{diff}}`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given uncommitted edits exist, `{{diff}}` contains the
   `git diff HEAD` output.
 - Given the working tree is clean and there's at least one
@@ -203,6 +216,7 @@ Compute the diff to inline into the prompt; fall back gracefully.
   working tree, `{{diff}}` is the fallback note.
 - Given `git` isn't installed, `{{diff}}` is the fallback note
   (no error).
+</behavior>
 
 <scenario id="CHK-005">
 - Given uncommitted edits exist, `{{diff}}` contains the
@@ -225,7 +239,7 @@ git diff HEAD output is captured first; if clean working tree, falls back to HEA
 
 Render the Phase 4 prompt for the resolved persona.
 
-**Done when:**
+<done-when>
 - The command:
   1. Looks up the task via `task_lookup::find` (SPEC-0008
      REQ-002).
@@ -241,13 +255,15 @@ Render the Phase 4 prompt for the resolved persona.
      `{{agents}}`.
   6. Trims to budget.
   7. Writes to stdout.
+</done-when>
 
-**Behavior:**
+<behavior>
 - The rendered prompt contains the persona content (whether
   project-local or embedded).
 - The diff (or fallback note) appears where `{{diff}}` was.
 - Task entry includes the task line plus every sub-list bullet,
   same as SPEC-0008 DEC-004.
+</behavior>
 
 <scenario id="CHK-006">
 - The rendered prompt contains the persona content (whether
@@ -266,7 +282,7 @@ reviewer-<persona>.md template loaded; placeholders (spec_id, spec_md, task_id, 
 
 Task lookup errors propagate through the same shape as SPEC-0008.
 
-**Done when:**
+<done-when>
 - `speccy review` uses `task_lookup::find` directly. No
   duplicate lookup code in the binary crate.
 - `LookupError::InvalidFormat / NotFound / Ambiguous` map to the
@@ -275,10 +291,12 @@ Task lookup errors propagate through the same shape as SPEC-0008.
   `speccy review SPEC-NNNN/T-NNN --persona <name>` as the
   copy-pasteable correction (the `--persona` flag is included
   for completeness).
+</done-when>
 
-**Behavior:**
+<behavior>
 - An ambiguous task ref produces the same error shape as
   SPEC-0008, with the suggested command rewritten for review.
+</behavior>
 
 <scenario id="CHK-007">
 - An ambiguous task ref produces the same error shape as
@@ -472,10 +490,12 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005, SPEC-0008.
 
 ## Assumptions
 
+<assumptions>
 - `task_lookup::find` from SPEC-0008 is stable.
 - `prompt::*` helpers from SPEC-0005 are stable.
 - `git` is on PATH on developer machines and CI runners; absence
   triggers the fallback note (no error).
+</assumptions>
 
 ## Changelog
 

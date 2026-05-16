@@ -35,6 +35,7 @@ reuses.
 
 ## Goals
 
+<goals>
 - One CLI surface for the Phase 3 prompt.
 - Task lookup handles both unqualified and qualified forms.
 - Ambiguous unqualified IDs error cleanly with candidates.
@@ -42,9 +43,11 @@ reuses.
   AGENTS.md, budget trimming).
 - Land `task_lookup` in `speccy-core` so SPEC-0009 doesn't
   reinvent it.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No file mutation. The implementer-agent writes code and flips
   task state; the CLI just renders the prompt.
 - No batch mode. One task per invocation.
@@ -52,9 +55,11 @@ reuses.
 - No execution of `speccy check` from this command (the
   implementer-agent runs it manually per the template's
   instructions).
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As `/speccy:work` (the implementation-loop skill), I want
   `speccy implement T-003` to give me a prompt I can hand to an
   implementer sub-agent with full context.
@@ -65,6 +70,7 @@ reuses.
 - As a future SPEC-0009 implementer, I want a shared
   `task_lookup::find` helper so my review command doesn't
   duplicate the lookup logic.
+</user-stories>
 
 ## Requirements
 
@@ -73,14 +79,15 @@ reuses.
 
 Parse the task argument into a typed `TaskRef` value.
 
-**Done when:**
+<done-when>
 - The argument is parsed against two patterns:
   - Unqualified: `^T-\d{3,}$` -> `TaskRef::Unqualified { id }`.
   - Qualified: `^SPEC-\d{4,}/T-\d{3,}$` ->
     `TaskRef::Qualified { spec_id, task_id }`.
 - Anything else returns `LookupError::InvalidFormat { arg }`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - `"T-001"` parses to `Unqualified { id: "T-001" }`.
 - `"SPEC-0001/T-001"` parses to `Qualified { spec_id:
   "SPEC-0001", task_id: "T-001" }`.
@@ -89,6 +96,7 @@ Parse the task argument into a typed `TaskRef` value.
   also valid).
 - `"FOO"`, `"T-"`, `"SPEC-0001/FOO"` all return
   `InvalidFormat` naming the input verbatim.
+</behavior>
 
 <scenario id="CHK-001">
 - `"T-001"` parses to `Unqualified { id: "T-001" }`.
@@ -110,7 +118,7 @@ Task ref parser accepts unqualified T-NNN and qualified SPEC-NNNN/T-NNN; invalid
 
 Locate the matching task across the workspace.
 
-**Done when:**
+<done-when>
 - `task_lookup::find(workspace, task_ref)` returns
   `Ok(TaskLocation)` when exactly one task matches:
   - `Unqualified`: every parsed spec's TASKS.md is searched; the
@@ -121,8 +129,9 @@ Locate the matching task across the workspace.
   returns `LookupError::Ambiguous` (see REQ-003).
 - Specs whose TASKS.md failed to parse are skipped silently --
   they can't contain the task and shouldn't poison the lookup.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 has T-001 and SPEC-0002 has T-002, when
   looking up `Unqualified { id: "T-001" }`, returns
   `Ok(TaskLocation { spec_id: "SPEC-0001", ... })`.
@@ -134,6 +143,7 @@ Locate the matching task across the workspace.
   `Qualified { spec_id: "SPEC-0001", task_id: "T-001" }`,
   returns `Ok(...)` (qualified bypasses ambiguity).
 - Given no spec has T-999, lookup returns `NotFound`.
+</behavior>
 
 <scenario id="CHK-002">
 - Given SPEC-0001 has T-001 and SPEC-0002 has T-002, when
@@ -158,7 +168,7 @@ find returns TaskLocation for an unambiguous unqualified match; qualified form s
 
 Ambiguous unqualified IDs return a structured error.
 
-**Done when:**
+<done-when>
 - `LookupError::Ambiguous { task_id, candidate_specs }` carries
   the requested `task_id` and the list of spec IDs where it was
   found.
@@ -167,8 +177,9 @@ Ambiguous unqualified IDs return a structured error.
 - The CLI maps this error to exit code 1 with a stderr message
   listing each candidate as `speccy implement SPEC-NNNN/T-NNN`
   for the user to copy-paste.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given T-001 exists in SPEC-0001, SPEC-0003, SPEC-0005, the
   error's `candidate_specs` is `["SPEC-0001", "SPEC-0003",
   "SPEC-0005"]`.
@@ -180,6 +191,7 @@ Ambiguous unqualified IDs return a structured error.
     speccy implement SPEC-0003/T-001
     speccy implement SPEC-0005/T-001
   ```
+</behavior>
 
 <scenario id="CHK-003">
 - Given T-001 exists in SPEC-0001, SPEC-0003, SPEC-0005, the
@@ -204,7 +216,7 @@ Unqualified T-NNN matching multiple specs returns Ambiguous with candidate_specs
 
 Render the Phase 3 prompt to stdout.
 
-**Done when:**
+<done-when>
 - The command loads the embedded `implementer.md` template via
   `prompt::load_template`.
 - It substitutes placeholders:
@@ -220,8 +232,9 @@ Render the Phase 3 prompt to stdout.
   - `{{agents}}` -- AGENTS.md content via `prompt::load_agents_md`.
 - The rendered prompt is trimmed via `prompt::trim_to_budget`.
 - The trimmed output goes to stdout; exit code 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 with T-001 and three sub-list notes under
   T-001, the rendered prompt contains all three notes in
   declared order where `{{task_entry}}` was.
@@ -230,6 +243,7 @@ Render the Phase 3 prompt to stdout.
 - Given a task whose `Covers:` bullet lists REQ-001 and REQ-002,
   the rendered output includes those IDs (within the task_entry
   inline).
+</behavior>
 
 <scenario id="CHK-004">
 - Given SPEC-0001 with T-001 and three sub-list notes under
@@ -251,7 +265,7 @@ speccy implement T-NNN loads implementer.md, substitutes spec_id, spec_md, task_
 
 Map all error paths to exit codes and informative stderr.
 
-**Done when:**
+<done-when>
 - `LookupError::InvalidFormat` -> exit 1, stderr names the bad
   argument and shows the accepted formats.
 - `LookupError::NotFound` -> exit 1, stderr names the task and
@@ -264,11 +278,13 @@ Map all error paths to exit codes and informative stderr.
   the parser error.
 - `PromptError::TemplateNotFound` -> exit 2 (internal failure;
   the embedded bundle should always have this template).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Every exit-1 error path has an actionable stderr message
   (names what's wrong and what to do next).
 - Exit codes are deterministic given identical inputs.
+</behavior>
 
 <scenario id="CHK-005">
 - Every exit-1 error path has an actionable stderr message
@@ -431,6 +447,7 @@ SPEC-0004 (workspace::scan), SPEC-0005 (prompt helpers).
 
 ## Assumptions
 
+<assumptions>
 - The SPEC-0001 parser's TASKS.md handling exposes `Task.notes`
   as a Vec preserving declared order (per SPEC-0001 REQ-004).
 - `prompt::load_template`, `render`, `load_agents_md`,
@@ -438,6 +455,7 @@ SPEC-0004 (workspace::scan), SPEC-0005 (prompt helpers).
 - The `implementer.md` template is in the embedded bundle by
   the time this command ships (SPEC-0013 fills it; initial stub
   is sufficient for testing).
+</assumptions>
 
 ## Changelog
 

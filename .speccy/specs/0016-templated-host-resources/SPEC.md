@@ -56,6 +56,7 @@ outputs are refreshed in the same commit.
 
 ## Goals
 
+<goals>
 - One canonical source file for any shared resource — persona
   body, prompt template, or skill body — so cross-cutting edits
   land once and propagate to every host on next render.
@@ -74,9 +75,11 @@ outputs are refreshed in the same commit.
 - CI fails fast when `resources/` source drifts from the committed
   dogfood outputs under `.claude/`, `.agents/`, `.codex/`, and
   `.speccy/skills/`.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - Changing the persona resolver chain. SPEC-0009 DEC-002's
   lookup order (project-local override at
   `.speccy/skills/personas/reviewer-X.md`, then shipped) is
@@ -97,9 +100,11 @@ outputs are refreshed in the same commit.
 - Changing the `speccy review` CLI surface or its inline prompt
   rendering. Subagent files are a new artifact alongside, not a
   replacement for, the existing `--persona` rendering.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a speccy contributor, when I update the prose in
   `resources/modules/skills/speccy-review.md` once, both hosts'
   shipped `SKILL.md` pick up the change after `speccy init --force`
@@ -125,6 +130,7 @@ outputs are refreshed in the same commit.
   without re-running `speccy init --force` for both hosts, the
   PR build fails with a clear diff pointing at the stale
   materialised outputs.
+</user-stories>
 
 ## Requirements
 
@@ -136,8 +142,7 @@ exactly one source-of-truth file under
 `resources/modules/{personas,prompts,skills}/`. All host-specific
 rendered outputs derive from these modules.
 
-**Done when:**
-
+<done-when>
 - `resources/modules/personas/reviewer-*.md` is the only source of
   truth for the eight personas listed in SPEC-0009 (six default
   plus `reviewer-architecture` and `reviewer-docs`).
@@ -154,9 +159,9 @@ rendered outputs derive from these modules.
   point at the new `resources/modules/...` paths and are
   non-empty.
 - The legacy `skills/` tree is deleted from the workspace.
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given the embedded `RESOURCES` bundle, when iterated, then
   `modules/personas/reviewer-security.md`,
   `modules/prompts/plan-greenfield.md`, and
@@ -169,6 +174,7 @@ rendered outputs derive from these modules.
   plus an `{% include %}` directive.
 - Given the workspace tree, when walked, then no path matches
   `skills/`.
+</behavior>
 
 <scenario id="CHK-001">
 resources/modules/{personas,prompts,skills}/ are the only source-of-truth bodies for personas, prompts, and skill bodies; no per-host file under resources/agents/ duplicates a module body verbatim outside its `{% include %}` directive.
@@ -189,8 +195,7 @@ with that host's template context, strips the `.tmpl` suffix,
 and writes the result to `<project_root>/<rel>` where `<rel>`
 matches the source path under `resources/agents/.<host>/`.
 
-**Done when:**
-
+<done-when>
 - For `--host claude-code`, the seven rendered `SKILL.md` files
   land at `.claude/skills/speccy-<verb>/SKILL.md` and contain
   slash-prefixed command references (`/speccy-plan`,
@@ -209,9 +214,9 @@ matches the source path under `resources/agents/.<host>/`.
   shipped tree (SPEC-0015 REQ-002's classification behaviour is
   unchanged in spirit; it operates on the rendered output set
   rather than a flat copy).
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given a fresh repo with `.claude/`, when
   `speccy init --host claude-code` runs, then
   `.claude/skills/speccy-plan/SKILL.md` contains the literal
@@ -225,6 +230,7 @@ matches the source path under `resources/agents/.<host>/`.
   contain `/speccy-tasks`.
 - Given a fresh repo, when `speccy init --host claude-code`
   runs, then no path is created under `.agents/` or `.codex/`.
+</behavior>
 
 <scenario id="CHK-003">
 speccy init --host claude-code renders the seven SKILL.md files at `.claude/skills/speccy-<verb>/SKILL.md` with slash-prefixed command references (e.g. `/speccy-tasks`); does not create any path under `.agents/` or `.codex/`.
@@ -243,8 +249,7 @@ For each shipped reviewer persona, the per-host renderer
 materialises a subagent file in the host's native format at the
 host's native location.
 
-**Done when:**
-
+<done-when>
 - For `--host claude-code`, six files
   `.claude/agents/reviewer-{business,tests,security,style,architecture,docs}.md`
   exist after init. Each opens with a YAML frontmatter block
@@ -262,9 +267,9 @@ host's native location.
   literal substring `"""`; this invariant keeps the Codex
   triple-quoted `developer_instructions = """..."""` block
   unambiguous.
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given a fresh repo with `.claude/`, when
   `speccy init --host claude-code` runs, then a file at
   `.claude/agents/reviewer-security.md` exists, opens with a
@@ -279,6 +284,7 @@ host's native location.
   `developer_instructions`.
 - Given the workspace, when persona module files are read, then
   none contain the substring `"""`.
+</behavior>
 
 <scenario id="CHK-005">
 speccy init --host claude-code renders six files at `.claude/agents/reviewer-{business,tests,security,style,architecture,docs}.md`, each with YAML frontmatter declaring `name: reviewer-<persona>` and a `description:` string, followed by the matching persona body content from resources/modules/personas/.
@@ -299,8 +305,7 @@ through the host's native subagent primitive, with the existing
 `speccy review --persona X` CLI as an explicit fallback step for
 harnesses that don't recognise the subagent type.
 
-**Done when:**
-
+<done-when>
 - Claude Code's rendered `.claude/skills/speccy-review/SKILL.md`
   step 4 instructs the main agent to use the `Task` tool with
   `subagent_type: "reviewer-business"`,
@@ -316,9 +321,9 @@ harnesses that don't recognise the subagent type.
   that don't recognise the subagent type.
 - The `speccy review` CLI command itself is unchanged: it still
   renders the per-persona prompt to stdout and exits zero.
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given Claude Code's rendered SKILL.md, when searched, then
   step 4 contains the string `subagent_type: "reviewer-` and
   the four default persona names.
@@ -330,6 +335,7 @@ harnesses that don't recognise the subagent type.
 - Given either host's rendered SKILL.md, when searched, then it
   contains the literal `speccy review` CLI command as a
   fallback reference.
+</behavior>
 
 <scenario id="CHK-007">
 - Given Claude Code's rendered SKILL.md, when searched, then
@@ -358,8 +364,7 @@ runs `speccy init --force` for both hosts in sequence and fails
 the build if any committed output drifts from what would be
 freshly rendered.
 
-**Done when:**
-
+<done-when>
 - `.github/workflows/ci.yml` includes a job step that runs
   `speccy init --force --host claude-code` and
   `speccy init --force --host codex` in order, then
@@ -369,9 +374,9 @@ freshly rendered.
 - The stale `.claude/commands` path is removed from the CI diff
   check (it has been a no-op since SPEC-0015 moved the install
   destination to `.claude/skills`).
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given a clean repo at HEAD, when both init commands run in
   CI, then `git diff --exit-code` against the listed paths
   succeeds.
@@ -380,6 +385,7 @@ freshly rendered.
   re-running init, when CI runs, then the diff check fails and
   the error message names `.claude/skills/speccy-review/SKILL.md`
   and `.agents/skills/speccy-review/SKILL.md` as drifted.
+</behavior>
 
 <scenario id="CHK-008">
 - Given a clean repo at HEAD, when both init commands run in
@@ -403,8 +409,7 @@ The MiniJinja-backed renderer produces byte-identical output on
 repeated runs against the same source, and the renderer's
 output contains no unsubstituted template tokens.
 
-**Done when:**
-
+<done-when>
 - Rendering the full host pack for either host into a tempdir
   twice in a row produces byte-identical files in both passes.
 - No rendered output file (across both hosts and all artifact
@@ -414,9 +419,9 @@ output contains no unsubstituted template tokens.
   `{% raw %}`-wrapped regions exist in the actual implementation.)
 - The embedded `RESOURCES` bundle is non-empty and contains the
   three expected top-level subtrees: `agents/`, `modules/`.
+</done-when>
 
-**Behavior:**
-
+<behavior>
 - Given a tempdir with `.claude/`, when
   `speccy init --force --host claude-code` runs twice in
   succession, then every file under `.claude/` is byte-identical
@@ -429,6 +434,7 @@ output contains no unsubstituted template tokens.
 - Given the embedded `RESOURCES` bundle, when iterated, then it
   contains at least the two expected top-level entries
   `agents/` and `modules/`, each non-empty.
+</behavior>
 
 <scenario id="CHK-009">
 Rendering the full host pack for either host into the same tempdir twice in succession produces byte-identical file contents on the second pass.
@@ -915,6 +921,7 @@ Install destinations (rendered):
 
 ## Assumptions
 
+<assumptions>
 - MiniJinja 2.x's `UndefinedBehavior::Strict` causes any
   reference to an undefined variable inside a rendered template
   to return a render-time error (rather than silently emitting
@@ -944,6 +951,7 @@ Install destinations (rendered):
   persona already violates it, the migration includes a
   rewrite. (Initial inspection during planning found no
   violations; the test catches future regressions.)
+</assumptions>
 
 ## Changelog
 

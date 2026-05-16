@@ -81,11 +81,14 @@ This is the third step in the sequence:
   markers; per-spec `spec.toml` is removed.
 - **SPEC-0020:** SPEC.md switches from HTML-comment markers to raw
   XML element tags.
-- **SPEC-0021:** TASKS.md and REPORT.md adopt the same raw XML
+- **SPEC-0021:** the SPEC.md element whitelist expands with semantic
+  section tags around intent-bearing prose surfaces.
+- **SPEC-0022:** TASKS.md and REPORT.md adopt the same raw XML
   element style.
 
 ## Goals
 
+<goals>
 - SPEC.md carries Speccy structure with raw XML element tags
   (`<requirement>`, `<scenario>`, `<decision>`, `<changelog>`,
   `<open-question>`, optional `<spec>` root and `<overview>` section).
@@ -101,9 +104,11 @@ This is the third step in the sequence:
 - Architecture docs and shipped skill prompts teach the raw XML form
   with no leftover guidance pointing at comment markers as the
   active carrier.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No revival of `spec.toml` or any other secondary spec carrier.
 - No full XML document parser. The file is still Markdown plus a
   small whitelisted set of Speccy element tags; bodies are not XML
@@ -114,12 +119,14 @@ This is the third step in the sequence:
   shipped: requirement, scenario, decision, changelog, open-question,
   and optional spec/overview wrappers. Adding new structural elements
   is out of scope.
-- No migration of TASKS.md or REPORT.md. That belongs to SPEC-0021.
+- No migration of TASKS.md or REPORT.md. That belongs to SPEC-0022.
 - No back-compat shim that accepts both forms. After migration, the
   comment-marker form is rejected as a parse error.
+</non-goals>
 
 ## User Stories
 
+<user-stories>
 - As an implementer agent reading a sliced SPEC.md, I want vendor-
   recommended XML structure around requirements and scenarios so I
   ground on the right block without extra prompting effort.
@@ -133,6 +140,7 @@ This is the third step in the sequence:
 - As a human reviewing a SPEC.md diff, I want structure tags that I
   can read at a glance and Markdown bodies that still read as
   Markdown in my editor.
+</user-stories>
 
 ## Requirements
 
@@ -144,7 +152,7 @@ level-1 heading. Machine structure is carried by line-isolated raw
 XML element tags drawn from a closed whitelist of bare semantic
 names.
 
-**Done when:**
+<done-when>
 - Element syntax is a literal XML open/close tag pair on its own
   line: `<NAME attr="value">` to open, `</NAME>` to close.
 - Attribute values are always double-quoted. Unquoted values are
@@ -191,8 +199,9 @@ names.
 - Markdown inside elements is preserved verbatim. `<`, `>`, and `&`
   inside scenario/decision bodies remain ordinary Markdown
   characters; the parser does not XML-decode body content.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md with a `<requirement>` containing one
   `<scenario>`, parsing returns a typed requirement with one
   scenario.
@@ -203,6 +212,7 @@ names.
   Markdown content.
 - Given two `<scenario id="CHK-001">` opens in one spec,
   parsing fails with a duplicate-id error.
+</behavior>
 
 <scenario id="CHK-001">
 Given a SPEC.md with line-isolated speccy XML element tags wrapping
@@ -234,7 +244,7 @@ After this spec lands, the SPEC-0019 marker form is no longer a
 valid carrier. The parser, renderer, and migration tool only emit
 raw element tags.
 
-**Done when:**
+<done-when>
 - The marker scanner module (`speccy-core::parse::spec_markers` or
   its current name) is replaced by an XML element scanner module.
   Old marker-comment parsing code is deleted, not feature-flagged.
@@ -244,14 +254,16 @@ raw element tags.
 - The renderer emits only raw XML element tags. It never produces
   HTML-comment markers.
 - No back-compat acceptance of mixed forms within one SPEC.md.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a migrated SPEC.md, every Speccy structure tag is a raw XML
   element, not an HTML comment.
 - Given a hand-authored SPEC.md that still contains
   `<!-- speccy:requirement id="REQ-001" -->`, parsing fails and the
   error names the legacy marker form and points to the equivalent
   element syntax.
+</behavior>
 
 <scenario id="CHK-002">
 Given a SPEC.md authored entirely with raw speccy XML element tags,
@@ -278,7 +290,7 @@ The carrier change does not change Speccy's model. Existing
 consumers continue to read `SpecDoc`, `Requirement`, `Scenario`, and
 `Decision`; only the on-disk form they parse from changes.
 
-**Done when:**
+<done-when>
 - `speccy-core::parse::spec_xml` (or the renamed module) exposes:
   - `SpecDoc`;
   - `Requirement`;
@@ -304,14 +316,16 @@ consumers continue to read `SpecDoc`, `Requirement`, `Scenario`, and
   prompt slicing, `speccy verify`, workspace loader) compile and
   pass against the new module with no behavioural change beyond the
   carrier form.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a hand-authored canonical SPEC.md, parse/render/parse yields
   equal ids, parent links, element names, and Markdown bodies.
 - Given a speccy element tag hidden inside a fenced code block, it
   is treated as code content, not structure.
 - Given an unknown attribute on a known element, the parse error
   names the attribute, element name, path, and byte offset.
+</behavior>
 
 <scenario id="CHK-003">
 Given a canonical raw-XML SPEC.md fixture,
@@ -341,7 +355,7 @@ change beyond carrier form.
 An ephemeral migration tool converts every in-tree SPEC.md from
 comment markers to raw XML element tags.
 
-**Done when:**
+<done-when>
 - `xtask/migrate-spec-xml-0020` exists during implementation and is
   deleted before the final commit.
 - The migration reads each post-SPEC-0019 SPEC.md and rewrites it
@@ -352,14 +366,15 @@ comment markers to raw XML element tags.
 - Frontmatter, the level-1 heading, and all Markdown bodies between
   markers are preserved byte-for-byte.
 - Comment markers that appear inside fenced code blocks (e.g.
-  illustrative examples in this spec, SPEC-0019, or SPEC-0021) are
+  illustrative examples in this spec, SPEC-0019, or SPEC-0022) are
   left as-is: they are documentation about the old form, not
   structure.
 - The migration emits warnings (not silent guesses) when it cannot
   determine whether a marker is structure or example.
 - After migration, `speccy verify` exits 0 across the workspace.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a pre-migration SPEC.md with marker-comment requirements and
   scenarios, the migrated file has equivalent raw XML element tags
   in the same nesting and order.
@@ -367,6 +382,7 @@ comment markers to raw XML element tags.
   block showing the old marker syntax as an example, the migrated
   file leaves that example untouched.
 - Given the migrated workspace, `speccy verify` exits 0.
+</behavior>
 
 <scenario id="CHK-004">
 Given a post-SPEC-0019 SPEC.md authored with HTML-comment markers,
@@ -392,7 +408,7 @@ then it exits zero.
 Active guidance must stop teaching the HTML-comment marker form as
 the canonical carrier.
 
-**Done when:**
+<done-when>
 - `.speccy/ARCHITECTURE.md` documents the raw XML element grammar
   for SPEC.md, with the HTML-comment marker form listed only as
   migration history.
@@ -407,8 +423,9 @@ the canonical carrier.
 - A grep for `<!-- speccy:` in active (non-historical) guidance
   returns hits only inside migration-context documentation or this
   spec's own summary/decisions.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a freshly rendered SPEC.md after this spec lands, every
   Speccy structure tag is a raw XML element.
 - Given a task slice rendered for an implementer agent, the
@@ -416,6 +433,7 @@ the canonical carrier.
   tags inside the rendered prompt.
 - Given active shipped guidance, `<!-- speccy:` appears only in
   historical/migration context.
+</behavior>
 
 <scenario id="CHK-005">
 Given an implementer task slice rendered after this spec lands,
@@ -499,7 +517,7 @@ publish examples using bare semantic names, and Speccy's element
 vocabulary (`requirement`, `scenario`, `decision`, `changelog`,
 `open-question`, plus the `spec` and `overview` wrappers and the
 `task`, `coverage`, `tasks`, `report`, `task-scenarios` set used by
-SPEC-0021) is domain-specific enough that no realistic collision with
+SPEC-0022) is domain-specific enough that no realistic collision with
 standard prompt-engineering tags exists.
 
 The second concern is HTML5. A SPEC.md viewed in any HTML-aware
@@ -578,6 +596,7 @@ implementation against real fixtures.
 
 ## Assumptions
 
+<assumptions>
 - SPEC-0019 has shipped on disk: every SPEC.md is currently in the
   HTML-comment marker form and every per-spec `spec.toml` has been
   removed.
@@ -588,6 +607,7 @@ implementation against real fixtures.
   acceptable; humans review diffs and source, not GitHub previews.
 - A line-aware element scanner is sufficient for v1 and does not
   require a true XML parser.
+</assumptions>
 
 ## Changelog
 
@@ -607,8 +627,8 @@ SPEC-0019 carries over unchanged — the single-carrier rule, typed
 parser/renderer, scenario-under-requirement nesting, deterministic
 rendering, and the "Markdown body, not XML payload" property.
 
-The carrier change is timed before SPEC-0021 deliberately: rolling
+The carrier change is timed before SPEC-0022 deliberately: rolling
 the form change once across SPEC.md and again across
 TASKS.md/REPORT.md would create two breaks in agent-facing structure.
-Landing the SPEC.md change first means SPEC-0021 can adopt the
+Landing the SPEC.md change first means SPEC-0022 can adopt the
 already-chosen XML element shape with no second carrier debate.

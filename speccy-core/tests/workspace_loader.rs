@@ -51,9 +51,30 @@ const VALID_SPEC_MD: &str = indoc! {r#"
 
     # Example
 
+    <goals>
+    Example goals.
+    </goals>
+
+    <non-goals>
+    Example non-goals.
+    </non-goals>
+
+    <user-stories>
+    - Example user story.
+    </user-stories>
+
     <requirement id="REQ-001">
     ### REQ-001: First
     body
+
+    <done-when>
+    - placeholder.
+    </done-when>
+
+    <behavior>
+    - placeholder.
+    </behavior>
+
     <scenario id="CHK-001">
     covers REQ-001
     </scenario>
@@ -333,9 +354,30 @@ fn duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001() -> TestResult 
 
         # Example
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example user story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         first
         </scenario>
@@ -343,6 +385,15 @@ fn duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001() -> TestResult 
         <requirement id="REQ-002">
         ### REQ-002: Second
         body
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         duplicate id
         </scenario>
@@ -426,9 +477,30 @@ fn requirement_with_two_scenarios_reports_two_proofs() -> TestResult {
 
         # Example
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example user story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         first
         </scenario>

@@ -42,7 +42,9 @@ The rest of the sequence depends on this semantic shift:
   `SPEC.md`.
 - **SPEC-0020:** switch `SPEC.md` from HTML-comment markers to raw
   XML element tags so vendor-recommended prompt structure applies.
-- **SPEC-0021:** apply the same raw XML element carrier to
+- **SPEC-0021:** expand the SPEC.md element whitelist with semantic
+  section tags around intent-bearing prose surfaces.
+- **SPEC-0022:** apply the same raw XML element carrier to
   `TASKS.md` and `REPORT.md`, without introducing first-class
   handoff structure.
 
@@ -53,6 +55,7 @@ including this one, to the new shape.
 
 ## Goals
 
+<goals>
 - `speccy check` and `speccy verify` never spawn child processes.
 - `spec.toml` `[[checks]]` rows shrink to exactly `id` and
   `scenario`.
@@ -64,9 +67,11 @@ including this one, to the new shape.
   `speccy verify`.
 - `.speccy/ARCHITECTURE.md` and shipped skills teach the new
   feedback-only contract.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No XML or marker-structured Markdown carrier change. SPEC-0019 owns
   that.
 - No `speccy verify --exec`, no project test runner wrapper, and no
@@ -78,9 +83,11 @@ including this one, to the new shape.
   executable command.
 - No compatibility shim for the old check row shape after this spec
   lands. Speccy has not shipped v1; the migration can be a hard break.
+</non-goals>
 
 ## User Stories
 
+<user-stories>
 - As an implementer agent, I want each check to describe behavior in
   English so I can choose the right project test surface without
   deciphering a stale command string.
@@ -92,6 +99,7 @@ including this one, to the new shape.
 - As a developer refactoring tests, I want Speccy artifacts to avoid
   churn when file names or command flags change but the behavior
   contract remains stable.
+</user-stories>
 
 ## Requirements
 
@@ -102,7 +110,7 @@ including this one, to the new shape.
 `[[checks]]` row carries only a stable id and an English validation
 scenario.
 
-**Done when:**
+<done-when>
 - `CheckEntry` in `speccy-core::parse::toml_files` is reduced to
   `{ id: CheckId, scenario: NonEmptyString }`.
 - `CheckPayload` and all production references to `kind`, `command`,
@@ -118,14 +126,16 @@ scenario.
   - if an old check has `command`, new `scenario = old_proves`;
   - if an old check has `prompt`, new `scenario = old_prompt`;
   - `kind`, `command`, `prompt`, and `proves` are removed.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a check row with `id = "CHK-001"` and
   `scenario = "Given ..."`, parsing succeeds.
 - Given a check row with a legacy `command` or `prompt` field after
   migration, parsing fails with an unknown-field error.
 - Given a check row with `scenario = ""`, parsing fails with an
   empty-scenario error.
+</behavior>
 
 <scenario id="CHK-001">
 - Given a check row with `id = "CHK-001"` and
@@ -158,7 +168,7 @@ then parsing fails with an error naming the containing CHK id.
 `speccy check [SELECTOR]` keeps SPEC-0017's selector surface but
 renders selected scenarios instead of executing commands.
 
-**Done when:**
+<done-when>
 - `speccy-cli::check::run` has no dependency on `speccy_core::exec`.
 - Selector behavior remains unchanged for:
   - no selector;
@@ -175,8 +185,9 @@ renders selected scenarios instead of executing commands.
   `N scenarios rendered across M specs`.
 - Exit code is non-zero only for selector, lookup, parse, or
   workspace errors.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given three specs with two checks each, `speccy check` prints six
   `==>` headers, no child process output, and the count summary.
 - Given `speccy check SPEC-9999`, the existing no-matching-spec error
@@ -184,6 +195,7 @@ renders selected scenarios instead of executing commands.
 - Given `speccy check SPEC-0001/T-002`, selected scenarios are derived
   from the task's covered requirements exactly as SPEC-0017 did for
   executable checks.
+</behavior>
 
 <scenario id="CHK-002">
 - Given three specs with two checks each, `speccy check` prints six
@@ -217,7 +229,7 @@ then it exits non-zero with the existing selector error wording.
 does not call `speccy check`, execute scenarios, or infer test
 quality.
 
-**Done when:**
+<done-when>
 - `speccy-cli::verify::run` no longer calls any execution helper.
 - Verification walks all specs and reports:
   - parse errors in `SPEC.md`, `TASKS.md`, `REPORT.md`, or
@@ -232,14 +244,16 @@ quality.
   `verified N specs, M requirements, K scenarios; E errors`.
 - `speccy verify --json` bumps to `schema_version = 2` and removes
   execution-shaped fields (`outcome`, `exit_code`, `duration_ms`).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a requirement with an empty `checks` array, verify exits 1 and
   names the requirement.
 - Given a requirement that references `CHK-099` with no corresponding
   check row, verify exits 1 and names both ids.
 - Given a clean workspace, verify exits 0 without spawning any child
   process.
+</behavior>
 
 <scenario id="CHK-003">
 - Given a requirement with an empty `checks` array, verify exits 1 and
@@ -270,7 +284,7 @@ outcome, exit_code, or duration_ms appear.
 
 The old execution layer is removed rather than deprecated.
 
-**Done when:**
+<done-when>
 - `speccy-core/src/exec.rs` is deleted.
 - `speccy-core/src/lib.rs` no longer exports `exec`.
 - Production source has zero references to `run_checks_captured`,
@@ -280,12 +294,14 @@ The old execution layer is removed rather than deprecated.
   replaced with renderer/shape tests.
 - `cargo build --workspace`, `cargo test --workspace`, and clippy run
   without dead-code warnings from the removed execution surface.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given the post-spec workspace, `git grep -n "speccy_core::exec"`
   returns no production-source hits.
 - Given the post-spec test suite, no test depends on a shell command
   succeeding or failing through Speccy.
+</behavior>
 
 <scenario id="CHK-004">
 - Given the post-spec workspace, `git grep -n "speccy_core::exec"`
@@ -311,7 +327,7 @@ then no test depends on Speccy spawning a shell command.
 Architecture docs and skill prompts stop implying that Speccy runs or
 grades tests.
 
-**Done when:**
+<done-when>
 - `.speccy/ARCHITECTURE.md` describes checks as validation scenarios.
 - The `check` command row is render-only.
 - The `verify` command row is shape-only.
@@ -321,12 +337,14 @@ grades tests.
   `.speccy/skills/` copies no longer tell agents to author
   `kind =`, `command =`, or `prompt =` check rows.
 - Active guidance uses `scenario = """..."""` examples.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a grep for legacy check-authoring snippets in active docs and
   shipped skills, there are no hits except historical migration notes.
 - Given reviewer-tests reads the post-spec prompt, it is instructed to
   compare tests against scenario prose, not command exit codes.
+</behavior>
 
 <scenario id="CHK-005">
 - Given a grep for legacy check-authoring snippets in active docs and
@@ -433,6 +451,7 @@ restores both.
 
 ## Assumptions
 
+<assumptions>
 - All in-tree `spec.toml` files parse under the current schema before
   the migration starts.
 - Current project CI continues to run the four standard hygiene gates
@@ -440,6 +459,7 @@ restores both.
 - SPEC-0019 will remove the `spec.toml` carrier after this spec lands,
   so SPEC-0018 should avoid adding new fields that would immediately
   be migrated away.
+</assumptions>
 
 ## Changelog
 

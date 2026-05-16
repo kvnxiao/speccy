@@ -15,7 +15,7 @@
 //!    `tests/fixtures/in_tree_id_snapshot.json`. That fixture was generated
 //!    before the bulk migration by running the SPEC-0019 marker parser over
 //!    every in-tree SPEC.md (and the SPEC-0020 XML parser over SPEC-0020 /
-//!    SPEC-0021, which were already authored in raw XML before T-004 started).
+//!    SPEC-0022, which were already authored in raw XML before T-004 started).
 //!    Equality between the pre-migration and post-migration id sets is the
 //!    structural guarantee that the migration was mechanical: tags swapped,
 //!    identifiers preserved.

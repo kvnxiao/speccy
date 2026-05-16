@@ -7,9 +7,10 @@ description: Draft a new Speccy SPEC from the `AGENTS.md` product north star, or
 
 Renders the planning prompt: read `AGENTS.md` (which carries the
 project-wide product north star), propose the next SPEC slice, and
-write `SPEC.md` (requirements and validation scenarios live as
-raw XML element blocks — `<requirement>` / `<scenario>` — inside
-SPEC.md itself). With a SPEC-ID argument, renders the amendment
+write `SPEC.md`. Top-level intent surfaces (`<goals>`, `<non-goals>`,
+`<user-stories>`, optional `<assumptions>`) and per-requirement
+sub-sections (`<done-when>`, `<behavior>`, `<scenario>`) live as
+raw XML element blocks inside SPEC.md itself. With a SPEC-ID argument, renders the amendment
 prompt instead and inlines the nearest parent `MISSION.md` so
 focus-area context is in scope.
 

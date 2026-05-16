@@ -456,9 +456,29 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
 
         # SPEC-0099
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         unrelated body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         unrelated scenario
         </scenario>
@@ -466,6 +486,14 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
         <requirement id="REQ-002">
         ### REQ-002: Second
         body for REQ-002
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-002">
         Given REQ-002,
         when the reviewer reads the prompt,
@@ -556,9 +584,29 @@ fn reviewer_tests_multi_paragraph_scenario_body_renders_verbatim() -> TestResult
 
         # SPEC-0099
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-002">
         ### REQ-002: Reviewer surfaces multi-paragraph bodies verbatim
         body for REQ-002.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-002">
         Given a scenario whose body contains literal `<thinking>` and
         comparison expressions like `a < b > c`,

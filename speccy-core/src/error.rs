@@ -236,6 +236,95 @@ pub enum ParseError {
         /// Suggested raw XML element form that replaces the legacy marker.
         suggested_element: String,
     },
+
+    /// A SPEC.md used an element name retired by SPEC-0021 (`<spec>`,
+    /// `<overview>`). SPEC-0021 DEC-008 retires these from the whitelist
+    /// in the same pass that adds the new section tags; surfacing the
+    /// retirement in the diagnostic lets the author find SPEC-0021 in
+    /// the project log when they hit the message.
+    #[error(
+        "retired speccy element `<{marker_name}>` in {path} at byte offset {offset}: this element was retired in SPEC-0021"
+    )]
+    RetiredMarkerName {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name found in the source.
+        marker_name: String,
+        /// Byte offset of the offending tag's start in the source.
+        offset: usize,
+    },
+
+    /// A SPEC.md is missing a top-level section element that SPEC-0021
+    /// requires exactly once (`<goals>`, `<non-goals>`, `<user-stories>`).
+    #[error("missing required top-level section `<{element_name}>` in {path}")]
+    MissingRequiredSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Element name that should have been present.
+        element_name: String,
+    },
+
+    /// A SPEC.md has two or more occurrences of a top-level section
+    /// element that SPEC-0021 caps at exactly one
+    /// (`<goals>`, `<non-goals>`, `<user-stories>`, `<assumptions>`).
+    #[error(
+        "duplicate top-level section `<{element_name}>` in {path} at byte offset {offset}: the section may appear at most once"
+    )]
+    DuplicateSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Element name that was repeated.
+        element_name: String,
+        /// Byte offset of the offending duplicate's start in the source.
+        offset: usize,
+    },
+
+    /// A `<requirement>` is missing one of its required sub-sections
+    /// (`<done-when>`, `<behavior>`).
+    #[error(
+        "requirement `{requirement_id}` in {path} is missing required `<{element_name}>` element"
+    )]
+    MissingRequirementSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending requirement.
+        requirement_id: String,
+        /// Element name that should have been present inside the requirement.
+        element_name: String,
+    },
+
+    /// A `<requirement>` carries two or more occurrences of a sub-section
+    /// element that SPEC-0021 caps at exactly one
+    /// (`<done-when>`, `<behavior>`).
+    #[error(
+        "requirement `{requirement_id}` in {path} has duplicate `<{element_name}>` element at byte offset {offset}"
+    )]
+    DuplicateRequirementSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending requirement.
+        requirement_id: String,
+        /// Element name that was repeated.
+        element_name: String,
+        /// Byte offset of the offending duplicate's start in the source.
+        offset: usize,
+    },
+
+    /// A `<requirement>` violates the SPEC-0021 DEC-002 ordering rule
+    /// (`<done-when>` before `<behavior>` before any `<scenario>`).
+    #[error(
+        "requirement `{requirement_id}` in {path} violates section order at byte offset {offset}: {reason}"
+    )]
+    RequirementSectionOrder {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending requirement.
+        requirement_id: String,
+        /// Byte offset of the offending tag's start in the source.
+        offset: usize,
+        /// Human-readable explanation of the ordering violation.
+        reason: String,
+    },
 }
 
 fn location_suffix(label: Option<&str>) -> String {

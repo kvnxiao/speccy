@@ -160,7 +160,7 @@ migration tool, and added the docs-sweep regression test.
   is brittle against future-carrier drafts.** The test asserts
   every `.speccy/specs/*/SPEC.md` parses with the SPEC-0019 marker
   parser. SPEC-0020 (raw XML element tags for SPEC.md) and its
-  follow-on SPEC-0021 (raw XML for TASKS.md and REPORT.md) are
+  follow-on SPEC-0022 (raw XML for TASKS.md and REPORT.md) are
   already drafted in the new carrier form and will fail this test
   until the SPEC-0020 implementation lands the XML element parser.
   Tightening the test to skip in-progress specs lacking marker

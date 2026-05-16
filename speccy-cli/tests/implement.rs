@@ -430,9 +430,29 @@ fn marker_three_req_spec_md(spec_id: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         BODY_REQ_001_unique_marker.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         SCENARIO_CHK_001_unique_marker
         </scenario>
@@ -440,6 +460,14 @@ fn marker_three_req_spec_md(spec_id: &str) -> String {
         <requirement id="REQ-002">
         ### REQ-002: Second
         BODY_REQ_002_unique_marker.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-002">
         SCENARIO_CHK_002_unique_marker
         </scenario>
@@ -447,6 +475,14 @@ fn marker_three_req_spec_md(spec_id: &str) -> String {
         <requirement id="REQ-003">
         ### REQ-003: Third
         BODY_REQ_003_unique_marker.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-003">
         SCENARIO_CHK_003_unique_marker
         </scenario>
@@ -583,9 +619,29 @@ fn prompt_single_pass_does_not_substitute_placeholders_inside_scenario_body() ->
 
         # SPEC-0099
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: Documented placeholders survive verbatim
         Body.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         Given a scenario body that documents `{{agents}}` and `{{task_id}}`
         as literal placeholder text,

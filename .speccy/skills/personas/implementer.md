@@ -25,7 +25,8 @@ into executable tests and write the code that makes them pass.
 ## What to consider
 
 - What does this task's `Covers: REQ-NNN` actually require? Re-read the
-  REQ's `done_when` -- not the surrounding prose alone.
+  REQ's `<done-when>` (acceptance criteria) and `<behavior>` (test
+  selection) elements -- not the surrounding prose alone.
 - What did prior attempts try? If a review left a `blocking` note, the
   retry must address it, not work around it.
 - Are there `### Decisions` in SPEC.md that constrain how this task

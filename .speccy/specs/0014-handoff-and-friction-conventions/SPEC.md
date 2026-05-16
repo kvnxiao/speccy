@@ -36,6 +36,7 @@ spec teaches the shipped skills to use it.
 
 ## Goals
 
+<goals>
 - Implementer notes that downstream readers (reviewers, future
   implementers, harness telemetry) can parse without judgement calls
   about prose shape.
@@ -43,9 +44,11 @@ spec teaches the shipped skills to use it.
   in-flight, and REPORT.md captures which ones moved.
 - Content-shape tests that fail loudly if the conventions drift out of
   the shipped bundle.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No CLI surface change. The behaviour lives entirely in shipped
   markdown.
 - No new lint codes. The article-recommended patterns are skill-pack
@@ -58,9 +61,11 @@ spec teaches the shipped skills to use it.
   or replay these edits.
 - No backporting to closed specs. SPEC-0001..0013 keep their existing
   implementer notes; the new convention applies prospectively.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As an implementer-agent picking up `T-NNN`, I want the prompt to
   spell out exactly which fields belong in my closing note so I don't
   have to invent structure on the fly.
@@ -73,6 +78,7 @@ spec teaches the shipped skills to use it.
   the next implementer doesn't re-discover it.
 - As an orchestrator reading REPORT.md three months later, I want a
   single section that lists which skill files moved during the run.
+</user-stories>
 
 ## Requirements
 
@@ -82,7 +88,7 @@ spec teaches the shipped skills to use it.
 The shipped implementer prompt (`skills/shared/prompts/implementer.md`)
 embeds a structured handoff template enumerating six fields.
 
-**Done when:**
+<done-when>
 - `skills/shared/prompts/implementer.md` contains a fenced markdown
   template block (```` ```markdown ```` fence) showing the
   implementer-note shape with all six handoff fields, each on its own
@@ -94,13 +100,15 @@ embeds a structured handoff template enumerating six fields.
   implementer note ..." is rewritten to reference the template and
   require all six fields, with the convention that empty fields are
   written as `- Completed: (none)` rather than omitted.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A content-shape test loads the template from the embedded bundle
   and asserts all six field labels are present inside a fenced code
   block.
 - A second test asserts the `## Your task` body references the
   template and instructs filling every field.
+</behavior>
 
 <scenario id="CHK-001">
 skills/shared/prompts/implementer.md embeds a fenced markdown template containing the six handoff field labels verbatim: Completed, Undone, Commands run, Exit codes, Discovered issues, Procedural compliance.
@@ -120,7 +128,7 @@ loop: when a worker hits recurring friction, they update the relevant
 skill markdown before flipping `[~] -> [?]`, and they note the file
 they touched in the implementer note under `Procedural compliance`.
 
-**Done when:**
+<done-when>
 - `skills/shared/prompts/implementer.md` contains a section
   (heading: `## When you hit friction`) that names the pattern,
   gives one worked example (e.g. "the implementer prompt told you to
@@ -133,8 +141,9 @@ they touched in the implementer note under `Procedural compliance`.
 - The project's own `AGENTS.md` adds a short paragraph under
   `## Conventions for AI agents specifically` documenting the pattern
   for speccy's own contributors, since speccy dogfoods speccy.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A content test asserts the prompt contains a heading named exactly
   `## When you hit friction` and at least one fenced example referring
   to a `skills/` path.
@@ -144,6 +153,7 @@ they touched in the implementer note under `Procedural compliance`.
 - A content test asserts `AGENTS.md` contains a recognisable phrase
   about the friction-to-skill-update loop (substring match against an
   invariant sentence shipped in the spec).
+</behavior>
 
 <scenario id="CHK-003">
 skills/shared/prompts/implementer.md contains a '## When you hit friction' heading with at least one fenced example referencing a skills/ path.
@@ -166,7 +176,7 @@ The shipped report prompt (`skills/shared/prompts/report.md`)
 instructs the report-writing agent to add a `## Skill updates`
 section listing any `skills/**` files touched during the run.
 
-**Done when:**
+<done-when>
 - `skills/shared/prompts/report.md` is amended so that the section
   enumeration in `2.` includes `## Skill updates` (after
   `## Out-of-scope items absorbed`, before
@@ -175,12 +185,14 @@ section listing any `skills/**` files touched during the run.
   `skills/**` file (one bullet per file) with a one-line summary of
   what changed and which task surfaced the friction; if no skill files
   were touched, write `(none)` rather than omitting the section.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A content test loads the report prompt and asserts the literal
   string `## Skill updates` appears in the body and that the
   `## Out-of-scope` / `## Skill updates` / `## Deferred` ordering is
   preserved.
+</behavior>
 
 <scenario id="CHK-006">
 - A content test loads the report prompt and asserts the literal
@@ -334,6 +346,7 @@ tests harness).
 
 ## Assumptions
 
+<assumptions>
 - The embedded bundle from SPEC-0002 re-includes any new content in
   `skills/shared/prompts/` and `skills/shared/personas/`
   automatically. (No `include_dir!` glob change required.)
@@ -346,6 +359,7 @@ tests harness).
   Either pattern works; implementer picks one.
 - Reviewers will not retroactively re-review SPEC-0001..0013 against
   the new convention.
+</assumptions>
 
 ## Changelog
 

@@ -41,6 +41,7 @@ in-flight categorisation for in-progress specs) is unchanged. Only
 
 ## Goals
 
+<goals>
 - One positional argument accepts all five selector shapes; no flag
   clutter.
 - Task forms reuse `task_lookup` verbatim -- no second implementation
@@ -50,9 +51,11 @@ in-flight categorisation for in-progress specs) is unchanged. Only
 - Errors name the offending input verbatim and list the valid shapes.
 - Internal consistency with `speccy implement` / `speccy review`
   (also single polymorphic positional).
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No new flags. The CLI stays at "ten commands, two optional flags."
 - No change to execution semantics (live stream, run-all-then-report,
   exit-code aggregation, in-flight categorisation).
@@ -61,9 +64,11 @@ in-flight categorisation for in-progress specs) is unchanged. Only
   alongside SPEC-0010's deferred `--list` open question.
 - No JSON envelope for `speccy check`; separate concern.
 - No deprecation of bare `CHK-NNN`. It stays a first-class shape.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a developer mid-task on SPEC-0017, I want `speccy check
   SPEC-0017` to run just my spec's checks instead of every check in
   the workspace.
@@ -76,6 +81,7 @@ in-flight categorisation for in-progress specs) is unchanged. Only
 - As a CI maintainer, I want `speccy verify`'s embedded `speccy check`
   invocation to continue meaning "run everything" -- bare `speccy
   check` behaviour is unchanged.
+</user-stories>
 
 ## Requirements
 
@@ -85,7 +91,7 @@ in-flight categorisation for in-progress specs) is unchanged. Only
 The CLI accepts five shapes and rejects anything else with a single,
 informative error.
 
-**Done when:**
+<done-when>
 - Absent argument is the `All` selector (today's `speccy check`).
 - `SPEC-NNNN/T-NNN` parses as the qualified task shape (regex tested
   first because it is the most specific).
@@ -97,8 +103,9 @@ informative error.
   variant that includes the offending input verbatim and a list of
   the five valid shapes.
 - The CLI exits 1 (selector-error class) on parse failure.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `speccy check FOO`, exit code is 1 and stderr lists the five
   valid shapes plus the verbatim `FOO`.
 - Given `speccy check chk-001`, exit code is 1 (case mismatch ->
@@ -106,6 +113,7 @@ informative error.
 - Given `speccy check SPEC-0010/CHK-001`, parsing succeeds.
 - Given `speccy check SPEC-0010/T-002`, parsing succeeds and the
   task fragment is delegated to `task_lookup::parse_ref`.
+</behavior>
 
 <scenario id="CHK-001">
 - Given `speccy check FOO`, exit code is 1 and stderr lists the five
@@ -127,7 +135,7 @@ parse_selector accepts the five valid shapes (None -> All, SPEC-NNNN, SPEC-NNNN/
 A `SPEC-NNNN` selector runs every check (executable and manual)
 defined in that spec's `spec.toml`.
 
-**Done when:**
+<done-when>
 - The named spec is looked up in the workspace; if absent, exit 1
   with `SelectorError::NoSpecMatching { spec_id }` naming the
   missing spec.
@@ -141,8 +149,9 @@ defined in that spec's `spec.toml`.
 - In-progress failures are categorised as IN-FLIGHT exactly as today
   (no gating). Implemented failures gate the exit code.
 - The summary line totals reflect only the selected spec.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0010 has 8 checks and SPEC-0011 has 5, `speccy check
   SPEC-0010` runs exactly 8.
 - Given SPEC-0010 has status `dropped`, `speccy check SPEC-0010`
@@ -152,6 +161,7 @@ defined in that spec's `spec.toml`.
 - Given an in-progress SPEC-0017 with one passing and one failing
   check, `speccy check SPEC-0017` exits 0 and the failing check is
   reported as IN-FLIGHT in the footer and summary.
+</behavior>
 
 <scenario id="CHK-002">
 - Given SPEC-0010 has 8 checks and SPEC-0011 has 5, `speccy check
@@ -175,7 +185,7 @@ speccy check SPEC-NNNN runs every check under that spec in declared order; missi
 A task selector runs every check that proves the requirements the
 task covers, transitively via `spec.toml`.
 
-**Done when:**
+<done-when>
 - The task fragment is resolved via `speccy_core::task_lookup::find`,
   which returns the existing `TaskLocation` (or surfaces
   `LookupError::Ambiguous` / `LookupError::NotFound` /
@@ -194,8 +204,9 @@ task covers, transitively via `spec.toml`.
   `CHK-ID`s absent from `[[checks]]` is the lint engine's concern
   (SPEC-0003 LNT codes); `speccy check` still runs whatever it found
   and exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0010/T-002 covers `REQ-002`, and `REQ-002` maps to
   `[CHK-003]`, then `speccy check SPEC-0010/T-002` runs exactly
   `CHK-003`.
@@ -210,6 +221,7 @@ task covers, transitively via `spec.toml`.
   status`).
 - Given SPEC-0010/T-Y covers `[]`, `speccy check SPEC-0010/T-Y`
   prints the informational message and exits 0.
+</behavior>
 
 <scenario id="CHK-003">
 - Given SPEC-0010/T-002 covers `REQ-002`, and `REQ-002` maps to
@@ -238,7 +250,7 @@ speccy check T-NNN / SPEC-NNNN/T-NNN resolves the task via task_lookup::find; ru
 The unqualified `CHK-NNN` form continues to match across all specs.
 The new `SPEC-NNNN/CHK-NNN` form is an *addition*, not a replacement.
 
-**Done when:**
+<done-when>
 - `speccy check CHK-NNN` selects every spec's `CHK-NNN` (matches the
   existing `id_filter_matches_across_specs` test).
 - `speccy check SPEC-NNNN/CHK-NNN` runs only that spec's `CHK-NNN`;
@@ -248,8 +260,9 @@ The new `SPEC-NNNN/CHK-NNN` form is an *addition*, not a replacement.
   DEC-003 stands.
 - `speccy check CHK-099` (no match anywhere) exits 1 with the
   existing `NoCheckMatching` wording.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 and SPEC-0003 both define `CHK-001`, `speccy check
   CHK-001` runs both (verbatim existing semantics).
 - Given `speccy check SPEC-0003/CHK-001`, only SPEC-0003's `CHK-001`
@@ -257,6 +270,7 @@ The new `SPEC-NNNN/CHK-NNN` form is an *addition*, not a replacement.
 - Given `speccy check SPEC-0001/CHK-099` where SPEC-0001 has no
   `CHK-099`, exit 1 with stderr naming both the spec and the
   missing check.
+</behavior>
 
 <scenario id="CHK-004">
 - Given SPEC-0001 and SPEC-0003 both define `CHK-001`, `speccy check
@@ -280,7 +294,7 @@ The CLI surface is canonically documented in
 that calls `speccy check`, must reflect the new selector shape so
 agents don't get a stale invocation from the doc surface.
 
-**Done when:**
+<done-when>
 - `.speccy/ARCHITECTURE.md` "CLI Surface" table row for
   `speccy check` changes from `[CHK-ID]` to `[SELECTOR]` with
   indented sub-bullets for each shape, mirroring the style of the
@@ -292,12 +306,14 @@ agents don't get a stale invocation from the doc surface.
   invokes `speccy check CHK-...` is reviewed; updated only if the
   surrounding guidance would otherwise mislead a future agent.
 - No new lint codes; no new noun.
+</done-when>
 
-**Behavior:**
+<behavior>
 - `git grep -n "speccy check"` across the repo shows updated
   invocations in human-facing docs.
 - The reviewer-docs and reviewer-architecture personas, given the
   diff, can trace every doc change to a REQ in this spec.
+</behavior>
 
 <scenario id="CHK-005">
 - `git grep -n "speccy check"` across the repo shows updated
@@ -539,6 +555,7 @@ Rollback is a `git revert`. No on-disk state changes.
 
 ## Assumptions
 
+<assumptions>
 - `speccy_core::task_lookup::{parse_ref, find, TaskRef, LookupError,
   TaskLocation}` are stable enough that we reuse them without
   signature changes.
@@ -557,6 +574,7 @@ Rollback is a `git revert`. No on-disk state changes.
 - All four hygiene gates (`cargo test --workspace`, `cargo clippy
   ... -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny
   check`) pass after implementation.
+</assumptions>
 
 ## Changelog
 

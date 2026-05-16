@@ -145,10 +145,30 @@ pub fn valid_spec_md(id: &str) -> String {
 
         # Test spec
 
+        <goals>
+        Test goals.
+        </goals>
+
+        <non-goals>
+        Test non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Test user story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
 
         Body.
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
 
         <scenario id="CHK-001">
         Given REQ-001, when the suite runs, then it covers REQ-001.

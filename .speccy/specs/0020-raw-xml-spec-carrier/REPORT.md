@@ -136,5 +136,5 @@ fixes.
   Splitting `RawTag` into open/close variants would be tidier but is
   outside SPEC-0020's diff budget. Future refactor.
 - **TASKS.md and REPORT.md carrier change** is intentionally out of
-  scope for SPEC-0020; SPEC-0021 owns rolling raw XML element tags
+  scope for SPEC-0020; SPEC-0022 owns rolling raw XML element tags
   through those artefacts.

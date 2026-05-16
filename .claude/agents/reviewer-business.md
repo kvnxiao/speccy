@@ -13,15 +13,19 @@ orchestrating skill flips the checkbox.
 
 ## Focus
 
-- Mapping from each requirement's `done_when` to the diff. Does the
-  diff actually satisfy the observable behaviour the SPEC named?
-- Non-goals -- did the diff sneak in scope the SPEC explicitly excluded?
-- User stories -- does the diff serve the named user, or did it answer
-  a different question?
-- Open questions -- did the implementer silently resolve a question that
-  was supposed to surface for a human?
-- Edge cases the SPEC named in `**Behavior:**` Given/When/Then prose --
-  are they covered or quietly missing?
+- Mapping from each requirement's `<done-when>` element to the diff.
+  Does the diff actually satisfy the observable behaviour the SPEC
+  named?
+- The top-level `<non-goals>` element -- did the diff sneak in scope
+  the SPEC explicitly excluded?
+- The top-level `<goals>` element -- does the diff move toward the
+  outcomes the SPEC committed to?
+- The top-level `<user-stories>` element -- does the diff serve the
+  named user, or did it answer a different question?
+- Open questions -- did the implementer silently resolve a question
+  that was supposed to surface for a human?
+- Edge cases the requirement named in its `<behavior>` Given/When/Then
+  prose -- are they covered or quietly missing?
 
 ## What to look for that's easy to miss
 

@@ -37,6 +37,7 @@ The parser must handle Speccy's known quirks:
 
 ## Goals
 
+<goals>
 - A single deterministic API for reading every Speccy artifact.
 - Refuse unknown `schema_version` with a clear error rather than
   silently misinterpreting a future schema.
@@ -44,9 +45,11 @@ The parser must handle Speccy's known quirks:
 - Expose enough structure for SPEC-0003 (lint) and downstream commands
   to do their work without re-parsing files.
 - No panics reachable from public APIs.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No semantic validation of prose. ("Done when:" being meaningful is
   review's job.)
 - No prompt rendering, command execution, or I/O beyond file reads.
@@ -55,9 +58,11 @@ The parser must handle Speccy's known quirks:
 - No fancy YAML features (anchors, merge keys, custom tags). Speccy
   frontmatter is flat key-value plus arrays.
 - No normalisation of SPEC.md content. The sha256 is over raw bytes.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a future `speccy status` implementer, I want a single function
   call that returns parsed state for every spec under `specs/` so I
   can build the status view without re-implementing parsing.
@@ -68,6 +73,7 @@ The parser must handle Speccy's known quirks:
   parser to expose a stable sha256 hash of the SPEC.md byte content
   so I can record it into TASKS.md frontmatter without normalising
   prose myself.
+</user-stories>
 
 ## Requirements
 
@@ -76,7 +82,7 @@ The parser must handle Speccy's known quirks:
 
 Parse `speccy.toml` and `spec.toml` into typed structs.
 
-**Done when:**
+<done-when>
 - A valid `speccy.toml` deserialises into
   `SpeccyConfig { project: { name, root } }`.
 - A valid `spec.toml` deserialises into
@@ -87,8 +93,9 @@ Parse `speccy.toml` and `spec.toml` into typed structs.
   and the offending value.
 - Missing required fields return an error naming the field and the
   parent table.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a `spec.toml` with `schema_version = 1`, three
   `[[requirements]]` rows, and three `[[checks]]` rows, when parsed,
   the resulting struct contains all rows in declared order.
@@ -100,6 +107,7 @@ Parse `speccy.toml` and `spec.toml` into typed structs.
 - Given a `spec.toml` where a `[[checks]]` entry has both `command`
   and `prompt`, when parsed, the result is an error naming the check
   ID and the conflict.
+</behavior>
 
 <scenario id="CHK-001">
 Valid speccy.toml and spec.toml fixtures round-trip into typed structs in declared order.
@@ -121,15 +129,16 @@ Unknown schema_version values in speccy.toml or spec.toml are rejected with a cl
 Split markdown files into `(yaml_frontmatter, body)` pairs without
 pulling in a third-party crate dedicated to the job.
 
-**Done when:**
+<done-when>
 - A file beginning with `---\n<yaml>\n---\n<body>` splits into
   `Some((yaml, body))`.
 - A file without a leading `---` fence returns `None`.
 - A file with an opening `---` but no closing `---` fence returns a
   structured `ParseError`.
 - Both `\n` and `\r\n` line endings are handled.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md with valid frontmatter, when split, the YAML
   fragment ends at the line before the closing fence and the body
   starts at the line after.
@@ -139,6 +148,7 @@ pulling in a third-party crate dedicated to the job.
   opening fence counts.
 - Given a file that is exactly `---\n---\n` (empty frontmatter, empty
   body), when split, the result is `Some(("", ""))`.
+</behavior>
 
 <scenario id="CHK-003">
 - Given a SPEC.md with valid frontmatter, when split, the YAML
@@ -162,7 +172,7 @@ Frontmatter splitter handles valid, missing, malformed, body-with-hr, and CRLF i
 Parse SPEC.md frontmatter, REQ headings, and the `## Changelog`
 table.
 
-**Done when:**
+<done-when>
 - Frontmatter deserialises via `serde-saphyr` into
   `SpecFrontmatter { id, slug, title, status, created, supersedes }`.
   `supersedes` defaults to an empty `Vec` when omitted from the
@@ -179,8 +189,9 @@ table.
   implemented, dropped, superseded}`.
 - A sha256 hash of the full SPEC.md byte content (including
   frontmatter) is computed and exposed on the parsed struct.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md containing a fenced code block with `### REQ-999:`
   inside it, when parsed, `REQ-999` is **not** present in the
   extracted REQ heading list.
@@ -191,6 +202,7 @@ table.
   `changelog` is an empty vec.
 - Given a SPEC.md modified by one byte, when parsed, the sha256 hash
   differs from the prior parse's hash.
+</behavior>
 
 <scenario id="CHK-004">
 SPEC.md parser extracts REQ headings and never emits one that lived inside a fenced code block.
@@ -207,7 +219,7 @@ SPEC.md parser extracts Changelog rows and computes a stable sha256 that changes
 
 Parse TASKS.md frontmatter, task lines with state, and inline notes.
 
-**Done when:**
+<done-when>
 - Frontmatter deserialises into
   `TasksFrontmatter { spec, spec_hash_at_generation, generated_at }`.
 - Tasks are extracted as
@@ -224,8 +236,9 @@ Parse TASKS.md frontmatter, task lines with state, and inline notes.
   parsed `suggested_files` vec.
 - Phase headings (`## Phase N: ...`) are ignored for parsing
   purposes; the parser does not produce a `Phase` struct.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, and one
   `[x]` task, when parsed, the resulting state counts are
   `{open: 2, in_progress: 1, awaiting_review: 1, done: 1}`.
@@ -234,6 +247,7 @@ Parse TASKS.md frontmatter, task lines with state, and inline notes.
   surfaced via the result so SPEC-0003 (lint) can emit `TSK-002`.
 - Given a task with three sub-list `Review (...)` bullets, when
   parsed, `notes` contains all three preserving declared order.
+</behavior>
 
 <scenario id="CHK-006">
 - Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, and one
@@ -256,18 +270,20 @@ TASKS.md parser extracts task state, IDs, covers, notes, and suggested files; ma
 Parse REPORT.md frontmatter; return the body verbatim without further
 structural parsing.
 
-**Done when:**
+<done-when>
 - Frontmatter deserialises into
   `ReportFrontmatter { spec, outcome, generated_at }`.
 - `outcome` is validated against the closed set
   `{delivered, partial, abandoned}`.
 - The REPORT.md body is returned verbatim as a `String`.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a REPORT.md with `outcome: rejected`, when parsed, the result
   is an error naming the invalid value.
 - Given a REPORT.md missing the `generated_at` field, when parsed,
   the result is an error naming the missing field.
+</behavior>
 
 <scenario id="CHK-008">
 - Given a REPORT.md with `outcome: rejected`, when parsed, the result
@@ -286,19 +302,21 @@ REPORT.md frontmatter rejects invalid outcome values and missing required fields
 Produce the symmetric diff between REQ headings in SPEC.md and
 `[[requirements]]` rows in `spec.toml`.
 
-**Done when:**
+<done-when>
 - A pure function takes a parsed `SpecMd` and a parsed `SpecToml`
   and returns
   `CrossRef { only_in_spec_md: Vec<String>, only_in_toml: Vec<String>, in_both: Vec<String> }`.
 - Ordering inside each list matches declared order in the source.
 - The function is deterministic and idempotent.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md with `REQ-001`, `REQ-002`, `REQ-003` and a
   `spec.toml` with `REQ-001`, `REQ-002`, `REQ-004`, when
   cross-referenced, the result is
   `only_in_spec_md = ["REQ-003"]`, `only_in_toml = ["REQ-004"]`,
   `in_both = ["REQ-001", "REQ-002"]`.
+</behavior>
 
 <scenario id="CHK-009">
 - Given a SPEC.md with `REQ-001`, `REQ-002`, `REQ-003` and a
@@ -318,7 +336,7 @@ Cross-reference between parsed SPEC.md and spec.toml is symmetric, deterministic
 Expose the parser surface as a stable library API and lock in the
 project's quality gates from day one.
 
-**Done when:**
+<done-when>
 - `speccy-core` exposes a public module path
   `speccy_core::parse::{speccy_toml, spec_toml, spec_md, tasks_md, report_md, cross_ref}`.
 - Each parser takes a `&Path` and returns
@@ -331,13 +349,15 @@ project's quality gates from day one.
   (Tests may use `.expect("descriptive message")`.)
 - `cargo clippy -p speccy-core --all-targets --all-features -- -D warnings`
   is clean.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh checkout, when `cargo build --workspace` runs, it
   compiles without warnings under the project's `-D warnings` gate.
 - Given a parser failure surfaced to a consumer, the error message
   identifies the file path or label, the line number where possible,
   and the human-readable reason.
+</behavior>
 
 <scenario id="CHK-010">
 speccy-core compiles clean under the project's clippy gate with no warnings.
@@ -355,7 +375,7 @@ Workspace dependency surface is clean (advisories, bans, licenses, sources) per 
 Compute the inverse `superseded_by` relation by scanning every
 parsed SPEC.md's `frontmatter.supersedes`.
 
-**Done when:**
+<done-when>
 - A pure function takes `&[&SpecMd]` and returns a
   `SupersessionIndex` keyed by spec ID.
 - For any spec ID `Y`, `index.superseded_by(Y)` returns the set of
@@ -365,8 +385,9 @@ parsed SPEC.md's `frontmatter.supersedes`.
   slice is surfaced via `index.dangling_references()` so SPEC-0003
   (lint) can emit a diagnostic without re-scanning.
 - The function is deterministic and idempotent.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0017 (no `supersedes`), SPEC-0042
   (`supersedes: [SPEC-0017]`), and SPEC-0050
   (`supersedes: [SPEC-0017, SPEC-0030]`), when indexed, then
@@ -376,6 +397,7 @@ parsed SPEC.md's `frontmatter.supersedes`.
   indexed, the result is empty (no panics, no errors).
 - Given the same input slice in the same order twice, the index
   values are equal.
+</behavior>
 
 <scenario id="CHK-012">
 - Given SPEC-0017 (no `supersedes`), SPEC-0042
@@ -616,6 +638,7 @@ project root.
 
 ## Assumptions
 
+<assumptions>
 - Files are UTF-8. Non-UTF-8 input is a parse error (we do not
   attempt encoding detection).
 - The repository targets Rust stable for normal compilation;
@@ -624,6 +647,7 @@ project root.
 - `comrak` is configured with GFM extensions enabled (tables, task
   lists, strikethrough). Without these, the `## Changelog` table and
   task-list parsing do not work.
+</assumptions>
 
 ## Changelog
 

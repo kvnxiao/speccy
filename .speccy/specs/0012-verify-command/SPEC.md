@@ -29,6 +29,7 @@ behaviour) is part of the contract.
 
 ## Goals
 
+<goals>
 - One binary exit code for CI: 0 = pass, 1 = fail.
 - Reuse SPEC-0010's execution logic via a captured-output library
   API; don't reimplement check execution.
@@ -38,17 +39,21 @@ behaviour) is part of the contract.
   consumption.
 - Deterministic: speccy verify's own behaviour is reproducible
   given identical workspace state and identical check outputs.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No partial-pass states. Verify is binary.
 - No parallelism in v1. Checks run serially (matches SPEC-0010).
 - No retries on flaky checks. The check author owns flake (DEC-04).
 - No persistence of verify results. CI artifact storage handles
   that layer.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a CI maintainer, I want one command whose exit code I can
   trust for the build gate.
 - As an agent at the end of an implementation loop, I want to
@@ -58,6 +63,7 @@ behaviour) is part of the contract.
 - As a harness writer, I want `speccy verify --json` to emit a
   structured report I can parse for per-check pass/fail without
   re-running the checks.
+</user-stories>
 
 ## Requirements
 
@@ -67,7 +73,7 @@ behaviour) is part of the contract.
 Run `speccy_core::lint::run` across the workspace; partition
 diagnostics by severity.
 
-**Done when:**
+<done-when>
 - Discovers the project root via `workspace::find_root` (SPEC-0004).
 - Scans the workspace via `workspace::scan`.
 - Builds a `lint::Workspace` (SPEC-0003 REQ-006) and calls
@@ -76,13 +82,15 @@ diagnostics by severity.
   warnings, info.
 - Lint runs every time `speccy verify` is invoked; it is never
   skipped on the assumption that checks would have failed.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a workspace with two `Level::Error` diagnostics and one
   `Level::Warn`, the resulting structured output contains all
   three diagnostics in the appropriate severity buckets.
 - Given an empty workspace (no specs), lint runs and returns
   empty buckets.
+</behavior>
 
 <scenario id="CHK-001">
 - Given a workspace with two `Level::Error` diagnostics and one
@@ -102,7 +110,7 @@ speccy verify runs lint::run; partitions diagnostics by Level into errors / warn
 Run every executable check and capture structured results, with
 output streamed to stderr.
 
-**Done when:**
+<done-when>
 - Enumerates all executable checks from every parsed `spec.toml`
   in the workspace (same discovery as SPEC-0010 REQ-001).
 - Executes each check via the project shell. Child stdio is piped
@@ -116,8 +124,9 @@ output streamed to stderr.
   outcome as `Manual`; never affect the exit code.
 - All executable checks run regardless of earlier failures
   (run-all, matches SPEC-0010 DEC-002).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given three executable checks (pass, fail-2, fail-1), all three
   run; CheckResults capture per-check exit codes; the first
   non-zero exit code (2) is the candidate for verify's exit code.
@@ -129,6 +138,7 @@ output streamed to stderr.
 - Given a manual check between two executable checks, the manual
   prompt prints to stderr; the executable checks both run and
   contribute to the exit code; the manual does not.
+</behavior>
 
 <scenario id="CHK-002">
 Executable checks run via the captured-execution API; child output streams live to stderr (not stdout); structured CheckResult per check captures spec_id, check_id, kind, outcome, exit_code, duration_ms.
@@ -145,7 +155,7 @@ All executable checks run regardless of earlier failures; spec-scoped CHK-IDs du
 
 Compose lint and check results into a single 0-or-1 exit code.
 
-**Done when:**
+<done-when>
 - Exit code is `0` if AND only if both hold:
   - `lint.errors` is empty (warnings and info do not count).
   - Every executable check produced `CheckOutcome::Pass`.
@@ -154,14 +164,16 @@ Compose lint and check results into a single 0-or-1 exit code.
   -> 1; ten errors -> 1).
 - The exit code is deterministic for identical workspace state
   and identical check exit codes.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Clean lint + 3 passing checks -> exit 0.
 - 1 lint error + 3 passing checks -> exit 1.
 - Clean lint + 1 failing check -> exit 1.
 - Lint warnings/info but no errors + all checks pass -> exit 0
   (warnings and info never fail).
 - Empty workspace (no specs, no checks) -> exit 0.
+</behavior>
 
 <scenario id="CHK-004">
 - Clean lint + 3 passing checks -> exit 0.
@@ -182,7 +194,7 @@ Exit code is 0 iff lint.errors is empty AND every executable check passed; warni
 In text mode, print a final summary to stdout after the live
 stderr output completes.
 
-**Done when:**
+<done-when>
 - After lint and check execution finish, stdout receives exactly
   three lines as the last output:
   - `Lint: <E> errors, <W> warnings, <I> info`
@@ -192,8 +204,9 @@ stderr output completes.
 - Stderr received the live check output (per REQ-002) including
   the per-check headers and footers from SPEC-0010 conventions.
 - The summary lines are the LAST output on stdout.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a clean workspace with three passing checks, stdout's
   last three lines are
   `Lint: 0 errors, 0 warnings, 0 info`,
@@ -204,6 +217,7 @@ stderr output completes.
   `Lint: 1 errors, 0 warnings, 0 info`,
   `Checks: 2 passed, 1 failed, 0 manual`,
   `verify: FAIL`.
+</behavior>
 
 <scenario id="CHK-005">
 - Given a clean workspace with three passing checks, stdout's
@@ -228,7 +242,7 @@ Text mode prints Lint / Checks / verify summary lines to stdout as the LAST thre
 In `--json` mode, emit a structured report to stdout following the
 established envelope.
 
-**Done when:**
+<done-when>
 - Output begins with `"schema_version": 1` and includes
   `"repo_sha": <string>` (same convention as SPEC-0004 DEC-003;
   empty string if git is unavailable).
@@ -244,8 +258,9 @@ established envelope.
 - Output is pretty-printed.
 - Output is byte-deterministic across runs given identical
   workspace state and identical check exit codes.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Two back-to-back `speccy verify --json` runs with no filesystem
   change and identical check outcomes produce byte-identical
   stdout.
@@ -254,6 +269,7 @@ established envelope.
   entries with `"outcome": "Fail"`.
 - An empty workspace produces JSON with empty arrays throughout
   and `"passed": true`.
+</behavior>
 
 <scenario id="CHK-006">
 speccy verify --json emits schema_version=1, repo_sha, structured lint and checks blocks, summary, and passed bool; pretty-printed; byte-identical across runs with same workspace state and check outcomes.
@@ -432,6 +448,7 @@ deepened.
 
 ## Assumptions
 
+<assumptions>
 - `lint::run` from SPEC-0003 is deterministic.
 - `workspace::scan` from SPEC-0004 is deterministic.
 - `std::process::Command` with piped stdio can tee output to
@@ -439,6 +456,7 @@ deepened.
 - The JSON envelope (`schema_version: 1`, structured
   diagnostics) established in SPEC-0004 is the right shape for
   this command's output too.
+</assumptions>
 
 ## Changelog
 

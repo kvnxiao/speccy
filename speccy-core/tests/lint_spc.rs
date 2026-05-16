@@ -64,9 +64,30 @@ fn spc_002_fires_when_req_only_in_spec_md_heading() -> TestResult {
 
         # Spec
 
+        <goals>
+        Goals.
+        </goals>
+
+        <non-goals>
+        Non-goals.
+        </non-goals>
+
+        <user-stories>
+        - A story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         scenario body
         </scenario>

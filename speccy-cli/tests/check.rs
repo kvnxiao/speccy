@@ -50,9 +50,29 @@ fn marker_spec_md_two_scenarios(spec_id: &str, status: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         Given the workspace, when CHK-001 is selected, then alpha is asserted.
         </scenario>
@@ -88,9 +108,29 @@ fn marker_spec_md_three_scenarios(spec_id: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         first in __ID__
         </scenario>
@@ -126,9 +166,29 @@ fn marker_spec_md_multiline_scenario(spec_id: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         Given a multi-line scenario,
         when CHK-001 is rendered,
@@ -431,9 +491,29 @@ fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
 
         # SPEC-0010
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         covers REQ-001
         </scenario>
@@ -444,6 +524,14 @@ fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
         <requirement id="REQ-002">
         ### REQ-002: Second
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-003">
         covers REQ-002
         </scenario>
@@ -485,9 +573,29 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
 
         # SPEC-0010
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         alpha scenario
         </scenario>
@@ -535,9 +643,29 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
 
         # SPEC-0020
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-100">
         ### REQ-100: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         alpha
         </scenario>
@@ -548,6 +676,14 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
         <requirement id="REQ-200">
         ### REQ-200: Second
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-003">
         gamma
         </scenario>
@@ -699,6 +835,14 @@ fn malformed_spec_toml_warns_and_other_specs_render() -> TestResult {
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         scenario
         </scenario>
@@ -931,9 +1075,29 @@ fn check_task_prints_scenario_body_bytes_from_element_block() -> TestResult {
 
         # SPEC-0099
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         Given a task covers REQ-001,
         when speccy check runs against that task,
@@ -1005,9 +1169,29 @@ fn check_duplicate_scenario_id_across_requirements_is_surfaced_as_parse_warning(
 
         # SPEC-0098
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         first
         </scenario>
@@ -1015,6 +1199,14 @@ fn check_duplicate_scenario_id_across_requirements_is_surfaced_as_parse_warning(
         <requirement id="REQ-002">
         ### REQ-002: Second
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         duplicate
         </scenario>

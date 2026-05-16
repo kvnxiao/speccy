@@ -40,6 +40,7 @@ allocation.
 
 ## Goals
 
+<goals>
 - One CLI surface for both greenfield and amendment phases.
 - Stable, simple template substitution (`{{NAME}}` placeholders);
   no Turing-complete templating engine.
@@ -48,9 +49,11 @@ allocation.
   budget trimming.
 - Deterministic output: same workspace state -> byte-identical
   rendered prompt across runs.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No LLM invocation. The CLI never calls a model.
 - No interactive prompt selection. Templates ship embedded; not
   user-selectable in v1.
@@ -60,9 +63,11 @@ allocation.
   writes SPEC.md and spec.toml.
 - No per-host context-budget tuning in v1. One hardcoded budget
   (see DEC-004).
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a developer starting a new spec, I want `speccy plan` to give
   me a prompt my agent reads with `AGENTS.md` (carrying the product
   north star) already inlined and a fresh `SPEC-NNNN` ID allocated.
@@ -77,6 +82,7 @@ allocation.
   in `speccy-core` so my `speccy tasks` command doesn't reimplement
   AGENTS.md loading, MISSION.md walking, template rendering, or
   budget trimming.
+</user-stories>
 
 ## Requirements
 
@@ -85,7 +91,7 @@ allocation.
 
 `speccy plan` with no arg renders the greenfield prompt.
 
-**Done when:**
+<done-when>
 - The command discovers the project root via
   `speccy_core::workspace::find_root`.
 - It allocates the next `SPEC-NNNN` ID via
@@ -103,8 +109,9 @@ allocation.
 - It trims the rendered output to the budget via
   `prompt::trim_to_budget` (REQ-006).
 - It writes the final rendered prompt to stdout; exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh `.speccy/` with no specs yet, when `speccy plan`
   runs, then `{{next_spec_id}}` substitutes to `SPEC-0001` and
   AGENTS.md content (or the missing-marker) appears at the
@@ -118,6 +125,7 @@ allocation.
 - Given `speccy plan` runs outside a `.speccy/` workspace, then
   exit code is 1 with a stderr message stating `.speccy/` was not
   found walking up from cwd.
+</behavior>
 
 <scenario id="CHK-001">
 speccy plan (no arg) renders plan-greenfield.md with agents and next_spec_id placeholders substituted; no vision placeholder exists; output goes to stdout.
@@ -134,7 +142,7 @@ speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stati
 
 `speccy plan SPEC-NNNN` renders the amendment prompt.
 
-**Done when:**
+<done-when>
 - The command parses the SPEC-ID argument. If it doesn't match
   `SPEC-\d{4,}`, exit code 1 with a format-error message.
 - It discovers the spec directory matching the ID. The directory
@@ -158,8 +166,9 @@ speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stati
   table rows for context).
 - It trims the rendered output to the budget.
 - It writes the final rendered prompt to stdout; exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `speccy plan SPEC-0001` and
   `.speccy/specs/0001-artifact-parsers/` exists (flat), when the
   command runs, then the rendered output contains the full SPEC.md
@@ -173,6 +182,7 @@ speccy plan run outside a .speccy/ workspace exits 1 with a stderr message stati
   code is 1 and stderr names SPEC-9999.
 - Given `speccy plan FOO`, then exit code is 1 with a format
   error naming the invalid argument.
+</behavior>
 
 <scenario id="CHK-003">
 - Given `speccy plan SPEC-0001` and
@@ -200,7 +210,7 @@ speccy plan SPEC-NNNN renders plan-amend.md with the named SPEC.md inlined; the 
 Allocate the next available `SPEC-NNNN` ID by walking `specs/`
 recursively so flat and mission-grouped specs share one ID space.
 
-**Done when:**
+<done-when>
 - `prompt::allocate_next_spec_id(specs_dir: &Utf8Path) -> String`
   walks `specs_dir` recursively, finds every directory whose name
   matches `^(\d{4,})-`, parses the numeric prefix, and returns
@@ -213,8 +223,9 @@ recursively so flat and mission-grouped specs share one ID space.
   `_scratch`, `00ab-foo`) are silently ignored.
 - The function does directory traversal only; no spec.toml or
   SPEC.md content is read.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given an empty `specs/`, the allocator returns `"0001"`.
 - Given flat `0001-foo` and `0003-bar`, the allocator returns
   `"0004"` (no gap recycling).
@@ -224,6 +235,7 @@ recursively so flat and mission-grouped specs share one ID space.
   `billing/0010-invoice`, the allocator returns `"0011"`.
 - Given a non-matching directory `_scratch` alongside `0001-foo`,
   the allocator returns `"0002"`.
+</behavior>
 
 <scenario id="CHK-004">
 - Given an empty `specs/`, the allocator returns `"0001"`.
@@ -247,7 +259,7 @@ allocate_next_spec_id walks specs/** recursively across mission folders and flat
 Load AGENTS.md from the project root for inclusion in every
 prompt-rendering command's output.
 
-**Done when:**
+<done-when>
 - `prompt::load_agents_md(project_root: &Path) -> String`:
   - Returns the file content if `<project_root>/AGENTS.md` exists.
   - Returns a literal marker
@@ -257,14 +269,16 @@ prompt-rendering command's output.
     `<!-- AGENTS.md unreadable: <err> -->` and stderr warning.
 - The function is consumed by SPEC-0005 (this spec), SPEC-0006,
   SPEC-0008, SPEC-0009, SPEC-0011.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given AGENTS.md exists with content `# Agents\n<rest>`, the
   function returns that content verbatim.
 - Given AGENTS.md is missing, the function returns the marker and
   stderr contains a warning naming the expected path.
 - Given AGENTS.md exists but is unreadable (permission denied),
   the function returns the error-marker and stderr warns.
+</behavior>
 
 <scenario id="CHK-005">
 - Given AGENTS.md exists with content `# Agents\n<rest>`, the
@@ -285,7 +299,7 @@ load_agents_md returns file content when present; returns marker + stderr warnin
 Load embedded prompt templates and substitute `{{NAME}}`
 placeholders.
 
-**Done when:**
+<done-when>
 - `prompt::load_template(name: &str) -> Result<&'static str, PromptError>`
   returns the template body from the embedded bundle. `name` is
   the file name within `skills/shared/prompts/` (e.g.
@@ -300,8 +314,9 @@ placeholders.
 - Unrecognised placeholders (`{{foo}}` where `foo` is not in
   `vars`) are left in place AND a stderr warning is printed naming
   each unique unmatched placeholder.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given template `"hello {{name}}"` and `vars = {"name": "world"}`,
   render returns `"hello world"`.
 - Given template `"{{a}} {{b}}"` and
@@ -312,6 +327,7 @@ placeholders.
   `"{{unknown}}"` and stderr contains a warning naming `unknown`.
 - Given `load_template("nope.md")`, the result is
   `PromptError::TemplateNotFound { name: "nope.md" }`.
+</behavior>
 
 <scenario id="CHK-006">
 render substitutes every {{name}} placeholder; single-pass means substituted text is not re-scanned for further placeholders.
@@ -329,7 +345,7 @@ render leaves unrecognised {{placeholders}} in place and prints a stderr warning
 Drop low-priority sections from the rendered prompt when it
 exceeds a budget threshold.
 
-**Done when:**
+<done-when>
 - `prompt::trim_to_budget(rendered: String, budget: usize) -> TrimResult`
   returns `{ output: String, dropped: Vec<String>, fits: bool }`.
 - Drop ordering matches ARCHITECTURE.md "Prompt context budget":
@@ -347,8 +363,9 @@ exceeds a budget threshold.
   (see DEC-004).
 - The function is consumed by SPEC-0005, SPEC-0006, SPEC-0008,
   SPEC-0009, SPEC-0011.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a 60,000-char rendered prompt and an 80,000 budget,
   `output == rendered`, `dropped = []`, `fits = true`.
 - Given a 100,000-char rendered prompt with a 5,000-char `##
@@ -360,6 +377,7 @@ exceeds a budget threshold.
 - Given a 200,000-char prompt where even all five drop steps
   leave the result at 150,000, `fits = false`, stderr warns about
   the overrun, and the 150,000-char output is emitted.
+</behavior>
 
 <scenario id="CHK-008">
 - Given a 60,000-char rendered prompt and an 80,000 budget,
@@ -385,7 +403,7 @@ trim_to_budget drops sections in ARCHITECTURE.md order until under budget; sets 
 Walk upward from a spec directory looking for the nearest parent
 `MISSION.md`, returning either its content or an ungrouped marker.
 
-**Done when:**
+<done-when>
 - `prompt::find_nearest_mission_md(spec_dir: &Utf8Path, specs_root: &Utf8Path) -> String`:
   - Walks from `spec_dir`'s parent upward (toward `specs_root`),
     stopping at `specs_root` inclusive.
@@ -401,8 +419,9 @@ Walk upward from a spec directory looking for the nearest parent
 - The function does not search outside the `specs_root` subtree.
 - The function is consumed by SPEC-0005 (amendment path), SPEC-0008
   (implementer), SPEC-0009 (reviewer), and SPEC-0011 (report).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `specs_root = .speccy/specs/` and
   `spec_dir = .speccy/specs/0001-foo/` with no MISSION.md anywhere,
   the function returns the ungrouped marker.
@@ -412,6 +431,7 @@ Walk upward from a spec directory looking for the nearest parent
   that file's content verbatim.
 - Given a malformed unreadable `MISSION.md`, the function returns
   the unreadable marker and stderr is non-empty.
+</behavior>
 
 <scenario id="CHK-009">
 - Given `specs_root = .speccy/specs/` and
@@ -639,6 +659,7 @@ and SPEC-0002 (embedded-bundle mechanism).
 
 ## Assumptions
 
+<assumptions>
 - `speccy_core::workspace::find_root` (from SPEC-0004) is
   available for project-root discovery.
 - The embedded prompt bundle exists at build time. SPEC-0013
@@ -647,6 +668,7 @@ and SPEC-0002 (embedded-bundle mechanism).
 - `BTreeMap<&str, String>` (ordered map) for vars gives
   deterministic iteration; HashMap would also work but ordering
   helps debugging.
+</assumptions>
 
 ## Changelog
 

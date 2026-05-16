@@ -58,11 +58,6 @@ pub fn slice_for_task(doc: &SpecDoc, covers: &[String]) -> String {
     out.push_str(&doc.heading);
     out.push('\n');
 
-    if let Some(overview) = &doc.overview {
-        out.push('\n');
-        push_element_block(&mut out, "overview", &[], overview);
-    }
-
     let mut emitted: Vec<&str> = Vec::with_capacity(covers.len());
     for req_id in covers {
         if emitted.iter().any(|id| id == req_id) {
@@ -127,12 +122,6 @@ fn strip_nested_scenario_blocks(body: &str) -> String {
         }
     }
     out
-}
-
-fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
-    push_element_open(out, name, attrs);
-    push_body(out, body);
-    push_element_close(out, name);
 }
 
 fn push_element_open(out: &mut String, name: &str, attrs: &[(&str, &str)]) {
@@ -240,12 +229,24 @@ mod tests {
 
             # SPEC-0099: Slice fixture
 
-            <overview>
-            Spec-level overview prose.
-            </overview>
+            <goals>
+            Goals body.
+            </goals>
+            <non-goals>
+            Non-goals body.
+            </non-goals>
+            <user-stories>
+            - A user story.
+            </user-stories>
             <requirement id="REQ-001">
             ### REQ-001: First
             Body of REQ-001.
+            <done-when>
+            - REQ-001 is done when X.
+            </done-when>
+            <behavior>
+            - REQ-001 behaves like Y.
+            </behavior>
             <scenario id="CHK-001">
             Scenario body for CHK-001.
             </scenario>
@@ -253,6 +254,12 @@ mod tests {
             <requirement id="REQ-002">
             ### REQ-002: Second
             Body of REQ-002.
+            <done-when>
+            - REQ-002 is done when X.
+            </done-when>
+            <behavior>
+            - REQ-002 behaves like Y.
+            </behavior>
             <scenario id="CHK-002">
             Scenario body for CHK-002.
             </scenario>
@@ -260,6 +267,12 @@ mod tests {
             <requirement id="REQ-003">
             ### REQ-003: Third
             Body of REQ-003.
+            <done-when>
+            - REQ-003 is done when X.
+            </done-when>
+            <behavior>
+            - REQ-003 behaves like Y.
+            </behavior>
             <scenario id="CHK-003">
             Scenario body for CHK-003.
             </scenario>
@@ -311,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn slice_includes_frontmatter_heading_overview_and_decisions() {
+    fn slice_includes_frontmatter_heading_and_decisions() {
         let doc = parse_spec_xml(fixture(), Utf8Path::new("SPEC.md")).expect("fixture must parse");
         let out = slice_for_task(&doc, &["REQ-001".to_owned()]);
         assert!(
@@ -325,10 +338,6 @@ mod tests {
         assert!(
             out.contains("# SPEC-0099: Slice fixture"),
             "level-1 heading must be preserved:\n{out}",
-        );
-        assert!(
-            out.contains("Spec-level overview prose."),
-            "overview body must be included:\n{out}",
         );
         assert!(
             out.contains("<decision id=\"DEC-001\" status=\"accepted\">"),

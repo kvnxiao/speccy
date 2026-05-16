@@ -1,10 +1,14 @@
 //! Raw-XML-element-structured SPEC.md parser and renderer (SPEC-0020
-//! carrier).
+//! carrier, extended by SPEC-0021's section-level element whitelist).
 //!
 //! Reads a SPEC.md whose body is ordinary Markdown plus line-isolated raw
 //! XML open/close tag pairs drawn from a closed whitelist (`requirement`,
-//! `scenario`, `decision`, `open-question`, `changelog`, plus optional
-//! `spec` root and `overview` section) and returns a typed [`SpecDoc`].
+//! `scenario`, `decision`, `open-question`, `changelog`, plus SPEC-0021's
+//! top-level `goals`, `non-goals`, `user-stories`, optional `assumptions`,
+//! and per-requirement `done-when` / `behavior` sub-sections) and returns a
+//! typed [`SpecDoc`]. SPEC-0020's `<spec>` root and `<overview>` section
+//! were retired by SPEC-0021 DEC-008 and are now rejected by the parser
+//! with a dedicated diagnostic.
 //!
 //! The element scanner is line-aware and treats element-looking content
 //! inside fenced code blocks as Markdown body — never structure. Body
@@ -59,6 +63,24 @@ pub struct SpecDoc {
     pub heading: String,
     /// Raw source bytes, retained so [`ElementSpan`] indices remain valid.
     pub raw: String,
+    /// Body of the required `<goals>` top-level element, verbatim.
+    pub goals: String,
+    /// Span of the `<goals>` open tag.
+    pub goals_span: ElementSpan,
+    /// Body of the required `<non-goals>` top-level element, verbatim.
+    pub non_goals: String,
+    /// Span of the `<non-goals>` open tag.
+    pub non_goals_span: ElementSpan,
+    /// Body of the required `<user-stories>` top-level element, verbatim.
+    pub user_stories: String,
+    /// Span of the `<user-stories>` open tag.
+    pub user_stories_span: ElementSpan,
+    /// Body of the optional `<assumptions>` top-level element, verbatim,
+    /// when present. SPEC-0021 DEC-005 makes the element optional;
+    /// specs without load-bearing assumptions omit it entirely.
+    pub assumptions: Option<String>,
+    /// Span of the `<assumptions>` open tag, when present.
+    pub assumptions_span: Option<ElementSpan>,
     /// Requirements declared by `<requirement>` elements in source order.
     pub requirements: Vec<Requirement>,
     /// Decisions declared by `<decision>` elements in source order.
@@ -70,10 +92,6 @@ pub struct SpecDoc {
     pub changelog_body: String,
     /// Span of the `<changelog>` open tag.
     pub changelog_span: ElementSpan,
-    /// Body of the optional `<overview>` element, when present.
-    pub overview: Option<String>,
-    /// Span of the optional `<overview>` open tag.
-    pub overview_span: Option<ElementSpan>,
 }
 
 /// One requirement block (`<requirement>`).
@@ -81,10 +99,19 @@ pub struct SpecDoc {
 pub struct Requirement {
     /// Id from the `id="..."` attribute (matches `REQ-\d{3,}`).
     pub id: String,
-    /// Markdown body between open and close tags, verbatim (scenario tag
-    /// lines are included as literal text — T-002's renderer strips them
-    /// before re-emitting from typed state).
+    /// Markdown body between open and close tags, verbatim (nested
+    /// `<done-when>`, `<behavior>`, and `<scenario>` tag lines are
+    /// included as literal text — the renderer strips them before
+    /// re-emitting from typed state).
     pub body: String,
+    /// Body of the required `<done-when>` sub-element, verbatim.
+    pub done_when: String,
+    /// Span of the `<done-when>` open tag.
+    pub done_when_span: ElementSpan,
+    /// Body of the required `<behavior>` sub-element, verbatim.
+    pub behavior: String,
+    /// Span of the `<behavior>` open tag.
+    pub behavior_span: ElementSpan,
     /// Nested scenarios in source order.
     pub scenarios: Vec<Scenario>,
     /// Span of the open tag.
@@ -172,15 +199,31 @@ const ALLOWED_RESOLVED_VALUES: &[&str] = &["true", "false"];
 /// Closed whitelist of Speccy structure element names. Must remain
 /// disjoint from [`HTML5_ELEMENT_NAMES`]; the disjointness unit test
 /// below enforces this at build time.
+///
+/// SPEC-0021 retired `spec` and `overview` from this list (DEC-008) and
+/// added six new entries: the per-requirement `behavior` / `done-when`
+/// sub-sections (DEC-002) plus four top-level section wrappers
+/// (`goals`, `non-goals`, `user-stories`, `assumptions`).
 pub const SPECCY_ELEMENT_NAMES: &[&str] = &[
-    "spec",
-    "overview",
     "requirement",
     "scenario",
     "decision",
     "open-question",
     "changelog",
+    "behavior",
+    "done-when",
+    "goals",
+    "non-goals",
+    "user-stories",
+    "assumptions",
 ];
+
+/// Element names that used to be in the SPEC-0020 whitelist but were
+/// retired by SPEC-0021 DEC-008. The scanner still recognises lines that
+/// open or close these tags so it can surface a dedicated
+/// [`ParseError::RetiredMarkerName`] diagnostic that names SPEC-0021,
+/// instead of silently treating them as Markdown body.
+const RETIRED_ELEMENT_NAMES: &[&str] = &["spec", "overview"];
 
 #[expect(
     clippy::unwrap_used,
@@ -327,7 +370,10 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
         requirements: Vec::new(),
         decisions: Vec::new(),
         open_questions: Vec::new(),
-        overview: None,
+        goals: None,
+        non_goals: None,
+        user_stories: None,
+        assumptions: None,
         changelog: None,
         req_ids: HashSet::new(),
         chk_ids: HashSet::new(),
@@ -335,17 +381,17 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
     };
 
     for block in tree {
-        match block {
-            Block::Spec { children, .. } => process_blocks(children, &mut ctx)?,
-            other => process_block(other, &mut ctx)?,
-        }
+        process_block(block, &mut ctx)?;
     }
 
     let ProcessCtx {
         requirements,
         decisions,
         open_questions,
-        overview,
+        goals,
+        non_goals,
+        user_stories,
+        assumptions,
         changelog,
         ..
     } = ctx;
@@ -364,7 +410,21 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
         });
     }
 
-    let (overview_body, overview_span) = match overview {
+    let (goals_body, goals_span) = goals.ok_or_else(|| ParseError::MissingRequiredSection {
+        path: path.to_path_buf(),
+        element_name: "goals".to_owned(),
+    })?;
+    let (non_goals_body, non_goals_span) =
+        non_goals.ok_or_else(|| ParseError::MissingRequiredSection {
+            path: path.to_path_buf(),
+            element_name: "non-goals".to_owned(),
+        })?;
+    let (user_stories_body, user_stories_span) =
+        user_stories.ok_or_else(|| ParseError::MissingRequiredSection {
+            path: path.to_path_buf(),
+            element_name: "user-stories".to_owned(),
+        })?;
+    let (assumptions_body, assumptions_span) = match assumptions {
         Some((b, s)) => (Some(b), Some(s)),
         None => (None, None),
     };
@@ -373,13 +433,19 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
         frontmatter_raw,
         heading,
         raw: source.to_owned(),
+        goals: goals_body,
+        goals_span,
+        non_goals: non_goals_body,
+        non_goals_span,
+        user_stories: user_stories_body,
+        user_stories_span,
+        assumptions: assumptions_body,
+        assumptions_span,
         requirements,
         decisions,
         open_questions,
         changelog_body,
         changelog_span,
-        overview: overview_body,
-        overview_span,
     })
 }
 
@@ -390,14 +456,16 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
 ///
 /// 1. Frontmatter fence followed by [`SpecDoc::frontmatter_raw`].
 /// 2. A blank line, then the level-1 heading (`# {heading}`).
-/// 3. Optional `<overview>` block, if present.
+/// 3. `<goals>`, `<non-goals>`, `<user-stories>` top-level sections.
 /// 4. Every [`Requirement`] in [`SpecDoc::requirements`] order. Each
-///    requirement renders its prose (with nested `<scenario>` tag lines
-///    stripped out), then every nested [`Scenario`] in
+///    requirement renders its prose (with nested `<done-when>`,
+///    `<behavior>`, and `<scenario>` tag lines stripped out), then
+///    `<done-when>` and `<behavior>`, then every nested [`Scenario`] in
 ///    [`Requirement::scenarios`] order.
 /// 5. Every [`Decision`] in [`SpecDoc::decisions`] order.
 /// 6. Every [`OpenQuestion`] in [`SpecDoc::open_questions`] order.
-/// 7. The required `<changelog>` block.
+/// 7. Optional `<assumptions>` block, if present.
+/// 8. The required `<changelog>` block.
 ///
 /// The renderer is canonical-not-lossless. Free Markdown prose between
 /// elements in a hand-authored source (Goals, Non-goals, Design,
@@ -451,10 +519,12 @@ pub fn render(doc: &SpecDoc) -> String {
     out.push_str(&doc.heading);
     out.push('\n');
 
-    if let Some(overview) = &doc.overview {
-        out.push('\n');
-        push_element_block(&mut out, "overview", &[], overview);
-    }
+    out.push('\n');
+    push_element_block(&mut out, "goals", &[], &doc.goals);
+    out.push('\n');
+    push_element_block(&mut out, "non-goals", &[], &doc.non_goals);
+    out.push('\n');
+    push_element_block(&mut out, "user-stories", &[], &doc.user_stories);
 
     for req in &doc.requirements {
         out.push('\n');
@@ -462,12 +532,14 @@ pub fn render(doc: &SpecDoc) -> String {
         push_element_open(&mut out, "requirement", &attrs);
         // The parser stores `Requirement.body` as the verbatim slice
         // between the requirement's open and close tags, which includes
-        // nested scenario tag lines as literal text. The renderer
-        // re-emits scenarios from typed state to honour
-        // `Requirement.scenarios` ordering, so strip nested scenario
+        // nested done-when, behavior, and scenario tag lines as literal
+        // text. The renderer re-emits each sub-section from typed state
+        // to honour the SPEC-0021 canonical order, so strip those nested
         // tag blocks out of the prose here.
-        let prose = strip_nested_scenario_blocks(&req.body);
+        let prose = strip_nested_requirement_sub_blocks(&req.body);
         push_body(&mut out, &prose);
+        push_element_block(&mut out, "done-when", &[], &req.done_when);
+        push_element_block(&mut out, "behavior", &[], &req.behavior);
         for sc in &req.scenarios {
             let sc_attrs = [("id", sc.id.as_str())];
             push_element_open(&mut out, "scenario", &sc_attrs);
@@ -498,40 +570,58 @@ pub fn render(doc: &SpecDoc) -> String {
         push_element_block(&mut out, "open-question", &attrs, &q.body);
     }
 
+    if let Some(assumptions) = &doc.assumptions {
+        out.push('\n');
+        push_element_block(&mut out, "assumptions", &[], assumptions);
+    }
+
     out.push('\n');
     push_element_block(&mut out, "changelog", &[], &doc.changelog_body);
 
     out
 }
 
-/// Strip nested `<scenario>` blocks from a requirement body.
+/// Strip nested `<done-when>`, `<behavior>`, and `<scenario>` blocks
+/// from a requirement body.
 ///
 /// The parser stores `Requirement.body` as the verbatim source slice
-/// between the requirement's open and close tags, which includes nested
-/// scenario tag lines as literal text. [`render`] re-emits scenarios
-/// from typed state to honour [`Requirement::scenarios`] ordering, so
-/// the scenario tag lines must be stripped from the prose first.
+/// between the requirement's open and close tags, which includes all
+/// nested SPEC-0021 sub-section tag lines as literal text. [`render`]
+/// re-emits those sub-sections from typed state to honour the canonical
+/// order, so the tag lines must be stripped from the surrounding prose
+/// first.
 ///
-/// We walk line-by-line and drop runs that begin with a scenario open
-/// tag and continue through the matching close tag. The parser has
-/// already validated tag shape and nesting, so this scan can rely on a
-/// balanced single-level structure (scenarios never nest scenarios).
-fn strip_nested_scenario_blocks(body: &str) -> String {
+/// We walk line-by-line and drop runs that begin with a sub-section
+/// open tag and continue through the matching close tag. The parser
+/// has already validated tag shape and nesting, so this scan can rely
+/// on balanced single-level structure (sub-sections never nest each
+/// other).
+fn strip_nested_requirement_sub_blocks(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
-    let mut in_scenario = false;
+    let mut in_block: Option<&'static str> = None;
     for line in body.split_inclusive('\n') {
         let trimmed = line.trim_start();
-        if !in_scenario {
-            if trimmed.starts_with("<scenario")
-                && (trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>"))
-            {
-                in_scenario = true;
-                continue;
+        if let Some(close) = in_block {
+            if trimmed.starts_with(close) {
+                in_block = None;
             }
-            out.push_str(line);
-        } else if trimmed.starts_with("</scenario>") {
-            in_scenario = false;
+            continue;
         }
+        if (trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>"))
+            && !trimmed.starts_with("</scenario>")
+        {
+            in_block = Some("</scenario>");
+            continue;
+        }
+        if trimmed.starts_with("<done-when>") {
+            in_block = Some("</done-when>");
+            continue;
+        }
+        if trimmed.starts_with("<behavior>") {
+            in_block = Some("</behavior>");
+            continue;
+        }
+        out.push_str(line);
     }
     out
 }
@@ -648,27 +738,18 @@ struct ProcessCtx<'a> {
     requirements: Vec<Requirement>,
     decisions: Vec<Decision>,
     open_questions: Vec<OpenQuestion>,
-    overview: Option<(String, ElementSpan)>,
+    goals: Option<(String, ElementSpan)>,
+    non_goals: Option<(String, ElementSpan)>,
+    user_stories: Option<(String, ElementSpan)>,
+    assumptions: Option<(String, ElementSpan)>,
     changelog: Option<(String, ElementSpan)>,
     req_ids: HashSet<String>,
     chk_ids: HashSet<String>,
     dec_ids: HashSet<String>,
 }
 
-fn process_blocks(blocks: Vec<Block>, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseError> {
-    for block in blocks {
-        process_block(block, ctx)?;
-    }
-    Ok(())
-}
-
 fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseError> {
     match block {
-        Block::Spec { span, .. } => Err(ParseError::MalformedMarker {
-            path: ctx.path.to_path_buf(),
-            offset: span.start,
-            reason: "nested <spec> elements are not allowed".to_owned(),
-        }),
         Block::Requirement {
             id,
             body,
@@ -713,17 +794,26 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
             });
             Ok(())
         }
-        Block::Overview { body, span } => {
-            if ctx.overview.is_some() {
-                return Err(ParseError::MalformedMarker {
-                    path: ctx.path.to_path_buf(),
-                    offset: span.start,
-                    reason: "more than one <overview> element".to_owned(),
-                });
-            }
-            ctx.overview = Some((body, span));
-            Ok(())
+        Block::Goals { body, span } => assign_top_section(&mut ctx.goals, "goals", body, span, ctx.path),
+        Block::NonGoals { body, span } => {
+            assign_top_section(&mut ctx.non_goals, "non-goals", body, span, ctx.path)
         }
+        Block::UserStories { body, span } => {
+            assign_top_section(&mut ctx.user_stories, "user-stories", body, span, ctx.path)
+        }
+        Block::Assumptions { body, span } => {
+            assign_top_section(&mut ctx.assumptions, "assumptions", body, span, ctx.path)
+        }
+        Block::DoneWhen { span, .. } => Err(ParseError::MalformedMarker {
+            path: ctx.path.to_path_buf(),
+            offset: span.start,
+            reason: "<done-when> element is only allowed inside a <requirement>".to_owned(),
+        }),
+        Block::Behavior { span, .. } => Err(ParseError::MalformedMarker {
+            path: ctx.path.to_path_buf(),
+            offset: span.start,
+            reason: "<behavior> element is only allowed inside a <requirement>".to_owned(),
+        }),
         Block::Changelog { body, span } => {
             if ctx.changelog.is_some() {
                 return Err(ParseError::MalformedMarker {
@@ -738,6 +828,28 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
     }
 }
 
+fn assign_top_section(
+    slot: &mut Option<(String, ElementSpan)>,
+    element_name: &str,
+    body: String,
+    span: ElementSpan,
+    path: &Utf8Path,
+) -> Result<(), ParseError> {
+    if slot.is_some() {
+        return Err(ParseError::DuplicateSection {
+            path: path.to_path_buf(),
+            element_name: element_name.to_owned(),
+            offset: span.start,
+        });
+    }
+    *slot = Some((body, span));
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "single-pass requirement validator; SPEC-0021 added behaviour / done-when sub-section bookkeeping inline rather than splitting and re-walking child blocks"
+)]
 fn process_requirement(
     id: String,
     body: String,
@@ -753,13 +865,85 @@ fn process_requirement(
         });
     }
     let mut scenarios: Vec<Scenario> = Vec::new();
+    let mut done_when: Option<(String, ElementSpan)> = None;
+    let mut behavior: Option<(String, ElementSpan)> = None;
+
     for child in children {
         match child {
+            Block::DoneWhen {
+                body: child_body,
+                span: child_span,
+            } => {
+                if done_when.is_some() {
+                    return Err(ParseError::DuplicateRequirementSection {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        element_name: "done-when".to_owned(),
+                        offset: child_span.start,
+                    });
+                }
+                if behavior.is_some() {
+                    return Err(ParseError::RequirementSectionOrder {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        offset: child_span.start,
+                        reason: "<done-when> must appear before <behavior>".to_owned(),
+                    });
+                }
+                if !scenarios.is_empty() {
+                    return Err(ParseError::RequirementSectionOrder {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        offset: child_span.start,
+                        reason: "<done-when> must appear before any <scenario>".to_owned(),
+                    });
+                }
+                done_when = Some((child_body, child_span));
+            }
+            Block::Behavior {
+                body: child_body,
+                span: child_span,
+            } => {
+                if behavior.is_some() {
+                    return Err(ParseError::DuplicateRequirementSection {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        element_name: "behavior".to_owned(),
+                        offset: child_span.start,
+                    });
+                }
+                if !scenarios.is_empty() {
+                    return Err(ParseError::RequirementSectionOrder {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        offset: child_span.start,
+                        reason: "<behavior> must appear before any <scenario>".to_owned(),
+                    });
+                }
+                behavior = Some((child_body, child_span));
+            }
             Block::Scenario {
                 id: child_id,
                 body: child_body,
                 span: child_span,
             } => {
+                if done_when.is_none() {
+                    return Err(ParseError::RequirementSectionOrder {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        offset: child_span.start,
+                        reason: "<scenario> must appear after <done-when> and <behavior>"
+                            .to_owned(),
+                    });
+                }
+                if behavior.is_none() {
+                    return Err(ParseError::RequirementSectionOrder {
+                        path: ctx.path.to_path_buf(),
+                        requirement_id: id.clone(),
+                        offset: child_span.start,
+                        reason: "<scenario> must appear after <behavior>".to_owned(),
+                    });
+                }
                 if !ctx.chk_ids.insert(child_id.clone()) {
                     return Err(ParseError::DuplicateMarkerId {
                         path: ctx.path.to_path_buf(),
@@ -794,11 +978,41 @@ fn process_requirement(
             }
         }
     }
+
+    let (done_when_body, done_when_span) =
+        done_when.ok_or_else(|| ParseError::MissingRequirementSection {
+            path: ctx.path.to_path_buf(),
+            requirement_id: id.clone(),
+            element_name: "done-when".to_owned(),
+        })?;
+    let (behavior_body, behavior_span) =
+        behavior.ok_or_else(|| ParseError::MissingRequirementSection {
+            path: ctx.path.to_path_buf(),
+            requirement_id: id.clone(),
+            element_name: "behavior".to_owned(),
+        })?;
+
     if scenarios.is_empty() {
         return Err(ParseError::MalformedMarker {
             path: ctx.path.to_path_buf(),
             offset: span.start,
             reason: format!("requirement `{id}` has no nested scenario elements"),
+        });
+    }
+    if done_when_body.trim().is_empty() {
+        return Err(ParseError::EmptyMarkerBody {
+            path: ctx.path.to_path_buf(),
+            marker_name: "done-when".to_owned(),
+            id: Some(id.clone()),
+            offset: done_when_span.start,
+        });
+    }
+    if behavior_body.trim().is_empty() {
+        return Err(ParseError::EmptyMarkerBody {
+            path: ctx.path.to_path_buf(),
+            marker_name: "behavior".to_owned(),
+            id: Some(id.clone()),
+            offset: behavior_span.start,
         });
     }
     if body.trim().is_empty() {
@@ -812,6 +1026,10 @@ fn process_requirement(
     ctx.requirements.push(Requirement {
         id,
         body,
+        done_when: done_when_body,
+        done_when_span,
+        behavior: behavior_body,
+        behavior_span,
         scenarios,
         span,
     });
@@ -820,14 +1038,6 @@ fn process_requirement(
 
 #[derive(Debug)]
 enum Block {
-    Spec {
-        children: Vec<Block>,
-        span: ElementSpan,
-    },
-    Overview {
-        body: String,
-        span: ElementSpan,
-    },
     Requirement {
         id: String,
         body: String,
@@ -850,6 +1060,30 @@ enum Block {
         body: String,
         span: ElementSpan,
     },
+    DoneWhen {
+        body: String,
+        span: ElementSpan,
+    },
+    Behavior {
+        body: String,
+        span: ElementSpan,
+    },
+    Goals {
+        body: String,
+        span: ElementSpan,
+    },
+    NonGoals {
+        body: String,
+        span: ElementSpan,
+    },
+    UserStories {
+        body: String,
+        span: ElementSpan,
+    },
+    Assumptions {
+        body: String,
+        span: ElementSpan,
+    },
     Changelog {
         body: String,
         span: ElementSpan,
@@ -859,24 +1093,32 @@ enum Block {
 impl Block {
     fn span(&self) -> ElementSpan {
         match self {
-            Block::Spec { span, .. }
-            | Block::Overview { span, .. }
-            | Block::Requirement { span, .. }
+            Block::Requirement { span, .. }
             | Block::Scenario { span, .. }
             | Block::Decision { span, .. }
             | Block::OpenQuestion { span, .. }
+            | Block::DoneWhen { span, .. }
+            | Block::Behavior { span, .. }
+            | Block::Goals { span, .. }
+            | Block::NonGoals { span, .. }
+            | Block::UserStories { span, .. }
+            | Block::Assumptions { span, .. }
             | Block::Changelog { span, .. } => *span,
         }
     }
 
     fn element_name(&self) -> &'static str {
         match self {
-            Block::Spec { .. } => "spec",
-            Block::Overview { .. } => "overview",
             Block::Requirement { .. } => "requirement",
             Block::Scenario { .. } => "scenario",
             Block::Decision { .. } => "decision",
             Block::OpenQuestion { .. } => "open-question",
+            Block::DoneWhen { .. } => "done-when",
+            Block::Behavior { .. } => "behavior",
+            Block::Goals { .. } => "goals",
+            Block::NonGoals { .. } => "non-goals",
+            Block::UserStories { .. } => "user-stories",
+            Block::Assumptions { .. } => "assumptions",
             Block::Changelog { .. } => "changelog",
         }
     }
@@ -1010,6 +1252,13 @@ fn classify_line(
             .get(1)
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
+        if RETIRED_ELEMENT_NAMES.contains(&name.as_str()) {
+            return Err(ParseError::RetiredMarkerName {
+                path: path.to_path_buf(),
+                marker_name: name,
+                offset: abs_tag_offset,
+            });
+        }
         if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
             return Ok(());
         }
@@ -1030,6 +1279,13 @@ fn classify_line(
             .get(1)
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
+        if RETIRED_ELEMENT_NAMES.contains(&name.as_str()) {
+            return Err(ParseError::RetiredMarkerName {
+                path: path.to_path_buf(),
+                marker_name: name,
+                offset: abs_tag_offset,
+            });
+        }
         if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
             return Ok(());
         }
@@ -1412,8 +1668,6 @@ impl PendingBlock {
         };
 
         match name.as_str() {
-            "spec" => Ok(Block::Spec { children, span }),
-            "overview" => Ok(Block::Overview { body, span }),
             "requirement" => {
                 let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
                     field: "id".to_owned(),
@@ -1464,6 +1718,12 @@ impl PendingBlock {
                     span,
                 })
             }
+            "done-when" => Ok(Block::DoneWhen { body, span }),
+            "behavior" => Ok(Block::Behavior { body, span }),
+            "goals" => Ok(Block::Goals { body, span }),
+            "non-goals" => Ok(Block::NonGoals { body, span }),
+            "user-stories" => Ok(Block::UserStories { body, span }),
+            "assumptions" => Ok(Block::Assumptions { body, span }),
             "changelog" => Ok(Block::Changelog { body, span }),
             other => Err(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
@@ -1493,8 +1753,23 @@ mod tests {
         "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\n---\n\n# Title\n"
     }
 
+    /// SPEC-0021 makes `<goals>`, `<non-goals>`, and `<user-stories>` required
+    /// top-level sections; every test fixture that exercises a `<requirement>`
+    /// must include them so the parser sees a structurally valid spec.
+    fn top_sections() -> &'static str {
+        "\n<goals>\nGoals body.\n</goals>\n\n<non-goals>\nNon-goals body.\n</non-goals>\n\n<user-stories>\n- A story.\n</user-stories>\n\n"
+    }
+
+    /// SPEC-0021 makes `<done-when>` and `<behavior>` required sub-elements
+    /// inside `<requirement>`, before any `<scenario>`. Tests insert this
+    /// canned block between their requirement prose and the nested scenarios
+    /// so the structural validator sees a complete requirement.
+    fn req_intro() -> &'static str {
+        "<done-when>\n- placeholder done-when bullet.\n</done-when>\n\n<behavior>\n- placeholder behavior bullet.\n</behavior>\n\n"
+    }
+
     fn make(body_after_heading: &str) -> String {
-        format!("{}{}", frontmatter(), body_after_heading)
+        format!("{}{}{}", frontmatter(), top_sections(), body_after_heading)
     }
 
     #[test]
@@ -1502,6 +1777,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             Requirement body prose.
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             Given a thing, when X, then Y.
@@ -1551,6 +1834,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             a
             </scenario>
@@ -1558,6 +1849,14 @@ mod tests {
 
             <requirement id="REQ-002">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             b
@@ -1585,6 +1884,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             a
             </scenario>
@@ -1592,6 +1899,14 @@ mod tests {
 
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-002">
             b
@@ -1618,6 +1933,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             a
@@ -1702,6 +2025,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -1730,6 +2061,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -1753,6 +2092,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -1771,6 +2118,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001" priority="high">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -1798,6 +2153,14 @@ mod tests {
             <requirement id="REQ-1">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -1824,6 +2187,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHECK-001">
             text
             </scenario>
@@ -1848,6 +2219,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -1877,6 +2256,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             requirement prose
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
 
@@ -1909,6 +2296,14 @@ mod tests {
         // re-emitting the requirement prose.
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -1929,6 +2324,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -1953,8 +2356,10 @@ mod tests {
     fn scenario_body_preserves_bytes_verbatim() {
         let body = "Literal <thinking>, <example>, <T>, A & B, [link](https://example.com)\n\n```rust\nfn x() {}\n```";
         let src = format!(
-            "{front}\n<requirement id=\"REQ-001\">\nintro prose\n\n<scenario id=\"CHK-001\">\n{body}\n</scenario>\n</requirement>\n\n<changelog>\nrow\n</changelog>\n",
+            "{front}{top}<requirement id=\"REQ-001\">\nintro prose\n\n{intro}<scenario id=\"CHK-001\">\n{body}\n</scenario>\n</requirement>\n\n<changelog>\nrow\n</changelog>\n",
             front = frontmatter().trim_end(),
+            top = top_sections(),
+            intro = req_intro(),
             body = body,
         );
         let doc = parse(&src, path()).expect("parse should succeed");
@@ -1985,6 +2390,14 @@ mod tests {
             <requirement id="REQ-001">
             real body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             real scenario
             </scenario>
@@ -2011,6 +2424,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -2030,6 +2451,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -2074,6 +2503,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -2092,6 +2529,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -2123,6 +2568,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -2146,6 +2599,14 @@ mod tests {
         let src = make(indoc! {r#"
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -2247,6 +2708,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -2288,6 +2757,14 @@ mod tests {
             <requirement id="REQ-001">
             body
 
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
+
             <scenario id="CHK-001">
             text
             </scenario>
@@ -2315,6 +2792,14 @@ mod tests {
 
             <requirement id="REQ-001">
             body
+
+            <done-when>
+            - placeholder.
+            </done-when>
+
+            <behavior>
+            - placeholder.
+            </behavior>
 
             <scenario id="CHK-001">
             text
@@ -2348,20 +2833,50 @@ mod tests {
         assert_eq!(chk_ids, vec!["CHK-001", "CHK-002", "CHK-003"]);
         assert_eq!(doc.decisions.len(), 1);
         assert_eq!(doc.open_questions.len(), 1);
-        assert!(doc.overview.is_some());
+        assert!(!doc.goals.trim().is_empty());
+        assert!(!doc.non_goals.trim().is_empty());
+        assert!(!doc.user_stories.trim().is_empty());
+        assert!(doc.assumptions.is_some());
         assert!(doc.changelog_body.contains("Initial canonical fixture"));
     }
 
     #[test]
     fn speccy_whitelist_is_disjoint_from_html5_element_set() {
-        // The disjointness invariant from REQ-001 / DEC-002. Each
-        // Speccy structure element name must be absent from the
-        // checked-in HTML5 element set; future additions that collide
-        // surface as a build-time test failure.
+        // The disjointness invariant from SPEC-0020 REQ-001 / DEC-002
+        // and SPEC-0021 REQ-005. Each Speccy structure element name
+        // must be absent from the checked-in HTML5 element set;
+        // future additions that collide surface as a build-time test
+        // failure. The list below pins the post-SPEC-0021 whitelist
+        // names so a future edit can extend the same assertion as new
+        // tags ship.
         for &name in SPECCY_ELEMENT_NAMES {
             assert!(
                 !is_html5_element_name(name),
                 "Speccy element `{name}` collides with the HTML5 element name set",
+            );
+        }
+        for expected in [
+            "requirement",
+            "scenario",
+            "decision",
+            "open-question",
+            "changelog",
+            "behavior",
+            "done-when",
+            "goals",
+            "non-goals",
+            "user-stories",
+            "assumptions",
+        ] {
+            assert!(
+                SPECCY_ELEMENT_NAMES.contains(&expected),
+                "post-SPEC-0021 whitelist is missing `{expected}`; SPECCY_ELEMENT_NAMES = {SPECCY_ELEMENT_NAMES:?}",
+            );
+        }
+        for retired in ["spec", "overview"] {
+            assert!(
+                !SPECCY_ELEMENT_NAMES.contains(&retired),
+                "SPEC-0021 DEC-008 retired `{retired}`; it must no longer appear in SPECCY_ELEMENT_NAMES",
             );
         }
         // Sanity: ensure the HTML5 list contains the names called out

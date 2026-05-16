@@ -32,6 +32,7 @@ regex set rather than a heuristic.
 
 ## Goals
 
+<goals>
 - Every code in `.speccy/ARCHITECTURE.md` "Lint Codes" is implemented and
   triggered by at least one fixture.
 - Codes are stable: removing or renaming one is a build-breaking
@@ -42,9 +43,11 @@ regex set rather than a heuristic.
   `speccy verify` behaviour in SPEC-0012).
 - Diagnostics are emitted in deterministic order so snapshot tests
   are stable.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No semantic quality checks. Lint does not evaluate whether
   `proves:` strings are meaningful or whether tests are exhaustive.
 - No autofix. Lint reports; users or skill prompts decide what to do.
@@ -52,9 +55,11 @@ regex set rather than a heuristic.
   `lint.toml`; matching the "no `--strict` mode" stance.
 - No execution of commands. VAL-004 is pattern-based, not behavioural.
 - No I/O. Lint receives parsed structures; callers do the parsing.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a future `speccy status` implementer (SPEC-0004), I want a
   single function that takes a parsed workspace and returns a
   deterministic vec of diagnostics so I can render them inline per
@@ -67,6 +72,7 @@ regex set rather than a heuristic.
   before approving the spec.
 - As a spec author, I want a clear "your TASKS.md is stale" signal
   (TSK-003) so I know when to run `/speccy:amend`.
+</user-stories>
 
 ## Requirements
 
@@ -76,7 +82,7 @@ regex set rather than a heuristic.
 Emit SPC-001 through SPC-007 against parsed `SpecToml`, parsed
 `SpecMd`, and the workspace supersession index.
 
-**Done when:**
+<done-when>
 - `SPC-001`: A required field in `spec.toml` is missing. (Error.) The
   parser already surfaces this; lint emits the diagnostic with
   `file = .../spec.toml`.
@@ -93,8 +99,9 @@ Emit SPC-001 through SPC-007 against parsed `SpecToml`, parsed
   supersession index from SPEC-0001 REQ-008. (Error.)
 - `SPC-007`: SPEC.md `status: implemented` but TASKS.md has any
   non-`[x]` task. (Info; informational.)
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fixture with SPEC.md REQ-001+REQ-002 and spec.toml only
   REQ-001, when linted, exactly one SPC-002 is emitted (for REQ-002).
 - Given a fixture with `status: implemented` and one `[ ]` task,
@@ -104,6 +111,7 @@ Emit SPC-001 through SPC-007 against parsed `SpecToml`, parsed
   SPEC-0017, then SPC-006 is emitted naming SPEC-0017.
 - Given a fixture SPEC.md with `status: paused` (invalid), when
   linted, then SPC-005 is emitted naming the value.
+</behavior>
 
 <scenario id="CHK-001">
 SPC-001 through SPC-005 fire for missing fields, mismatched REQ headings, and invalid status values.
@@ -125,18 +133,20 @@ SPC-007 fires at severity=Info when status=implemented but TASKS.md has any non-
 Emit REQ-001 and REQ-002 against the requirement-to-check graph in
 spec.toml.
 
-**Done when:**
+<done-when>
 - `REQ-001`: A `[[requirements]]` row has an empty `checks` array.
   (Error.)
 - `REQ-002`: A `[[requirements]]` row's `checks` array references a
   CHK ID that has no matching `[[checks]]` entry. (Error.)
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `[[requirements]] id = "REQ-001" checks = []`, when linted,
   then REQ-001 lint code is emitted naming `REQ-001`.
 - Given `[[requirements]] id = "REQ-001" checks = ["CHK-999"]` and
   no `[[checks]] id = "CHK-999"`, when linted, then REQ-002 is
   emitted naming both the requirement and the missing check.
+</behavior>
 
 <scenario id="CHK-004">
 - Given `[[requirements]] id = "REQ-001" checks = []`, when linted,
@@ -155,7 +165,7 @@ REQ-001 fires for empty checks arrays; REQ-002 fires for check-ID references tha
 
 Emit VAL-001 through VAL-004 against parsed `[[checks]]` entries.
 
-**Done when:**
+<done-when>
 - `VAL-001`: A check is missing the `proves` field. (Error.)
 - `VAL-002`: A check with `kind = "test"` or `kind = "command"` is
   missing `command`. (Error.)
@@ -179,8 +189,9 @@ string; whitespace-tolerant):
 Compound commands containing a no-op prefix do **not** match. For
 example, `true && cargo test` is NOT flagged; the lint targets pure
 no-ops only.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a check with `command = "true"`, when linted, then VAL-004
   is emitted at severity = Warn.
 - Given a check with `command = "  true  "`, when linted, then
@@ -189,6 +200,7 @@ no-ops only.
   then VAL-004 is NOT emitted.
 - Given a check with `kind = "manual"` and no `prompt`, when linted,
   then VAL-003 is emitted naming the check ID.
+</behavior>
 
 <scenario id="CHK-005">
 VAL-001 fires for missing proves; VAL-002 for missing command on test/command kinds; VAL-003 for missing prompt on manual kinds.
@@ -205,7 +217,7 @@ VAL-004 fires on the closed set of no-op patterns (true, :, exit 0, /bin/true, c
 
 Emit TSK-001 through TSK-004 against parsed `TasksMd`.
 
-**Done when:**
+<done-when>
 - `TSK-001`: A task's `Covers:` line references a REQ ID that doesn't
   exist in the spec's SPEC.md or spec.toml. (Error.)
 - `TSK-002`: The TASKS.md parser surfaced a recoverable warning about
@@ -221,8 +233,9 @@ The `bootstrap-pending` sentinel for `spec_hash_at_generation` is a
 specific TSK-003 variant: same code, severity = Info, and the
 message advises `speccy tasks SPEC-NNNN --commit` rather than
 `/speccy:amend`. Lint distinguishes the cases via message text only.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a TASKS.md with a task `Covers: REQ-099` where REQ-099 isn't
   in the spec, when linted, then TSK-001 is emitted naming the task
   and the missing REQ.
@@ -234,6 +247,7 @@ message advises `speccy tasks SPEC-NNNN --commit` rather than
   message naming `speccy tasks --commit` as the remediation.
 - Given a TASKS.md without `generated_at` in its frontmatter, when
   linted, then TSK-004 is emitted naming the missing field.
+</behavior>
 
 <scenario id="CHK-007">
 TSK-001 fires for unknown REQ references; TSK-002 fires when the parser surfaced a malformed task ID warning; TSK-004 fires for missing frontmatter fields.
@@ -250,17 +264,19 @@ TSK-003 fires at severity=Warn for hash or mtime drift; bootstrap-pending sentin
 
 Emit QST-001 per unchecked open question in SPEC.md.
 
-**Done when:**
+<done-when>
 - A SPEC.md `## Open questions` section with `- [ ] some question?`
   produces a QST-001 diagnostic at severity = Info.
 - The same question with `- [x] resolved...` produces nothing.
 - The question text (minus the checkbox glyph) is included in the
   diagnostic message.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a SPEC.md with three unchecked and two checked open
   questions, when linted, then exactly three QST-001 diagnostics are
   emitted, each carrying the corresponding question text.
+</behavior>
 
 <scenario id="CHK-009">
 - Given a SPEC.md with three unchecked and two checked open
@@ -277,7 +293,7 @@ QST-001 fires once per unchecked open question at severity=Info; checked questio
 
 Expose a single function consumed by SPEC-0004 and SPEC-0012.
 
-**Done when:**
+<done-when>
 - `lint::run(workspace: &Workspace) -> Vec<Diagnostic>` is the
   entry point.
 - `Workspace` bundles parsed specs (each with SPEC.md, spec.toml,
@@ -291,8 +307,9 @@ Expose a single function consumed by SPEC-0004 and SPEC-0012.
 - Diagnostics are returned in deterministic order: by `spec_id`,
   then `code`, then `file`, then `line` (each ascending; `None`
   sorts before `Some`).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given two identical `Workspace` inputs, when `lint::run` is called
   twice, then the resulting vecs are byte-equal.
 - Given an empty workspace, when `lint::run` is called, then the
@@ -301,6 +318,7 @@ Expose a single function consumed by SPEC-0004 and SPEC-0012.
   REQ-001, when linted, then the SPC-002 from the lower spec ID
   appears before any diagnostic from the higher spec ID, regardless
   of internal iteration order.
+</behavior>
 
 <scenario id="CHK-010">
 - Given two identical `Workspace` inputs, when `lint::run` is called
@@ -323,7 +341,7 @@ lint::run is pure and deterministic; output ordering is (spec_id, code, file, li
 Codes are stable across minor versions; severity is part of the
 contract.
 
-**Done when:**
+<done-when>
 - A `const REGISTRY: &[(&'static str, Level)]` lists every code the
   engine emits, with its severity.
 - A snapshot test compares `REGISTRY` against an on-disk snapshot
@@ -332,8 +350,9 @@ contract.
 - Adding a new code requires snapshot regeneration; the test fails
   until the snapshot includes it.
 - Severity changes (Error -> Warn, etc.) also fail the snapshot.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a developer removes `SPC-007` from the engine, when the
   registry test runs, then it fails with a clear message naming the
   removed code.
@@ -342,6 +361,7 @@ contract.
   message asking for snapshot regeneration.
 - Given a developer changes `VAL-004` from Warn to Error, when the
   registry test runs, then it fails with the severity diff.
+</behavior>
 
 <scenario id="CHK-011">
 - Given a developer removes `SPC-007` from the engine, when the
@@ -521,6 +541,7 @@ SPEC-0012 land.
 
 ## Assumptions
 
+<assumptions>
 - The SPEC-0001 parser surfaces recoverable warnings (e.g. malformed
   task IDs) on the returned struct so the lint engine can consume
   them without re-parsing. (REQ-004 of SPEC-0001 specifies this.)
@@ -528,6 +549,7 @@ SPEC-0012 land.
   workspace scan and borrowed into the `Workspace`.
 - `&'static str` codes (compile-time constants) are sufficient for
   the public API; no allocated `String` codes.
+</assumptions>
 
 ## Changelog
 

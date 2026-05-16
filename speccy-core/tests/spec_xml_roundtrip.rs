@@ -36,26 +36,37 @@ fn parse(source: &str) -> SpecDoc {
         .expect("canonical fixture should parse")
 }
 
-/// Strip nested `<scenario>` blocks from a requirement body and trim
-/// outer whitespace, mirroring the renderer's canonical view of the
-/// requirement prose. Roundtrip tests compare this projection rather
-/// than the raw body, because the parser stores nested scenario tag
-/// lines as literal text inside `Requirement.body` while the renderer
-/// re-emits scenarios from typed state.
+/// Strip nested `<scenario>`, `<done-when>`, and `<behavior>` blocks
+/// from a requirement body and trim outer whitespace, mirroring the
+/// renderer's canonical view of the requirement prose. Roundtrip tests
+/// compare this projection rather than the raw body, because the parser
+/// stores nested sub-section tag lines as literal text inside
+/// `Requirement.body` while the renderer re-emits each from typed
+/// state.
 fn requirement_prose(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
-    let mut in_scenario = false;
+    let mut in_block: Option<&'static str> = None;
     for line in body.split_inclusive('\n') {
         let trimmed = line.trim_start();
-        if !in_scenario {
-            if trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>") {
-                in_scenario = true;
-                continue;
+        if let Some(close) = in_block {
+            if trimmed.starts_with(close) {
+                in_block = None;
             }
-            out.push_str(line);
-        } else if trimmed.starts_with("</scenario>") {
-            in_scenario = false;
+            continue;
         }
+        if trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>") {
+            in_block = Some("</scenario>");
+            continue;
+        }
+        if trimmed.starts_with("<done-when>") {
+            in_block = Some("</done-when>");
+            continue;
+        }
+        if trimmed.starts_with("<behavior>") {
+            in_block = Some("</behavior>");
+            continue;
+        }
+        out.push_str(line);
     }
     out.trim().to_owned()
 }
@@ -138,10 +149,17 @@ fn assert_specdocs_structurally_equal(a: &SpecDoc, b: &SpecDoc) {
     assert_requirements_equal(&a.requirements, &b.requirements);
     assert_decisions_equal(&a.decisions, &b.decisions);
     assert_open_questions_equal(&a.open_questions, &b.open_questions);
+    assert_eq!(a.goals.trim(), b.goals.trim(), "goals mismatch");
+    assert_eq!(a.non_goals.trim(), b.non_goals.trim(), "non-goals mismatch");
     assert_eq!(
-        a.overview.as_deref().map(str::trim),
-        b.overview.as_deref().map(str::trim),
-        "overview mismatch",
+        a.user_stories.trim(),
+        b.user_stories.trim(),
+        "user-stories mismatch",
+    );
+    assert_eq!(
+        a.assumptions.as_deref().map(str::trim),
+        b.assumptions.as_deref().map(str::trim),
+        "assumptions mismatch",
     );
     assert_eq!(
         a.changelog_body.trim(),
@@ -215,6 +233,10 @@ fn render_normalises_boundary_whitespace_but_preserves_interior_bytes() {
     let requirement = Requirement {
         id: "REQ-001".to_owned(),
         body: "Some requirement prose.\n".to_owned(),
+        done_when: "- ship.\n".to_owned(),
+        done_when_span: span,
+        behavior: "- it works.\n".to_owned(),
+        behavior_span: span,
         scenarios: vec![scenario],
         span,
     };
@@ -224,13 +246,19 @@ fn render_normalises_boundary_whitespace_but_preserves_interior_bytes() {
                 .to_owned(),
         heading: "SPEC-0099: hand built".to_owned(),
         raw: String::new(),
+        goals: "Hand-built goals body.\n".to_owned(),
+        goals_span: span,
+        non_goals: "Hand-built non-goals body.\n".to_owned(),
+        non_goals_span: span,
+        user_stories: "- A hand-built user story.\n".to_owned(),
+        user_stories_span: span,
+        assumptions: None,
+        assumptions_span: None,
         requirements: vec![requirement],
         decisions: Vec::new(),
         open_questions: Vec::new(),
         changelog_body: "| Date | Author | Summary |\n".to_owned(),
         changelog_span: span,
-        overview: None,
-        overview_span: None,
     };
 
     let rendered = render_spec_xml(&doc);
@@ -287,7 +315,7 @@ fn render_emits_blank_line_after_every_closing_element_tag() {
     // Pins SPEC-0020 Open Question 2's resolution: every closing
     // element tag is followed by a blank line. Asserting against the
     // canonical fixture covers requirement, scenario, decision,
-    // open-question, overview, and changelog close tags in one pass.
+    // open-question, and changelog close tags in one pass.
     let source = load_fixture();
     let doc = parse(&source);
     let rendered = render_spec_xml(&doc);
@@ -297,7 +325,6 @@ fn render_emits_blank_line_after_every_closing_element_tag() {
         "</scenario>",
         "</decision>",
         "</open-question>",
-        "</overview>",
         "</changelog>",
     ] {
         let probe = format!("{close_tag}\n\n");

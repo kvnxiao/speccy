@@ -73,9 +73,30 @@ pub fn spec_md_template(id: &str, status: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example user story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         Given REQ-001, when the suite runs, then it covers REQ-001.
         </scenario>

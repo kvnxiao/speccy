@@ -943,7 +943,7 @@ generated_at: 2026-05-16T02:00:18Z
     - Discovered issues: `cargo test --workspace` fails on the
       sibling `in_tree_specs::every_in_tree_spec_md_parses_with_marker_parser`
       test, but the failure is induced by the SPEC-0020 (new,
-      raw-xml-spec-carrier) and SPEC-0021 working-tree drafts —
+      raw-xml-spec-carrier) and SPEC-0022 working-tree drafts —
       hand-authored in the future raw XML carrier form proposed by
       SPEC-0020 itself — not by the T-007 retry change. The
       SPEC-0019 ship commit excludes those drafts; the committed

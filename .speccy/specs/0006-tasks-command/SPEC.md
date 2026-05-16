@@ -32,6 +32,7 @@ rather than a generic helper.
 
 ## Goals
 
+<goals>
 - One CLI surface for initial + amendment decomposition prompts;
   form auto-detected.
 - `--commit` records the spec hash so staleness detection
@@ -42,9 +43,11 @@ rather than a generic helper.
 - Initial-bootstrap specs (with `spec_hash_at_generation:
   bootstrap-pending`) graduate to real hashes the first time
   `--commit` runs against them.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No partial commit. `--commit` always rewrites both fields
   together (hash + timestamp); they're a unit.
 - No prompt mode under `--commit`. The flags are mutually
@@ -54,9 +57,11 @@ rather than a generic helper.
 - No interactive confirmation. `--commit` is non-interactive.
 - No automatic discovery of which spec was edited; the SPEC-ID
   must be passed explicitly.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a skill orchestrating Phase 2, I want to invoke
   `speccy tasks SPEC-0001` once to get the decomposition prompt,
   then `speccy tasks SPEC-0001 --commit` after the agent writes
@@ -68,6 +73,7 @@ rather than a generic helper.
   frontmatter's `spec_hash_at_generation` to be accurate so the
   TSK-003 staleness diagnostic fires only when SPEC.md actually
   drifted.
+</user-stories>
 
 ## Requirements
 
@@ -77,7 +83,7 @@ rather than a generic helper.
 When TASKS.md is absent for the given spec, render the initial
 Phase 2 prompt.
 
-**Done when:**
+<done-when>
 - The command resolves SPEC-ID to its spec directory (see REQ-005).
 - It parses the existing SPEC.md.
 - It loads AGENTS.md via `speccy_core::prompt::load_agents_md`
@@ -88,13 +94,15 @@ Phase 2 prompt.
   content of the SPEC.md, including frontmatter), `{{agents}}`.
 - It trims to budget via `speccy_core::prompt::trim_to_budget`.
 - It writes the rendered prompt to stdout; exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `.speccy/specs/0001-foo/SPEC.md` exists and TASKS.md does
   not, when `speccy tasks SPEC-0001` runs, then the rendered
   prompt contains the SPEC.md content where `{{spec_md}}` was.
 - Given the SPEC.md parses without error, the initial-mode
   prompt language is rendered (not amendment-mode).
+</behavior>
 
 <scenario id="CHK-001">
 - Given `.speccy/specs/0001-foo/SPEC.md` exists and TASKS.md does
@@ -114,7 +122,7 @@ speccy tasks SPEC-NNNN with TASKS.md absent renders tasks-generate.md with spec_
 When TASKS.md is present for the given spec, render the
 amendment Phase 2 prompt.
 
-**Done when:**
+<done-when>
 - The command parses both SPEC.md and TASKS.md.
 - It loads AGENTS.md.
 - It loads the embedded `tasks-amend.md` template.
@@ -122,14 +130,16 @@ amendment Phase 2 prompt.
   `{{tasks_md}}` (full content of existing TASKS.md), `{{agents}}`.
 - It trims to budget.
 - It writes the rendered prompt to stdout; exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given both SPEC.md and TASKS.md exist for SPEC-0001, when
   `speccy tasks SPEC-0001` runs, then the rendered prompt
   contains the TASKS.md content where `{{tasks_md}}` was.
 - The amendment-mode prompt language asks the agent to preserve
   completed tasks unless invalidated by spec changes; it does
   NOT ask for a fresh decomposition.
+</behavior>
 
 <scenario id="CHK-002">
 - Given both SPEC.md and TASKS.md exist for SPEC-0001, when
@@ -150,7 +160,7 @@ speccy tasks SPEC-NNNN with TASKS.md present renders tasks-amend.md with spec_id
 The `--commit` sub-action rewrites TASKS.md's frontmatter with
 the current SPEC.md sha256 and UTC timestamp.
 
-**Done when:**
+<done-when>
 - The command parses SPEC.md and computes its sha256 (matches
   SPEC-0001 REQ-003's `SpecMd.sha256`).
 - It reads TASKS.md raw bytes.
@@ -165,8 +175,9 @@ the current SPEC.md sha256 and UTC timestamp.
     byte-identically.
 - It writes TASKS.md back to disk.
 - Exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given TASKS.md frontmatter `spec_hash_at_generation:
   bootstrap-pending` (the bootstrap sentinel), when `speccy
   tasks SPEC-0001 --commit` runs, then the sentinel is replaced
@@ -181,6 +192,7 @@ the current SPEC.md sha256 and UTC timestamp.
 - Given TASKS.md frontmatter's `spec` field does not match the
   command's SPEC-ID arg, exit code is 1 with a clear error
   naming both IDs.
+</behavior>
 
 <scenario id="CHK-003">
 commit_frontmatter writes the SPEC.md sha256 as 64-char hex into spec_hash_at_generation and sets generated_at to the supplied UTC ISO 8601 timestamp.
@@ -202,7 +214,7 @@ commit_frontmatter returns SpecIdMismatch when frontmatter spec field differs fr
 Body content (everything after the closing `---` frontmatter
 fence) is preserved byte-identically across `--commit`.
 
-**Done when:**
+<done-when>
 - After `--commit`, the body bytes of TASKS.md are unchanged from
   before -- byte-by-byte equality of everything after the closing
   `---` line.
@@ -212,8 +224,9 @@ fence) is preserved byte-identically across `--commit`.
 - The frontmatter region (between the opening `---` and the
   closing `---`, exclusive) may be rewritten, but only the two
   managed fields change semantically.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a TASKS.md with CRLF line endings in the body, when
   `--commit` runs, then the body line endings remain CRLF.
 - Given a TASKS.md with trailing whitespace on some task lines,
@@ -222,6 +235,7 @@ fence) is preserved byte-identically across `--commit`.
   `generated_at`, `spec_hash_at_generation` (non-canonical
   order), when `--commit` runs, then the field order is
   preserved (no canonicalisation in v1).
+</behavior>
 
 <scenario id="CHK-006">
 - Given a TASKS.md with CRLF line endings in the body, when
@@ -243,7 +257,7 @@ Body bytes (everything after the closing --- fence) are byte-identical before an
 
 Validate the argument and the workspace state.
 
-**Done when:**
+<done-when>
 - If the SPEC-ID argument doesn't match `SPEC-\d{4,}`, exit code
   1 with a format-error message.
 - If no spec directory matches the ID, exit code 1 with a "spec
@@ -253,14 +267,16 @@ Validate the argument and the workspace state.
 - For `--commit` only: if TASKS.md is absent, exit code 1 with a
   clear "TASKS.md not found; was it generated by the agent?"
   message.
+</done-when>
 
-**Behavior:**
+<behavior>
 - `speccy tasks FOO` -> exit 1, format error.
 - `speccy tasks SPEC-9999` -> exit 1, "spec not found".
 - `speccy tasks SPEC-0001 --commit` with no TASKS.md -> exit 1,
   TASKS.md-missing error.
 - `speccy tasks SPEC-0001` (TASKS.md missing -- initial form) ->
   exit 0, renders the initial prompt (not an error).
+</behavior>
 
 <scenario id="CHK-007">
 speccy tasks with invalid ID format exits 1; with unknown SPEC-NNNN exits 1; SPEC.md parse failure exits 1 with the parser error.
@@ -448,6 +464,7 @@ SPEC-0005 (prompt helpers) -- all deepened.
 
 ## Assumptions
 
+<assumptions>
 - `speccy_core::prompt::{load_template, render, load_agents_md,
   trim_to_budget}` from SPEC-0005 are available.
 - `speccy_core::workspace::find_root` and spec discovery from
@@ -457,6 +474,7 @@ SPEC-0005 (prompt helpers) -- all deepened.
   guarantee on Windows checkouts.
 - `chrono::Utc::now()` (or equivalent) is acceptable for a
   monotonic-ish "now" -- exact monotonicity isn't required.
+</assumptions>
 
 ## Changelog
 

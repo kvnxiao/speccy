@@ -496,7 +496,33 @@
       "CHK-005"
     ]
   },
-  "0021-xml-canonical-tasks-report": {
+  "0021-spec-section-xml-tags": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007",
+      "DEC-008"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0022-xml-canonical-tasks-report": {
     "decisions": [
       "DEC-001",
       "DEC-002",

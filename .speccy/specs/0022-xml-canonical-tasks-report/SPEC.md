@@ -1,5 +1,5 @@
 ---
-id: SPEC-0021
+id: SPEC-0022
 slug: xml-canonical-tasks-report
 title: Raw XML element tags for TASKS.md and REPORT.md
 status: in-progress
@@ -7,13 +7,17 @@ created: 2026-05-15
 supersedes: []
 ---
 
-# SPEC-0021: Raw XML element tags for TASKS.md and REPORT.md
+# SPEC-0022: Raw XML element tags for TASKS.md and REPORT.md
 
 ## Summary
 
-SPEC-0020 makes raw XML element tags the canonical carrier for
-`SPEC.md`. Two artifacts still carry load-bearing orchestration state
-through Markdown conventions:
+SPEC-0020 introduces raw XML element tags as the canonical carrier
+for `SPEC.md`. SPEC-0021 extends the SPEC.md element whitelist with
+semantic section tags (`<behavior>`, `<done-when>`, `<goals>`,
+`<non-goals>`, `<user-stories>`, `<assumptions>`) around the
+intent-bearing prose surfaces, so prompts can address them directly
+instead of grepping Markdown bold and headings. Two artifacts still
+carry load-bearing orchestration state through Markdown conventions:
 
 - `TASKS.md` carries task ids, task state, requirement coverage, and
   task-local testing expectations.
@@ -47,7 +51,7 @@ schema. Implementer notes, review notes, commands run, and friction
 records remain ordinary Markdown for now. A future spec can harden
 handoffs once the core contract carrier is settled.
 
-This is the fourth step in the sequence:
+This is the fifth step in the sequence:
 
 - **SPEC-0018:** checks become English validation scenarios and Speccy
   stops executing commands.
@@ -55,12 +59,17 @@ This is the fourth step in the sequence:
   markers; per-spec `spec.toml` disappears.
 - **SPEC-0020:** `SPEC.md` switches from HTML-comment markers to raw
   XML element tags so vendor-recommended prompt structure applies.
-- **SPEC-0021:** `TASKS.md` and `REPORT.md` use the same raw XML
+- **SPEC-0021:** the SPEC.md element whitelist expands with semantic
+  section tags (`<behavior>`, `<done-when>`, `<goals>`, `<non-goals>`,
+  `<user-stories>`, `<assumptions>`) around the intent-bearing prose
+  surfaces.
+- **SPEC-0022:** `TASKS.md` and `REPORT.md` use the same raw XML
   element style for task state, task-local scenarios, and report
   coverage.
 
 ## Goals
 
+<goals>
 - `TASKS.md` has deterministic XML elements for task id, state,
   covered requirements, and task-local validation scenarios.
 - `REPORT.md` has deterministic XML elements for per-requirement
@@ -71,9 +80,11 @@ This is the fourth step in the sequence:
   heuristics for core task/report state.
 - Migration from current Markdown conventions is mechanical.
 - Architecture docs and shipped prompts teach the XML element shape.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No first-class handoff schema. Do not add structured
   `<implementer-note>` fields, command-run ledgers, exit-code
   subfields, or procedural-compliance tags in this spec.
@@ -88,9 +99,11 @@ This is the fourth step in the sequence:
   - `[~]` -> `in-progress`
   - `[?]` -> `in-review`
   - `[x]` -> `completed`
+</non-goals>
 
 ## User Stories
 
+<user-stories>
 - As an orchestrator agent, I want to read task state from a typed
   XML attribute instead of a Markdown checkbox prefix.
 - As an implementer agent, I want each task to carry task-local
@@ -101,6 +114,7 @@ This is the fourth step in the sequence:
   checks the user-facing requirement.
 - As a human, I want TASKS.md and REPORT.md to remain readable
   Markdown source, with XML element tags visible as structure anchors.
+</user-stories>
 
 ## Requirements
 
@@ -110,7 +124,7 @@ This is the fourth step in the sequence:
 `TASKS.md` uses raw XML element tags for task state and task
 coverage. The body inside each task remains Markdown.
 
-**Done when:**
+<done-when>
 - `TASKS.md` has a root `<tasks>` element emitted by the
   renderer carrying a `spec="SPEC-NNNN"` attribute.
 - Each task is wrapped by a `<task>` element carrying `id`,
@@ -127,8 +141,9 @@ coverage. The body inside each task remains Markdown.
 - Unknown task-element attributes are parse errors.
 - Markdown outside Speccy elements is preserved as task body prose
   and is not interpreted as structure.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a task element with `state="pending"` and
   `covers="REQ-001 REQ-002"`, parsing returns a task with those ids
   and state.
@@ -138,6 +153,7 @@ coverage. The body inside each task remains Markdown.
 - Given a task covering `REQ-999` when the parent SPEC has no
   `REQ-999`, workspace loading fails with a dangling requirement
   reference.
+</behavior>
 
 <scenario id="CHK-001">
 Given a TASKS.md with a task element containing id, state, and covers
@@ -163,7 +179,7 @@ then parsing fails and names the task.
 `REPORT.md` uses raw XML element tags for requirement coverage.
 Outcome and narrative sections remain Markdown.
 
-**Done when:**
+<done-when>
 - `REPORT.md` has a root `<report>` element emitted by the
   renderer carrying a `spec="SPEC-NNNN"` attribute.
 - Each requirement outcome is wrapped by a `<coverage>`
@@ -180,8 +196,9 @@ Outcome and narrative sections remain Markdown.
   coverage element in REPORT.md.
 - Markdown inside each coverage block is preserved as explanatory
   prose.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a coverage element for `REQ-001` with
   `result="satisfied"` and `scenarios="CHK-001"`, parsing returns a
   coverage row linked to that requirement and scenario.
@@ -190,6 +207,7 @@ Outcome and narrative sections remain Markdown.
 - Given `REQ-001` coverage listing `CHK-099` when the SPEC has no
   such scenario under REQ-001, workspace loading fails with a dangling
   scenario reference.
+</behavior>
 
 <scenario id="CHK-002">
 Given a REPORT.md coverage element with a valid requirement id,
@@ -215,7 +233,7 @@ then it fails with a dangling scenario reference.
 TASKS.md and REPORT.md use the same XML element parser style
 introduced by SPEC-0020.
 
-**Done when:**
+<done-when>
 - `speccy-core::parse::task_xml` exposes typed `TasksDoc` and
   `Task` models plus `parse` and `render`.
 - `speccy-core::parse::report_xml` exposes typed `ReportDoc` and
@@ -230,14 +248,16 @@ introduced by SPEC-0020.
 - Existing public APIs for `speccy next`, `speccy status`,
   `speccy implement`, `speccy review`, and `speccy report` keep their
   external behavior while reading from the new typed models.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a canonical TASKS.md, parse/render/parse yields equivalent
   task ids, states, covers arrays, and task scenario bodies.
 - Given a canonical REPORT.md, parse/render/parse yields equivalent
   requirement coverage rows.
 - Given a Speccy XML element inside a fenced code block, it is
   treated as Markdown body content, not structure.
+</behavior>
 
 <scenario id="CHK-003">
 Given canonical TASKS.md and REPORT.md fixtures,
@@ -264,8 +284,8 @@ behavior.
 An ephemeral migration tool converts existing files to the XML
 element shape.
 
-**Done when:**
-- `xtask/migrate-task-report-xml-0021` exists during implementation
+<done-when>
+- `xtask/migrate-task-report-xml-0022` exists during implementation
   and is deleted before the final commit.
 - TASKS.md migration:
   - frontmatter and level-1 heading are preserved;
@@ -285,8 +305,9 @@ element shape.
 - Migration fails when it cannot determine task coverage, task state,
   or report coverage without guessing.
 - After migration, `speccy verify` exits 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given an existing task `- [?] **T-003**` covering `REQ-002`, the
   migrated task element has `id="T-003"`, `state="in-review"`, and
   `covers="REQ-002"`.
@@ -294,6 +315,7 @@ element shape.
   names the task rather than inventing a scenario.
 - Given an existing report row for `REQ-001`, migration creates one
   coverage element with the mapped result and scenario ids.
+</behavior>
 
 <scenario id="CHK-004">
 Given the pre-migration TASKS.md files,
@@ -319,7 +341,7 @@ then requirements coverage table rows become coverage elements.
 The skill layer must stop teaching the old checkbox/bullet grammar as
 the machine contract.
 
-**Done when:**
+<done-when>
 - `.speccy/ARCHITECTURE.md` documents the TASKS.md and REPORT.md XML
   element grammars.
 - The four task states are documented as XML attribute values, with
@@ -333,8 +355,9 @@ the machine contract.
 - Active shipped guidance does not require structured handoff fields.
   It may still ask implementers and reviewers to leave clear Markdown
   notes.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a freshly generated TASKS.md after this spec lands, task ids,
   states, covers, and task scenarios are all represented by Speccy
   XML elements.
@@ -343,6 +366,7 @@ the machine contract.
 - Given a grep for old active guidance that treats checkbox bullets
   as the machine contract, there are no hits except historical
   migration notes.
+</behavior>
 
 <scenario id="CHK-005">
 Given post-spec ARCHITECTURE.md and shipped skill prompts,
@@ -368,8 +392,9 @@ and report coverage.
 
 Implementation order:
 
-1. Extract shared XML element parsing utilities from SPEC-0020 if
-   needed.
+1. Reuse the shared XML element parser established by SPEC-0020 and
+   extended by SPEC-0021; only add what TASKS.md and REPORT.md
+   require on top.
 2. Add TASKS.md and REPORT.md XML element parsers/renderers with
    fixtures.
 3. Write and test the migration tool against the most complex in-tree
@@ -451,16 +476,24 @@ checkbox and report-table conventions remain in history.
 
 ## Assumptions
 
+<assumptions>
 - Existing TASKS.md files have enough `Covers:` and `Tests to write:`
   prose to migrate without inventing validation scenarios.
 - Existing REPORT.md files have enough requirements coverage table
   data to migrate coverage elements.
 - SPEC-0020's XML element parser has already established fenced-code
   handling and deterministic element rendering.
+- SPEC-0021 has already extended the SPEC.md element whitelist with
+  semantic section tags (`<behavior>`, `<done-when>`, `<goals>`,
+  `<non-goals>`, `<user-stories>`, `<assumptions>`); this spec's
+  TASKS.md and REPORT.md additions reuse the same scanner
+  infrastructure with no further parser refactor.
 - The element names introduced here (`tasks`, `task`, `task-scenarios`,
   `report`, `coverage`) are disjoint from the HTML5 element name set,
   satisfying the SPEC-0020 DEC-002 invariant. The same unit test that
-  enforces SPEC-0020's whitelist disjointness also covers these.
+  enforces SPEC-0020's and SPEC-0021's whitelist disjointness also
+  covers these.
+</assumptions>
 
 ## Changelog
 
@@ -470,7 +503,8 @@ checkbox and report-table conventions remain in history.
 | 2026-05-15 | human/kevin | Initial rewritten draft. Applies marker comments to TASKS.md and REPORT.md while deferring first-class handoffs. |
 | 2026-05-15 | human/kevin | Renumbered from SPEC-0020 to SPEC-0021. Rewrote carrier from HTML-comment markers to raw XML element tags to align with the new SPEC-0020. |
 | 2026-05-15 | human/kevin | Dropped the `speccy-` prefix on element names to match SPEC-0020 DEC-002; tag names are now bare semantic words (`task`, `coverage`, `tasks`, `report`, `task-scenarios`). |
-| 2026-05-15 | human/kevin | Recorded HTML5-disjointness invariant in Assumptions; the SPEC-0021 element set is already disjoint and inherits the SPEC-0020 unit test. |
+| 2026-05-15 | human/kevin | Recorded HTML5-disjointness invariant in Assumptions; this spec's element set is already disjoint and inherits the SPEC-0020 unit test. |
+| 2026-05-16 | human/kevin | Renumbered from SPEC-0021 to SPEC-0022. New SPEC-0021 now occupies the section-level XML element expansion for SPEC.md; this spec is resequenced to land after it so the parser already supports the wider whitelist when TASKS.md and REPORT.md migration runs. |
 </changelog>
 
 ## Notes

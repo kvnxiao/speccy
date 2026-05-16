@@ -60,6 +60,7 @@ installs out there to migrate — the change is a straight cut-over.
 
 ## Goals
 
+<goals>
 - Codex pack is discoverable as Codex skills (the actually-broken
   case today).
 - Claude Code pack supports natural-language activation by living
@@ -70,9 +71,11 @@ installs out there to migrate — the change is a straight cut-over.
   lands in the user's project.
 - Each shipped SKILL.md has the `name` + `description` frontmatter
   fields both hosts require for skill discovery.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - New host support. Cursor remains deferred per SPEC-0002 DEC-002.
 - Plugin manifest / marketplace publishing. Out of scope for v1.
 - Preserving the `/speccy:<verb>` colon-namespaced slash command
@@ -91,9 +94,11 @@ installs out there to migrate — the change is a straight cut-over.
   path that works in practice, a follow-up spec adds it.
 - Changes to shared personas or shared prompts. They aren't host
   skills and aren't affected.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a Codex user, after `speccy init` I can ask Codex to "draft a
   spec for X" and Codex's skill selector surfaces `speccy-plan`
   among candidate skills.
@@ -104,6 +109,7 @@ installs out there to migrate — the change is a straight cut-over.
   `skills/claude-code/speccy-plan/SKILL.md`, the file is
   byte-identical to what `speccy init` would write at
   `.claude/skills/speccy-plan/SKILL.md` for a user.
+</user-stories>
 
 ## Requirements
 
@@ -113,7 +119,7 @@ installs out there to migrate — the change is a straight cut-over.
 Restructure `skills/claude-code/` and `skills/codex/` so each
 shipped host skill is a directory containing a `SKILL.md` file.
 
-**Done when:**
+<done-when>
 - Each of the 7 shipped skills (`speccy-init`, `speccy-plan`,
   `speccy-tasks`, `speccy-work`, `speccy-review`, `speccy-ship`,
   `speccy-amend`) lives at `skills/claude-code/<name>/SKILL.md`
@@ -124,8 +130,9 @@ shipped host skill is a directory containing a `SKILL.md` file.
 - The embedded bundle (`speccy-cli/src/embedded.rs`) compiles
   without changes to the macro invocation; only the underlying
   directory tree shifts.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a checkout of the repo, when `cargo build -p speccy-cli`
   runs, then the embedded bundle exposes
   `claude-code/speccy-plan/SKILL.md` as a walkable file.
@@ -134,6 +141,7 @@ shipped host skill is a directory containing a `SKILL.md` file.
   speccy verbs.
 - Given the embedded bundle, when walked, then no flat-file
   `<verb>.md` exists at `claude-code/speccy/` or `codex/speccy/`.
+</behavior>
 
 <scenario id="CHK-001">
 The embedded bundle exposes exactly 7 SKILL.md files under skills/claude-code/ and 7 under skills/codex/, named for the seven speccy verbs (speccy-init, speccy-plan, speccy-tasks, speccy-work, speccy-review, speccy-ship, speccy-amend).
@@ -152,7 +160,7 @@ The embedded bundle no longer contains the legacy flat-file layout (skills/claud
 project-local skills directory, preserving the per-skill
 directory layout.
 
-**Done when:**
+<done-when>
 - For host `claude-code`, files copy to
   `.claude/skills/<name>/SKILL.md`.
 - For host `codex`, files copy to `.agents/skills/<name>/SKILL.md`
@@ -166,8 +174,9 @@ directory layout.
   the host skills directory whose paths aren't part of the
   shipped bundle (SPEC-0002 DEC-003 unchanged in spirit; the
   classification operates on the new layout).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh repo with `.claude/`, when `speccy init` runs,
   then `.claude/skills/speccy-plan/SKILL.md` exists with content
   byte-identical to the embedded bundle's
@@ -179,6 +188,7 @@ directory layout.
 - Given `.claude/skills/my-personal-skill/SKILL.md` exists, when
   `speccy init --force` runs, then that file is byte-identical
   before and after.
+</behavior>
 
 <scenario id="CHK-003">
 speccy init --host claude-code copies skills/claude-code/<name>/SKILL.md to .claude/skills/<name>/SKILL.md with byte-identical content; destination directories created recursively.
@@ -197,7 +207,7 @@ Every shipped SKILL.md declares `name` and `description` in YAML
 frontmatter so both Claude Code and Codex recognise the file as a
 skill.
 
-**Done when:**
+<done-when>
 - Every shipped SKILL.md (both hosts) opens with a YAML
   frontmatter block delimited by `---` on its own line above and
   below.
@@ -210,8 +220,9 @@ skill.
   v1.
 - `description` is a single-line string (no multi-line YAML
   scalars) so it parses identically in both hosts' loaders.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a shipped SKILL.md, when parsed as YAML frontmatter, then
   the parser returns a mapping with the keys `name` and
   `description`.
@@ -219,6 +230,7 @@ skill.
   is read, then `name` equals the directory the file lives in.
 - Given a shipped SKILL.md, when the description is inspected,
   then it is a single-line non-empty string.
+</behavior>
 
 <scenario id="CHK-005">
 - Given a shipped SKILL.md, when parsed as YAML frontmatter, then
@@ -242,7 +254,7 @@ states concrete trigger phrases a user might say. Phase-numbered
 internal jargon ("Phase 1.", "Phase 2.") is removed from
 descriptions.
 
-**Done when:**
+<done-when>
 - No shipped description starts with the substring "Phase " (with
   a trailing digit), which is the current anti-pattern.
 - Each shipped description contains at least one trigger-phrase
@@ -251,14 +263,16 @@ descriptions.
   spec's design notes.
 - Each shipped description is ≤ 500 characters so Codex's ~2%
   context budget for the skills list isn't strained.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given any shipped SKILL.md, when the description is inspected,
   then it does not match `^Phase \d` (Python regex).
 - Given any shipped SKILL.md, when the description is searched
   case-insensitively, then it contains `use when`.
 - Given any shipped SKILL.md, when the description's character
   count is measured, then it is at most 500.
+</behavior>
 
 <scenario id="CHK-006">
 - Given any shipped SKILL.md, when the description is inspected,
@@ -456,6 +470,7 @@ Install destinations:
 
 ## Assumptions
 
+<assumptions>
 - Both Claude Code and Codex skill loaders accept the YAML
   frontmatter shape `name: <slug>` / `description: <one-line
   string>` with `---` delimiters. Verified against OpenAI's
@@ -469,6 +484,7 @@ Install destinations:
   `developers.openai.com/codex/skills`. The 7 speccy skills do
   not need to live directly under `.agents/skills/` — nested
   under `.agents/skills/speccy-*/` is fine.
+</assumptions>
 
 ## Changelog
 

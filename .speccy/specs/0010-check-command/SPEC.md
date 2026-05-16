@@ -34,6 +34,7 @@ full picture in one invocation.
 
 ## Goals
 
+<goals>
 - Mechanical proof execution that matches each project's existing
   test/command tooling without inventing a new runner.
 - Live output (no buffering) so long-running checks are observable.
@@ -42,9 +43,11 @@ full picture in one invocation.
 - Cross-platform: identical behaviour on Unix (`sh -c`) and Windows
   (`cmd /c`).
 - Zero persistence -- no result files, no caches.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No timeouts. If a check hangs, the developer Ctrl+C's it.
 - No parallelism in v1. Checks run serially.
 - No internal test runner. We shell out to whatever the project
@@ -53,9 +56,11 @@ full picture in one invocation.
   run all (or the selected CHK-ID).
 - No record of execution results. CI artifact storage handles that
   layer.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a developer mid-task, I want one command that runs every check
   for the work I just did, with live output so I can watch slow
   tests progress.
@@ -66,6 +71,7 @@ full picture in one invocation.
   check prompts so I know which checks need human attention.
 - As a developer with a flaky check, I want `speccy check CHK-001`
   to run just that one without waiting on the rest.
+</user-stories>
 
 ## Requirements
 
@@ -74,7 +80,7 @@ full picture in one invocation.
 
 Collect every check from every spec's `spec.toml`.
 
-**Done when:**
+<done-when>
 - The command consumes `speccy_core::workspace::scan` (SPEC-0004) to
   discover specs.
 - For each parsed `spec.toml`, every `[[checks]]` entry is collected
@@ -86,8 +92,9 @@ Collect every check from every spec's `spec.toml`.
   stderr warning per spec is printed. Other specs still scan.
 - Empty workspaces (no specs, or no checks across specs) print
   `No checks defined.` and exit 0.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given two specs (SPEC-0001 with three checks, SPEC-0002 with
   three checks), when `speccy check` runs, then all six are queued
   in `(spec_id ascending, declared check order)` order.
@@ -98,6 +105,7 @@ Collect every check from every spec's `spec.toml`.
   contains a one-line warning naming the offending spec; checks
   from the other two specs still run; the eventual exit code is
   non-zero (a malformed spec.toml is a real error).
+</behavior>
 
 <scenario id="CHK-001">
 speccy check enumerates every [[checks]] across all spec.toml files in (spec_id ascending, declared check order) order.
@@ -114,7 +122,7 @@ Empty workspace prints 'No checks defined.' and exits 0; malformed spec.toml is 
 
 Restrict execution to a single check ID when one is supplied.
 
-**Done when:**
+<done-when>
 - `speccy check CHK-NNN` runs only checks whose `id == "CHK-NNN"`
   across every spec.
 - If multiple specs each define `CHK-NNN`, ALL of them run
@@ -125,8 +133,9 @@ Restrict execution to a single check ID when one is supplied.
   status` to list specs.
 - If the argument doesn't match the format `CHK-\d{3,}`, exit code
   is 1 with a clear "not a valid check ID" message.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 has CHK-001 and SPEC-0003 has CHK-001 (both
   legitimate; scoped per spec), when `speccy check CHK-001` runs,
   then both matching checks execute in spec-ID ascending order.
@@ -134,6 +143,7 @@ Restrict execution to a single check ID when one is supplied.
   exit code is 1 and stderr contains the string `CHK-099` and a
   hint.
 - Given `speccy check FOO`, exit code is 1 with a format error.
+</behavior>
 
 <scenario id="CHK-003">
 - Given SPEC-0001 has CHK-001 and SPEC-0003 has CHK-001 (both
@@ -155,7 +165,7 @@ speccy check CHK-NNN runs only matching IDs (across all specs where that ID exis
 Execute commands via the project shell with stdout/stderr inheriting
 the parent.
 
-**Done when:**
+<done-when>
 - Unix: each check's `command` is invoked as `sh -c "<command>"`.
 - Windows: invoked as `cmd /c "<command>"`.
 - Working directory is the project root (the directory containing
@@ -166,8 +176,9 @@ the parent.
 - After each check: print
   `<-- CHK-NNN PASS` (exit 0) or `<-- CHK-NNN FAIL (exit N)`
   (non-zero).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a check with `command = "cargo test -p foo"` on Linux,
   then `sh -c "cargo test -p foo"` is spawned with cwd = project
   root.
@@ -178,6 +189,7 @@ the parent.
   completion).
 - Given a check exiting with code 2, the footer reads `<-- CHK-NNN
   FAIL (exit 2)`.
+</behavior>
 
 <scenario id="CHK-004">
 Unix uses sh -c; Windows uses cmd /c; working directory is the project root containing .speccy/.
@@ -194,7 +206,7 @@ Child stdout/stderr stream live to the terminal via inherited stdio; speccy prin
 
 Run every check; exit with the first non-zero exit code encountered.
 
-**Done when:**
+<done-when>
 - All executable checks run to completion regardless of earlier
   failures.
 - The recorded exit code is the first non-zero exit code from any
@@ -204,14 +216,16 @@ Run every check; exit with the first non-zero exit code encountered.
 - Manual checks never affect the exit code.
 - `SpecParseError` warnings during discovery contribute exit code
   1 if no check sets a higher non-zero code.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given three checks (pass, fail-2, fail-1), then all three run and
   the final exit code is 2.
 - Given three passing checks, then exit code is 0.
 - Given two executable checks and one manual check between them,
   both executable checks run, the manual check prints its prompt,
   and the exit code reflects only the executable checks.
+</behavior>
 
 <scenario id="CHK-006">
 - Given three checks (pass, fail-2, fail-1), then all three run and
@@ -232,7 +246,7 @@ All executable checks run regardless of earlier failures; exit code is the first
 Print the prompt for kind = `manual` (or any check with `prompt`
 but no `command`); never execute them.
 
-**Done when:**
+<done-when>
 - A manual check prints `==> CHK-NNN (SPEC-NNNN, manual):` on its
   header line, followed by the `prompt` text verbatim on the next
   lines.
@@ -243,14 +257,16 @@ but no `command`); never execute them.
   upstream (VAL-002 / VAL-003 in SPEC-0003). At runtime, `speccy
   check` prefers `command` and prints a stderr warning naming the
   check.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a check with `kind = "manual"` and `prompt = "Sign up via
   the UI; confirm duplicate email shows the error toast."`, when
   it runs, then stdout contains both the prompt text verbatim and
   the header + footer lines.
 - Given a check with `kind = "property"` (free-form) and a `prompt`
   field but no `command`, it is treated as manual.
+</behavior>
 
 <scenario id="CHK-007">
 - Given a check with `kind = "manual"` and `prompt = "Sign up via
@@ -270,19 +286,21 @@ Manual checks (kind=manual or any kind with prompt but no command) print the pro
 
 Print a deterministic final summary after every run.
 
-**Done when:**
+<done-when>
 - After all checks complete, print
   `<N> passed, <M> failed, <K> manual` on its own line as the last
   line of output before the process exits.
 - The summary appears regardless of exit code.
 - Empty-workspace case (no checks at all) prints `No checks
   defined.` instead of a summary line.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given five checks (3 pass, 1 fail, 1 manual), the last stdout
   line is `3 passed, 1 failed, 1 manual`.
 - Given zero checks, the only stdout line is `No checks defined.`
   and exit code is 0.
+</behavior>
 
 <scenario id="CHK-008">
 - Given five checks (3 pass, 1 fail, 1 manual), the last stdout
@@ -427,6 +445,7 @@ landing first.
 
 ## Assumptions
 
+<assumptions>
 - `sh` is on PATH on Unix; `cmd` is on PATH on Windows. True on
   any reasonable target.
 - The project shell can interpret arbitrary command strings from
@@ -435,6 +454,7 @@ landing first.
   output live on both platforms.
 - Single non-zero exit codes can be propagated as-is; speccy does
   not transform exit codes outside its own error categories.
+</assumptions>
 
 ## Changelog
 

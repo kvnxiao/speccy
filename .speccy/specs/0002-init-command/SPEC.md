@@ -30,15 +30,18 @@ filesystem signals.
 
 ## Goals
 
+<goals>
 - Single command takes a fresh repo to a working speccy workspace.
 - Refusal/overwrite semantics are predictable for repeat runs and CI.
 - Exit codes cleanly distinguish user error (1) from internal failure
   (2) so harnesses can act on them.
 - Skill content is versioned with the binary -- updating skills means
   releasing a new speccy.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No interactive prompts. `speccy init` never asks the user a question.
 - No remote skill fetching. The bundle is compile-time embedded.
 - No host other than Claude Code and Codex in v1. `.cursor/` is
@@ -46,9 +49,11 @@ filesystem signals.
 - No mutation of project files outside `.speccy/` and the host's
   native skill directory (`.claude/skills/` for Claude Code or
   `.agents/skills/` for Codex, per SPEC-0015).
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As a solo developer starting a new repo, I want `speccy init` to
   scaffold `.speccy/` and place the Claude Code skill files where
   Claude Code will find them, with no further setup.
@@ -60,6 +65,7 @@ filesystem signals.
 - As a Cursor user, I want a clear message that v1 does not yet ship
   a Cursor pack, rather than silent fallback to a different host's
   skills.
+</user-stories>
 
 ## Requirements
 
@@ -72,14 +78,15 @@ the project's root `AGENTS.md`, and the greenfield bootstrap that
 populates it is a **harness-skill** responsibility (the shipped
 `speccy-init` skill markdown), not the CLI's.
 
-**Done when:**
+<done-when>
 - `.speccy/speccy.toml` is written with `schema_version = 1` and a
   `[project]` block; `name` is the parent directory's name.
 - The file validates against the SPEC-0001 parser without errors.
 - No file is written under `.speccy/` other than `speccy.toml` plus
   the per-spec skill resources copied by REQ-004.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh repo at `/foo/bar` with no `.speccy/`, when
   `speccy init` runs successfully, then `.speccy/speccy.toml` exists
   with `name = "bar"`.
@@ -88,6 +95,7 @@ populates it is a **harness-skill** responsibility (the shipped
 - Given the templates change between speccy releases, when `speccy
   init` runs, then the scaffolded `speccy.toml` reflects the
   template baked into the current binary.
+</behavior>
 
 <scenario id="CHK-001">
 - Given a fresh repo at `/foo/bar` with no `.speccy/`, when
@@ -111,7 +119,7 @@ Refuse to run if `.speccy/` already exists unless `--force` is
 passed. Always print the list of files that would be created or
 overwritten before mutating.
 
-**Done when:**
+<done-when>
 - Without `--force`, an existing `.speccy/` causes exit code 1 and a
   stderr message naming the conflicting path.
 - With `--force`, speccy-shipped files in `.speccy/` and the host's
@@ -120,8 +128,9 @@ overwritten before mutating.
   name is not in the shipped bundle) are never touched.
 - A summary of "would create" / "would overwrite" lines prints to
   stdout before any file is written.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given `.speccy/speccy.toml` exists, when `speccy init` runs without
   `--force`, then exit code is 1 and stderr contains the path string
   `.speccy/`.
@@ -135,6 +144,7 @@ overwritten before mutating.
   left byte-identical.
 - Given any successful run, when `speccy init` finishes, then a
   "Created N files" or "Overwrote N files" summary appears on stdout.
+</behavior>
 
 <scenario id="CHK-003">
 Existing .speccy/ without --force returns exit code 1 and stderr names the conflicting path.
@@ -157,7 +167,7 @@ Detect the host from project signals; allow `--host <name>` override.
 Refuse cleanly when `.cursor/` is detected without an explicit
 override.
 
-**Done when:**
+<done-when>
 - `--host <name>` always wins, regardless of which host directories
   exist.
 - Without `--host`: probe in order `.claude/`, `.codex/`, `.cursor/`.
@@ -169,8 +179,9 @@ override.
   with a printed warning naming the chosen host and the reason.
 - `--host` with an unsupported name exits 1 listing supported names
   (currently `claude-code`, `codex`).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a repo with `.claude/`, when `speccy init` runs, then the
   Claude Code skill pack is chosen and copied.
 - Given a repo with both `.claude/` and `.codex/`, when `speccy init`
@@ -182,6 +193,7 @@ override.
   same message (cursor is not a supported `--host` value in v1).
 - Given a repo with no host directories, when `speccy init` runs,
   then claude-code is chosen and a warning is printed on stderr.
+</behavior>
 
 <scenario id="CHK-006">
 - Given a repo with `.claude/`, when `speccy init` runs, then the
@@ -209,7 +221,7 @@ Copy `skills/<host>/*` from the embedded bundle into the host-native
 directory shape so the pack is discoverable as host-native skills
 (SPEC-0015 supersedes the original flat `.claude/commands/` layout).
 
-**Done when:**
+<done-when>
 - For host `claude-code`, files are copied to `.claude/skills/<name>/`.
 - For host `codex`, files are copied to `.agents/skills/<name>/`.
 - The destination directory is created (recursively) if missing.
@@ -218,8 +230,9 @@ directory shape so the pack is discoverable as host-native skills
 - Shared resources (`skills/shared/personas/`, `skills/shared/prompts/`)
   are also copied: personas to a location prompt-rendering commands
   (SPEC-0005..0011) can find them; prompts likewise.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh repo with `.claude/`, when `speccy init` runs, then
   every `SKILL.md` file in the embedded `skills/claude-code/` tree
   has a byte-identical counterpart under
@@ -232,6 +245,7 @@ directory shape so the pack is discoverable as host-native skills
   runs, then a project-local override location holds that file (the
   exact path is the implementer's choice within `.speccy/skills/`
   per ARCHITECTURE.md "Persona file resolution").
+</behavior>
 
 <scenario id="CHK-007">
 speccy init --host claude-code copies skills/claude-code/*.md to .claude/commands/ with byte-identical content.
@@ -248,7 +262,7 @@ speccy init --host codex copies skills/codex/*.md to .codex/skills/ with byte-id
 
 Predictable exit codes for CI and harnesses.
 
-**Done when:**
+<done-when>
 - `0` on success (workspace scaffolded; skill pack copied).
 - `1` on user error: existing workspace without `--force`; unknown
   `--host` value; `.cursor/` detected without override.
@@ -257,8 +271,9 @@ Predictable exit codes for CI and harnesses.
 - Exit-1 messages are actionable: name the offending condition and
   the corrective action.
 - Exit-2 messages include the underlying `std::io::Error` for debugging.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a fresh repo, when `speccy init` runs to completion, then
   exit code is 0.
 - Given `.speccy/` exists without `--force`, then exit code is 1.
@@ -267,6 +282,7 @@ Predictable exit codes for CI and harnesses.
 - Given a read-only project root (simulated permissions denied),
   when `speccy init` attempts to write, then exit code is 2 and
   stderr contains the underlying I/O error message.
+</behavior>
 
 <scenario id="CHK-009">
 - Given a fresh repo, when `speccy init` runs to completion, then
@@ -430,6 +446,7 @@ commit; no data migration since the command creates net-new files.
 
 ## Assumptions
 
+<assumptions>
 - The embedded skill bundle exists at build time under
   `skills/claude-code/`, `skills/codex/`, `skills/shared/personas/`,
   and `skills/shared/prompts/`. Initial implementation can use stub
@@ -438,6 +455,7 @@ commit; no data migration since the command creates net-new files.
   implementer's choice and not part of the public contract.
 - The CLI runs from any cwd; the project root is detected as the
   current working directory unless overridden by a flag (not in v1).
+</assumptions>
 
 ## Changelog
 

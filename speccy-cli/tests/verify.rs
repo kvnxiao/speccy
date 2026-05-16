@@ -63,6 +63,18 @@ fn spec_md_empty_scenarios(spec_id: &str, status: &str) -> String {
 
         # __ID__
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body with no scenarios.
@@ -398,9 +410,29 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
 
         # SPEC-0002
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         Body.
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         covers REQ-001
         </scenario>
@@ -576,9 +608,29 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
 
         # SPEC-0098
 
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example story.
+        </user-stories>
+
         <requirement id="REQ-001">
         ### REQ-001: First
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         first
         </scenario>
@@ -586,6 +638,14 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
         <requirement id="REQ-002">
         ### REQ-002: Second
         body
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
         <scenario id="CHK-001">
         duplicate
         </scenario>

@@ -30,6 +30,7 @@ right specific command.
 
 ## Goals
 
+<goals>
 - Single deterministic query for "next thing to do" across all
   specs.
 - `--kind` filters cleanly so implementer loops and reviewer loops
@@ -39,9 +40,11 @@ right specific command.
 - The four output kinds (`implement`, `review`, `report`,
   `blocked`) cover every workspace state without falling off the
   edge.
+</goals>
 
 ## Non-goals
 
+<non-goals>
 - No mutation of task state. `next` is strictly read-only; the
   implementer or reviewer flips checkboxes.
 - No claiming or locking. If two agents both ask for the next
@@ -52,9 +55,11 @@ right specific command.
   no critical-path computation.
 - No persona-fan-out configuration in v1. The default set is
   hardcoded.
+</non-goals>
 
 ## User stories
 
+<user-stories>
 - As `/speccy:work` (the implementation-loop skill), I want
   `speccy next --kind implement --json` to give me one
   `T-NNN` to dispatch a sub-agent against, or `kind: blocked` if
@@ -69,6 +74,7 @@ right specific command.
 - As `/speccy:ship` (the report skill), I want to detect that
   "all tasks are `[x]` and REPORT.md is missing" so I know to
   generate the report.
+</user-stories>
 
 ## Requirements
 
@@ -79,7 +85,7 @@ Walk specs in ascending ID order; within each spec, prefer
 review-ready (`[?]`) tasks over open (`[ ]`) tasks; return the
 first match.
 
-**Done when:**
+<done-when>
 - The scanner enumerates specs via `workspace::scan` in ascending
   spec-ID order.
 - For each spec, it inspects task state in this order:
@@ -93,8 +99,9 @@ first match.
   detection (REQ-003).
 - `InProgress` (`[~]`) tasks are skipped (they're claimed by some
   other session).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 with one `[?]` and two `[ ]` tasks, when
   `speccy next` runs (no `--kind`), then the result is a review
   for the `[?]` task -- the within-spec `[?]` preference wins
@@ -107,6 +114,7 @@ first match.
   with a `[ ]` task, then the result is an implement for the `[ ]`
   task from SPEC-0002 (SPEC-0001 has no actionable work for any
   caller).
+</behavior>
 
 <scenario id="CHK-001">
 Within a spec, [?] review-ready tasks are preferred over [ ] open tasks when no --kind is supplied; [~] tasks are always skipped.
@@ -123,7 +131,7 @@ Across specs, the lowest spec ID with actionable work wins regardless of which k
 
 Filter strictly to the requested state class across all specs.
 
-**Done when:**
+<done-when>
 - `--kind implement` walks specs in ascending order; within each
   spec, returns the first task with state `Open` (`[ ]`).
 - `--kind review` walks specs in ascending order; within each
@@ -133,8 +141,9 @@ Filter strictly to the requested state class across all specs.
   with no `[ ]` tasks anywhere does NOT return a `[?]` task.
 - If no task matches the filter, fall through to blocked detection
   (REQ-003).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 with one `[?]` task and no `[ ]` tasks, when
   `speccy next --kind implement` runs, then the result is
   `kind: blocked` (not a `[?]` review fallback).
@@ -142,6 +151,7 @@ Filter strictly to the requested state class across all specs.
   `[?]` task, when `speccy next --kind review` runs, then the
   result is the `[?]` from SPEC-0002 with persona fan-out
   `["business", "tests", "security", "style"]`.
+</behavior>
 
 <scenario id="CHK-003">
 --kind implement returns only [ ] tasks; never falls back to [?] tasks even when no [ ] is available; returns blocked instead.
@@ -158,7 +168,7 @@ Filter strictly to the requested state class across all specs.
 
 When no actionable task exists, classify the workspace state.
 
-**Done when:**
+<done-when>
 - If every task across every spec is `Done` (`[x]`) AND at least
   one spec lacks REPORT.md, return `kind: report` for the lowest-
   ID spec missing REPORT.md.
@@ -166,8 +176,9 @@ When no actionable task exists, classify the workspace state.
   filter when none is supplied) AND no report is pending, return
   `kind: blocked` with a `reason` string describing the workspace
   state.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given SPEC-0001 with all `[x]` tasks and no `REPORT.md`, when
   `speccy next` runs, then the result is
   `kind: report, spec: "SPEC-0001"`.
@@ -180,6 +191,7 @@ When no actionable task exists, classify the workspace state.
   sessions"`.
 - Given an empty workspace (no specs), then the result is
   `kind: blocked, reason: "no specs in workspace"`.
+</behavior>
 
 <scenario id="CHK-005">
 When all tasks across all specs are [x] AND at least one spec lacks REPORT.md, the result is kind=report for the lowest spec ID missing REPORT.md.
@@ -197,7 +209,7 @@ Blocked variant carries one of a small set of canonical reason strings; empty wo
 `--json` emits a tagged union by `kind` following SPEC-0004's
 envelope conventions.
 
-**Done when:**
+<done-when>
 - Output begins with `"schema_version": 1`.
 - The `"kind"` field discriminates four variants:
   - `"implement"`: `{ kind, spec, task, task_line, covers,
@@ -216,8 +228,9 @@ envelope conventions.
 - A workspace with absent or malformed `.speccy/specs/` cleanly
   produces `kind: blocked, reason: "no specs in workspace"`
   rather than panicking.
+</done-when>
 
-**Behavior:**
+<behavior>
 - A `--kind review` result has `personas: ["business", "tests",
   "security", "style"]` (the v1 default fan-out, hardcoded per
   DEC-002).
@@ -225,6 +238,7 @@ envelope conventions.
   from the `Covers:` bullet under the task line.
 - A `blocked` result's `reason` string is one of a small set of
   canonical phrases (testable enum-like).
+</behavior>
 
 <scenario id="CHK-007">
 speccy next --json emits schema_version=1 envelope; the kind field discriminates four variants (implement, review, report, blocked) with the field shapes from ARCHITECTURE.md and SPEC.md.
@@ -241,7 +255,7 @@ Two back-to-back speccy next --json invocations against identical workspace stat
 
 Text mode prints one line per kind variant.
 
-**Done when:**
+<done-when>
 - `implement` kind prints one line:
   `next: implement T-NNN (SPEC-NNNN) -- <task_line>`.
 - `review` kind prints one line:
@@ -252,10 +266,12 @@ Text mode prints one line per kind variant.
   `next: blocked -- <reason>`.
 - All four lines end with a newline; exit code is 0 in all four
   cases (blocked is not an error -- it's a valid state).
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given each of the four kinds, text output matches the shape
   above. Snapshot tests assert per-kind.
+</behavior>
 
 <scenario id="CHK-009">
 - Given each of the four kinds, text output matches the shape
@@ -441,6 +457,7 @@ Greenfield. Rollback via `git revert`. Depends on SPEC-0001
 
 ## Assumptions
 
+<assumptions>
 - `speccy_core::workspace::scan` from SPEC-0004 surfaces task
   state per spec; the next-command consumer doesn't re-parse.
 - Task `Covers:` bullets in TASKS.md are parsed by the SPEC-0001
@@ -450,6 +467,7 @@ Greenfield. Rollback via `git revert`. Depends on SPEC-0001
 - An empty workspace (no specs at all) returns `kind: blocked`
   rather than erroring -- consistent with SPEC-0004's empty-
   workspace behaviour.
+</assumptions>
 
 ## Changelog
 

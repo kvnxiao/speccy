@@ -874,12 +874,40 @@ only the element name with a leading slash.
 
 Plain Markdown prose remains plain Markdown.
 
+<done-when>
+- Implementer-visible acceptance criteria as a bullet list.
+</done-when>
+
+<behavior>
+- Given/When/Then prose that drives test selection.
+</behavior>
+
 <scenario id="CHK-001">
 Given a task covers REQ-001,
 when `speccy check SPEC-0020/T-001` runs,
 then only REQ-001's scenarios are rendered.
 </scenario>
 </requirement>
+```
+
+Top-level intent sections are wrapped the same way:
+
+```markdown
+<goals>
+- Concrete outcomes this spec must achieve.
+</goals>
+
+<non-goals>
+- Explicitly out of scope.
+</non-goals>
+
+<user-stories>
+- As a <role>, I want <capability> so that <benefit>.
+</user-stories>
+
+<assumptions>
+- Optional. Preconditions the spec relies on; omit entirely if none.
+</assumptions>
 ```
 
 A Speccy element tag sharing a line with non-whitespace prose is a
@@ -891,27 +919,39 @@ structural element).
 
 ### Element names
 
-| Element | Cardinality | Attributes |
-|---|---|---|
-| `spec` | optional root; emitted by the renderer | none |
-| `overview` | optional, single | none |
-| `requirement` | required, 1+ | `id="REQ-NNN"` |
-| `scenario` | required, 1+ inside each requirement | `id="CHK-NNN"` |
-| `decision` | optional, 0+ | `id="DEC-NNN"`, optional `status="accepted\|rejected\|deferred\|superseded"` |
-| `open-question` | optional, 0+ | optional `resolved="true\|false"` |
-| `changelog` | required, single | none |
+| Element | Cardinality | Location | Attributes |
+|---|---|---|---|
+| `goals` | required, single | top-level | none |
+| `non-goals` | required, single | top-level | none |
+| `user-stories` | required, single | top-level | none |
+| `assumptions` | optional, 0 or 1 | top-level | none |
+| `requirement` | required, 1+ | top-level | `id="REQ-NNN"` |
+| `done-when` | required, single | inside `<requirement>`, before `<behavior>` | none |
+| `behavior` | required, single | inside `<requirement>`, after `<done-when>` and before `<scenario>` | none |
+| `scenario` | required, 1+ inside each requirement | inside `<requirement>`, after `<behavior>` | `id="CHK-NNN"` |
+| `decision` | optional, 0+ | top-level | `id="DEC-NNN"`, optional `status="accepted\|rejected\|deferred\|superseded"` |
+| `open-question` | optional, 0+ | top-level | optional `resolved="true\|false"` |
+| `changelog` | required, single | top-level | none |
 
 Open-tag forms in canonical order:
 
 ```markdown
-<spec>
-<overview>
+<goals>
+<non-goals>
+<user-stories>
 <requirement id="REQ-001">
+<done-when>
+<behavior>
 <scenario id="CHK-001">
 <decision id="DEC-001" status="accepted">
 <open-question resolved="false">
+<assumptions>
 <changelog>
 ```
+
+SPEC-0020's `<spec>` and `<overview>` were retired by SPEC-0021
+DEC-008; the parser now rejects them with a diagnostic noting they
+are no longer part of the whitelist.
 
 The Speccy element whitelist is **disjoint from the HTML5 element
 name set** by construction (see SPEC-0020 DEC-002): a `<section>` or
