@@ -2,7 +2,7 @@
 id: SPEC-0021
 slug: spec-section-xml-tags
 title: Section-level XML element tags for SPEC.md
-status: in-progress
+status: implemented
 created: 2026-05-16
 supersedes: []
 ---

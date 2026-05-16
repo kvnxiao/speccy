@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0021
-spec_hash_at_generation: a0f6087394529833a13867d60b8cfb35fa36fd135d3cef55fb30beb0c2b8d48c
-generated_at: 2026-05-16T06:46:41Z
+spec_hash_at_generation: b5df62baca46b2804a8af0abf6f71fad725473b49a3222cbe9ff260f1d29e199
+generated_at: 2026-05-16T23:45:21Z
 ---
 
 # Tasks: SPEC-0021 Section-level XML element tags for SPEC.md
@@ -9,7 +9,7 @@ generated_at: 2026-05-16T06:46:41Z
 ## Phase 1: Parser, typed model, and renderer
 
 - [x] **T-001**: Whitelist expansion, typed model fields, and parse-side validation
-  - Covers: REQ-001, REQ-002 (parse half), REQ-005
+  - Covers: REQ-001, REQ-002, REQ-005
   - Tests to write:
     - When `parse` runs on a SPEC.md whose `<requirement>` body
       contains a `<done-when>` block immediately followed by a
@@ -79,7 +79,7 @@ generated_at: 2026-05-16T06:46:41Z
     `speccy-core/tests/fixtures/spec_xml/`
 
 - [x] **T-002**: Renderer canonical order, blank-line spacing, and round-trip
-  - Covers: REQ-002 (render half)
+  - Covers: REQ-002
   - Tests to write:
     - When `render(&SpecDoc)` runs on a `SpecDoc` parsed from a hand-
       authored canonical fixture exercising all six new section tags,
@@ -119,7 +119,7 @@ generated_at: 2026-05-16T06:46:41Z
 ## Phase 2: Migration tool and in-tree corpus rewrite
 
 - [x] **T-003**: Build `xtask/migrate-spec-sections-0021`
-  - Covers: REQ-003 (build half)
+  - Covers: REQ-003
   - Tests to write:
     - When the migration runs on a fixture SPEC.md whose top level
       has `## Goals`, `## Non-goals`, and `## User Stories` Markdown
@@ -169,7 +169,7 @@ generated_at: 2026-05-16T06:46:41Z
     workspace root `Cargo.toml` (add the workspace member)
 
 - [x] **T-004**: Apply migration across `.speccy/specs/*/SPEC.md` and dogfood `speccy verify`
-  - Covers: REQ-003 (apply half)
+  - Covers: REQ-003
   - Tests to write:
     - When the migration tool has run across every
       `.speccy/specs/*/SPEC.md` in the workspace, then each file
@@ -241,7 +241,7 @@ generated_at: 2026-05-16T06:46:41Z
     `resources/agents/.agents/`, `resources/agents/.codex/`
 
 - [x] **T-006**: Delete the ephemeral migration tool
-  - Covers: REQ-003 (cleanup)
+  - Covers: REQ-003
   - Tests to write:
     - When the final implementation commit lands, then
       `xtask/migrate-spec-sections-0021/` no longer exists on disk.
