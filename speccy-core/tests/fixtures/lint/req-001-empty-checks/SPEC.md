@@ -7,10 +7,22 @@ created: 2026-05-11
 ---
 
 <!--
-expects: REQ-001
+expects: SPC-001
 not: SPC-002
 -->
 
 # Fixture
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: First
+
+body with no scenarios
+<!-- /speccy:requirement -->
+
+## Changelog
+
+<!-- speccy:changelog -->
+| Date | Author | Summary |
+|------|--------|---------|
+| 2026-05-11 | t | init |
+<!-- /speccy:changelog -->

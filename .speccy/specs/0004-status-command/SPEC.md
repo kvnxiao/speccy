@@ -66,6 +66,7 @@ SPEC-0010 (`check`) and SPEC-0012 (`verify`) reuse it.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Workspace scan
 
 Discover and parse every spec under `.speccy/specs/`. Surface
@@ -97,8 +98,14 @@ per-spec parse failures inline rather than failing the whole scan.
   exists, when project-root discovery runs, then it returns
   `/foo/bar`.
 
-**Covered by:** CHK-001, CHK-002
-
+<!-- speccy:scenario id="CHK-001" -->
+workspace::scan finds every NNNN-slug directory under .speccy/specs/, parses each artifact, and ignores non-matching subdirectories.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-002" -->
+Malformed individual specs produce ScannedSpec entries with parse errors; other specs still scan successfully; missing .speccy/specs/ yields an empty result without error.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Staleness detection
 
 Compute whether each spec's TASKS.md is stale relative to SPEC.md.
@@ -128,8 +135,20 @@ Compute whether each spec's TASKS.md is stale relative to SPEC.md.
 - Given `spec_hash_at_generation: bootstrap-pending`, then
   `stale = true` with `BootstrapPending` as the sole reason.
 
-**Covered by:** CHK-003
+<!-- speccy:scenario id="CHK-003" -->
+- Given hash match AND TASKS.md mtime >= SPEC.md mtime, then
+  `stale = false`.
+- Given hash mismatch, then `stale = true` with `HashDrift` in
+  reasons.
+- Given hash match but SPEC.md mtime > TASKS.md mtime, then
+  `stale = true` with `MtimeDrift`.
+- Given `spec_hash_at_generation: bootstrap-pending`, then
+  `stale = true` with `BootstrapPending` as the sole reason.
 
+stale_for returns HashDrift, MtimeDrift, or BootstrapPending appropriately; bootstrap-pending sentinel short-circuits other reasons; specs without TASKS.md are not stale.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Task state aggregation
 
 Count tasks per state for each spec.
@@ -146,8 +165,17 @@ Count tasks per state for each spec.
 - Given a TASKS.md with only phase headings and no task lines, then
   all counts are zero.
 
-**Covered by:** CHK-004
+<!-- speccy:scenario id="CHK-004" -->
+- Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, one `[x]`
+  task, then `TaskCounts { open: 2, in_progress: 1,
+  awaiting_review: 1, done: 1 }`.
+- Given a TASKS.md with only phase headings and no task lines, then
+  all counts are zero.
 
+Task state counts match the [ ] / [~] / [?] / [x] glyph distribution; missing TASKS.md yields zero counts.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: Supersession inverse
 
 Compute `superseded_by` per spec by inverting the supersedes graph
@@ -171,8 +199,17 @@ via `supersession_index` (SPEC-0001 REQ-008).
   `superseded_by: []`.
 - Given a spec with `parse_error`, then its `superseded_by` is `[]`.
 
-**Covered by:** CHK-005
+<!-- speccy:scenario id="CHK-005" -->
+- Given SPEC-0017 (no supersedes) and SPEC-0042
+  (`supersedes: [SPEC-0017]`), then SPEC-0017's entry has
+  `superseded_by: ["SPEC-0042"]` and SPEC-0042's entry has
+  `superseded_by: []`.
+- Given a spec with `parse_error`, then its `superseded_by` is `[]`.
 
+superseded_by per spec is computed via supersession_index inversion over successfully-parsed specs; specs with parse errors have empty superseded_by; dangling references are surfaced for lint.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Lint integration
 
 Run `lint::run` from SPEC-0003 and surface diagnostics per spec and
@@ -198,8 +235,20 @@ at workspace level.
   [SPEC-9999]`), then the workspace-level lint block contains a
   diagnostic naming SPEC-9999.
 
-**Covered by:** CHK-006
+<!-- speccy:scenario id="CHK-006" -->
+- Given SPEC-0001 emits one Error and one Warn diagnostic, then
+  SPEC-0001's entry's `lint.errors` has one item and `lint.warnings`
+  has one item, each as a structured object.
+- Given every spec is clean, then every spec's lint block has three
+  empty arrays.
+- Given a dangling supersedes reference (e.g. `supersedes:
+  [SPEC-9999]`), then the workspace-level lint block contains a
+  diagnostic naming SPEC-9999.
 
+status partitions lint::run diagnostics by spec_id; workspace-level diagnostics (no spec_id) appear in the top-level lint block; each lint block has errors/warnings/info arrays.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-006" -->
 ### REQ-006: Text view with default filter
 
 Render a human-scannable view filtered to specs that need attention.
@@ -225,8 +274,14 @@ Render a human-scannable view filtered to specs that need attention.
 - Given no specs, then stdout shows `No specs in workspace.` and
   exit code is 0.
 
-**Covered by:** CHK-007, CHK-008
-
+<!-- speccy:scenario id="CHK-007" -->
+Default text view shows in-progress specs plus any with errors / staleness / parse failures; clean implemented/dropped/superseded specs are excluded.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-008" -->
+Empty workspace prints 'No specs in workspace.' and exits 0; single-spec workspace prints a one-line header plus per-line summaries.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-007" -->
 ### REQ-007: JSON output with stable schema
 
 Render structured JSON for harness consumption.
@@ -258,8 +313,17 @@ Render structured JSON for harness consumption.
 - Given a workspace with one spec, when `--json` runs, the output
   validates against the contract above.
 
-**Covered by:** CHK-009
+<!-- speccy:scenario id="CHK-009" -->
+- Given any workspace, when `speccy status --json` runs twice with
+  no intervening filesystem change, the outputs are byte-identical.
+- Given no git is installed (or no HEAD exists), then `repo_sha`
+  is `""` and the command still succeeds.
+- Given a workspace with one spec, when `--json` runs, the output
+  validates against the contract above.
 
+speccy status --json emits schema_version=1, repo_sha (empty if no git), every spec regardless of status, structured lint diagnostics, deterministic byte-identical output across runs with no filesystem change.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -289,6 +353,7 @@ that mirrors the contract.
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Per-spec parse failure is non-fatal
 
 **Status:** Accepted
@@ -304,7 +369,8 @@ spec is being drafted and isn't valid yet.
 **Consequences:** Downstream processing (lint integration,
 supersession index) operates over `Result<_, _>` per artifact and
 skips errored ones.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Structured lint diagnostics in JSON, not strings
 
 **Status:** Accepted
@@ -320,7 +386,8 @@ as one-line strings.
 **Consequences:** ARCHITECTURE.md's JSON example is illustrative, not
 literal. A one-line clarification in ARCHITECTURE.md is queued as a
 non-blocking follow-up.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: `repo_sha` via shell-out to git, optional
 
 **Status:** Accepted
@@ -335,7 +402,8 @@ git repo), set `repo_sha = ""` and continue without error.
 - Omit the field -- rejected; ARCHITECTURE.md contract has it.
 **Consequences:** One subprocess per `status` invocation.
 Negligible cost.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: Workspace utilities live in `speccy-core`, not the binary
 
 **Status:** Accepted
@@ -353,7 +421,7 @@ part of this spec.
 **Consequences:** SPEC-0010 and SPEC-0012 consume these utilities.
 PLANNING.md updates SPEC-0010's dependencies to reflect the
 relationship.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -438,10 +506,12 @@ the new types until SPEC-0010 and SPEC-0012 land.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-12 | agent/claude | Implemented: `speccy_core::workspace` (scan, find_root, stale_for, TaskCounts, count_open_questions), `lint::Workspace` refactored to borrow specs, `speccy status [--json]` with text + JSON renderers + dangling-supersedes synthesis (WS-001). |
+<!-- /speccy:changelog -->
 
 ## Notes
 

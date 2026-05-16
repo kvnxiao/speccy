@@ -108,16 +108,16 @@ fn tsk_001_covers(
             known_reqs.insert(req.id.as_str());
         }
     }
-    if let Some(spec_toml) = spec.spec_toml_ok() {
-        for req in &spec_toml.requirements {
+    if let Some(spec_doc) = spec.spec_doc_ok() {
+        for req in &spec_doc.requirements {
             known_reqs.insert(req.id.as_str());
         }
     }
 
     if known_reqs.is_empty() {
-        // If we don't know any REQ IDs (e.g. both SPEC.md and spec.toml
-        // failed to parse), suppress TSK-001 to avoid noise stacking on
-        // an upstream parse failure.
+        // If we don't know any REQ IDs (e.g. the SPEC.md frontmatter
+        // and the SPEC.md marker tree both failed to parse), suppress
+        // TSK-001 to avoid noise stacking on an upstream parse failure.
         return;
     }
 
@@ -131,7 +131,7 @@ fn tsk_001_covers(
                     tasks_path.to_path_buf(),
                     u32::try_from(task.line).unwrap_or(0),
                     format!(
-                        "task `{tid}` covers `{covered}` but that REQ is not declared in SPEC.md or spec.toml",
+                        "task `{tid}` covers `{covered}` but that REQ is not declared in SPEC.md",
                         tid = task.id,
                     ),
                 ));

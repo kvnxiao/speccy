@@ -13,7 +13,6 @@ mod lint_common;
 use indoc::indoc;
 use lint_common::TestResult;
 use lint_common::lint_fixture;
-use lint_common::valid_spec_toml;
 use lint_common::write_spec_fixture;
 use speccy_core::lint::types::Diagnostic;
 use speccy_core::lint::types::Level;
@@ -22,19 +21,39 @@ fn count_code(diags: &[Diagnostic], code: &str) -> usize {
     diags.iter().filter(|d| d.code == code).count()
 }
 
+const SPEC_BASE: &str = indoc! {r#"
+    ---
+    id: SPEC-0001
+    slug: x
+    title: y
+    status: in-progress
+    created: 2026-05-11
+    ---
+
+    # Spec
+
+    <!-- speccy:requirement id="REQ-001" -->
+    ### REQ-001: First
+    body
+    <!-- speccy:scenario id="CHK-001" -->
+    covers
+    <!-- /speccy:scenario -->
+    <!-- /speccy:requirement -->
+"#};
+
+const CHANGELOG: &str = indoc! {r"
+    ## Changelog
+
+    <!-- speccy:changelog -->
+    | Date | Author | Summary |
+    |------|--------|---------|
+    | 2026-05-11 | t | init |
+    <!-- /speccy:changelog -->
+"};
+
 #[test]
 fn qst_001_fires_for_each_unchecked_question() -> TestResult {
-    let spec_md = indoc! {r"
-        ---
-        id: SPEC-0001
-        slug: x
-        title: y
-        status: in-progress
-        created: 2026-05-11
-        ---
-
-        ### REQ-001: First
-
+    let questions = indoc! {r"
         ## Open questions
 
         - [ ] First question?
@@ -42,7 +61,8 @@ fn qst_001_fires_for_each_unchecked_question() -> TestResult {
         - [ ] Second question?
         - [ ] Third question?
     "};
-    let fx = write_spec_fixture(spec_md, &valid_spec_toml(), None)?;
+    let spec_md = format!("{SPEC_BASE}\n{questions}\n{CHANGELOG}");
+    let fx = write_spec_fixture(&spec_md, None)?;
     let diags = lint_fixture(&fx);
     assert_eq!(count_code(&diags, "QST-001"), 3);
     let qst_diags: Vec<_> = diags.iter().filter(|d| d.code == "QST-001").collect();
@@ -59,23 +79,14 @@ fn qst_001_fires_for_each_unchecked_question() -> TestResult {
 
 #[test]
 fn qst_001_silent_when_all_checked() -> TestResult {
-    let spec_md = indoc! {r"
-        ---
-        id: SPEC-0001
-        slug: x
-        title: y
-        status: in-progress
-        created: 2026-05-11
-        ---
-
-        ### REQ-001: First
-
+    let questions = indoc! {r"
         ## Open questions
 
         - [x] all answered
         - [x] yes
     "};
-    let fx = write_spec_fixture(spec_md, &valid_spec_toml(), None)?;
+    let spec_md = format!("{SPEC_BASE}\n{questions}\n{CHANGELOG}");
+    let fx = write_spec_fixture(&spec_md, None)?;
     let diags = lint_fixture(&fx);
     assert_eq!(count_code(&diags, "QST-001"), 0);
     Ok(())
@@ -83,22 +94,13 @@ fn qst_001_silent_when_all_checked() -> TestResult {
 
 #[test]
 fn qst_001_heading_match_is_case_insensitive() -> TestResult {
-    let spec_md = indoc! {r"
-        ---
-        id: SPEC-0001
-        slug: x
-        title: y
-        status: in-progress
-        created: 2026-05-11
-        ---
-
-        ### REQ-001: First
-
+    let questions = indoc! {r"
         ## OPEN QUESTIONS
 
         - [ ] What about case?
     "};
-    let fx = write_spec_fixture(spec_md, &valid_spec_toml(), None)?;
+    let spec_md = format!("{SPEC_BASE}\n{questions}\n{CHANGELOG}");
+    let fx = write_spec_fixture(&spec_md, None)?;
     let diags = lint_fixture(&fx);
     assert_eq!(count_code(&diags, "QST-001"), 1);
     Ok(())

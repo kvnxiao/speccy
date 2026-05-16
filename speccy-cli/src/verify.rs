@@ -75,11 +75,12 @@ pub struct VerifyReport {
     pub lint_info: Vec<Diagnostic>,
     /// Number of specs walked (all statuses).
     pub specs_total: usize,
-    /// Total `[[requirements]]` rows across every parsed spec.toml that
-    /// belongs to a non-defunct spec.
+    /// Total `SpecDoc.requirements` entries across every spec whose
+    /// SPEC.md marker tree parsed and which is not defunct.
     pub requirements_total: usize,
-    /// Total `[[checks]]` rows (scenarios) across every parsed spec.toml
-    /// that belongs to a non-defunct spec.
+    /// Sum of `Requirement.scenarios.len()` over those same specs — every
+    /// `speccy:scenario` marker nested under a `speccy:requirement`
+    /// marker in a non-defunct spec's SPEC.md.
     pub scenarios_total: usize,
     /// `HEAD` SHA from `git rev-parse HEAD`, or `""` if unavailable.
     pub repo_sha: String,
@@ -201,10 +202,11 @@ fn build_status_map(ws: &Workspace) -> HashMap<String, SpecStatus> {
         .collect()
 }
 
-/// Total `[[requirements]]` and `[[checks]]` rows across non-defunct
-/// specs whose `spec.toml` parsed cleanly. Dropped and superseded specs
-/// contribute zero, matching the pre-SPEC-0018 "their checks never ran"
-/// distinction.
+/// Walk `SpecDoc.requirements` across every spec whose SPEC.md marker
+/// tree parsed and which is not defunct, returning `(requirements,
+/// scenarios)` where `scenarios` sums `Requirement.scenarios.len()`.
+/// Dropped and superseded specs contribute zero, matching the
+/// pre-SPEC-0018 "their checks never ran" distinction.
 fn shape_totals(ws: &Workspace) -> (usize, usize) {
     let mut requirements = 0usize;
     let mut scenarios = 0usize;
@@ -216,9 +218,10 @@ fn shape_totals(ws: &Workspace) -> (usize, usize) {
         if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
             continue;
         }
-        if let Ok(toml) = &parsed.spec_toml {
-            requirements = requirements.saturating_add(toml.requirements.len());
-            scenarios = scenarios.saturating_add(toml.checks.len());
+        if let Ok(doc) = &parsed.spec_doc {
+            requirements = requirements.saturating_add(doc.requirements.len());
+            let scenario_count: usize = doc.requirements.iter().map(|r| r.scenarios.len()).sum();
+            scenarios = scenarios.saturating_add(scenario_count);
         }
     }
     (requirements, scenarios)

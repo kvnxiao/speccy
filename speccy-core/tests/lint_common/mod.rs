@@ -17,8 +17,8 @@ use speccy_core::lint::Workspace;
 use speccy_core::lint::run;
 use speccy_core::lint::types::Diagnostic;
 use speccy_core::parse::report_md;
+use speccy_core::parse::spec_markers;
 use speccy_core::parse::spec_md;
-use speccy_core::parse::spec_toml;
 use speccy_core::parse::supersession::SupersessionIndex;
 use speccy_core::parse::supersession::supersession_index;
 use speccy_core::parse::tasks_md;
@@ -28,30 +28,25 @@ use tempfile::TempDir;
 /// with `?` while staying inside the test-code expect/unwrap policy.
 pub type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-/// One on-disk spec fixture rooted at a `TempDir`.
+/// One on-disk spec fixture rooted at a `TempDir`. The legacy
+/// `spec_toml` field was removed by SPEC-0019; per-spec data lives in
+/// `SPEC.md` markers.
 pub struct Fixture {
     pub _dir: TempDir,
     pub spec_md_path: Utf8PathBuf,
-    pub spec_toml_path: Utf8PathBuf,
     pub tasks_md_path: Option<Utf8PathBuf>,
     pub dir_path: Utf8PathBuf,
 }
 
-/// Write a single spec fixture into a tempdir.
-pub fn write_spec_fixture(
-    spec_md: &str,
-    spec_toml: &str,
-    tasks_md: Option<&str>,
-) -> TestResult<Fixture> {
+/// Write a single spec fixture into a tempdir. `spec_md` should be a
+/// canonical marker-structured SPEC.md (see [`valid_spec_md`]).
+pub fn write_spec_fixture(spec_md: &str, tasks_md: Option<&str>) -> TestResult<Fixture> {
     let dir = tempfile::tempdir()?;
     let dir_path = Utf8PathBuf::from_path_buf(dir.path().to_path_buf())
         .map_err(|p| format!("tempdir path must be UTF-8: {}", p.display()))?;
 
     let spec_md_path = dir_path.join("SPEC.md");
     fs_err::write(spec_md_path.as_std_path(), spec_md)?;
-
-    let spec_toml_path = dir_path.join("spec.toml");
-    fs_err::write(spec_toml_path.as_std_path(), spec_toml)?;
 
     let tasks_md_path = match tasks_md {
         Some(content) => {
@@ -65,21 +60,32 @@ pub fn write_spec_fixture(
     Ok(Fixture {
         _dir: dir,
         spec_md_path,
-        spec_toml_path,
         tasks_md_path,
         dir_path,
     })
 }
 
 /// Build a `ParsedSpec` by parsing each artifact via SPEC-0001's
-/// parsers.
+/// parsers and SPEC-0019's marker parser.
 pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
     let spec_md_result = spec_md(&fx.spec_md_path);
     let spec_id = spec_md_result
         .as_ref()
         .ok()
         .map(|s| s.frontmatter.id.clone());
-    let spec_toml_result = spec_toml(&fx.spec_toml_path);
+    // Mirror the workspace loader's SPEC-0019 stray-spec.toml check so
+    // SPC-001 fires on the lint side of the test harness too.
+    let stray_path = fx.dir_path.join("spec.toml");
+    let spec_doc_result = if fs_err::metadata(stray_path.as_std_path()).is_ok() {
+        Err(speccy_core::ParseError::StraySpecToml { path: stray_path })
+    } else {
+        fs_err::read_to_string(fx.spec_md_path.as_std_path())
+            .map_err(|e| speccy_core::ParseError::Io {
+                path: fx.spec_md_path.clone(),
+                source: e,
+            })
+            .and_then(|src| spec_markers::parse(&src, &fx.spec_md_path))
+    };
     let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| tasks_md(p));
 
     let spec_md_mtime = fs_err::metadata(fx.spec_md_path.as_std_path())
@@ -95,10 +101,9 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
         spec_id,
         dir: fx.dir_path.clone(),
         spec_md_path: fx.spec_md_path.clone(),
-        spec_toml_path: fx.spec_toml_path.clone(),
         tasks_md_path: fx.tasks_md_path.clone(),
         spec_md: spec_md_result,
-        spec_toml: spec_toml_result,
+        spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
         spec_md_mtime,
         tasks_md_mtime,
@@ -125,10 +130,11 @@ pub fn lint_fixture(fx: &Fixture) -> Vec<Diagnostic> {
     run_lint(&[parsed])
 }
 
-/// Minimal valid SPEC.md for tests that need a backdrop. Replace
-/// `__ID__` in the returned string to inject a spec id.
+/// Minimal valid marker-structured SPEC.md for tests that need a
+/// backdrop. Replace `__ID__` in the returned string to inject a spec
+/// id.
 pub fn valid_spec_md(id: &str) -> String {
-    let template = indoc! {r"
+    let template = indoc! {r#"
         ---
         id: __ID__
         slug: x
@@ -139,26 +145,32 @@ pub fn valid_spec_md(id: &str) -> String {
 
         # Test spec
 
+        <!-- speccy:requirement id="REQ-001" -->
         ### REQ-001: First
+
         Body.
-    "};
+
+        <!-- speccy:scenario id="CHK-001" -->
+        Given REQ-001, when the suite runs, then it covers REQ-001.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date       | Author | Summary |
+        |------------|--------|---------|
+        | 2026-05-11 | tester | Initial. |
+        <!-- /speccy:changelog -->
+    "#};
     template.replace("__ID__", id)
 }
 
-/// Minimal valid spec.toml matching `valid_spec_md`.
-pub fn valid_spec_toml() -> String {
-    indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "Given REQ-001, when the suite runs, then it covers REQ-001."
-    "#}
-    .to_owned()
+/// Minimal valid marker-structured SPEC.md, kept as a separate helper
+/// name so older test bodies that referenced `valid_spec_toml` for
+/// pairing can be adapted incrementally.
+pub fn valid_spec_md_default() -> String {
+    valid_spec_md("SPEC-0001")
 }
 
 /// Deliberately-unused helper that keeps the `report_md` import alive

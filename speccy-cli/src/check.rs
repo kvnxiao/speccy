@@ -1,11 +1,14 @@
 //! `speccy check` command logic.
 //!
 //! Discovers the project root, scans `.speccy/specs/`, resolves the
-//! SPEC-0017 selector against parsed spec.toml files, and renders the
-//! English validation scenario for each selected check. Renders only —
-//! no child processes spawn (SPEC-0018 REQ-002).
+//! SPEC-0017 selector against the scenarios reached via
+//! `SpecDoc.requirements[*].scenarios` (the `speccy:scenario` markers
+//! nested under each `speccy:requirement` marker in SPEC.md), and
+//! renders the English validation scenario for each selected check.
+//! Renders only — no child processes spawn (SPEC-0018 REQ-002).
 //!
-//! See `.speccy/specs/0018-remove-check-execution/SPEC.md`.
+//! See `.speccy/specs/0018-remove-check-execution/SPEC.md` and
+//! `.speccy/specs/0019-xml-canonical-spec-md/SPEC.md`.
 
 use crate::check_selector::CheckSelector;
 use crate::check_selector::SelectorError;
@@ -13,7 +16,7 @@ use crate::check_selector::parse_selector;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::lint::ParsedSpec;
-use speccy_core::parse::CheckEntry;
+use speccy_core::parse::Scenario;
 use speccy_core::parse::SpecStatus;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskRef;
@@ -40,8 +43,9 @@ pub enum CheckError {
     /// task reference.
     #[error(transparent)]
     TaskLookup(#[from] LookupError),
-    /// No spec.toml across the workspace contained a `[[checks]]` entry
-    /// with the requested ID.
+    /// No `speccy:scenario` marker nested under any
+    /// `SpecDoc.requirements[*].scenarios` entry across the workspace
+    /// carried the requested ID.
     #[error("no check with id `{id}` found in workspace; run `speccy status` to list specs")]
     NoCheckMatching {
         /// Check ID that produced no match.
@@ -65,11 +69,11 @@ pub struct CheckArgs {
     pub selector: Option<String>,
 }
 
-/// One check enriched with the `spec_id` of its parent spec.
+/// One scenario enriched with the `spec_id` of its parent spec.
 #[derive(Debug, Clone)]
 struct CollectedCheck {
     spec_id: String,
-    entry: CheckEntry,
+    entry: Scenario,
 }
 
 /// Resolve current working directory as a `Utf8PathBuf`.
@@ -261,15 +265,16 @@ fn run_qualified_check(
     render_checks(&matched, out, malformed)
 }
 
-/// Resolve a task selector via `task_lookup::find`, collect every check
-/// referenced by the requirements the task covers (deduplicated,
+/// Resolve a task selector via `task_lookup::find`, then walk
+/// `spec_doc.requirements` for each REQ-ID the task covers and collect
+/// every `req.scenarios` entry (deduplicated by scenario ID,
 /// first-occurrence requirement-declared order), and render them.
 ///
 /// Empty-covers is informational (exit 0): the line names the task ref
-/// and states it covers no requirements. CHK-IDs listed in
-/// `[[requirements]].checks` but absent from `[[checks]]` are silently
-/// skipped at this layer — the lint engine is the right surface for the
-/// absence.
+/// and states it covers no requirements. A REQ-ID in `task.covers` that
+/// does not match any `req.id` under `spec_doc.requirements` is
+/// silently skipped at this layer — the lint engine's TSK-001 is the
+/// right surface for that absence.
 fn run_task(
     task_ref: &TaskRef,
     project_root: &Utf8Path,
@@ -290,9 +295,10 @@ fn run_task(
 
     let spec = resolve_spec(&ws, &location.spec_id)?;
 
-    let Ok(spec_toml) = spec.spec_toml.as_ref() else {
-        // Parent spec.toml failed to parse; surface via collect_for_spec
-        // (one-shot warning) and return an empty render set.
+    let Ok(spec_doc) = spec.spec_doc.as_ref() else {
+        // Parent SPEC.md marker tree failed to parse (or a stray
+        // spec.toml is present); surface via collect_for_spec (one-shot
+        // warning) and return an empty render set.
         let label = spec
             .spec_id
             .clone()
@@ -302,33 +308,30 @@ fn run_task(
         return Ok(i32::from(malformed > 0));
     };
 
-    // Accumulate CHK-IDs in declared requirement order, deduplicating on
-    // first occurrence so a CHK referenced by multiple covered REQs
-    // renders exactly once.
-    let mut ordered_check_ids: Vec<&str> = Vec::new();
-    for req_id in &location.task.covers {
-        let Some(req_entry) = spec_toml.requirements.iter().find(|r| &r.id == req_id) else {
-            continue;
-        };
-        for chk_id in &req_entry.checks {
-            if !ordered_check_ids.contains(&chk_id.as_str()) {
-                ordered_check_ids.push(chk_id.as_str());
-            }
-        }
-    }
-
     let label = spec
         .spec_id
         .clone()
         .unwrap_or_else(|| display_spec_label(&spec.dir));
 
+    // Accumulate scenarios in declared requirement order, deduplicating
+    // on first occurrence so a scenario nested under multiple covered
+    // REQs (impossible today since scenarios are owned by exactly one
+    // requirement, but kept for symmetry with the pre-SPEC-0019 path)
+    // renders exactly once.
     let mut collected: Vec<CollectedCheck> = Vec::new();
-    for chk_id in &ordered_check_ids {
-        if let Some(entry) = spec_toml.checks.iter().find(|c| c.id == *chk_id) {
-            collected.push(CollectedCheck {
-                spec_id: label.clone(),
-                entry: entry.clone(),
-            });
+    let mut seen_ids: Vec<String> = Vec::new();
+    for req_id in &location.task.covers {
+        let Some(req) = spec_doc.requirements.iter().find(|r| &r.id == req_id) else {
+            continue;
+        };
+        for scenario in &req.scenarios {
+            if !seen_ids.iter().any(|s| s == &scenario.id) {
+                seen_ids.push(scenario.id.clone());
+                collected.push(CollectedCheck {
+                    spec_id: label.clone(),
+                    entry: scenario.clone(),
+                });
+            }
         }
     }
 
@@ -379,7 +382,7 @@ fn render_checks(
 }
 
 fn render_one(c: &CollectedCheck, out: &mut dyn Write) -> Result<(), CheckError> {
-    let scenario = c.entry.scenario.as_str();
+    let scenario = c.entry.body.as_str();
     let mut lines = scenario.lines();
     let first = lines.next().unwrap_or("");
     writeln!(out, "==> {} ({}): {}", c.entry.id, c.spec_id, first)?;
@@ -417,30 +420,32 @@ fn collect_checks(
     Ok((out, malformed))
 }
 
-/// Collect every `[[checks]]` entry from one spec.toml, tagged with the
-/// parent spec's label. Returns the collected checks plus a 1-or-0
-/// malformed count so callers can fold it into a workspace total.
+/// Collect every nested `speccy:scenario` from one spec's SPEC.md
+/// marker tree, tagged with the parent spec's label. Returns the
+/// collected scenarios plus a 1-or-0 malformed count so callers can
+/// fold it into a workspace total.
 fn collect_for_spec(
     spec: &ParsedSpec,
     label: &str,
     err: &mut dyn Write,
 ) -> Result<(Vec<CollectedCheck>, u32), CheckError> {
-    match &spec.spec_toml {
-        Ok(toml) => {
-            let collected = toml
-                .checks
-                .iter()
-                .map(|check| CollectedCheck {
-                    spec_id: label.to_owned(),
-                    entry: check.clone(),
-                })
-                .collect();
+    match &spec.spec_doc {
+        Ok(doc) => {
+            let mut collected = Vec::new();
+            for req in &doc.requirements {
+                for scenario in &req.scenarios {
+                    collected.push(CollectedCheck {
+                        spec_id: label.to_owned(),
+                        entry: scenario.clone(),
+                    });
+                }
+            }
             Ok((collected, 0))
         }
         Err(e) => {
             writeln!(
                 err,
-                "speccy check: warning: {label} spec.toml failed to parse: {e}; skipping",
+                "speccy check: warning: {label} SPEC.md marker tree failed to parse: {e}; skipping",
             )?;
             Ok((Vec::new(), 1))
         }

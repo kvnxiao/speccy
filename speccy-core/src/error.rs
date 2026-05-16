@@ -74,15 +74,18 @@ pub enum ParseError {
         context: String,
     },
 
-    /// A `[[checks]]` entry violated the command/prompt invariant.
-    #[error("check `{check_id}` in {path} is invalid: {reason}")]
-    InvalidCheckEntry {
-        /// Path of the offending file.
+    /// A per-spec `spec.toml` file was present after the SPEC-0019
+    /// migration. SPEC-0019 REQ-002 deleted per-spec TOML; the marker
+    /// tree in `SPEC.md` is the only carrier. The workspace loader
+    /// surfaces a stray file as a per-spec parse failure so callers
+    /// (lint, status, verify) see it through the existing per-spec
+    /// error channel.
+    #[error(
+        "stray per-spec spec.toml present at {path}: SPEC-0019 removed spec.toml; the marker tree in SPEC.md is the only spec carrier"
+    )]
+    StraySpecToml {
+        /// Absolute path to the stray `spec.toml` file.
         path: Utf8PathBuf,
-        /// `id` of the offending check.
-        check_id: String,
-        /// Human-readable reason.
-        reason: String,
     },
 
     /// A markdown file declared an opening `---` fence but no closing one.
@@ -100,6 +103,115 @@ pub enum ParseError {
         path: Utf8PathBuf,
         /// Field that carried the invalid value.
         field: String,
+        /// Offending value.
+        value: String,
+        /// Comma-separated list of allowed values.
+        allowed: String,
+    },
+
+    /// A marker comment used a name outside the closed Speccy set.
+    #[error("unknown speccy marker `{marker_name}` in {path} at byte offset {offset}")]
+    UnknownMarkerName {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name found in the source (without the `speccy:` prefix).
+        marker_name: String,
+        /// Byte offset of the marker's start in the source.
+        offset: usize,
+    },
+
+    /// A marker comment carried an attribute outside the set allowed for
+    /// that marker name.
+    #[error(
+        "unknown attribute `{attribute}` on speccy marker `{marker_name}` in {path} at byte offset {offset}"
+    )]
+    UnknownMarkerAttribute {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name carrying the attribute.
+        marker_name: String,
+        /// Attribute name found in the source.
+        attribute: String,
+        /// Byte offset of the marker's start in the source.
+        offset: usize,
+    },
+
+    /// A marker comment was syntactically malformed (non-line-isolated,
+    /// unquoted attribute, missing end marker, bad nesting).
+    #[error("malformed speccy marker in {path} at byte offset {offset}: {reason}")]
+    MalformedMarker {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Byte offset of the offending marker's start in the source.
+        offset: usize,
+        /// Human-readable reason.
+        reason: String,
+    },
+
+    /// A marker id failed the id-pattern regex for its marker name.
+    #[error(
+        "speccy marker `{marker_name}` in {path} has invalid id `{id}` (expected pattern {expected_pattern})"
+    )]
+    InvalidMarkerId {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name carrying the id.
+        marker_name: String,
+        /// Id found in the source.
+        id: String,
+        /// Regex pattern that the id should have matched.
+        expected_pattern: String,
+    },
+
+    /// Two markers of the same kind reused the same id within one spec.
+    #[error("duplicate speccy marker id `{id}` for `{marker_name}` in {path}")]
+    DuplicateMarkerId {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name carrying the duplicate id.
+        marker_name: String,
+        /// Id that appeared more than once.
+        id: String,
+    },
+
+    /// A `speccy:scenario` marker appeared outside any
+    /// `speccy:requirement` marker.
+    #[error("scenario marker outside any requirement in {path} at byte offset {offset}")]
+    ScenarioOutsideRequirement {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Scenario id when present in the malformed marker.
+        scenario_id: Option<String>,
+        /// Byte offset of the offending marker's start in the source.
+        offset: usize,
+    },
+
+    /// A marker block that is required to carry non-whitespace Markdown
+    /// body contained only whitespace.
+    #[error("speccy marker `{marker_name}` in {path} at byte offset {offset} has an empty body")]
+    EmptyMarkerBody {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name with the empty body.
+        marker_name: String,
+        /// Id of the offending marker when one is set.
+        id: Option<String>,
+        /// Byte offset of the marker's start in the source.
+        offset: usize,
+    },
+
+    /// A marker attribute's value was outside the allowed closed set for
+    /// that attribute (e.g. `decision` `status`, `open-question` `resolved`).
+    #[error(
+        "invalid value for attribute `{attribute}` on speccy marker `{marker_name}` in {path}: `{value}` is not one of {allowed}"
+    )]
+    InvalidMarkerAttributeValue {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Marker name carrying the attribute.
+        marker_name: String,
+        /// Attribute name.
+        attribute: String,
         /// Offending value.
         value: String,
         /// Comma-separated list of allowed values.

@@ -1,8 +1,8 @@
 //! Public types for the lint engine.
 
 use crate::error::ParseError;
+use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
-use crate::parse::SpecToml;
 use crate::parse::TasksMd;
 use crate::parse::supersession::SupersessionIndex;
 use camino::Utf8PathBuf;
@@ -129,9 +129,9 @@ pub struct Workspace<'a> {
 /// One spec's parsed artifacts plus the path metadata the lint engine
 /// needs to render diagnostics.
 ///
-/// `spec_md`, `spec_toml`, and `tasks_md` are stored as `Result` so the
+/// `spec_md`, `spec_doc`, and `tasks_md` are stored as `Result` so the
 /// lint engine can emit diagnostics for parse failures (e.g. SPC-001 for
-/// a malformed `spec.toml`).
+/// a malformed SPEC.md marker tree, or a SPEC-0019 stray `spec.toml`).
 #[derive(Debug)]
 pub struct ParsedSpec {
     /// Stable `SPEC-NNNN` id pulled from the SPEC.md frontmatter when
@@ -142,14 +142,14 @@ pub struct ParsedSpec {
     pub dir: Utf8PathBuf,
     /// Path to `SPEC.md`.
     pub spec_md_path: Utf8PathBuf,
-    /// Path to `spec.toml`.
-    pub spec_toml_path: Utf8PathBuf,
     /// Path to `TASKS.md`, if present.
     pub tasks_md_path: Option<Utf8PathBuf>,
-    /// Parsed SPEC.md (or the parse error).
+    /// Parsed SPEC.md frontmatter / heading view (or the parse error).
     pub spec_md: Result<SpecMd, ParseError>,
-    /// Parsed spec.toml (or the parse error).
-    pub spec_toml: Result<SpecToml, ParseError>,
+    /// Parsed SPEC.md marker tree (or the parse error). After SPEC-0019
+    /// this carries the canonical requirement-to-scenario graph; the
+    /// stray `spec.toml` lint also surfaces here as a parse failure.
+    pub spec_doc: Result<SpecDoc, ParseError>,
     /// Parsed TASKS.md (or the parse error), if a TASKS.md exists.
     pub tasks_md: Option<Result<TasksMd, ParseError>>,
     /// Modification time of `SPEC.md`, captured by the workspace
@@ -168,10 +168,11 @@ impl ParsedSpec {
         self.spec_md.as_ref().ok()
     }
 
-    /// Convenience: return the parsed spec.toml if parsing succeeded.
+    /// Convenience: return the parsed SPEC.md marker tree if parsing
+    /// succeeded.
     #[must_use = "callers must handle the None case (parse failure)"]
-    pub fn spec_toml_ok(&self) -> Option<&SpecToml> {
-        self.spec_toml.as_ref().ok()
+    pub fn spec_doc_ok(&self) -> Option<&SpecDoc> {
+        self.spec_doc.as_ref().ok()
     }
 
     /// Convenience: return the parsed TASKS.md if present and parsed

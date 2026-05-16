@@ -58,7 +58,6 @@ fn check_one_fixture(dir: &Path) -> TestResult {
     let utf8_dir = Utf8PathBuf::from_path_buf(dir.to_path_buf())
         .map_err(|p| format!("fixture path must be UTF-8: {}", p.display()))?;
     let spec_md_path = utf8_dir.join("SPEC.md");
-    let spec_toml_path = utf8_dir.join("spec.toml");
 
     let spec_md_content = fs_err::read_to_string(spec_md_path.as_std_path())?;
     let (expects, forbids) = parse_expectations(&spec_md_content);
@@ -74,7 +73,6 @@ fn check_one_fixture(dir: &Path) -> TestResult {
     let fx = lint_common::Fixture {
         _dir: placeholder_dir,
         spec_md_path,
-        spec_toml_path,
         tasks_md_path,
         dir_path: utf8_dir.clone(),
     };

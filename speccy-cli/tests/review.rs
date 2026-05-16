@@ -434,3 +434,95 @@ fn diff_placeholder_is_substituted_with_fallback_outside_repo() -> TestResult {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// SPEC-0019 T-006: reviewer prompt is task-scoped — the scenario text the
+// reviewer sees equals the marker body bytes from SPEC.md.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
+    let ws = Workspace::new()?;
+    write_agents(&ws, "# Agents\n")?;
+    let containing_spec = "SPEC-0099";
+    let spec_md = indoc::indoc! {r#"
+        ---
+        id: SPEC-0099
+        slug: x
+        title: Example SPEC-0099
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # SPEC-0099
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        unrelated body
+        <!-- speccy:scenario id="CHK-001" -->
+        unrelated scenario
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-002" -->
+        ### REQ-002: Second
+        body for REQ-002
+        <!-- speccy:scenario id="CHK-002" -->
+        Given REQ-002,
+        when the reviewer reads the prompt,
+        then the scenario body bytes equal this text.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    let tasks = tasks_md_with(
+        containing_spec,
+        "- [?] **T-001**: only req2\n  - Covers: REQ-002\n  - Implementer note: done.\n",
+    );
+    write_spec(&ws.root, "0099-review-slice", spec_md, "", Some(&tasks))?;
+
+    let out = capture_stdout(&ws, "T-001", "tests")?;
+
+    // Extract the CHK-002 marker body bytes from the source.
+    let start_tag = "<!-- speccy:scenario id=\"CHK-002\" -->\n";
+    let end_tag = "<!-- /speccy:scenario -->";
+    let after_start = spec_md
+        .find(start_tag)
+        .map(|i| i + start_tag.len())
+        .expect("fixture must contain CHK-002 start marker");
+    let tail = spec_md
+        .get(after_start..)
+        .expect("after_start must be a valid char boundary in fixture");
+    let before_end = tail
+        .find(end_tag)
+        .map(|j| after_start + j)
+        .expect("fixture must contain matching end marker");
+    let body_bytes = spec_md
+        .get(after_start..before_end)
+        .expect("body slice must lie on valid char boundaries in fixture")
+        .trim_end_matches('\n');
+
+    // The full marker body (multi-line) must appear in the rendered
+    // prompt as a contiguous substring — that's how the reviewer sees
+    // the validation scenario.
+    assert!(
+        out.contains(body_bytes),
+        "reviewer prompt must include the CHK-002 marker body bytes verbatim;\n\
+         body_bytes={body_bytes:?}\n\
+         out={out}",
+    );
+
+    // And the unrelated REQ-001 marker body must NOT appear (task-scoped
+    // slicing excludes uncovered requirements).
+    assert!(
+        !out.contains("unrelated scenario"),
+        "uncovered REQ-001's scenario body must be excluded from slice:\n{out}",
+    );
+    Ok(())
+}

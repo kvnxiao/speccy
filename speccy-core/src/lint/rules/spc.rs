@@ -20,7 +20,7 @@ const REQUIRED_FRONTMATTER_FIELDS: &[&str] = &["id", "slug", "title", "status", 
 
 /// Append every SPC-* diagnostic for one spec.
 pub fn lint(spec: &ParsedSpec, workspace: &Workspace<'_>, out: &mut Vec<Diagnostic>) {
-    spc_001_spec_toml_parse(spec, out);
+    spc_001_spec_doc_parse(spec, out);
     let (spc_004_fired, spc_005_fired) = spc_004_005_spec_md_parse(spec, out);
 
     if !spc_004_fired && !spc_005_fired {
@@ -31,25 +31,22 @@ pub fn lint(spec: &ParsedSpec, workspace: &Workspace<'_>, out: &mut Vec<Diagnost
     spc_007_implemented_open_tasks(spec, out);
 }
 
-fn spc_001_spec_toml_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
-    if let Err(err) = &spec.spec_toml {
+fn spc_001_spec_doc_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
+    if let Err(err) = &spec.spec_doc {
         let message = match err {
-            ParseError::Toml { message, .. } => {
-                format!("spec.toml failed to parse (likely a missing required field): {message}")
-            }
-            ParseError::Io { source, .. } => {
-                format!("spec.toml could not be read: {source}")
-            }
-            ParseError::UnsupportedSchemaVersion { value, .. } => format!(
-                "spec.toml declares unsupported schema_version = {value}; speccy supports schema_version = 1"
+            ParseError::StraySpecToml { path } => format!(
+                "stray per-spec spec.toml at {path}: SPEC-0019 removed spec.toml; remove the file and rely on SPEC.md markers"
             ),
-            other => format!("spec.toml is invalid: {other}"),
+            ParseError::Io { source, .. } => {
+                format!("SPEC.md marker tree could not be read: {source}")
+            }
+            other => format!("SPEC.md marker tree is invalid: {other}"),
         };
         out.push(Diagnostic::with_file(
             SPC_001,
             Level::Error,
             spec.spec_id.clone(),
-            spec.spec_toml_path.clone(),
+            spec.spec_md_path.clone(),
             message,
         ));
     }
@@ -130,11 +127,11 @@ fn spc_004_005_spec_md_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) -> (b
 }
 
 fn spc_002_003_cross_ref(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
-    let (Some(spec_md), Some(spec_toml)) = (spec.spec_md_ok(), spec.spec_toml_ok()) else {
+    let (Some(spec_md), Some(spec_doc)) = (spec.spec_md_ok(), spec.spec_doc_ok()) else {
         return;
     };
 
-    let diff = cross_ref(spec_md, spec_toml);
+    let diff = cross_ref(spec_md, spec_doc);
 
     for id in &diff.only_in_spec_md {
         out.push(Diagnostic::with_file(
@@ -142,18 +139,20 @@ fn spc_002_003_cross_ref(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             Level::Error,
             spec.spec_id.clone(),
             spec.spec_md_path.clone(),
-            format!("SPEC.md declares `{id}` but spec.toml has no matching `[[requirements]]` row"),
+            format!(
+                "SPEC.md heading declares `{id}` but no matching `speccy:requirement` marker exists"
+            ),
         ));
     }
 
-    for id in &diff.only_in_toml {
+    for id in &diff.only_in_markers {
         out.push(Diagnostic::with_file(
             SPC_003,
             Level::Error,
             spec.spec_id.clone(),
-            spec.spec_toml_path.clone(),
+            spec.spec_md_path.clone(),
             format!(
-                "spec.toml declares `[[requirements]] id = \"{id}\"` but SPEC.md has no matching `REQ-NNN` heading"
+                "`speccy:requirement id=\"{id}\"` marker exists but SPEC.md has no matching `### REQ-NNN` heading"
             ),
         ));
     }

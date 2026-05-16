@@ -21,7 +21,6 @@ use indoc::indoc;
 use lint_common::Fixture;
 use lint_common::TestResult;
 use lint_common::parse_fixture;
-use lint_common::valid_spec_toml;
 use lint_common::write_spec_fixture;
 use speccy_core::parse::supersession::supersession_index;
 use speccy_core::task_lookup::LookupError;
@@ -33,7 +32,7 @@ use speccy_core::workspace::Workspace;
 // -- Helpers -----------------------------------------------------------------
 
 fn spec_md_for(id: &str) -> String {
-    let body = indoc! {r"
+    let body = indoc! {r#"
         ---
         id: __ID__
         slug: x
@@ -44,9 +43,22 @@ fn spec_md_for(id: &str) -> String {
 
         # __ID__
 
+        <!-- speccy:requirement id="REQ-001" -->
         ### REQ-001: First
         Body.
-    "};
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
     body.replace("__ID__", id)
 }
 
@@ -59,7 +71,7 @@ fn tasks_md_with(spec_id: &str, body: &str) -> String {
 fn make_fixture(spec_id: &str, tasks_body: &str) -> TestResult<Fixture> {
     let spec = spec_md_for(spec_id);
     let tasks = tasks_md_with(spec_id, tasks_body);
-    write_spec_fixture(&spec, &valid_spec_toml(), Some(&tasks))
+    write_spec_fixture(&spec, Some(&tasks))
 }
 
 fn make_workspace(fixtures: &[&Fixture]) -> Workspace {
@@ -248,8 +260,6 @@ fn workspace_lookup_skips_specs_with_failed_tasks_md_parse() -> TestResult {
         .map_err(|p| format!("tempdir path must be UTF-8: {}", p.display()))?;
     let spec_md_path = dir_path.join("SPEC.md");
     fs_err::write(spec_md_path.as_std_path(), spec_md_for("SPEC-0002"))?;
-    let spec_toml_path = dir_path.join("spec.toml");
-    fs_err::write(spec_toml_path.as_std_path(), valid_spec_toml())?;
     let tasks_md_path = dir_path.join("TASKS.md");
     fs_err::write(
         tasks_md_path.as_std_path(),
@@ -258,7 +268,6 @@ fn workspace_lookup_skips_specs_with_failed_tasks_md_parse() -> TestResult {
     let fx_broken = Fixture {
         _dir: dir,
         spec_md_path,
-        spec_toml_path,
         tasks_md_path: Some(tasks_md_path),
         dir_path,
     };

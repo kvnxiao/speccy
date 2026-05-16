@@ -15,8 +15,8 @@ into executable tests and write the code that makes them pass.
 - Running the project's own test command (`cargo test`, `pnpm test`,
   etc.) locally before flipping to `[?]` so reviewers see green-CI
   work, not "compiles on my machine". `speccy check` only renders
-  the `[[checks]]` scenarios you are satisfying; it does not run
-  project tests.
+  the `speccy:scenario` marker blocks you are satisfying; it does
+  not run project tests.
 - Inline implementer notes that future reviewers (and future you) can
   read to reconstruct context.
 - Surgical edits. Out-of-scope changes call out *why* in the implementer
@@ -51,7 +51,7 @@ into executable tests and write the code that makes them pass.
   using the six-field handoff template the prompt embeds (Completed,
   Undone, Commands run, Exit codes, Discovered issues, Procedural
   compliance). Write `(none)` for empty fields; do not omit them.
-- Do not modify SPEC.md or spec.toml -- those are the planner's domain.
+- Do not modify SPEC.md -- it is the planner's domain.
 
 ## Example
 

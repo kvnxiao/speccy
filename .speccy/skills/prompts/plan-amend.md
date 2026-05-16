@@ -28,9 +28,10 @@ correct.
 3. Append a new row to the `## Changelog` table describing **why**
    the amendment was needed.
 4. If the amendment invalidates the requirement-to-check mapping,
-   update `spec.toml` accordingly. Each `[[checks]]` row is exactly
-   `id` and `scenario = """..."""` (English Given/When/Then). Do not
-   reintroduce `kind`, `command`, `prompt`, or `proves` fields —
-   they were removed in SPEC-0018.
+   edit the `<!-- speccy:requirement id="REQ-NNN" -->` and nested
+   `<!-- speccy:scenario id="CHK-NNN" -->` marker blocks in
+   `SPEC.md` directly. The scenario body is English
+   Given/When/Then prose. Per-spec `spec.toml` is no longer used
+   (SPEC-0019 migration); the marker tree is the machine contract.
 
 Do not regenerate TASKS.md; the next phase will reconcile it.

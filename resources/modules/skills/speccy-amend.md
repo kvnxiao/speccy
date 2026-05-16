@@ -20,9 +20,10 @@ reconciliation are not forgotten.
    speccy plan SPEC-0007
    ```
 
-2. Follow the prompt: edit SPEC.md surgically; append a `## Changelog`
-   row explaining *why* the amendment was needed; update `spec.toml`
-   if requirements changed.
+2. Follow the prompt: edit SPEC.md surgically (including its
+   `speccy:requirement` / `speccy:scenario` marker blocks if
+   requirements changed); append a `## Changelog` row explaining
+   *why* the amendment was needed.
 3. Render the TASKS.md amendment prompt:
 
    ```bash

@@ -1,9 +1,0 @@
-schema_version = 1
-
-[[requirements]]
-id = "REQ-001"
-checks = ["CHK-001"]
-
-[[checks]]
-id = "CHK-001"
-scenario = "covers REQ-001"

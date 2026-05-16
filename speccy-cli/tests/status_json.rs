@@ -143,14 +143,15 @@ fn output_is_deterministic_across_runs() -> TestResult {
 #[test]
 fn lint_diagnostics_are_structured_objects() -> TestResult {
     let ws = Workspace::new()?;
-    // Trigger SPC-001: missing spec.toml.
+    // After SPEC-0019 SPC-001 fires when a stray per-spec `spec.toml`
+    // is present (the marker tree is the new spec carrier).
     let dir = ws.root.join(".speccy").join("specs").join("0001-broken");
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(
         dir.join("SPEC.md").as_std_path(),
         spec_md_template("SPEC-0001", "in-progress"),
     )?;
-    // No spec.toml -> SPC-001 fires as an Error.
+    fs_err::write(dir.join("spec.toml").as_std_path(), "schema_version = 1\n")?;
 
     let json_text = render_json(&ws.root)?;
     let parsed: serde_json::Value = serde_json::from_str(&json_text)?;

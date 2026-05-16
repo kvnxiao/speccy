@@ -14,7 +14,6 @@ use indoc::indoc;
 use lint_common::TestResult;
 use lint_common::lint_fixture;
 use lint_common::valid_spec_md;
-use lint_common::valid_spec_toml;
 use lint_common::write_spec_fixture;
 use speccy_core::lint::types::Diagnostic;
 use speccy_core::lint::types::Level;
@@ -39,11 +38,7 @@ fn tsk_001_fires_for_unknown_covered_req() -> TestResult {
         - [ ] **T-001**: thing
           - Covers: REQ-099
     "};
-    let fx = write_spec_fixture(
-        &valid_spec_md("SPEC-0001"),
-        &valid_spec_toml(),
-        Some(tasks_md),
-    )?;
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_has_code(&diags, "TSK-001");
     Ok(())
@@ -60,11 +55,7 @@ fn tsk_002_fires_when_parser_warning_present() -> TestResult {
 
         - [ ] **TASK-001**: malformed prefix
     "};
-    let fx = write_spec_fixture(
-        &valid_spec_md("SPEC-0001"),
-        &valid_spec_toml(),
-        Some(tasks_md),
-    )?;
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_has_code(&diags, "TSK-002");
     Ok(())
@@ -80,11 +71,7 @@ fn tsk_004_fires_when_frontmatter_missing_generated_at() -> TestResult {
 
         - [ ] **T-001**: t
     "};
-    let fx = write_spec_fixture(
-        &valid_spec_md("SPEC-0001"),
-        &valid_spec_toml(),
-        Some(tasks_md),
-    )?;
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_has_code(&diags, "TSK-004");
     Ok(())
@@ -102,11 +89,7 @@ fn tsk_003_fires_at_info_for_bootstrap_pending() -> TestResult {
         - [ ] **T-001**: t
           - Covers: REQ-001
     "};
-    let fx = write_spec_fixture(
-        &valid_spec_md("SPEC-0001"),
-        &valid_spec_toml(),
-        Some(tasks_md),
-    )?;
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     let tsk_003 = diags
         .iter()
@@ -133,11 +116,7 @@ fn tsk_003_fires_at_warn_for_hash_mismatch() -> TestResult {
         - [ ] **T-001**: t
           - Covers: REQ-001
     "};
-    let fx = write_spec_fixture(
-        &valid_spec_md("SPEC-0001"),
-        &valid_spec_toml(),
-        Some(tasks_md),
-    )?;
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     let tsk_003 = diags
         .iter()

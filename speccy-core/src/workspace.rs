@@ -14,8 +14,8 @@
 use crate::lint::ParsedSpec;
 use crate::parse::SpecMd;
 use crate::parse::TasksMd;
+use crate::parse::spec_markers;
 use crate::parse::spec_md;
-use crate::parse::spec_toml;
 use crate::parse::supersession::SupersessionIndex;
 use crate::parse::supersession::supersession_index;
 use crate::parse::tasks_md;
@@ -399,7 +399,18 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     let has_tasks = fs_err::metadata(tasks_md_path.as_std_path()).is_ok_and(|m| m.is_file());
 
     let spec_md_result = spec_md(&spec_md_path);
-    let spec_toml_result = spec_toml(&spec_toml_path);
+    // SPEC-0019 REQ-002: a per-spec `spec.toml` is a stray after
+    // migration. Surface it through the per-spec parse-failure channel
+    // (the lint engine already renders these) instead of going to the
+    // marker parser.
+    let stray_spec_toml = fs_err::metadata(spec_toml_path.as_std_path()).is_ok();
+    let spec_doc_result = if stray_spec_toml {
+        Err(crate::error::ParseError::StraySpecToml {
+            path: spec_toml_path.clone(),
+        })
+    } else {
+        parse_spec_doc(&spec_md_path)
+    };
     let tasks_md_result = if has_tasks {
         Some(tasks_md(&tasks_md_path))
     } else {
@@ -427,14 +438,23 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
         spec_id,
         dir: dir.to_path_buf(),
         spec_md_path,
-        spec_toml_path,
         tasks_md_path: has_tasks.then_some(tasks_md_path),
         spec_md: spec_md_result,
-        spec_toml: spec_toml_result,
+        spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
         spec_md_mtime,
         tasks_md_mtime,
     }
+}
+
+/// Parse the marker tree from a SPEC.md path, propagating I/O and
+/// parser errors through the existing [`crate::error::ParseError`]
+/// channel.
+fn parse_spec_doc(
+    spec_md_path: &Utf8Path,
+) -> Result<crate::parse::SpecDoc, crate::error::ParseError> {
+    let source = crate::parse::toml_files::read_to_string(spec_md_path)?;
+    spec_markers::parse(&source, spec_md_path)
 }
 
 fn hex_of_sha256(bytes: &[u8; 32]) -> String {

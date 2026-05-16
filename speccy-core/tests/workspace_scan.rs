@@ -18,7 +18,7 @@ use tempfile::TempDir;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-const VALID_SPEC_MD: &str = indoc! {r"
+const VALID_SPEC_MD: &str = indoc! {r#"
     ---
     id: SPEC-0001
     slug: example
@@ -29,19 +29,21 @@ const VALID_SPEC_MD: &str = indoc! {r"
 
     # Example
 
+    <!-- speccy:requirement id="REQ-001" -->
     ### REQ-001: First
-"};
+    body
+    <!-- speccy:scenario id="CHK-001" -->
+    covers REQ-001
+    <!-- /speccy:scenario -->
+    <!-- /speccy:requirement -->
 
-const VALID_SPEC_TOML: &str = indoc! {r#"
-    schema_version = 1
+    ## Changelog
 
-    [[requirements]]
-    id = "REQ-001"
-    checks = ["CHK-001"]
-
-    [[checks]]
-    id = "CHK-001"
-    scenario = "covers REQ-001"
+    <!-- speccy:changelog -->
+    | Date | Author | Summary |
+    |------|--------|---------|
+    | 2026-05-11 | t | init |
+    <!-- /speccy:changelog -->
 "#};
 
 fn utf8(dir: &TempDir) -> TestResult<Utf8PathBuf> {
@@ -49,16 +51,10 @@ fn utf8(dir: &TempDir) -> TestResult<Utf8PathBuf> {
         .map_err(|p| format!("tempdir path must be UTF-8: {}", p.display()).into())
 }
 
-fn write_spec(
-    project_root: &Utf8Path,
-    dir_name: &str,
-    spec_md: &str,
-    spec_toml: &str,
-) -> TestResult<Utf8PathBuf> {
+fn write_spec(project_root: &Utf8Path, dir_name: &str, spec_md: &str) -> TestResult<Utf8PathBuf> {
     let dir = project_root.join(".speccy").join("specs").join(dir_name);
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(dir.join("SPEC.md").as_std_path(), spec_md)?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), spec_toml)?;
     Ok(dir)
 }
 
@@ -67,12 +63,11 @@ fn discovers_specs_and_ignores_non_matching_subdirs() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
 
-    write_spec(&root, "0001-foo", VALID_SPEC_MD, VALID_SPEC_TOML)?;
+    write_spec(&root, "0001-foo", VALID_SPEC_MD)?;
     write_spec(
         &root,
         "0002-bar",
         &VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0002"),
-        VALID_SPEC_TOML,
     )?;
 
     // Non-matching subdirectories that must be ignored.
@@ -105,13 +100,12 @@ fn parse_failure_on_one_spec_is_non_fatal() -> TestResult {
     let root = utf8(&tmp)?;
 
     // Malformed SPEC.md: missing frontmatter.
-    write_spec(&root, "0001-broken", "# Just a heading\n", VALID_SPEC_TOML)?;
+    write_spec(&root, "0001-broken", "# Just a heading\n")?;
     // Well-formed second spec.
     write_spec(
         &root,
         "0002-good",
         &VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0002"),
-        VALID_SPEC_TOML,
     )?;
 
     let ws = scan(&root);
@@ -168,14 +162,12 @@ fn specs_are_returned_in_ascending_id_order() -> TestResult {
         &root,
         "0003-c",
         &VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0003"),
-        VALID_SPEC_TOML,
     )?;
-    write_spec(&root, "0001-a", VALID_SPEC_MD, VALID_SPEC_TOML)?;
+    write_spec(&root, "0001-a", VALID_SPEC_MD)?;
     write_spec(
         &root,
         "0002-b",
         &VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0002"),
-        VALID_SPEC_TOML,
     )?;
 
     let ws = scan(&root);
@@ -190,7 +182,7 @@ fn discovers_specs_inside_mission_focus_folders() -> TestResult {
     let root = utf8(&tmp)?;
 
     // Ungrouped flat spec.
-    write_spec(&root, "0001-flat", VALID_SPEC_MD, VALID_SPEC_TOML)?;
+    write_spec(&root, "0001-flat", VALID_SPEC_MD)?;
 
     // Mission-grouped specs under `auth/`.
     let auth = root.join(".speccy").join("specs").join("auth");
@@ -199,18 +191,10 @@ fn discovers_specs_inside_mission_focus_folders() -> TestResult {
         auth.join("0002-signup").join("SPEC.md").as_std_path(),
         VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0002"),
     )?;
-    fs_err::write(
-        auth.join("0002-signup").join("spec.toml").as_std_path(),
-        VALID_SPEC_TOML,
-    )?;
     fs_err::create_dir_all(auth.join("0003-reset").as_std_path())?;
     fs_err::write(
         auth.join("0003-reset").join("SPEC.md").as_std_path(),
         VALID_SPEC_MD.replace("SPEC-0001", "SPEC-0003"),
-    )?;
-    fs_err::write(
-        auth.join("0003-reset").join("spec.toml").as_std_path(),
-        VALID_SPEC_TOML,
     )?;
     // Optional MISSION.md alongside the specs — not a spec dir, must
     // not be picked up.
@@ -230,7 +214,7 @@ fn discovers_specs_inside_mission_focus_folders() -> TestResult {
 fn tasks_md_optional() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
-    let dir = write_spec(&root, "0001-foo", VALID_SPEC_MD, VALID_SPEC_TOML)?;
+    let dir = write_spec(&root, "0001-foo", VALID_SPEC_MD)?;
     // No TASKS.md written.
 
     let ws = scan(&root);

@@ -128,6 +128,7 @@ outputs are refreshed in the same commit.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Single-source content modules
 
 Persona bodies, prompt templates, and skill bodies each have
@@ -169,8 +170,14 @@ rendered outputs derive from these modules.
 - Given the workspace tree, when walked, then no path matches
   `skills/`.
 
-**Covered by:** CHK-001, CHK-002
-
+<!-- speccy:scenario id="CHK-001" -->
+resources/modules/{personas,prompts,skills}/ are the only source-of-truth bodies for personas, prompts, and skill bodies; no per-host file under resources/agents/ duplicates a module body verbatim outside its `{% include %}` directive.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-002" -->
+The embedded RESOURCES bundle exposes both `modules/` (with `personas/`, `prompts/`, `skills/` subtrees) and `agents/` (with per-host subtrees) as walkable directories, and the legacy `skills/` tree is absent from the workspace and from the bundle.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Host-templated skill packs install to correct destinations
 
 `speccy init --host <host>` walks `resources/agents/.<host>/...`
@@ -216,8 +223,14 @@ matches the source path under `resources/agents/.<host>/`.
 - Given a fresh repo, when `speccy init --host claude-code`
   runs, then no path is created under `.agents/` or `.codex/`.
 
-**Covered by:** CHK-003, CHK-004
-
+<!-- speccy:scenario id="CHK-003" -->
+speccy init --host claude-code renders the seven SKILL.md files at `.claude/skills/speccy-<verb>/SKILL.md` with slash-prefixed command references (e.g. `/speccy-tasks`); does not create any path under `.agents/` or `.codex/`.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-004" -->
+speccy init --host codex renders the seven SKILL.md files at `.agents/skills/speccy-<verb>/SKILL.md` with unprefixed command references; does not create any path under `.claude/`. Codex subagent files land under `.codex/agents/` in the same run.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Per-host reviewer subagent files
 
 For each shipped reviewer persona, the per-host renderer
@@ -261,8 +274,14 @@ host's native location.
 - Given the workspace, when persona module files are read, then
   none contain the substring `"""`.
 
-**Covered by:** CHK-005, CHK-006
-
+<!-- speccy:scenario id="CHK-005" -->
+speccy init --host claude-code renders six files at `.claude/agents/reviewer-{business,tests,security,style,architecture,docs}.md`, each with YAML frontmatter declaring `name: reviewer-<persona>` and a `description:` string, followed by the matching persona body content from resources/modules/personas/.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-006" -->
+speccy init --host codex renders six files at `.codex/agents/reviewer-{business,tests,security,style,architecture,docs}.toml`, each parses as TOML and contains string-typed top-level keys `name`, `description`, and `developer_instructions`; persona body files contain no `"""` substring (TOML-safety invariant).
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: `/speccy-review` skill prefers host-native subagents
 
 The rendered `/speccy-review` SKILL.md for each host instructs
@@ -303,8 +322,23 @@ harnesses that don't recognise the subagent type.
   contains the literal `speccy review` CLI command as a
   fallback reference.
 
-**Covered by:** CHK-007
+<!-- speccy:scenario id="CHK-007" -->
+- Given Claude Code's rendered SKILL.md, when searched, then
+  step 4 contains the string `subagent_type: "reviewer-` and
+  the four default persona names.
+- Given Codex's rendered SKILL.md, when searched, then step 4
+  does not contain `subagent_type:` and instead references the
+  four reviewer subagents by name (e.g.
+  `reviewer-business, reviewer-tests, reviewer-security,
+  reviewer-style`).
+- Given either host's rendered SKILL.md, when searched, then it
+  contains the literal `speccy review` CLI command as a
+  fallback reference.
 
+Claude Code's rendered .claude/skills/speccy-review/SKILL.md step 4 references the Task tool with subagent_type values for the four default reviewer personas; Codex's rendered .agents/skills/speccy-review/SKILL.md step 4 references the four reviewer subagents by name in prose; both rendered files include a fallback paragraph pointing at `speccy review TASK-ID --persona X`.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Dogfooded outputs stay in sync via CI
 
 Speccy's own repo commits the materialised outputs under
@@ -336,8 +370,20 @@ freshly rendered.
   the error message names `.claude/skills/speccy-review/SKILL.md`
   and `.agents/skills/speccy-review/SKILL.md` as drifted.
 
-**Covered by:** CHK-008
+<!-- speccy:scenario id="CHK-008" -->
+- Given a clean repo at HEAD, when both init commands run in
+  CI, then `git diff --exit-code` against the listed paths
+  succeeds.
+- Given a repo where a contributor has edited
+  `resources/modules/skills/speccy-review.md` without
+  re-running init, when CI runs, then the diff check fails and
+  the error message names `.claude/skills/speccy-review/SKILL.md`
+  and `.agents/skills/speccy-review/SKILL.md` as drifted.
 
+Running speccy init --force --host claude-code followed by speccy init --force --host codex into a worktree-rooted tempdir produces outputs byte-identical to the committed dogfood tree under `.claude/`, `.agents/`, `.codex/`, `.speccy/skills/`.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-006" -->
 ### REQ-006: Rendering is deterministic and idempotent
 
 The MiniJinja-backed renderer produces byte-identical output on
@@ -371,8 +417,13 @@ output contains no unsubstituted template tokens.
   contains at least the two expected top-level entries
   `agents/` and `modules/`, each non-empty.
 
-**Covered by:** CHK-009, CHK-010
-
+<!-- speccy:scenario id="CHK-009" -->
+Rendering the full host pack for either host into the same tempdir twice in succession produces byte-identical file contents on the second pass.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-010" -->
+No rendered output file contains the literal substrings `{{` or `{%` outside fenced code blocks where skill bodies intentionally reference example template syntax. DEC-004 establishes that no `{% raw %}`-wrapped regions exist in the actual implementation, so the test scans for unsubstituted tokens by walking line-by-line outside fenced code blocks.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -449,6 +500,7 @@ invocation has somewhere to resolve.
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: MiniJinja over alternatives
 
 **Status:** Accepted
@@ -493,7 +545,8 @@ strict-undefined mode tightens the failure surface (a missing
 context var fails the render round-trip test cleanly).
 `speccy.toml.tmpl`'s `str::replace` keeps working until a
 follow-up opportunistically migrates it onto the same engine.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: `resources/agents/.<host>/...` mirrors install destinations
 
 **Status:** Accepted
@@ -534,7 +587,8 @@ and writes outputs to the matching destination path.
 the renderer iterating over `HostChoice::install_roots()`.
 Adding a third host means adding a sibling subtree, not
 touching the renderer.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: Reviewer subagents are a new shipped artifact
 
 **Status:** Accepted
@@ -576,7 +630,8 @@ step.
 dimension: "what does a subagent file look like for this
 persona on this host?". DEC-004 below addresses the resulting
 TOML-safety invariant on persona body text.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: Wrapper includes use bare `{% include %}`; persona bodies must avoid `"""`
 
 **Status:** Accepted (amended 2026-05-14; see Changelog row of
@@ -666,7 +721,7 @@ clean render-time error rather than silently-broken output.
 Adding a parallel `persona_bodies_have_no_jinja_tokens` guard
 test would be cheap belt-and-braces hygiene; tracked as a
 follow-up, not blocking v1.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -872,10 +927,12 @@ Install destinations (rendered):
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-14 | agent/claude | Initial draft. Introduces MiniJinja-backed `resources/` layout (host wrappers under `agents/.<host>/`, host-neutral content under `modules/`), reviewer subagent files as a new shipped artifact per host, and a dual-host CI materialization check. Pre-v1, so no installed-user migration story; Speccy's own dogfooded outputs are refreshed in the same PR. |
 | 2026-05-14 | agent/claude | DEC-004 amendment. The original "every `{% include %}` is wrapped in `{% raw %}...{% endraw %}`" invariant conflicted with REQ-002 (rendered SKILL.md must contain `/speccy-tasks` for Claude Code and bare `speccy-tasks` for Codex, via `{{ cmd_prefix }}` expansion) and REQ-004 (rendered `speccy-review` step 4 must diverge per host via `{% if host == "claude-code" %}` blocks). The actual T-005 / T-006 / T-009 / T-010 implementations chose bare `{% include %}` over `{% raw %}` to preserve those behaviour contracts; this row aligns DEC-004's text with the as-built design, retitles the decision, and updates REQ-003 / REQ-006 / Assumptions to drop the now-superseded `{% raw %}` references. Strict-undefined mode plus the existing TOML-safety invariant test (`t010_persona_bodies_have_no_toml_triple_quote`) cover the residual risk the original wrapping was meant to address. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

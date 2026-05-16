@@ -76,6 +76,7 @@ spec teaches the shipped skills to use it.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Six-field handoff template in implementer prompt
 
 The shipped implementer prompt (`skills/shared/prompts/implementer.md`)
@@ -101,8 +102,14 @@ embeds a structured handoff template enumerating six fields.
 - A second test asserts the `## Your task` body references the
   template and instructs filling every field.
 
-**Covered by:** CHK-001, CHK-002
-
+<!-- speccy:scenario id="CHK-001" -->
+skills/shared/prompts/implementer.md embeds a fenced markdown template containing the six handoff field labels verbatim: Completed, Undone, Commands run, Exit codes, Discovered issues, Procedural compliance.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-002" -->
+The implementer prompt's '## Your task' section references the handoff template and requires every field be populated (empty fields written as '(none)').
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Friction-to-skill-update pattern documented
 
 The shipped implementer prompt and implementer persona document the
@@ -135,8 +142,17 @@ they touched in the implementer note under `Procedural compliance`.
   about the friction-to-skill-update loop (substring match against an
   invariant sentence shipped in the spec).
 
-**Covered by:** CHK-003, CHK-004, CHK-005
-
+<!-- speccy:scenario id="CHK-003" -->
+skills/shared/prompts/implementer.md contains a '## When you hit friction' heading with at least one fenced example referencing a skills/ path.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-004" -->
+skills/shared/personas/implementer.md references the friction-to-skill-update pattern under '## What to consider' and points back to the prompt section.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-005" -->
+The project's own AGENTS.md documents the friction-to-skill-update loop in the 'Conventions for AI agents specifically' section.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Skill-update surfacing in REPORT.md
 
 The shipped report prompt (`skills/shared/prompts/report.md`)
@@ -159,8 +175,15 @@ section listing any `skills/**` files touched during the run.
   `## Out-of-scope` / `## Skill updates` / `## Deferred` ordering is
   preserved.
 
-**Covered by:** CHK-006
+<!-- speccy:scenario id="CHK-006" -->
+- A content test loads the report prompt and asserts the literal
+  string `## Skill updates` appears in the body and that the
+  `## Out-of-scope` / `## Skill updates` / `## Deferred` ordering is
+  preserved.
 
+skills/shared/prompts/report.md instructs the report-writing agent to emit a '## Skill updates' section between '## Out-of-scope items absorbed' and '## Deferred / known limitations'.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -179,6 +202,7 @@ because the new template is a superset of what they already expect.
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Six fields verbatim, not paraphrased
 
 **Status:** Accepted
@@ -196,7 +220,8 @@ asserts the exact strings.
 **Consequences:** Renaming any field is a breaking change to the
 template (caught by CHK-001/002 and any consuming harness). Worth the
 stability for downstream tooling.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Skill-update surfacing lives in REPORT.md, not in TASKS.md notes
 
 **Status:** Accepted
@@ -218,7 +243,8 @@ spec.
 the skill-updates list from inline notes (already in context) +
 `git diff --name-only -- skills/` if available. The prompt change is
 minor; the orchestrating skill (`/speccy:ship`) already has git access.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: AGENTS.md edit is in scope; user-project AGENTS.md is not
 
 **Status:** Accepted
@@ -237,7 +263,8 @@ with it.
   inject into it.
 **Consequences:** REQ-002 splits naturally into "prompt + persona"
 (propagates) and "AGENTS.md" (speccy-only dogfooding).
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: No new CLI surface, no new lint codes
 
 **Status:** Accepted
@@ -250,7 +277,7 @@ unchanged. The deliverable is markdown and three content tests.
 **Alternatives:** See above.
 **Consequences:** Downstream harnesses that want to grep handoffs do
 so on stable string labels (DEC-001). That's the contract.
-
+<!-- /speccy:decision -->
 ### Data changes
 
 No Rust code. Modified markdown files:
@@ -309,9 +336,11 @@ tests harness).
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-13 | human/kevin  | Initial draft after reviewing Factory AI "missions" architecture against speccy's design. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

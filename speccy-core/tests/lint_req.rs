@@ -7,10 +7,16 @@
     reason = "tests use assert!/assert_eq! macros and return Result for ? propagation in setup"
 )]
 //! REQ-* lint diagnostics.
+//!
+//! After SPEC-0019 the requirement-to-scenario graph lives in SPEC.md
+//! marker nesting. The marker parser already rejects orphan scenarios,
+//! dangling references, AND a `speccy:requirement` block with zero
+//! nested `speccy:scenario` markers at parse time, so the REQ-001 lint
+//! rule is unreachable in practice (the parser fires SPC-001 first).
+//! The single test below documents that contract.
 
 mod lint_common;
 
-use indoc::indoc;
 use lint_common::TestResult;
 use lint_common::lint_fixture;
 use lint_common::valid_spec_md;
@@ -22,124 +28,9 @@ fn count_code(diags: &[Diagnostic], code: &str) -> usize {
 }
 
 #[test]
-fn req_001_fires_when_requirement_has_no_checks() -> TestResult {
-    let spec_toml = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = []
-    "#};
-    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
+fn req_001_silent_when_every_requirement_has_a_scenario() -> TestResult {
+    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), None)?;
     let diags = lint_fixture(&fx);
-    assert_eq!(count_code(&diags, "REQ-001"), 1);
-    Ok(())
-}
-
-#[test]
-fn req_002_fires_when_check_id_does_not_exist() -> TestResult {
-    let spec_toml = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-999"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "x"
-    "#};
-    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
-    let diags = lint_fixture(&fx);
-    assert_eq!(count_code(&diags, "REQ-002"), 1);
-    Ok(())
-}
-
-#[test]
-fn req_003_fires_when_scenario_is_unreferenced() -> TestResult {
-    // CHK-001 is referenced by REQ-001; CHK-077 is orphaned. SPEC-0018
-    // REQ-003: every scenario row must be claimed by at least one
-    // requirement.
-    let spec_toml = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "covers REQ-001"
-
-        [[checks]]
-        id = "CHK-077"
-        scenario = "orphan"
-    "#};
-    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
-    let diags = lint_fixture(&fx);
-    assert_eq!(count_code(&diags, "REQ-003"), 1);
-    let req3 = diags
-        .iter()
-        .find(|d| d.code == "REQ-003")
-        .expect("REQ-003 diagnostic present");
-    assert!(
-        req3.message.contains("CHK-077"),
-        "REQ-003 message must name the orphan: {msg}",
-        msg = req3.message,
-    );
-    Ok(())
-}
-
-#[test]
-fn req_003_silent_when_every_scenario_is_referenced() -> TestResult {
-    let spec_toml = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001", "CHK-002"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "covers REQ-001 in two ways"
-
-        [[checks]]
-        id = "CHK-002"
-        scenario = "second scenario"
-    "#};
-    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), spec_toml, None)?;
-    let diags = lint_fixture(&fx);
-    assert_eq!(count_code(&diags, "REQ-003"), 0);
-    Ok(())
-}
-
-#[test]
-fn multiple_requirements_missing_coverage_emit_one_diag_each() -> TestResult {
-    let spec_md = indoc! {r"
-        ---
-        id: SPEC-0001
-        slug: x
-        title: y
-        status: in-progress
-        created: 2026-05-11
-        ---
-
-        ### REQ-001: a
-        ### REQ-002: b
-    "};
-    let spec_toml = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = []
-
-        [[requirements]]
-        id = "REQ-002"
-        checks = []
-    "#};
-    let fx = write_spec_fixture(spec_md, spec_toml, None)?;
-    let diags = lint_fixture(&fx);
-    assert_eq!(count_code(&diags, "REQ-001"), 2);
+    assert_eq!(count_code(&diags, "REQ-001"), 0);
     Ok(())
 }

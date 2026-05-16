@@ -76,10 +76,10 @@ Speccy, not in the user's workflow.
 | Noun | What it is | Where it lives |
 |---|---|---|
 | **Mission** | Scope of one long-running initiative composed of 1+ specs | `specs/[focus]/MISSION.md` (optional grouping; omit for flat single-focus projects) |
-| **Spec** | One bounded behavior contract | `specs/[focus]/NNNN-slug/SPEC.md` + `spec.toml`, or `specs/NNNN-slug/...` when ungrouped |
-| **Requirement** | One observable behavior with a done condition | Heading in SPEC.md + entry in `spec.toml` |
+| **Spec** | One bounded behavior contract | `specs/[focus]/NNNN-slug/SPEC.md`, or `specs/NNNN-slug/SPEC.md` when ungrouped |
+| **Requirement** | One observable behavior with a done condition | `speccy:requirement` marker block in SPEC.md |
 | **Task** | One implementation slice sized for one agent | Line in `TASKS.md` |
-| **Check** | One English validation scenario a requirement must satisfy | Entry in `spec.toml` |
+| **Check** | One English validation scenario a requirement must satisfy | `speccy:scenario` marker block nested under a `speccy:requirement` in SPEC.md |
 
 The project-wide product north star ("what we're building, why, who
 for, what 'good enough to ship v1' looks like") is **not** a Speccy
@@ -111,7 +111,7 @@ The full loop is five phases, alternating between planning and
 agent-orchestrated loops:
 
 ```
-1. plan        agent writes SPEC.md + spec.toml (PRD-shaped)
+1. plan        agent writes SPEC.md (PRD-shaped, marker-structured)
 2. tasks       agent writes TASKS.md (sized for one sub-agent each)
 3. impl loop   main agent spawns implementer sub-agents per task
 4. review loop main agent spawns reviewer sub-agents per persona per task
@@ -188,16 +188,17 @@ AGENTS.md                Project-wide product north star + agent conventions
   speccy.toml
   specs/
     0001-user-signup/                Ungrouped spec (no mission folder)
-      SPEC.md            Frontmatter + PRD prose + Decisions + Changelog
+      SPEC.md            Frontmatter + PRD prose + marker-structured
+                         requirements / scenarios / decisions / changelog
+                         (SPEC-0019 collapsed the former `spec.toml`
+                         into marker comments here)
       TASKS.md           Frontmatter (gen hash) + checklist + notes
-      spec.toml          Requirement <-> Check mapping (machine contract)
       REPORT.md          Frontmatter (outcome) + summary (end of loop)
     auth/                            Mission folder (optional grouping)
       MISSION.md                     Scope/context for this focus area
       0002-signup/
         SPEC.md
         TASKS.md
-        spec.toml
         REPORT.md
       0003-password-reset/
         SPEC.md
@@ -266,8 +267,9 @@ Renders a deterministic prompt that asks the agent to:
   path; absent MISSION.md is fine, just means the spec is ungrouped)
 - propose the next SPEC slice
 - write `specs/[focus]/NNNN-slug/SPEC.md` when targeting a focus
-  area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template)
-- write the corresponding `spec.toml` (IDs + check definitions)
+  area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template),
+  including `speccy:requirement` and nested `speccy:scenario` marker
+  blocks for IDs and check scenarios
 - surface material questions inline in SPEC.md
 
 If `SPEC-ID` is passed, the prompt instead asks for a minimal
@@ -718,8 +720,9 @@ append a Changelog row whenever it edits SPEC.md.
 Speccy lints three things in SPEC.md:
 
 1. Required frontmatter fields are present.
-2. Every `REQ-NNN` heading in SPEC.md matches a `[[requirements]]` row
-   in `spec.toml` (and vice versa).
+2. The marker tree is well-formed: every `speccy:requirement` has at
+   least one nested `speccy:scenario`, every id matches its regex,
+   and no ids duplicate within a spec.
 3. Any unchecked `- [ ]` in the **Open questions** section is reported
    in `speccy status` as a soft signal.
 
@@ -737,8 +740,8 @@ Unit-level tests live in TASKS.md (see below) as `**Tests to write:**`
 bullets on each task. This split is intentional:
 
 - **SPEC.md behavior**: what the system does, observable from outside.
-  Maps to `[[checks]]` scenarios that the project's integration tests
-  must satisfy.
+  Maps to `speccy:scenario` marker blocks nested under each
+  requirement; the project's integration tests must satisfy them.
 - **TASKS.md tests**: what each implementation slice must verify.
   Maps to unit tests the implementer writes before code.
 
@@ -850,71 +853,92 @@ Speccy parses TASKS.md only to:
 
 It does not validate note format or persona-review prose.
 
-## spec.toml
+## SPEC.md marker grammar
 
-`spec.toml` is the machine contract for the requirement-to-check
-mapping. Spec metadata (id, slug, title, status, lifecycle) lives in
-the SPEC.md frontmatter; task-generation freshness lives in TASKS.md
-frontmatter. spec.toml is just the proof chain.
+The machine-readable structure inside `SPEC.md` is carried by
+line-isolated XML-style HTML comment markers wrapping ordinary
+Markdown. The Markdown body remains valid Markdown: GitHub renders
+it, editors preview it, and `<T>` / `A & B` style content inside a
+scenario does not need XML escaping.
 
-```toml
-schema_version = 1
+### Syntax
 
-[[requirements]]
-id = "REQ-001"
-checks = ["CHK-001", "CHK-002"]
+Every marker comment occupies its own line. Opening markers may
+carry double-quoted attributes; closing markers carry only the
+marker name with a leading slash.
 
-[[requirements]]
-id = "REQ-002"
-checks = ["CHK-003"]
+```markdown
+<!-- speccy:requirement id="REQ-001" -->
+### REQ-001: Render selected scenarios
 
-[[checks]]
-id = "CHK-001"
-scenario = """
-Given no account exists for alice@example.com, when the signup
-endpoint receives a valid request, then a user row is persisted and
-the response includes a session token.
-"""
+Plain Markdown prose remains plain Markdown.
 
-[[checks]]
-id = "CHK-002"
-scenario = """
-Given an account already exists for alice@example.com, when a signup
-request submits the same email, then the response is HTTP 409 with
-an error message containing "already exists".
-"""
-
-[[checks]]
-id = "CHK-003"
-scenario = """
-Given a signup request persists a user, when the password column is
-read directly from storage, then it contains a hash and never the
-original plaintext.
-"""
+<!-- speccy:scenario id="CHK-001" -->
+Given a task covers REQ-001,
+when `speccy check SPEC-0019/T-001` runs,
+then only REQ-001's scenarios are rendered.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ```
 
-Notes:
+A marker comment sharing a line with non-whitespace prose is a parse
+error; attribute values without surrounding double quotes are a parse
+error; unknown marker names or unknown attributes are parse errors.
 
-- Each `[[checks]]` row is exactly `{ id, scenario }`. `scenario` is
-  free-form prose describing the behavior the requirement must
-  satisfy; the project's own tests (and reviewers) judge whether
-  the implementation actually meets it.
-- No `kind`, `command`, `prompt`, or `proves` fields. The CLI does
-  not execute anything; see "Checks" below.
-- No `[spec]` block. Spec metadata (id, slug, title, status,
-  created, supersedes) lives in SPEC.md frontmatter.
-- No `[tasks_generation]` block. Spec-hash freshness lives in
-  TASKS.md frontmatter (`spec_hash_at_generation`,
-  `generated_at`).
-- No `inputs` field on checks. The freshness model it enables
-  relies on agents declaring correct globs, which is exactly the
-  kind of thing LLMs get wrong silently.
-- No `critical` flag. All requirements are treated equally.
-- No `origin` field. Brownfield context is the planner skill's
-  responsibility (see "Brownfield posture" above).
-- No `[design]` block. Design lives in SPEC.md narrative.
-- No `[[tasks]]` table. Tasks live in TASKS.md.
-- No `[claim]` table. No leases in v1.
+### Marker names
+
+| Marker | Cardinality | Attributes |
+|---|---|---|
+| `speccy:spec` | optional root; emitted by the renderer | none |
+| `speccy:summary` | optional, single | none |
+| `speccy:requirement` | required, 1+ | `id="REQ-NNN"` |
+| `speccy:scenario` | required, 1+ inside each requirement | `id="CHK-NNN"` |
+| `speccy:decision` | optional, 0+ | `id="DEC-NNN"`, optional `status="accepted\|rejected\|deferred\|superseded"` |
+| `speccy:open-question` | optional, 0+ | optional `resolved="true\|false"` |
+| `speccy:changelog` | required, single | none |
+
+### IDs and nesting
+
+- Requirement ids match `REQ-\d{3,}`.
+- Scenario ids match `CHK-\d{3,}`.
+- Decision ids match `DEC-\d{3,}`.
+- A `speccy:scenario` marker must be nested inside exactly one
+  `speccy:requirement` marker. Containment replaces the old
+  `[[requirements]].checks` TOML relation; the parent requirement is
+  recorded as `scenario.parent_requirement_id`.
+- Duplicate `REQ-`, `CHK-` (within one spec), or `DEC-` ids are parse
+  errors.
+- The body of each required marker (`requirement`, `scenario`,
+  `changelog`) must contain non-whitespace Markdown.
+- Markers hidden inside fenced code blocks are treated as code
+  content, not structure.
+
+### Deterministic rendering
+
+`speccy-core::parse::spec_markers` exposes `SpecDoc`, `Requirement`,
+`Scenario`, `Decision`, `MarkerSpan`,
+`parse(source, path) -> Result<SpecDoc, ParseError>`, and
+`render(&SpecDoc) -> String`. Rendering is deterministic:
+
+- marker comments are line-isolated;
+- marker attributes emit in a stable order;
+- requirement and scenario order follows the struct order;
+- Markdown bodies are preserved except for trailing whitespace
+  normalization at marker boundaries;
+- parse / render / parse yields a structurally equivalent
+  `SpecDoc`.
+
+The deterministic renderer is library-internal. Per DEC-003 of
+SPEC-0019 there is no public `speccy fmt` command; rendering is used
+by CLI internals, prompt slicing, and tests.
+
+> Historical note (SPEC-0019 migration): before SPEC-0019, the
+> requirement-to-check graph and the scenario text lived in a
+> per-spec `spec.toml` (SPEC-0019) alongside `SPEC.md`. SPEC-0019
+> migration collapsed `spec.toml` into marker comments in `SPEC.md`; per-spec
+> `spec.toml` (SPEC-0019) is now a stray file and the workspace
+> loader rejects it. The only TOML left in the file layout is the
+> workspace-level `.speccy/speccy.toml`.
 
 > Historical note: before SPEC-0018, checks carried `kind`,
 > `command` or `prompt`, and `proves` fields, and `speccy check`
@@ -1320,7 +1344,7 @@ A typical full-loop session in Claude Code looks like:
 
 ```
 /speccy:plan
-[agent writes SPEC.md + spec.toml]
+[agent writes SPEC.md]
 
 /speccy:tasks SPEC-001
 [agent writes TASKS.md, then speccy tasks --commit]
@@ -1502,9 +1526,13 @@ on LLM judgment. All have stable prefixes (`SPC-` for spec
 structure, `REQ-` for requirements, `TSK-` for task structure).
 
 ```text
-SPC-001  spec.toml missing required field
-SPC-002  SPEC.md heading REQ-NNN not found in spec.toml
-SPC-003  spec.toml requirement REQ-NNN has no matching SPEC.md heading
+SPC-001  Stray per-spec spec.toml file present in spec directory (SPEC-0019)
+         (per-spec spec.toml was removed in SPEC-0019; the workspace
+         loader rejects it as StraySpecToml)
+SPC-002  SPEC.md marker tree malformed (parse error from
+         speccy-core::parse::spec_markers)
+SPC-003  Reserved (historical; formerly: spec.toml requirement REQ-NNN
+         missing matching SPEC.md heading; obsolete post-SPEC-0019)
 SPC-004  SPEC.md frontmatter missing required field (id/slug/title/status/created)
 SPC-005  SPEC.md frontmatter status value is not one of: in-progress,
          implemented, dropped, superseded
@@ -1512,9 +1540,12 @@ SPC-006  status = superseded but no other spec in the workspace
          declares `supersedes` pointing to this spec
 SPC-007  status = implemented but tasks are not all [x] (informational)
 
-REQ-001  Requirement has no covering check
-REQ-002  Requirement's check IDs reference non-existent checks
-REQ-003  spec.toml [[checks]] row is not referenced by any requirement
+REQ-001  Requirement has no nested speccy:scenario marker
+REQ-002  Reserved (formerly: requirement's check IDs reference
+         non-existent checks — obsolete post-SPEC-0019; containment
+         is now the only relation)
+REQ-003  Reserved (formerly: orphan [[checks]] row — obsolete
+         post-SPEC-0019; scenarios cannot exist outside a requirement)
 
 TSK-001  TASKS.md task references non-existent REQ ID
 TSK-002  TASKS.md task ID format invalid (expected T-NNN)
@@ -1576,6 +1607,7 @@ These are not v1 features. Each was considered and rejected.
 | Mutation testing | Out of scope. |
 | Semantic dependency analysis | Out of scope. |
 | Bad-test detection beyond no-op commands | Review owns this. |
+| Public `speccy fmt` command | Per SPEC-0019 DEC-003. The deterministic SPEC.md renderer ships as library functionality (used by CLI internals, prompt slicing, and tests); a user-facing formatter is out of scope for v1. |
 
 The point is not that these features are wrong. The point is that
 v1 is small enough to trust.
@@ -1685,7 +1717,7 @@ nodes.
 
 ## Spec ID allocation
 
-Global ID space. `speccy plan` walks `.speccy/specs/**/spec.toml`
+Global ID space. `speccy plan` walks `.speccy/specs/**/SPEC.md`
 across every mission folder and every flat (ungrouped) spec, finds
 the maximum `NNNN-` prefix, and increments. SPEC-NNN IDs are unique
 repo-wide regardless of which mission folder a spec sits in. Moving
@@ -1745,10 +1777,11 @@ only. Lint warns on uppercase or non-ASCII. Mismatch between
 
 ## Schema version
 
-`spec.toml` requires `schema_version = 1`. SPEC.md / TASKS.md /
-REPORT.md frontmatter implicitly target schema version 1; no
-declaration needed. The CLI rejects unknown `schema_version`
-values with a clear error.
+`.speccy/speccy.toml` requires `schema_version = 1`. SPEC.md /
+TASKS.md / REPORT.md frontmatter implicitly target schema version
+1; no declaration needed. The CLI rejects unknown `schema_version`
+values with a clear error. (SPEC-0019 migration: per-spec
+`spec.toml` migration removed it; it no longer carries any schema.)
 
 ## `speccy verify` exit code
 
@@ -1814,9 +1847,10 @@ truncation. v1 does not implement smarter retrieval.
 
 In this order:
 
-1. Artifact parser: `spec.toml`, `speccy.toml`, SPEC.md (YAML
-   frontmatter + heading extraction + Changelog table), TASKS.md
-   (YAML frontmatter + state extraction), REPORT.md frontmatter
+1. Artifact parser: `speccy.toml`, SPEC.md (YAML frontmatter +
+   marker tree via `speccy-core::parse::spec_markers` + Changelog
+   table), TASKS.md (YAML frontmatter + state extraction),
+   REPORT.md frontmatter
 2. `speccy init` -- scaffold + host skill copy
 3. Lint engine with the codes listed above
 4. `speccy status` (text + `--json`)

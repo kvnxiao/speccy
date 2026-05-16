@@ -63,6 +63,7 @@ filesystem signals.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Scaffold the `.speccy/` workspace
 
 Create `.speccy/speccy.toml` with template content when it does not
@@ -88,8 +89,20 @@ populates it is a **harness-skill** responsibility (the shipped
   init` runs, then the scaffolded `speccy.toml` reflects the
   template baked into the current binary.
 
-**Covered by:** CHK-001
+<!-- speccy:scenario id="CHK-001" -->
+- Given a fresh repo at `/foo/bar` with no `.speccy/`, when
+  `speccy init` runs successfully, then `.speccy/speccy.toml` exists
+  with `name = "bar"`.
+- Given a fresh repo, when `speccy init` runs, then no
+  `.speccy/VISION.md` is created (the CLI no longer scaffolds one).
+- Given the templates change between speccy releases, when `speccy
+  init` runs, then the scaffolded `speccy.toml` reflects the
+  template baked into the current binary.
 
+speccy init writes .speccy/speccy.toml with schema_version=1, project name from cwd, and root="..".
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Existence check and `--force` semantics
 
 Refuse to run if `.speccy/` already exists unless `--force` is
@@ -121,8 +134,17 @@ overwritten before mutating.
 - Given any successful run, when `speccy init` finishes, then a
   "Created N files" or "Overwrote N files" summary appears on stdout.
 
-**Covered by:** CHK-003, CHK-004, CHK-005
-
+<!-- speccy:scenario id="CHK-003" -->
+Existing .speccy/ without --force returns exit code 1 and stderr names the conflicting path.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-004" -->
+--force overwrites speccy-shipped files in .speccy/ and the host skill directory with current binary content.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-005" -->
+--force does not touch user-authored files in the host skill directory whose names are not in the shipped bundle.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Host detection precedence
 
 Detect the host from project signals; allow `--host <name>` override.
@@ -155,8 +177,23 @@ override.
 - Given a repo with no host directories, when `speccy init` runs,
   then claude-code is chosen and a warning is printed on stderr.
 
-**Covered by:** CHK-006
+<!-- speccy:scenario id="CHK-006" -->
+- Given a repo with `.claude/`, when `speccy init` runs, then the
+  Claude Code skill pack is chosen and copied.
+- Given a repo with both `.claude/` and `.codex/`, when `speccy init`
+  runs, then `.claude/` wins (probed first).
+- Given a repo with only `.cursor/`, when `speccy init` runs, then
+  exit code is 1 and stderr names cursor + suggests the
+  `--host claude-code` or `--host codex` override.
+- Given `speccy init --host cursor`, then exit code is 1 with the
+  same message (cursor is not a supported `--host` value in v1).
+- Given a repo with no host directories, when `speccy init` runs,
+  then claude-code is chosen and a warning is printed on stderr.
 
+--host wins; otherwise .claude/ > .codex/; .cursor/ refuses cleanly; unknown --host value exits 1 listing supported names.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: Skill-pack copy
 
 Copy `skills/<host>/*` from the embedded bundle into the host-native
@@ -188,8 +225,14 @@ directory shape so the pack is discoverable as host-native skills
   exact path is the implementer's choice within `.speccy/skills/`
   per ARCHITECTURE.md "Persona file resolution").
 
-**Covered by:** CHK-007, CHK-008
-
+<!-- speccy:scenario id="CHK-007" -->
+speccy init --host claude-code copies skills/claude-code/*.md to .claude/commands/ with byte-identical content.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-008" -->
+speccy init --host codex copies skills/codex/*.md to .codex/skills/ with byte-identical content; destination directory created if missing.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Exit codes
 
 Predictable exit codes for CI and harnesses.
@@ -214,8 +257,19 @@ Predictable exit codes for CI and harnesses.
   when `speccy init` attempts to write, then exit code is 2 and
   stderr contains the underlying I/O error message.
 
-**Covered by:** CHK-009
+<!-- speccy:scenario id="CHK-009" -->
+- Given a fresh repo, when `speccy init` runs to completion, then
+  exit code is 0.
+- Given `.speccy/` exists without `--force`, then exit code is 1.
+- Given `--host unknown`, then exit code is 1 and stderr lists
+  `claude-code, codex`.
+- Given a read-only project root (simulated permissions denied),
+  when `speccy init` attempts to write, then exit code is 2 and
+  stderr contains the underlying I/O error message.
 
+Exit codes: 0 on success, 1 on user error (existing workspace, unknown host, cursor detected), 2 on internal I/O failure.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -235,6 +289,7 @@ is conventional). Subcommand dispatch lives in `main.rs`.
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Embedded resources via `include_dir!`
 
 **Status:** Accepted
@@ -250,7 +305,8 @@ init command walks.
 **Consequences:** Skill packs are versioned with the binary.
 Updating skills requires releasing a new speccy version. Acceptable
 in v1; revisit if skill iteration cadence outpaces release cadence.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Cursor detected but unsupported in v1
 
 **Status:** Accepted
@@ -269,7 +325,8 @@ message stating Cursor support is planned but not in v1.
   re-use is the cursor pack's job when it lands.
 **Consequences:** Cursor users get an explicit, actionable message.
 A future spec adds `skills/cursor/` and removes this DEC.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: `--force` scope limited to speccy-shipped files
 
 **Status:** Accepted
@@ -285,7 +342,8 @@ byte-identical.
   rejected. Too restrictive for projects that mix skills.
 **Consequences:** `--force` is safe to run repeatedly. The
 "speccy's own files only" rule is the principle of least surprise.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: Host detection probe order
 
 **Status:** Accepted
@@ -300,7 +358,7 @@ probe order the chosen host depends on filesystem iteration order.
   many repos have both.
 **Consequences:** Claude Code wins when ambiguous. Users with mixed
 setups can override via `--host`.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -366,11 +424,13 @@ commit; no data migration since the command creates net-new files.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition (bootstrap of speccy). |
 | 2026-05-14 | agent/claude | REQ-004 destinations updated by SPEC-0015. Claude Code pack moves from `.claude/commands/` to `.claude/skills/<name>/SKILL.md`; Codex pack moves from `.codex/skills/` to `.agents/skills/<name>/SKILL.md` per OpenAI's official Codex scan paths. Layout shifts from flat `<verb>.md` files to SKILL.md directory format. Pre-v1: no shipped-install migration needed. |
 | 2026-05-14 | agent/claude | Vision noun retired; CLI no longer scaffolds `.speccy/VISION.md`. REQ-001 narrowed to scaffolding `speccy.toml` plus skill-pack resources only. CHK-002 repurposed from "VISION.md sections present in declared order" to "no VISION.md is created" (negative assertion). `templates/VISION.md.tmpl` is deleted. The greenfield Q&A that previously seeded VISION.md sections now lives in the shipped `speccy-init` skill markdown, which appends a `## Product north star` section to `AGENTS.md` when one is absent. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

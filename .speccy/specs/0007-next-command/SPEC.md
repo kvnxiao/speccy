@@ -72,6 +72,7 @@ right specific command.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Default priority (no `--kind`)
 
 Walk specs in ascending ID order; within each spec, prefer
@@ -107,8 +108,14 @@ first match.
   task from SPEC-0002 (SPEC-0001 has no actionable work for any
   caller).
 
-**Covered by:** CHK-001, CHK-002
-
+<!-- speccy:scenario id="CHK-001" -->
+Within a spec, [?] review-ready tasks are preferred over [ ] open tasks when no --kind is supplied; [~] tasks are always skipped.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-002" -->
+Across specs, the lowest spec ID with actionable work wins regardless of which kind of task; the spec-ID ordering dominates the within-spec preference.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: `--kind implement` and `--kind review` filters
 
 Filter strictly to the requested state class across all specs.
@@ -133,8 +140,14 @@ Filter strictly to the requested state class across all specs.
   result is the `[?]` from SPEC-0002 with persona fan-out
   `["business", "tests", "security", "style"]`.
 
-**Covered by:** CHK-003, CHK-004
-
+<!-- speccy:scenario id="CHK-003" -->
+--kind implement returns only [ ] tasks; never falls back to [?] tasks even when no [ ] is available; returns blocked instead.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-004" -->
+--kind review returns only [?] tasks with persona fan-out [business, tests, security, style]; never falls back to [ ] tasks; returns blocked instead.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Report and blocked kinds
 
 When no actionable task exists, classify the workspace state.
@@ -162,8 +175,14 @@ When no actionable task exists, classify the workspace state.
 - Given an empty workspace (no specs), then the result is
   `kind: blocked, reason: "no specs in workspace"`.
 
-**Covered by:** CHK-005, CHK-006
-
+<!-- speccy:scenario id="CHK-005" -->
+When all tasks across all specs are [x] AND at least one spec lacks REPORT.md, the result is kind=report for the lowest spec ID missing REPORT.md.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-006" -->
+Blocked variant carries one of a small set of canonical reason strings; empty workspace, all-claimed [~] tasks, and filter-with-no-match each produce the expected reason.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: JSON contract
 
 `--json` emits a tagged union by `kind` following SPEC-0004's
@@ -198,8 +217,14 @@ envelope conventions.
 - A `blocked` result's `reason` string is one of a small set of
   canonical phrases (testable enum-like).
 
-**Covered by:** CHK-007, CHK-008
-
+<!-- speccy:scenario id="CHK-007" -->
+speccy next --json emits schema_version=1 envelope; the kind field discriminates four variants (implement, review, report, blocked) with the field shapes from ARCHITECTURE.md and SPEC.md.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-008" -->
+Two back-to-back speccy next --json invocations against identical workspace state produce byte-identical stdout.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Text output
 
 Text mode prints one line per kind variant.
@@ -220,8 +245,13 @@ Text mode prints one line per kind variant.
 - Given each of the four kinds, text output matches the shape
   above. Snapshot tests assert per-kind.
 
-**Covered by:** CHK-009
+<!-- speccy:scenario id="CHK-009" -->
+- Given each of the four kinds, text output matches the shape
+  above. Snapshot tests assert per-kind.
 
+Text mode prints one line per kind variant matching the contract; exit code is 0 for all four kinds (blocked is not an error).
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -241,6 +271,7 @@ Flow per invocation:
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Walk specs ascending; within-spec, `[?]` before `[ ]`
 
 **Status:** Accepted (per ARCHITECTURE.md "speccy next priority")
@@ -259,7 +290,8 @@ the within-spec preference.
 accumulate (the within-spec `[?]` preference). Lowest-ID-first
 locality means a developer who started on SPEC-0001 stays there
 until done before SPEC-0002 demands attention.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Persona fan-out is hardcoded in v1
 
 **Status:** Accepted (per ARCHITECTURE.md "Phase 4: Review loop")
@@ -276,7 +308,8 @@ results. No project-level config in v1.
   ARCHITECTURE.md stance and "no `--strict` mode" philosophy.
 **Consequences:** All v1 deployments get the same review
 discipline. Future config knob can override.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: `blocked` carries a `reason` string, not an enum
 
 **Status:** Accepted
@@ -294,7 +327,8 @@ predictability.
   to know "no work right now" and decide what to do).
 **Consequences:** Reasons are testable as exact strings; future
 reasons can be added without breaking JSON schema.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: `--kind` filters strictly; no fallback to the other kind
 
 **Status:** Accepted
@@ -313,7 +347,7 @@ work left").
 **Consequences:** Skills can rely on the kind matching their
 filter. `/speccy:work` knows it won't accidentally get a review
 task.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -401,9 +435,11 @@ Greenfield. Rollback via `git revert`. Depends on SPEC-0001
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

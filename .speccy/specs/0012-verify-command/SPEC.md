@@ -61,6 +61,7 @@ behaviour) is part of the contract.
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Lint integration
 
 Run `speccy_core::lint::run` across the workspace; partition
@@ -83,8 +84,17 @@ diagnostics by severity.
 - Given an empty workspace (no specs), lint runs and returns
   empty buckets.
 
-**Covered by:** CHK-001
+<!-- speccy:scenario id="CHK-001" -->
+- Given a workspace with two `Level::Error` diagnostics and one
+  `Level::Warn`, the resulting structured output contains all
+  three diagnostics in the appropriate severity buckets.
+- Given an empty workspace (no specs), lint runs and returns
+  empty buckets.
 
+speccy verify runs lint::run; partitions diagnostics by Level into errors / warnings / info; lint runs every time verify is invoked.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Check execution
 
 Run every executable check and capture structured results, with
@@ -118,8 +128,14 @@ output streamed to stderr.
   prompt prints to stderr; the executable checks both run and
   contribute to the exit code; the manual does not.
 
-**Covered by:** CHK-002, CHK-003
-
+<!-- speccy:scenario id="CHK-002" -->
+Executable checks run via the captured-execution API; child output streams live to stderr (not stdout); structured CheckResult per check captures spec_id, check_id, kind, outcome, exit_code, duration_ms.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-003" -->
+All executable checks run regardless of earlier failures; spec-scoped CHK-IDs duplicated across specs all execute; manual checks emit prompts and don't affect exit code.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Binary exit code
 
 Compose lint and check results into a single 0-or-1 exit code.
@@ -142,8 +158,18 @@ Compose lint and check results into a single 0-or-1 exit code.
   (warnings and info never fail).
 - Empty workspace (no specs, no checks) -> exit 0.
 
-**Covered by:** CHK-004
+<!-- speccy:scenario id="CHK-004" -->
+- Clean lint + 3 passing checks -> exit 0.
+- 1 lint error + 3 passing checks -> exit 1.
+- Clean lint + 1 failing check -> exit 1.
+- Lint warnings/info but no errors + all checks pass -> exit 0
+  (warnings and info never fail).
+- Empty workspace (no specs, no checks) -> exit 0.
 
+Exit code is 0 iff lint.errors is empty AND every executable check passed; warnings and info never fail; exit code is deterministic given identical workspace state.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: Text mode summary
 
 In text mode, print a final summary to stdout after the live
@@ -172,8 +198,22 @@ stderr output completes.
   `Checks: 2 passed, 1 failed, 0 manual`,
   `verify: FAIL`.
 
-**Covered by:** CHK-005
+<!-- speccy:scenario id="CHK-005" -->
+- Given a clean workspace with three passing checks, stdout's
+  last three lines are
+  `Lint: 0 errors, 0 warnings, 0 info`,
+  `Checks: 3 passed, 0 failed, 0 manual`,
+  `verify: PASS`.
+- Given one lint error and two passing + one failing check,
+  stdout shows
+  `Lint: 1 errors, 0 warnings, 0 info`,
+  `Checks: 2 passed, 1 failed, 0 manual`,
+  `verify: FAIL`.
 
+Text mode prints Lint / Checks / verify summary lines to stdout as the LAST three lines; stderr received the live streamed output and per-check headers/footers.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: JSON output
 
 In `--json` mode, emit a structured report to stdout following the
@@ -206,8 +246,13 @@ established envelope.
 - An empty workspace produces JSON with empty arrays throughout
   and `"passed": true`.
 
-**Covered by:** CHK-006, CHK-007
-
+<!-- speccy:scenario id="CHK-006" -->
+speccy verify --json emits schema_version=1, repo_sha, structured lint and checks blocks, summary, and passed bool; pretty-printed; byte-identical across runs with same workspace state and check outcomes.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-007" -->
+JSON 'passed' field is true iff exit code is 0 across lint-only failures, check-only failures, both, and clean states.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -225,6 +270,7 @@ invocation:
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Captured check-execution as a library function
 
 **Status:** Accepted
@@ -250,7 +296,8 @@ public surface.
 **Consequences:** SPEC-0010's implementation grows a library
 function its spec didn't explicitly require. The CLI surface of
 SPEC-0010 is unchanged.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Live output to stderr; stdout reserved for summary/JSON
 
 **Status:** Accepted
@@ -268,7 +315,8 @@ to stdout.
   confusing.
 **Consequences:** CI logs show streamed output; harnesses can
 `speccy verify --json | jq ...` without contamination.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: Lint errors and check failures both fail; warnings/info don't
 
 **Status:** Accepted (per SPEC-0003 DEC-003 severity contract)
@@ -282,7 +330,8 @@ executable check passed. Warnings and info never fail the gate.
 **Consequences:** Projects that want stricter gates must propose
 severity changes upstream (SPEC-0003 amendments + the lint
 stability registry).
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: No retries; check authors own flake
 
 **Status:** Accepted
@@ -293,7 +342,7 @@ issues.
 - Retry N times -- rejected. Hides flake; bloats CI runtime.
 **Consequences:** Flaky checks fail verify. Encourages root-cause
 fixes over symptomatic suppression.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -377,11 +426,13 @@ deepened.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-13 | human/kevin  | Filter by spec status: `dropped`/`superseded` specs are skipped entirely; `Fail` outcomes on `in-progress` specs are categorised as in-flight and do NOT gate the exit code. Only `Level::Error` lint diagnostics and `Fail` on `implemented` specs trigger `verify: FAIL`. JSON envelope gains `summary.checks.in_flight` and per-check `spec_status` fields; text summary becomes `Checks: P passed, F failed, FL in-flight, M manual`. |
 | 2026-05-13 | agent/claude | Lint side of the same status filter: `Level::Error` lint diagnostics on `in-progress` specs are demoted to `Level::Info` before partitioning, so drafted-spec lint noise (e.g. TSK-001 on a TASKS.md whose REQs aren't finalised yet) flows into the info bucket and does not gate `verify`. Workspace-level diagnostics (no `spec_id`) and diagnostics on `implemented` specs keep their original severity. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

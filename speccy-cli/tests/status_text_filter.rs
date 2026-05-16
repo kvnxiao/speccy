@@ -15,7 +15,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::status::StatusArgs;
 use speccy_cli::status::run;
@@ -33,7 +32,7 @@ fn in_progress_specs_are_always_shown() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
+        "",
         None,
     )?;
 
@@ -50,14 +49,14 @@ fn clean_implemented_specs_are_hidden() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        &valid_spec_toml(),
+        "",
         None,
     )?;
 
@@ -77,7 +76,7 @@ fn stale_implemented_spec_is_shown() -> TestResult {
         &ws.root,
         "0001-done",
         &spec_md_template("SPEC-0001", "implemented"),
-        &valid_spec_toml(),
+        "",
         // bootstrap-pending makes it stale.
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
@@ -97,14 +96,14 @@ fn stale_implemented_spec_is_shown() -> TestResult {
 #[test]
 fn implemented_with_lint_error_is_shown() -> TestResult {
     let ws = Workspace::new()?;
-    // Missing spec.toml -> SPC-001 Error diagnostic.
+    // SPEC-0019: a stray per-spec spec.toml fires SPC-001.
     let dir = ws.root.join(".speccy").join("specs").join("0001-broken");
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(
         dir.join("SPEC.md").as_std_path(),
         spec_md_template("SPEC-0001", "implemented"),
     )?;
-    // No spec.toml on disk.
+    fs_err::write(dir.join("spec.toml").as_std_path(), "schema_version = 1\n")?;
 
     let text = render_text(&ws.root)?;
     assert!(

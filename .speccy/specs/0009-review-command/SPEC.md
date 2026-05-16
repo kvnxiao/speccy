@@ -72,6 +72,7 @@ SPEC-0007's `DEFAULT_PERSONAS`) plus two off-by-default personas
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: Persona registry
 
 The full set of six persona names is exposed as a constant.
@@ -89,8 +90,14 @@ The full set of six persona names is exposed as a constant.
 - Adding a new persona means appending to one constant.
 - A test asserts `DEFAULT_PERSONAS` is a prefix of `ALL`.
 
-**Covered by:** CHK-001
+<!-- speccy:scenario id="CHK-001" -->
+- Adding a new persona means appending to one constant.
+- A test asserts `DEFAULT_PERSONAS` is a prefix of `ALL`.
 
+personas::ALL contains exactly six names in declared order; SPEC-0007's DEFAULT_PERSONAS is a strict prefix (first 4 elements); both lists derive from the same source.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Persona file resolution
 
 Resolve persona content in order: project-local override first;
@@ -124,8 +131,14 @@ embedded bundle second.
 - Given the project-local override is an empty file, the
   function warns on stderr and returns the embedded content.
 
-**Covered by:** CHK-002, CHK-003
-
+<!-- speccy:scenario id="CHK-002" -->
+resolve_file returns project-local override content when .speccy/skills/personas/reviewer-<name>.md exists; embedded bundle content when override absent.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-003" -->
+An empty or unreadable project-local override warns on stderr and falls through to the embedded version; missing persona name returns PersonaError::NotFound.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: `--persona` argument validation
 
 `--persona` is required and must be one of the six registry
@@ -146,8 +159,17 @@ names.
   contains `unknown` and the six valid names.
 - `speccy review T-001` (no --persona) -> exit 1 with usage.
 
-**Covered by:** CHK-004
+<!-- speccy:scenario id="CHK-004" -->
+- `speccy review T-001 --persona security` -> succeeds (security
+  is in ALL).
+- `speccy review T-001 --persona unknown` -> exit 1; stderr
+  contains `unknown` and the six valid names.
+- `speccy review T-001` (no --persona) -> exit 1 with usage.
 
+Missing --persona exits 1 with usage listing valid names; unknown --persona value exits 1; case-sensitive match (Security != security).
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: Diff computation with fallback chain
 
 Compute the diff to inline into the prompt; fall back gracefully.
@@ -175,8 +197,21 @@ Compute the diff to inline into the prompt; fall back gracefully.
 - Given `git` isn't installed, `{{diff}}` is the fallback note
   (no error).
 
-**Covered by:** CHK-005
+<!-- speccy:scenario id="CHK-005" -->
+- Given uncommitted edits exist, `{{diff}}` contains the
+  `git diff HEAD` output.
+- Given the working tree is clean and there's at least one
+  commit ahead of `HEAD~1`, `{{diff}}` contains the HEAD vs
+  HEAD~1 diff.
+- Given a fresh repo with one commit (no HEAD~1) and clean
+  working tree, `{{diff}}` is the fallback note.
+- Given `git` isn't installed, `{{diff}}` is the fallback note
+  (no error).
 
+git diff HEAD output is captured first; if clean working tree, falls back to HEAD vs HEAD~1; if neither yields content or git is unavailable, uses the literal no-diff fallback note.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Render reviewer prompt
 
 Render the Phase 4 prompt for the resolved persona.
@@ -205,8 +240,17 @@ Render the Phase 4 prompt for the resolved persona.
 - Task entry includes the task line plus every sub-list bullet,
   same as SPEC-0008 DEC-004.
 
-**Covered by:** CHK-006
+<!-- speccy:scenario id="CHK-006" -->
+- The rendered prompt contains the persona content (whether
+  project-local or embedded).
+- The diff (or fallback note) appears where `{{diff}}` was.
+- Task entry includes the task line plus every sub-list bullet,
+  same as SPEC-0008 DEC-004.
 
+reviewer-<persona>.md template loaded; placeholders (spec_id, spec_md, task_id, task_entry, diff, persona, persona_content, agents) all substituted; budget trimming applied; output to stdout.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-006" -->
 ### REQ-006: Reuse SPEC-0008's task lookup; error mapping
 
 Task lookup errors propagate through the same shape as SPEC-0008.
@@ -225,8 +269,13 @@ Task lookup errors propagate through the same shape as SPEC-0008.
 - An ambiguous task ref produces the same error shape as
   SPEC-0008, with the suggested command rewritten for review.
 
-**Covered by:** CHK-007
+<!-- speccy:scenario id="CHK-007" -->
+- An ambiguous task ref produces the same error shape as
+  SPEC-0008, with the suggested command rewritten for review.
 
+speccy review uses SPEC-0008's task_lookup; lookup errors map to the same exit codes; ambiguity stderr suggests the speccy review SPEC-NNNN/T-NNN --persona <name> form.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -252,6 +301,7 @@ Flow per invocation:
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Persona registry hardcoded; six names
 
 **Status:** Accepted (per ARCHITECTURE.md)
@@ -265,7 +315,8 @@ extensibility.
   Magic; the CLI shouldn't define semantics from file presence.
 **Consequences:** Adding a persona is a code change. Acceptable
 for v1.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Persona lookup: project-local first; embedded second; no host-native
 
 **Status:** Accepted
@@ -294,7 +345,8 @@ The host-native location (`.claude/commands/`,
 **Consequences:** ARCHITECTURE.md may want a one-line clarification
 in a future amendment. The behaviour is unambiguous at the
 spec level.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: Diff via shell-out to git; documented fallback chain
 
 **Status:** Accepted (per ARCHITECTURE.md "speccy review diff scoping")
@@ -314,7 +366,8 @@ two) per invocation is cheap.
   committed implementations.
 **Consequences:** Reviewers always have *something* under
 `{{diff}}` -- either real content or a clear "no diff" note.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: `--persona` is required; no implicit default
 
 **Status:** Accepted
@@ -330,7 +383,7 @@ usage error.
   fan out; that's the skill's job.
 **Consequences:** Skills calling `speccy review` always pass
 `--persona`. Manual invocations always need it too.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 ```rust
@@ -409,9 +462,11 @@ Greenfield. Depends on SPEC-0001, SPEC-0004, SPEC-0005, SPEC-0008.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

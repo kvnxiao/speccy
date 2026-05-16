@@ -49,4 +49,4 @@ Every task in this spec is now `[x]`. Your job is to author
 3. Do NOT open the PR; the orchestrating skill will call `gh` after
    you finish writing REPORT.md.
 
-Surgical only: do not edit SPEC.md, spec.toml, or TASKS.md.
+Surgical only: do not edit SPEC.md or TASKS.md.

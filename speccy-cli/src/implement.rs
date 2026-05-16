@@ -17,6 +17,7 @@ use speccy_core::prompt::TrimResult;
 use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
+use speccy_core::prompt::slice_for_task;
 use speccy_core::prompt::trim_to_budget;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskRef;
@@ -91,9 +92,18 @@ pub fn run(
     let template = load_template("implementer.md")?;
 
     let suggested_files = format_suggested_files(&location.task.suggested_files);
+    // After SPEC-0019 REQ-005, prompt slicing reads `SpecDoc` and emits
+    // only the requirements this task covers (plus frontmatter, summary,
+    // and decision context). Falls back to the raw SPEC.md when the
+    // marker tree failed to parse — the lint engine has already flagged
+    // that as SPC-001, so the agent at least sees something to act on.
+    let spec_md_slice = location.spec_doc.map_or_else(
+        || location.spec_md.raw.clone(),
+        |doc| slice_for_task(doc, &location.task.covers),
+    );
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", location.spec_id.clone());
-    vars.insert("spec_md", location.spec_md.raw.clone());
+    vars.insert("spec_md", spec_md_slice);
     vars.insert("task_id", location.task.id.clone());
     vars.insert("task_entry", location.task_entry_raw.clone());
     vars.insert("suggested_files", suggested_files);

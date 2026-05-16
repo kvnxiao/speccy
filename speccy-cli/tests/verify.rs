@@ -49,65 +49,36 @@ fn invoke(root: &Utf8Path, json: bool) -> TestResult<(i32, String, String)> {
     Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
 }
 
-/// A well-formed spec.toml referencing one scenario. Uses the new
-/// `scenario` field so REQ-003 (unreferenced scenario) cannot fire.
-fn spec_toml_one_scenario() -> String {
-    indoc! {r#"
-        schema_version = 1
+/// Marker SPEC.md with a requirement marker that has no nested
+/// scenarios — fires REQ-001.
+fn spec_md_empty_scenarios(spec_id: &str, status: &str) -> String {
+    let template = indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: __STATUS__
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
+        # __ID__
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = "Given a workspace, when verify runs, then it exits 0."
-    "#}
-    .to_owned()
-}
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        Body with no scenarios.
+        <!-- /speccy:requirement -->
 
-/// REQ-001 trigger: requirement with an empty `checks` array.
-fn spec_toml_empty_checks_array() -> String {
-    indoc! {r#"
-        schema_version = 1
+        ## Changelog
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = []
-    "#}
-    .to_owned()
-}
-
-/// REQ-002 trigger: requirement references CHK-099 with no matching row.
-fn spec_toml_unknown_check_reference() -> String {
-    indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-099"]
-    "#}
-    .to_owned()
-}
-
-/// REQ-003 trigger: a scenario row exists but no requirement references it.
-fn spec_toml_unreferenced_scenario() -> String {
-    indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "covers REQ-001"
-
-        [[checks]]
-        id = "CHK-077"
-        scenario = "orphaned scenario nobody references"
-    "#}
-    .to_owned()
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    template
+        .replace("__ID__", spec_id)
+        .replace("__STATUS__", status)
 }
 
 /// SPC-004 trigger: SPEC.md missing required `id` frontmatter field. Used
@@ -161,97 +132,38 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
         &ws.root,
         "0001-empty",
         // Implemented so REQ-001 stays at Error (no in-progress demotion).
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "implemented"),
+        "",
         None,
     )?;
 
     let (code, out, _err) = invoke(&ws.root, true)?;
-    assert_eq!(code, 1, "REQ-001 (empty checks) must gate verify");
+    assert_eq!(code, 1, "empty scenarios must gate verify");
 
     let json: Value = serde_json::from_str(&out)?;
     let errors = at(&json, &["lint", "errors"])
         .as_array()
         .expect("lint.errors array");
-    let req1 = errors
+    // After SPEC-0019 the marker parser itself rejects a requirement
+    // with no nested scenario marker, so the gating error surfaces as
+    // SPC-001 (marker tree invalid) rather than REQ-001 (lint-derived).
+    let spc1 = errors
         .iter()
-        .find(|d| field(d, "code").as_str() == Some("REQ-001"))
-        .expect("REQ-001 must appear in errors");
-    let message = field(req1, "message").as_str().unwrap_or("");
+        .find(|d| field(d, "code").as_str() == Some("SPC-001"))
+        .expect("SPC-001 must appear in errors");
+    let message = field(spc1, "message").as_str().unwrap_or("");
     assert!(
         message.contains("REQ-001"),
-        "REQ-001 diagnostic must name the requirement; got: {message}",
+        "SPC-001 diagnostic must name the offending requirement; got: {message}",
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Bullet 2: requirement references CHK-099 with no matching row
+// (Former REQ-002 / REQ-003 tests removed: SPEC-0019 marker containment
+// makes both "dangling CHK reference" and "orphan scenario row"
+// structurally unrepresentable, so neither code can fire.)
 // ---------------------------------------------------------------------------
-
-#[test]
-fn requirement_referencing_unknown_scenario_exits_one_and_names_both_ids() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-unknown-ref",
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_unknown_check_reference(),
-        None,
-    )?;
-
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    assert_eq!(code, 1);
-
-    let json: Value = serde_json::from_str(&out)?;
-    let errors = at(&json, &["lint", "errors"])
-        .as_array()
-        .expect("lint.errors array");
-    let req2 = errors
-        .iter()
-        .find(|d| field(d, "code").as_str() == Some("REQ-002"))
-        .expect("REQ-002 must appear in errors");
-    let message = field(req2, "message").as_str().unwrap_or("");
-    assert!(
-        message.contains("REQ-001") && message.contains("CHK-099"),
-        "REQ-002 diagnostic must name both REQ and CHK ids; got: {message}",
-    );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Bullet 3: scenario unreferenced by any requirement
-// ---------------------------------------------------------------------------
-
-#[test]
-fn unreferenced_scenario_reports_shape_error() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-orphan",
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_unreferenced_scenario(),
-        None,
-    )?;
-
-    let (code, out, _err) = invoke(&ws.root, true)?;
-    assert_eq!(code, 1, "unreferenced scenario must gate verify");
-
-    let json: Value = serde_json::from_str(&out)?;
-    let errors = at(&json, &["lint", "errors"])
-        .as_array()
-        .expect("lint.errors array");
-    let req3 = errors
-        .iter()
-        .find(|d| field(d, "code").as_str() == Some("REQ-003"))
-        .expect("REQ-003 must appear in errors");
-    let message = field(req3, "message").as_str().unwrap_or("");
-    assert!(
-        message.contains("CHK-077"),
-        "REQ-003 diagnostic must name the orphaned scenario id; got: {message}",
-    );
-    Ok(())
-}
 
 // ---------------------------------------------------------------------------
 // Bullet 4: clean workspace passes, no child process spawned
@@ -260,30 +172,16 @@ fn unreferenced_scenario_reports_shape_error() -> TestResult {
 #[test]
 fn clean_workspace_exits_zero_without_spawning_child_processes() -> TestResult {
     let ws = Workspace::new()?;
-    // The scenario carries a string that, were it ever executed as a
-    // shell command, would create a sentinel file. After verify runs,
-    // that file must not exist — proving no child ran.
+    // Sentinel file used as a process-spawning canary: even though the
+    // SPEC.md marker-tree scenario body is plain text and never
+    // executed, the assertion guards against regressions that would
+    // reintroduce subprocess execution.
     let sentinel = ws.root.join("verify-sentinel");
-    let sentinel_str = sentinel.as_str();
-    let toml = format!(
-        indoc! {r#"
-            schema_version = 1
-
-            [[requirements]]
-            id = "REQ-001"
-            checks = ["CHK-001"]
-
-            [[checks]]
-            id = "CHK-001"
-            scenario = "touch {sentinel}"
-        "#},
-        sentinel = sentinel_str,
-    );
     write_spec(
         &ws.root,
         "0001-no-spawn",
         &spec_md_template("SPEC-0001", "implemented"),
-        &toml,
+        "",
         None,
     )?;
 
@@ -307,7 +205,7 @@ fn text_output_ends_with_shape_summary_line() -> TestResult {
         &ws.root,
         "0001-one",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -329,14 +227,14 @@ fn text_output_summary_counts_aggregate_across_specs() -> TestResult {
         &ws.root,
         "0001-a",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-b",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -374,7 +272,7 @@ fn json_envelope_bumps_schema_to_two_and_drops_execution_fields() -> TestResult 
         &ws.root,
         "0001-json",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -416,7 +314,7 @@ fn json_envelope_is_pretty_printed_with_trailing_newline() -> TestResult {
         &ws.root,
         "0001-pretty",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -436,7 +334,7 @@ fn json_envelope_is_byte_identical_across_runs() -> TestResult {
         &ws.root,
         "0001-deterministic",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -453,13 +351,13 @@ fn json_envelope_is_byte_identical_across_runs() -> TestResult {
 #[test]
 fn dropped_spec_with_shape_errors_is_non_gating() -> TestResult {
     let ws = Workspace::new()?;
-    // A dropped spec with an empty `checks` array would normally fire
-    // REQ-001 at Error. Dropped specs must not gate verify.
+    // A dropped spec with no scenarios would normally fire REQ-001 at
+    // Error. Dropped specs must not gate verify.
     write_spec(
         &ws.root,
         "0001-dropped",
-        &spec_md_template("SPEC-0001", "dropped"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "dropped"),
+        "",
         None,
     )?;
 
@@ -484,11 +382,11 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
     write_spec(
         &ws.root,
         "0001-old",
-        &spec_md_template("SPEC-0001", "superseded"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "superseded"),
+        "",
         None,
     )?;
-    let supersedes_md = indoc! {r"
+    let supersedes_md = indoc! {r#"
         ---
         id: SPEC-0002
         slug: x
@@ -500,16 +398,23 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
 
         # SPEC-0002
 
+        <!-- speccy:requirement id="REQ-001" -->
         ### REQ-001: First
         Body.
-    "};
-    write_spec(
-        &ws.root,
-        "0002-new",
-        supersedes_md,
-        &spec_toml_one_scenario(),
-        None,
-    )?;
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    write_spec(&ws.root, "0002-new", supersedes_md, "", None)?;
 
     let (code, _out, _err) = invoke(&ws.root, false)?;
     assert_eq!(code, 0, "superseded spec shape errors must not gate verify");
@@ -520,13 +425,7 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
 fn workspace_level_parse_errors_still_gate_verify() -> TestResult {
     let ws = Workspace::new()?;
     // SPEC.md missing `id` -> SPC-004 (Error) -> gating.
-    write_spec(
-        &ws.root,
-        "0001-bad",
-        &spec_md_missing_id(),
-        &spec_toml_one_scenario(),
-        None,
-    )?;
+    write_spec(&ws.root, "0001-bad", &spec_md_missing_id(), "", None)?;
 
     let (code, out, _err) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "SPC-004 parse error must gate verify");
@@ -547,20 +446,20 @@ fn workspace_level_parse_errors_still_gate_verify() -> TestResult {
 #[test]
 fn in_progress_spec_shape_errors_are_demoted_not_gating() -> TestResult {
     let ws = Workspace::new()?;
-    // Empty `checks` array on an in-progress spec must be demoted to
-    // info (not gating).
+    // Empty scenarios on an in-progress spec must be demoted to info
+    // (not gating).
     write_spec(
         &ws.root,
         "0001-drafting",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
     let (code, out, _err) = invoke(&ws.root, true)?;
     assert_eq!(
         code, 0,
-        "REQ-001 on an in-progress spec must not gate; out:\n{out}",
+        "marker-tree shape errors on an in-progress spec must not gate; out:\n{out}",
     );
 
     let json: Value = serde_json::from_str(&out)?;
@@ -569,8 +468,8 @@ fn in_progress_spec_shape_errors_are_demoted_not_gating() -> TestResult {
         .expect("lint.info array");
     assert!(
         info.iter()
-            .any(|d| field(d, "code").as_str() == Some("REQ-001")),
-        "REQ-001 must be demoted to info on in-progress specs; got: {out}",
+            .any(|d| field(d, "code").as_str() == Some("SPC-001")),
+        "SPC-001 must be demoted to info on in-progress specs; got: {out}",
     );
     Ok(())
 }
@@ -581,8 +480,8 @@ fn implemented_spec_shape_errors_still_gate() -> TestResult {
     write_spec(
         &ws.root,
         "0001-shipped",
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "implemented"),
+        "",
         None,
     )?;
 
@@ -628,7 +527,7 @@ fn binary_propagates_exit_zero_on_pass() -> TestResult {
         &ws.root,
         "0001-pass",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_one_scenario(),
+        "",
         None,
     )?;
 
@@ -647,13 +546,83 @@ fn binary_propagates_exit_one_on_shape_failure() -> TestResult {
     write_spec(
         &ws.root,
         "0001-fail",
-        &spec_md_template("SPEC-0001", "implemented"),
-        &spec_toml_empty_checks_array(),
+        &spec_md_empty_scenarios("SPEC-0001", "implemented"),
+        "",
         None,
     )?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("verify").current_dir(ws.root.as_std_path());
     cmd.assert().failure().code(1);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0019 T-006: duplicate scenario id across two requirements -> verify
+// surfaces the marker parser's DuplicateMarkerId via SPC-001 and gates.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0098
+        slug: x
+        title: Example
+        status: implemented
+        created: 2026-05-11
+        ---
+
+        # SPEC-0098
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        first
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-002" -->
+        ### REQ-002: Second
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        duplicate
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(
+        code, 1,
+        "duplicate scenario id must gate verify (status=implemented)",
+    );
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    let spc1 = errors
+        .iter()
+        .find(|d| {
+            field(d, "code").as_str() == Some("SPC-001")
+                && field(d, "message")
+                    .as_str()
+                    .is_some_and(|m| m.contains("CHK-001"))
+        })
+        .expect("SPC-001 diagnostic naming CHK-001 must appear in errors");
+    let message = field(spc1, "message").as_str().unwrap_or("");
+    assert!(
+        message.contains("duplicate"),
+        "SPC-001 must surface the duplicate-id wording from the marker parser; got: {message}",
+    );
     Ok(())
 }

@@ -22,7 +22,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use common::TestResult;
 use common::Workspace;
-use common::spec_md_template;
 use common::write_spec;
 use indoc::indoc;
 use predicates::str::contains;
@@ -37,65 +36,115 @@ use speccy_cli::check_selector::SelectorError;
 // no-subprocess-on-legacy-row test.
 // ---------------------------------------------------------------------------
 
-fn spec_toml_two_scenarios() -> String {
-    indoc! {r#"
-        schema_version = 1
+/// Marker-structured SPEC.md (SPEC-0019) with two scenarios under
+/// REQ-001 to match the legacy `spec_toml_two_scenarios` shape.
+fn marker_spec_md_two_scenarios(spec_id: &str, status: &str) -> String {
+    let template = indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: __STATUS__
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001", "CHK-002"]
+        # __ID__
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = "Given the workspace, when CHK-001 is selected, then alpha is asserted."
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        Body.
+        <!-- speccy:scenario id="CHK-001" -->
+        Given the workspace, when CHK-001 is selected, then alpha is asserted.
+        <!-- /speccy:scenario -->
+        <!-- speccy:scenario id="CHK-002" -->
+        Given the workspace, when CHK-002 is selected, then beta is asserted.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
 
-        [[checks]]
-        id = "CHK-002"
-        scenario = "Given the workspace, when CHK-002 is selected, then beta is asserted."
-    "#}
-    .to_owned()
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    template
+        .replace("__ID__", spec_id)
+        .replace("__STATUS__", status)
 }
 
-fn spec_toml_three_scenarios(spec_id_suffix: &str) -> String {
-    format!(
-        indoc! {r#"
-            schema_version = 1
+/// Marker SPEC.md with three scenarios labelled "first/second/third in <spec>"
+/// matching the legacy `spec_toml_three_scenarios` shape.
+fn marker_spec_md_three_scenarios(spec_id: &str) -> String {
+    let template = indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: in-progress
+        created: 2026-05-11
+        ---
 
-            [[requirements]]
-            id = "REQ-001"
-            checks = ["CHK-001", "CHK-002", "CHK-003"]
+        # __ID__
 
-            [[checks]]
-            id = "CHK-001"
-            scenario = "first in {sid}"
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        Body.
+        <!-- speccy:scenario id="CHK-001" -->
+        first in __ID__
+        <!-- /speccy:scenario -->
+        <!-- speccy:scenario id="CHK-002" -->
+        second in __ID__
+        <!-- /speccy:scenario -->
+        <!-- speccy:scenario id="CHK-003" -->
+        third in __ID__
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
 
-            [[checks]]
-            id = "CHK-002"
-            scenario = "second in {sid}"
+        ## Changelog
 
-            [[checks]]
-            id = "CHK-003"
-            scenario = "third in {sid}"
-        "#},
-        sid = spec_id_suffix,
-    )
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    template.replace("__ID__", spec_id)
 }
 
-fn spec_toml_multiline_scenario() -> String {
-    indoc! {r#"
-        schema_version = 1
+/// Marker SPEC.md with one multi-line scenario.
+fn marker_spec_md_multiline_scenario(spec_id: &str) -> String {
+    let template = indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: in-progress
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
+        # __ID__
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = """Given a multi-line scenario,
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        Body.
+        <!-- speccy:scenario id="CHK-001" -->
+        Given a multi-line scenario,
         when CHK-001 is rendered,
-        then continuation lines are indented."""
-    "#}
-    .to_owned()
+        then continuation lines are indented.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    template.replace("__ID__", spec_id)
 }
 
 fn invoke(root: &Utf8Path, selector: Option<&str>) -> TestResult<(i32, String, String)> {
@@ -159,22 +208,22 @@ fn no_selector_renders_all_scenarios_with_count_summary() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0001"),
+        &marker_spec_md_three_scenarios("SPEC-0001"),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0002"),
+        &marker_spec_md_three_scenarios("SPEC-0002"),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0003-gamma",
-        &spec_md_template("SPEC-0003", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0003"),
+        &marker_spec_md_three_scenarios("SPEC-0003"),
+        "",
         None,
     )?;
 
@@ -219,8 +268,8 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
     write_spec(
         &ws.root,
         "0001-multiline",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_multiline_scenario(),
+        &marker_spec_md_multiline_scenario("SPEC-0001"),
+        "",
         None,
     )?;
 
@@ -250,33 +299,29 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
 // deserialization via `#[serde(deny_unknown_fields)]` on `RawCheck`.
 // ---------------------------------------------------------------------------
 
+/// Post-SPEC-0019 the analogue to the SPEC-0018 "legacy `command`
+/// field" hard break is: a stray per-spec `spec.toml` (regardless of
+/// content) surfaces as a parse warning on `speccy check`. The
+/// underlying parse error variant changed from `Toml` to
+/// `StraySpecToml`.
 #[test]
 fn legacy_command_field_is_rejected_by_deny_unknown_fields() -> TestResult {
     let ws = Workspace::new()?;
-    let spec_toml_text = indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "Given a check, when it parses, then it accepts only id+scenario."
-        command = "cargo test"
-    "#};
     write_spec(
         &ws.root,
         "0001-legacy",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        spec_toml_text,
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        // Stray spec.toml content is irrelevant — its presence alone is
+        // the SPEC-0019 violation.
+        "schema_version = 1\n",
         None,
     )?;
 
     let (_code, _out, err) = invoke(&ws.root, None)?;
     assert!(
-        err.contains("spec.toml failed to parse"),
-        "legacy `command` row should surface as a parse warning: {err}",
+        err.contains("SPEC.md marker tree failed to parse")
+            && err.contains("stray per-spec spec.toml"),
+        "stray spec.toml should surface as a parse warning: {err}",
     );
     Ok(())
 }
@@ -291,15 +336,15 @@ fn spec_selector_renders_only_named_spec() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0001"),
+        &marker_spec_md_three_scenarios("SPEC-0001"),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0002"),
+        &marker_spec_md_three_scenarios("SPEC-0002"),
+        "",
         None,
     )?;
 
@@ -322,15 +367,15 @@ fn qualified_check_selector_renders_one() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0001"),
+        &marker_spec_md_three_scenarios("SPEC-0001"),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0002"),
+        &marker_spec_md_three_scenarios("SPEC-0002"),
+        "",
         None,
     )?;
 
@@ -351,15 +396,15 @@ fn bare_chk_selector_renders_across_specs() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0001"),
+        &marker_spec_md_three_scenarios("SPEC-0001"),
+        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0003-gamma",
-        &spec_md_template("SPEC-0003", "in-progress"),
-        &spec_toml_three_scenarios("SPEC-0003"),
+        &marker_spec_md_three_scenarios("SPEC-0003"),
+        "",
         None,
     )?;
 
@@ -375,37 +420,45 @@ fn bare_chk_selector_renders_across_specs() -> TestResult {
 #[test]
 fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
     let ws = Workspace::new()?;
-    let spec_toml_text = indoc! {r#"
-        schema_version = 1
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0010
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
+        # SPEC-0010
 
-        [[requirements]]
-        id = "REQ-002"
-        checks = ["CHK-003"]
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- speccy:scenario id="CHK-002" -->
+        unrelated
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-002" -->
+        ### REQ-002: Second
+        body
+        <!-- speccy:scenario id="CHK-003" -->
+        covers REQ-002
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = "covers REQ-001"
+        ## Changelog
 
-        [[checks]]
-        id = "CHK-002"
-        scenario = "unrelated"
-
-        [[checks]]
-        id = "CHK-003"
-        scenario = "covers REQ-002"
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-001", "REQ-001"), ("T-002", "REQ-002")]);
-    write_spec(
-        &ws.root,
-        "0010-task-coverage",
-        &spec_md_template("SPEC-0010", "in-progress"),
-        spec_toml_text,
-        Some(&tasks),
-    )?;
+    write_spec(&ws.root, "0010-task-coverage", spec_md, "", Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0010/T-002"))?;
     assert_eq!(code, 0);
@@ -421,25 +474,35 @@ fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
 #[test]
 fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
     let ws = Workspace::new()?;
-    let spec_toml_text = indoc! {r#"
-        schema_version = 1
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0010
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
+        # SPEC-0010
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = "alpha scenario"
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        alpha scenario
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-007", "REQ-001")]);
-    write_spec(
-        &ws.root,
-        "0010-alpha",
-        &spec_md_template("SPEC-0010", "in-progress"),
-        spec_toml_text,
-        Some(&tasks),
-    )?;
+    write_spec(&ws.root, "0010-alpha", spec_md, "", Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("T-007"))?;
     assert_eq!(code, 0);
@@ -454,38 +517,52 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
 
 #[test]
 fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestResult {
+    // After SPEC-0019 a scenario is owned by exactly one requirement
+    // (marker containment), so the legacy "two REQs reference the same
+    // CHK" scenario can't be constructed at the marker level. The test
+    // is preserved as a regression guard for first-occurrence ordering
+    // across requirements covered by one task; the dedup-on-overlap
+    // assertion below still holds vacuously.
     let ws = Workspace::new()?;
-    let spec_toml_text = indoc! {r#"
-        schema_version = 1
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0020
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
 
-        [[requirements]]
-        id = "REQ-A"
-        checks = ["CHK-001", "CHK-002"]
+        # SPEC-0020
 
-        [[requirements]]
-        id = "REQ-B"
-        checks = ["CHK-002", "CHK-003"]
+        <!-- speccy:requirement id="REQ-100" -->
+        ### REQ-100: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        alpha
+        <!-- /speccy:scenario -->
+        <!-- speccy:scenario id="CHK-002" -->
+        beta
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-200" -->
+        ### REQ-200: Second
+        body
+        <!-- speccy:scenario id="CHK-003" -->
+        gamma
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
 
-        [[checks]]
-        id = "CHK-001"
-        scenario = "alpha"
+        ## Changelog
 
-        [[checks]]
-        id = "CHK-002"
-        scenario = "beta"
-
-        [[checks]]
-        id = "CHK-003"
-        scenario = "gamma"
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
     "#};
-    let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-A, REQ-B")]);
-    write_spec(
-        &ws.root,
-        "0020-dedup",
-        &spec_md_template("SPEC-0020", "in-progress"),
-        spec_toml_text,
-        Some(&tasks),
-    )?;
+    let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100, REQ-200")]);
+    write_spec(&ws.root, "0020-dedup", spec_md, "", Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0020/T-001"))?;
     assert_eq!(code, 0);
@@ -527,8 +604,8 @@ fn unknown_spec_preserves_no_spec_matching_wording() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -552,8 +629,8 @@ fn unknown_check_id_errors_with_no_check_matching() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -571,8 +648,8 @@ fn malformed_selector_errors() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -605,28 +682,44 @@ fn empty_workspace_prints_no_checks_defined() -> TestResult {
 #[test]
 fn malformed_spec_toml_warns_and_other_specs_render() -> TestResult {
     let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-broken",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        "schema_version = 1\n[[checks]]\nthis is not valid toml = = =",
-        None,
-    )?;
+    // After SPEC-0019 the equivalent "malformed" condition for `speccy
+    // check` is a SPEC.md marker tree that fails to parse. Use a SPEC.md
+    // missing the required `speccy:changelog` marker to trip the parser.
+    let broken_spec_md = indoc! {r#"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # SPEC-0001
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        scenario
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+    "#};
+    write_spec(&ws.root, "0001-broken", broken_spec_md, "", None)?;
     write_spec(
         &ws.root,
         "0002-alpha",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0002", "in-progress"),
+        "",
         None,
     )?;
 
     let (code, out, err) = invoke(&ws.root, None)?;
     assert_eq!(
         code, 1,
-        "malformed spec.toml warning must contribute exit 1; out:\n{out}\nerr:\n{err}"
+        "malformed SPEC.md marker tree must contribute exit 1; out:\n{out}\nerr:\n{err}"
     );
     assert!(
-        err.contains("SPEC-0001") && err.contains("spec.toml failed to parse"),
+        err.contains("SPEC-0001") && err.contains("SPEC.md marker tree failed to parse"),
         "stderr should name SPEC-0001: {err}",
     );
     assert!(out.contains("2 scenarios rendered across 1 specs"));
@@ -643,8 +736,8 @@ fn dropped_spec_skipped_in_run_all() -> TestResult {
     write_spec(
         &ws.root,
         "0001-dropped",
-        &spec_md_template("SPEC-0001", "dropped"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "dropped"),
+        "",
         None,
     )?;
 
@@ -664,8 +757,8 @@ fn dropped_spec_named_directly_surfaces_skip() -> TestResult {
     write_spec(
         &ws.root,
         "0001-dropped",
-        &spec_md_template("SPEC-0001", "dropped"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "dropped"),
+        "",
         None,
     )?;
 
@@ -704,8 +797,8 @@ fn binary_renders_headers_and_summary() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -725,8 +818,8 @@ fn binary_chk_099_no_match_preserves_no_check_matching_wording() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -746,8 +839,8 @@ fn binary_spec_9999_preserves_no_matching_spec_wording() -> TestResult {
     write_spec(
         &ws.root,
         "0001-alpha",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &spec_toml_two_scenarios(),
+        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
+        "",
         None,
     )?;
 
@@ -766,16 +859,15 @@ fn binary_spec_9999_preserves_no_matching_spec_wording() -> TestResult {
 // Two assertions paired in one test because they cover the same
 // contract from complementary angles:
 //
-//   1. Run `speccy check SPEC-0018` against this very repo and assert
-//      it exits zero and prints the summary line. SPEC-0018's
-//      `spec.toml` declares five CHK entries today; we assert the
-//      summary count rather than each header so reordering /
-//      additional checks within SPEC-0018 don't break the guard.
-//   2. Static grep over `speccy-cli/src/check.rs` to assert no
-//      `Command::new`, `process::Command`, or `.spawn(` reference
-//      survives in the production check path. This is the
-//      load-bearing assertion: it fails the suite if a future
-//      contributor reintroduces subprocess execution into `check.rs`
+//   1. Run `speccy check SPEC-0018` against this very repo and assert it exits
+//      zero and prints the summary line. SPEC-0018's `spec.toml` declares five
+//      CHK entries today; we assert the summary count rather than each header
+//      so reordering / additional checks within SPEC-0018 don't break the
+//      guard.
+//   2. Static grep over `speccy-cli/src/check.rs` to assert no `Command::new`,
+//      `process::Command`, or `.spawn(` reference survives in the production
+//      check path. This is the load-bearing assertion: it fails the suite if a
+//      future contributor reintroduces subprocess execution into `check.rs`
 //      regardless of whether the runtime test still happens to pass.
 // ---------------------------------------------------------------------------
 
@@ -812,5 +904,141 @@ fn check_spec_0018_renders_scenarios_without_spawning_processes() -> TestResult 
     cmd.assert()
         .success()
         .stdout(contains("scenarios rendered across"));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0019 T-006: `speccy check` reads scenario text from SPEC.md marker
+// bodies (byte-exact, not via a stale TOML mirror).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn check_task_prints_scenario_body_bytes_from_marker_block() -> TestResult {
+    // Construct a SPEC.md with a multi-line scenario body whose interior
+    // bytes are easy to assert verbatim. The marker parser preserves
+    // body bytes between the start and end markers (with whitespace-only
+    // boundary trim), so the stdout continuation lines must equal those
+    // bytes line-for-line.
+    let ws = Workspace::new()?;
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0099
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # SPEC-0099
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        Given a task covers REQ-001,
+        when speccy check runs against that task,
+        then the marker body bytes are printed verbatim.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    let tasks = tasks_md_fixture("SPEC-0099", &[("T-001", "REQ-001")]);
+    write_spec(&ws.root, "0099-marker-body", spec_md, "", Some(&tasks))?;
+
+    let (code, out, _err) = invoke(&ws.root, Some("SPEC-0099/T-001"))?;
+    assert_eq!(code, 0);
+
+    // Locate the marker body in the source file. The body is the text
+    // between `<!-- speccy:scenario id="CHK-001" -->\n` and `\n<!--
+    // /speccy:scenario -->`.
+    let start_tag = "<!-- speccy:scenario id=\"CHK-001\" -->\n";
+    let end_tag = "<!-- /speccy:scenario -->";
+    let after_start = spec_md
+        .find(start_tag)
+        .map(|i| i + start_tag.len())
+        .expect("fixture must contain CHK-001 start marker");
+    let tail = spec_md
+        .get(after_start..)
+        .expect("after_start must be a valid char boundary in fixture");
+    let before_end = tail
+        .find(end_tag)
+        .map(|j| after_start + j)
+        .expect("fixture must contain matching end marker");
+    let body_bytes = spec_md
+        .get(after_start..before_end)
+        .expect("body slice must lie on valid char boundaries in fixture")
+        .trim_end_matches('\n');
+
+    // Every non-empty line of the marker body must appear in the rendered
+    // output (header takes the first line; the rest are indented
+    // continuations, so we substring-match line-by-line).
+    for line in body_bytes.lines() {
+        assert!(
+            out.contains(line),
+            "speccy check stdout must contain marker body line `{line}`; got:\n{out}",
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn check_duplicate_scenario_id_across_requirements_is_surfaced_as_parse_warning() -> TestResult {
+    // Two `speccy:scenario` markers with the same id across two
+    // requirement blocks: the marker parser rejects this with
+    // `DuplicateMarkerId`, and `speccy check` should surface it as a
+    // per-spec warning (non-zero exit because malformed > 0).
+    let ws = Workspace::new()?;
+    let spec_md = indoc! {r#"
+        ---
+        id: SPEC-0098
+        slug: x
+        title: Example
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # SPEC-0098
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        first
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-002" -->
+        ### REQ-002: Second
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        duplicate
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
+
+    let (code, _out, err) = invoke(&ws.root, None)?;
+    assert_eq!(
+        code, 1,
+        "duplicate scenario id must surface as a non-zero exit from check",
+    );
+    assert!(
+        err.contains("CHK-001"),
+        "warning must name the duplicated scenario id; got: {err}",
+    );
     Ok(())
 }

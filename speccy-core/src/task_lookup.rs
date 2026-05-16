@@ -12,6 +12,7 @@
 //! review`) so the lookup logic lives in one place. See
 //! `.speccy/specs/0008-implement-command/SPEC.md` DEC-001.
 
+use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
 use crate::parse::Task;
 use crate::parse::TasksMd;
@@ -69,6 +70,11 @@ pub struct TaskLocation<'a> {
     pub spec_id: String,
     /// Parsed SPEC.md for the containing spec.
     pub spec_md: &'a SpecMd,
+    /// Parsed SPEC.md marker tree (after SPEC-0019) for the containing
+    /// spec, when the marker tree parsed successfully. `None` when the
+    /// marker tree failed to parse — callers that need it must surface
+    /// that as an error themselves.
+    pub spec_doc: Option<&'a SpecDoc>,
     /// Parsed TASKS.md for the containing spec.
     pub tasks_md: &'a TasksMd,
     /// The matched task entry.
@@ -179,6 +185,7 @@ pub fn find<'a>(
         Ok(TaskLocation {
             spec_id: sid.clone(),
             spec_md: parsed_spec_md,
+            spec_doc: parsed.spec_doc_ok(),
             tasks_md,
             task,
             task_entry_raw: entry,

@@ -243,8 +243,8 @@ fn first_parse_error(parsed: &speccy_core::lint::ParsedSpec) -> Option<String> {
     if let Err(e) = &parsed.spec_md {
         return Some(format!("SPEC.md: {e}"));
     }
-    if let Err(e) = &parsed.spec_toml {
-        return Some(format!("spec.toml: {e}"));
+    if let Err(e) = &parsed.spec_doc {
+        return Some(format!("SPEC.md (markers): {e}"));
     }
     if let Some(Err(e)) = &parsed.tasks_md {
         return Some(format!("TASKS.md: {e}"));
@@ -494,12 +494,11 @@ mod tests {
             spec_id: Some("SPEC-0001".to_owned()),
             dir: Utf8PathBuf::from("/tmp"),
             spec_md_path: Utf8PathBuf::from("/tmp/SPEC.md"),
-            spec_toml_path: Utf8PathBuf::from("/tmp/spec.toml"),
             tasks_md_path: None,
             spec_md: Err(speccy_core::ParseError::NonUtf8Path(
                 "test-fixture".to_owned(),
             )),
-            spec_toml: Err(speccy_core::ParseError::NonUtf8Path(
+            spec_doc: Err(speccy_core::ParseError::NonUtf8Path(
                 "test-fixture".to_owned(),
             )),
             tasks_md: None,

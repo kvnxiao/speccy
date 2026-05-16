@@ -38,13 +38,23 @@ pub fn write_spec(
     root: &Utf8Path,
     dir_name: &str,
     spec_md: &str,
-    spec_toml: &str,
+    // Legacy pre-SPEC-0019 spec.toml content. The third argument is
+    // preserved so the many call sites don't all need touch-ups in this
+    // task. When the string is non-empty it is written to disk, which
+    // surfaces as `WorkspaceError::StraySpecToml` (recorded on the
+    // parsed spec). T-006 will sweep the remaining call sites and drop
+    // the parameter; for now writing it keeps tests that expected a
+    // per-spec parse failure (`speccy check` warning, exit code 1)
+    // working.
+    legacy_spec_toml: &str,
     tasks_md: Option<&str>,
 ) -> TestResult<Utf8PathBuf> {
     let dir = root.join(".speccy").join("specs").join(dir_name);
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(dir.join("SPEC.md").as_std_path(), spec_md)?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), spec_toml)?;
+    if !legacy_spec_toml.is_empty() {
+        fs_err::write(dir.join("spec.toml").as_std_path(), legacy_spec_toml)?;
+    }
     if let Some(tm) = tasks_md {
         fs_err::write(dir.join("TASKS.md").as_std_path(), tm)?;
     }
@@ -52,7 +62,7 @@ pub fn write_spec(
 }
 
 pub fn spec_md_template(id: &str, status: &str) -> String {
-    let template = indoc! {r"
+    let template = indoc! {r#"
         ---
         id: __ID__
         slug: x
@@ -63,21 +73,41 @@ pub fn spec_md_template(id: &str, status: &str) -> String {
 
         # __ID__
 
+        <!-- speccy:requirement id="REQ-001" -->
         ### REQ-001: First
         Body.
-    "};
+        <!-- speccy:scenario id="CHK-001" -->
+        Given REQ-001, when the suite runs, then it covers REQ-001.
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
     template.replace("__ID__", id).replace("__STATUS__", status)
 }
 
 pub fn spec_md_with_open_questions(id: &str, status: &str, questions: usize) -> String {
     let base = spec_md_template(id, status);
-    let mut s = base;
-    s.push_str("\n## Open questions\n\n");
+    // Inject the Open questions section before the changelog so the
+    // marker parser still sees the required `speccy:changelog` block.
+    let marker = "## Changelog";
+    let split_idx = base.find(marker).unwrap_or(base.len());
+    let (before, after) = base.split_at(split_idx);
+    let mut s = String::from(before);
+    s.push_str("## Open questions\n\n");
     for i in 0..questions {
         if writeln!(s, "- [ ] open question {i}").is_err() {
             break;
         }
     }
+    s.push('\n');
+    s.push_str(after);
     s
 }
 

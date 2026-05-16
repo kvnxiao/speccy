@@ -2,7 +2,7 @@
 id: SPEC-0019
 slug: xml-canonical-spec-md
 title: Canonical marker-structured SPEC.md; remove spec.toml
-status: in-progress
+status: implemented
 created: 2026-05-15
 supersedes: []
 ---
@@ -54,9 +54,12 @@ replaces the old `[[requirements]].checks` table.
 This is the second step in the sequence:
 
 - **SPEC-0018:** checks stop executing and become English scenarios.
-- **SPEC-0019:** SPEC.md becomes the single canonical spec carrier.
-- **SPEC-0020:** TASKS.md and REPORT.md adopt the same marker style,
-  without adding first-class handoff structure.
+- **SPEC-0019:** SPEC.md becomes the single canonical spec carrier
+  using HTML-comment markers.
+- **SPEC-0020:** SPEC.md switches from HTML-comment markers to raw
+  XML element tags so vendor-recommended prompt structure applies.
+- **SPEC-0021:** TASKS.md and REPORT.md adopt the same raw XML
+  element style, without adding first-class handoff structure.
 
 ## Goals
 
@@ -64,7 +67,7 @@ This is the second step in the sequence:
   requirements and validation scenarios.
 - Per-spec `spec.toml` files are removed and rejected as stray state.
 - The canonical SPEC.md format remains normal Markdown with
-  line-isolated `<!-- speccy:... -->` marker comments.
+  line-isolated speccy marker comments.
 - Parsing is strict for marker shape, ids, nesting, required
   requirement/scenario coverage, and duplicate ids.
 - Rendering from Rust structs produces deterministic marker placement.
@@ -100,6 +103,7 @@ This is the second step in the sequence:
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: SPEC.md marker grammar is strict and Markdown-friendly
 
 SPEC.md remains a Markdown document with YAML frontmatter and a level-1
@@ -107,9 +111,9 @@ heading. Machine structure is carried by line-isolated Speccy marker
 comments.
 
 **Done when:**
-- Marker syntax is exactly:
-  - start: `<!-- speccy:<name> attr="value" ... -->`
-  - end: `<!-- /speccy:<name> -->`
+- Marker syntax is exactly an HTML comment whose body starts with
+  `speccy:<name>` for opens (with optional `attr="value"` pairs) and
+  `/speccy:<name>` for closes. Marker comments occupy their own line.
 - Marker comments must appear on their own lines.
 - Attribute values are double-quoted; unquoted values are rejected.
 - The parser accepts these marker names:
@@ -142,14 +146,38 @@ comments.
 - Given a SPEC.md with a requirement marker containing a scenario
   marker, parsing returns a typed requirement with one scenario.
 - Given a scenario marker outside any requirement, parsing fails.
-- Given two `<!-- speccy:scenario id="CHK-001" -->` markers in the
-  same spec, parsing fails with a duplicate-id error.
+- Given two scenario markers with the same `id="CHK-001"` in one
+  spec, parsing fails with a duplicate-id error.
 - Given prose inside a scenario containing `<html>` or `A & B`,
   parsing preserves it as Markdown text instead of requiring XML
   escaping.
 
-**Covered by:** CHK-001
+<!-- speccy:scenario id="CHK-001" -->
+- Given a SPEC.md with a requirement marker containing a scenario
+  marker, parsing returns a typed requirement with one scenario.
+- Given a scenario marker outside any requirement, parsing fails.
+- Given two scenario markers with the same `id="CHK-001"` in one
+  spec, parsing fails with a duplicate-id error.
+- Given prose inside a scenario containing `<html>` or `A & B`,
+  parsing preserves it as Markdown text instead of requiring XML
+  escaping.
 
+Given a SPEC.md with line-isolated speccy requirement and scenario
+marker comments,
+when the marker parser runs,
+then it returns a typed requirement with nested scenarios.
+
+Given a scenario marker outside any requirement marker,
+when parsing runs,
+then parsing fails and names the misplaced scenario.
+
+Given Markdown content inside a scenario containing XML-looking text
+such as <T> or A & B,
+when parsing runs,
+then the content is preserved as Markdown and is not XML-decoded.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Per-spec spec.toml is removed
 
 After this spec lands, requirement-to-scenario linkage is represented
@@ -174,8 +202,29 @@ only by marker containment in SPEC.md.
   check, verify, and prompt rendering all see two scenarios proving
   that requirement.
 
-**Covered by:** CHK-002
+<!-- speccy:scenario id="CHK-002" -->
+- Given a migrated workspace, each spec directory contains `SPEC.md`
+  and optionally `TASKS.md` / `REPORT.md`, but no `spec.toml`.
+- Given a manually reintroduced `.speccy/specs/0001-foo/spec.toml`,
+  workspace loading fails and names the stray file.
+- Given a requirement marker with two nested scenario markers, status,
+  check, verify, and prompt rendering all see two scenarios proving
+  that requirement.
 
+Given the migrated workspace,
+when the workspace loader scans .speccy/specs,
+then no per-spec spec.toml files are present.
+
+Given a stray per-spec spec.toml file,
+when the workspace loader runs,
+then it returns a StraySpecToml error naming the file.
+
+Given a requirement marker containing two scenario markers,
+when Speccy computes requirement coverage,
+then both scenarios are linked to that requirement by containment.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: Parser and renderer are backed by Rust structs
 
 The canonical carrier is not "whatever Markdown the agent wrote." It
@@ -212,8 +261,28 @@ is a typed model that can be parsed, validated, sliced, and rendered.
 - Given an unknown marker attribute, the parse error names the marker,
   attribute, path, and byte offset.
 
-**Covered by:** CHK-003
+<!-- speccy:scenario id="CHK-003" -->
+- Given a hand-authored canonical SPEC.md, parse/render/parse yields
+  equal ids, parent links, marker names, and Markdown bodies.
+- Given a marker hidden inside a fenced code block, it is treated as
+  code content, not as structure.
+- Given an unknown marker attribute, the parse error names the marker,
+  attribute, path, and byte offset.
 
+Given a canonical marker-structured SPEC.md,
+when parse, render, and parse run in sequence,
+then the resulting SpecDoc is structurally equivalent to the first.
+
+Given a speccy marker inside a fenced code block,
+when parsing runs,
+then the marker is treated as code content, not structure.
+
+Given a marker with an unknown attribute,
+when parsing runs,
+then the error names the attribute, marker name, file, and byte offset.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: Migration rewrites all in-tree specs
 
 An ephemeral migration tool rewrites the current two-file specs into
@@ -248,8 +317,29 @@ canonical marker-structured SPEC.md files.
   by any requirement, migration fails and names the orphan check.
 - Given the migrated workspace, `speccy verify` exits 0.
 
-**Covered by:** CHK-004
+<!-- speccy:scenario id="CHK-004" -->
+- Given a pre-migration requirement covered by `CHK-002` and
+  `CHK-003`, the migrated requirement block contains two nested
+  scenario markers in that order.
+- Given a pre-migration spec with a `spec.toml` check not referenced
+  by any requirement, migration fails and names the orphan check.
+- Given the migrated workspace, `speccy verify` exits 0.
 
+Given a post-SPEC-0018 workspace with SPEC.md plus spec.toml files,
+when the migration tool runs,
+then each spec is rewritten to marker-structured SPEC.md and the
+spec.toml file is deleted.
+
+Given a check row that is not referenced by any requirement,
+when migration runs,
+then migration fails and names the orphan check.
+
+Given the migrated workspace,
+when speccy verify runs,
+then it exits zero.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: Prompts, docs, and slicing consume the marker tree
 
 Agent-facing prompts must stop loading two separate spec carriers.
@@ -278,8 +368,24 @@ Agent-facing prompts must stop loading two separate spec carriers.
 - Given active docs and shipped skills, `spec.toml` appears only in
   historical migration context.
 
-**Covered by:** CHK-005
+<!-- speccy:scenario id="CHK-005" -->
+- Given a task covering `REQ-002`, the implementer prompt includes
+  `REQ-002` and its scenarios but not unrelated requirements.
+- Given reviewer-tests reads a prompt for the same task, it sees the
+  exact scenario text from SPEC.md markers.
+- Given active docs and shipped skills, `spec.toml` appears only in
+  historical migration context.
 
+Given a task covering REQ-002,
+when implementer or reviewer prompt slicing runs,
+then the prompt includes REQ-002 and its scenario marker bodies but
+excludes unrelated requirements.
+
+Given the post-spec docs and shipped skills,
+when active guidance is searched,
+then per-spec spec.toml appears only in historical or migration notes.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -297,6 +403,7 @@ Implementation order:
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Use marker comments, not raw XML containers
 
 **Status:** Accepted
@@ -313,7 +420,8 @@ humans to read; the parser still gets deterministic anchors.
 **Consequences:** We write a small marker scanner instead of using an
 XML parser. That is the right tradeoff because the artifact is
 Markdown-with-markers, not XML.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: Containment replaces the REQ-to-CHK table
 
 **Status:** Accepted
@@ -326,7 +434,8 @@ it.
 
 **Consequences:** Moving a scenario to a different requirement is an
 ordinary Markdown edit with a visible diff.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: The renderer is canonical, but no formatter command ships
 
 **Status:** Accepted
@@ -341,7 +450,7 @@ command in this spec.
 
 **Consequences:** We get deterministic output where needed without
 expanding the v1 command surface.
-
+<!-- /speccy:decision -->
 ## Migration / Rollback
 
 Migration is structural and fails closed when placement is ambiguous.
@@ -373,9 +482,11 @@ SPEC.md plus `spec.toml` shape remains in history.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-15 | human/kevin | Initial rewritten draft. Replaces raw XML-with-Markdown with XML-style marker comments and removes per-spec spec.toml. |
+<!-- /speccy:changelog -->
 
 ## Notes
 

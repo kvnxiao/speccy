@@ -1,6 +1,6 @@
 //! Prompt-rendering primitives shared by every phase command.
 //!
-//! Six helpers, each isolated in its own submodule:
+//! Seven helpers, each isolated in its own submodule:
 //!
 //! - [`template`] -- load embedded markdown templates by name.
 //! - [`render`] -- single-pass `{{NAME}}` placeholder substitution.
@@ -12,6 +12,9 @@
 //! - [`id_alloc`] -- allocate the next `SPEC-NNNN` ID (`max + 1`); walks
 //!   `specs/**` recursively so flat and mission-grouped specs share one ID
 //!   space.
+//! - [`spec_slice`] -- emit a task-scoped Markdown slice of a `SpecDoc` driven
+//!   by the task's `Covers:` list (frontmatter + heading + summary + covered
+//!   requirements with nested scenarios + decisions).
 //!
 //! See `.speccy/specs/0005-plan-command/SPEC.md` REQ-003..REQ-007.
 
@@ -20,6 +23,7 @@ pub mod budget;
 pub mod id_alloc;
 pub mod mission_md;
 pub mod render;
+pub mod spec_slice;
 pub mod template;
 
 pub use agents_md::load_agents_md;
@@ -29,6 +33,7 @@ pub use budget::trim_to_budget;
 pub use id_alloc::allocate_next_spec_id;
 pub use mission_md::find_nearest_mission_md;
 pub use render::render;
+pub use spec_slice::slice_for_task;
 pub use template::PROMPTS;
 pub use template::PromptError;
 pub use template::load_template;

@@ -28,7 +28,7 @@ fn utf8(dir: &TempDir) -> TestResult<Utf8PathBuf> {
 }
 
 fn valid_spec_md(id: &str) -> String {
-    let template = indoc! {r"
+    let template = indoc! {r#"
         ---
         id: __ID__
         slug: x
@@ -39,23 +39,23 @@ fn valid_spec_md(id: &str) -> String {
 
         # __ID__
 
+        <!-- speccy:requirement id="REQ-001" -->
         ### REQ-001: First
-    "};
+        body
+        <!-- speccy:scenario id="CHK-001" -->
+        covers REQ-001
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
     template.replace("__ID__", id)
-}
-
-fn valid_spec_toml() -> &'static str {
-    indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "covers REQ-001"
-    "#}
 }
 
 /// Build a TASKS.md with the given list of `(state, id, title)` rows.
@@ -92,7 +92,6 @@ fn write_spec(
     let dir = project_root.join(".speccy").join("specs").join(dir_name);
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(dir.join("SPEC.md").as_std_path(), valid_spec_md(spec_id))?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), valid_spec_toml())?;
     if let Some(rows) = tasks_rows {
         fs_err::write(dir.join("TASKS.md").as_std_path(), tasks_md(spec_id, rows))?;
     }

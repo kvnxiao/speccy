@@ -57,8 +57,8 @@ prompt, then record:
 4. Implement the code path so the tests pass. Run the project's
    own test command (`cargo test`, `pnpm test`, etc.) and fail fast
    on red. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
-   `[[checks]]` scenarios you are satisfying; it renders them, it
-   does not run them.
+   `speccy:scenario` marker blocks you are satisfying; it renders
+   them, it does not run them.
 5. Add one implementer note to the task subtree using the six-field
    handoff template shown below. Every field must appear; write
    `(none)` for empty fields rather than omitting them. Out-of-scope
@@ -83,4 +83,4 @@ REPORT.md, any harness reading TASKS.md) can grep them.
   - Procedural compliance: <skill files touched and why; (none) if no friction>
 ```
 
-Do not modify SPEC.md or spec.toml. Surgical changes only.
+Do not modify SPEC.md. Surgical changes only.

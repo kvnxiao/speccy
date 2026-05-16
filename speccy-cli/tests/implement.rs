@@ -408,3 +408,110 @@ fn error_paths_and_integration_help_succeeds() -> TestResult {
         .stdout(contains("TASK_REF"));
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// SPEC-0019 T-006: implementer prompt is task-scoped — only requirements
+// listed in `Covers:` appear in the rendered slice. Uncovered requirement
+// bodies are excluded.
+// ---------------------------------------------------------------------------
+
+/// Three-requirement marker SPEC.md with one scenario per requirement and
+/// uniquely-identifiable body text so the test can substring-match.
+fn marker_three_req_spec_md(spec_id: &str) -> String {
+    let template = indoc::indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # __ID__
+
+        <!-- speccy:requirement id="REQ-001" -->
+        ### REQ-001: First
+        BODY_REQ_001_unique_marker.
+        <!-- speccy:scenario id="CHK-001" -->
+        SCENARIO_CHK_001_unique_marker
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-002" -->
+        ### REQ-002: Second
+        BODY_REQ_002_unique_marker.
+        <!-- speccy:scenario id="CHK-002" -->
+        SCENARIO_CHK_002_unique_marker
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+        <!-- speccy:requirement id="REQ-003" -->
+        ### REQ-003: Third
+        BODY_REQ_003_unique_marker.
+        <!-- speccy:scenario id="CHK-003" -->
+        SCENARIO_CHK_003_unique_marker
+        <!-- /speccy:scenario -->
+        <!-- /speccy:requirement -->
+
+        ## Changelog
+
+        <!-- speccy:changelog -->
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        <!-- /speccy:changelog -->
+    "#};
+    template.replace("__ID__", spec_id)
+}
+
+#[test]
+fn prompt_slices_to_covered_requirements_only() -> TestResult {
+    let ws = Workspace::new()?;
+    write_agents(&ws, "# Agents\n")?;
+    let tasks = tasks_md_with(
+        "SPEC-0099",
+        "- [ ] **T-001**: only req2\n  - Covers: REQ-002\n  - Suggested files: `a.rs`\n",
+    );
+    // No legacy spec.toml — relying on the marker tree.
+    write_spec(
+        &ws.root,
+        "0099-slice",
+        &marker_three_req_spec_md("SPEC-0099"),
+        "",
+        Some(&tasks),
+    )?;
+
+    let out = capture_stdout(&ws, "T-001")?;
+
+    // Covered REQ-002: requirement marker, body, and scenario body all
+    // present.
+    assert!(
+        out.contains("speccy:requirement id=\"REQ-002\""),
+        "covered REQ-002 marker must be present in slice:\n{out}",
+    );
+    assert!(
+        out.contains("BODY_REQ_002_unique_marker."),
+        "covered REQ-002 body must be present in slice:\n{out}",
+    );
+    assert!(
+        out.contains("SCENARIO_CHK_002_unique_marker"),
+        "covered REQ-002 scenario body must be present in slice:\n{out}",
+    );
+
+    // Uncovered REQ-001 and REQ-003: bodies absent.
+    assert!(
+        !out.contains("BODY_REQ_001_unique_marker."),
+        "uncovered REQ-001 body must be excluded:\n{out}",
+    );
+    assert!(
+        !out.contains("BODY_REQ_003_unique_marker."),
+        "uncovered REQ-003 body must be excluded:\n{out}",
+    );
+    assert!(
+        !out.contains("speccy:requirement id=\"REQ-001\""),
+        "uncovered REQ-001 marker must be excluded:\n{out}",
+    );
+    assert!(
+        !out.contains("speccy:requirement id=\"REQ-003\""),
+        "uncovered REQ-003 marker must be excluded:\n{out}",
+    );
+    Ok(())
+}

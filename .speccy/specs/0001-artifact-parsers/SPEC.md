@@ -71,6 +71,7 @@ The parser must handle Speccy's known quirks:
 
 ## Requirements
 
+<!-- speccy:requirement id="REQ-001" -->
 ### REQ-001: TOML config parsers
 
 Parse `speccy.toml` and `spec.toml` into typed structs.
@@ -100,8 +101,17 @@ Parse `speccy.toml` and `spec.toml` into typed structs.
   and `prompt`, when parsed, the result is an error naming the check
   ID and the conflict.
 
-**Covered by:** CHK-001, CHK-002, CHK-007
-
+<!-- speccy:scenario id="CHK-001" -->
+Valid speccy.toml and spec.toml fixtures round-trip into typed structs in declared order.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-002" -->
+spec.toml [[checks]] entries require exactly one of command or prompt; neither or both is an error naming the check ID.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-007" -->
+Unknown schema_version values in speccy.toml or spec.toml are rejected with a clear error naming the file and value.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-002" -->
 ### REQ-002: Frontmatter extraction
 
 Split markdown files into `(yaml_frontmatter, body)` pairs without
@@ -126,8 +136,21 @@ pulling in a third-party crate dedicated to the job.
 - Given a file that is exactly `---\n---\n` (empty frontmatter, empty
   body), when split, the result is `Some(("", ""))`.
 
-**Covered by:** CHK-003
+<!-- speccy:scenario id="CHK-003" -->
+- Given a SPEC.md with valid frontmatter, when split, the YAML
+  fragment ends at the line before the closing fence and the body
+  starts at the line after.
+- Given a SPEC.md whose body begins with `---` (a horizontal rule),
+  when split, the splitter does not treat the horizontal rule as the
+  closing fence. Only the *first* `---`-on-its-own-line after the
+  opening fence counts.
+- Given a file that is exactly `---\n---\n` (empty frontmatter, empty
+  body), when split, the result is `Some(("", ""))`.
 
+Frontmatter splitter handles valid, missing, malformed, body-with-hr, and CRLF inputs without panicking.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-003" -->
 ### REQ-003: SPEC.md parsing
 
 Parse SPEC.md frontmatter, REQ headings, and the `## Changelog`
@@ -163,8 +186,14 @@ table.
 - Given a SPEC.md modified by one byte, when parsed, the sha256 hash
   differs from the prior parse's hash.
 
-**Covered by:** CHK-004, CHK-005
-
+<!-- speccy:scenario id="CHK-004" -->
+SPEC.md parser extracts REQ headings and never emits one that lived inside a fenced code block.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-005" -->
+SPEC.md parser extracts Changelog rows and computes a stable sha256 that changes on any byte edit.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-004" -->
 ### REQ-004: TASKS.md parsing
 
 Parse TASKS.md frontmatter, task lines with state, and inline notes.
@@ -197,8 +226,20 @@ Parse TASKS.md frontmatter, task lines with state, and inline notes.
 - Given a task with three sub-list `Review (...)` bullets, when
   parsed, `notes` contains all three preserving declared order.
 
-**Covered by:** CHK-006
+<!-- speccy:scenario id="CHK-006" -->
+- Given a TASKS.md with two `[ ]`, one `[~]`, one `[?]`, and one
+  `[x]` task, when parsed, the resulting state counts are
+  `{open: 2, in_progress: 1, awaiting_review: 1, done: 1}`.
+- Given a task whose ID bold span is malformed (e.g. `**TASK-001**`),
+  when parsed, the task is skipped and a recoverable warning is
+  surfaced via the result so SPEC-0003 (lint) can emit `TSK-002`.
+- Given a task with three sub-list `Review (...)` bullets, when
+  parsed, `notes` contains all three preserving declared order.
 
+TASKS.md parser extracts task state, IDs, covers, notes, and suggested files; malformed task IDs are surfaced as recoverable warnings.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-005" -->
 ### REQ-005: REPORT.md frontmatter parsing
 
 Parse REPORT.md frontmatter; return the body verbatim without further
@@ -217,8 +258,16 @@ structural parsing.
 - Given a REPORT.md missing the `generated_at` field, when parsed,
   the result is an error naming the missing field.
 
-**Covered by:** CHK-008
+<!-- speccy:scenario id="CHK-008" -->
+- Given a REPORT.md with `outcome: rejected`, when parsed, the result
+  is an error naming the invalid value.
+- Given a REPORT.md missing the `generated_at` field, when parsed,
+  the result is an error naming the missing field.
 
+REPORT.md frontmatter rejects invalid outcome values and missing required fields; body returns verbatim.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-006" -->
 ### REQ-006: Cross-reference SPEC.md against spec.toml
 
 Produce the symmetric diff between REQ headings in SPEC.md and
@@ -238,8 +287,17 @@ Produce the symmetric diff between REQ headings in SPEC.md and
   `only_in_spec_md = ["REQ-003"]`, `only_in_toml = ["REQ-004"]`,
   `in_both = ["REQ-001", "REQ-002"]`.
 
-**Covered by:** CHK-009
+<!-- speccy:scenario id="CHK-009" -->
+- Given a SPEC.md with `REQ-001`, `REQ-002`, `REQ-003` and a
+  `spec.toml` with `REQ-001`, `REQ-002`, `REQ-004`, when
+  cross-referenced, the result is
+  `only_in_spec_md = ["REQ-003"]`, `only_in_toml = ["REQ-004"]`,
+  `in_both = ["REQ-001", "REQ-002"]`.
 
+Cross-reference between parsed SPEC.md and spec.toml is symmetric, deterministic, and idempotent.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-007" -->
 ### REQ-007: Public API and hygiene for `speccy-core`
 
 Expose the parser surface as a stable library API and lock in the
@@ -266,8 +324,14 @@ project's quality gates from day one.
   identifies the file path or label, the line number where possible,
   and the human-readable reason.
 
-**Covered by:** CHK-010, CHK-011
-
+<!-- speccy:scenario id="CHK-010" -->
+speccy-core compiles clean under the project's clippy gate with no warnings.
+<!-- /speccy:scenario -->
+<!-- speccy:scenario id="CHK-011" -->
+Workspace dependency surface is clean (advisories, bans, licenses, sources) per project policy.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
+<!-- speccy:requirement id="REQ-008" -->
 ### REQ-008: Supersession index across the workspace
 
 Compute the inverse `superseded_by` relation by scanning every
@@ -295,8 +359,20 @@ parsed SPEC.md's `frontmatter.supersedes`.
 - Given the same input slice in the same order twice, the index
   values are equal.
 
-**Covered by:** CHK-012
+<!-- speccy:scenario id="CHK-012" -->
+- Given SPEC-0017 (no `supersedes`), SPEC-0042
+  (`supersedes: [SPEC-0017]`), and SPEC-0050
+  (`supersedes: [SPEC-0017, SPEC-0030]`), when indexed, then
+  `index.superseded_by("SPEC-0017") = ["SPEC-0042", "SPEC-0050"]`
+  and `index.dangling_references()` contains `"SPEC-0030"`.
+- Given a workspace with no `supersedes` declarations anywhere, when
+  indexed, the result is empty (no panics, no errors).
+- Given the same input slice in the same order twice, the index
+  values are equal.
 
+supersession_index inverts supersedes declarations across a workspace and surfaces dangling references for lint to consume.
+<!-- /speccy:scenario -->
+<!-- /speccy:requirement -->
 ## Design
 
 ### Approach
@@ -328,6 +404,7 @@ The parsing stack matches `.speccy/ARCHITECTURE.md`'s "Operational details
 
 ### Decisions
 
+<!-- speccy:decision id="DEC-001" status="accepted" -->
 #### DEC-001: Workspace layout
 
 **Status:** Accepted
@@ -348,7 +425,8 @@ the first place that needs it.
 **Consequences:** Cargo workspace overhead is minor. Library is
 reusable across future Speccy host integrations. All future specs
 land code in one of these two crates.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-002" status="accepted" -->
 #### DEC-002: `serde-saphyr` for YAML frontmatter
 
 **Status:** Accepted (per `.speccy/ARCHITECTURE.md` "Operational details")
@@ -366,7 +444,8 @@ RUSTSEC-2025-0068).
 Pre-`0.1.0` API may break; we accept a minor refactor when it
 stabilises. Recorded as a known unknown in `AGENTS.md`
 (`## Product north star > ### Known unknowns`).
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-003" status="accepted" -->
 #### DEC-003: `comrak` event walk, not rendering
 
 **Status:** Accepted
@@ -384,7 +463,8 @@ nodes.
 
 **Consequences:** Adds a CommonMark dependency. Worth it; this is
 the robustness `.speccy/ARCHITECTURE.md` specifically calls out.
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-004" status="accepted" -->
 #### DEC-004: Hash SPEC.md raw bytes for staleness detection
 
 **Status:** Accepted
@@ -402,7 +482,8 @@ frontmatter). No normalisation.
 **Consequences:** Any SPEC.md byte change invalidates the hash.
 Whitespace-only edits trigger staleness warnings. We accept this;
 the remedy is `/speccy:amend` (covered by SPEC-0005, SPEC-0006).
-
+<!-- /speccy:decision -->
+<!-- speccy:decision id="DEC-005" status="accepted" -->
 #### DEC-005: Single-direction supersession (no stored `superseded_by`)
 
 **Status:** Accepted
@@ -430,7 +511,7 @@ replacements in one place. `.speccy/ARCHITECTURE.md` is amended in the
 same change to drop `superseded_by` from the frontmatter table and
 to redefine `SPC-006` ("status = superseded but no other spec
 declares `supersedes` pointing here") accordingly.
-
+<!-- /speccy:decision -->
 ### Interfaces
 
 Public API surface from `speccy-core`:
@@ -521,10 +602,12 @@ project root.
 
 ## Changelog
 
+<!-- speccy:changelog -->
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from `.speccy/ARCHITECTURE.md` decomposition (bootstrap of speccy itself). |
 | 2026-05-14 | agent/claude | Noun swap (Vision → Mission) lands in ARCHITECTURE.md; serde-saphyr known-unknown reference shifts from `VISION.md` to `AGENTS.md ## Product north star > Known unknowns`. No parser-code changes. |
+<!-- /speccy:changelog -->
 
 ## Notes
 
