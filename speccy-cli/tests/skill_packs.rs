@@ -186,6 +186,7 @@ const SKILL_NAMES: &[&str] = &[
     "speccy-review",
     "speccy-ship",
     "speccy-amend",
+    "speccy-brainstorm",
 ];
 
 /// Per-host install root for the SKILL.md wrappers under
@@ -1829,4 +1830,207 @@ fn t010_persona_bodies_have_no_toml_triple_quote() {
         "expected at least one persona body to be checked under {}; found none",
         dir.display(),
     );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0025 REQ-002 content-shape: the speccy-brainstorm skill body
+// must teach the Socratic flow with a hard gate, naming the four
+// artifacts, the "2-3" soft-guidance count, the four destination
+// sections, "one question at a time" discipline, and both terminal
+// actions (`speccy-plan` for new specs, `speccy-amend` for
+// amendments). Without these grep-style assertions, a mutation that
+// strips the hard gate, drops a destination, or collapses the
+// amendment branch leaves every other test green — the canonical
+// "test passes even when the behaviour is gone" failure mode that
+// SPEC-0025 T-001's tests reviewer flagged.
+// --------------------------------------------------------------------
+
+fn read_brainstorm_module_body() -> String {
+    let path = workspace_root()
+        .join("resources")
+        .join("modules")
+        .join("skills")
+        .join("speccy-brainstorm.md");
+    fs_err::read_to_string(&path).unwrap_or_else(|err| {
+        panic_with_test_message(&format!(
+            "`resources/modules/skills/speccy-brainstorm.md` must be readable: {err}"
+        ))
+    })
+}
+
+#[test]
+fn brainstorm_module_body_names_four_artifacts() {
+    let body = read_brainstorm_module_body();
+    for label in [
+        "Restated ask",
+        "alternative framings",
+        "Silent assumptions",
+        "Open questions",
+    ] {
+        assert!(
+            body.contains(label),
+            "speccy-brainstorm.md must name the artifact label `{label}` (REQ-002 done-when item 1)",
+        );
+    }
+    assert!(
+        body.contains("- [ ]"),
+        "speccy-brainstorm.md must instruct the agent to use the `- [ ]` checkbox format \
+         for open questions so the output is copy-pasteable into SPEC.md (REQ-002 done-when item 1d)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_names_two_to_three_soft_guidance() {
+    let body = read_brainstorm_module_body();
+    assert!(
+        body.contains("2-3"),
+        "speccy-brainstorm.md must name `2-3` as the suggested alternative-framings count (REQ-002 done-when item 2)",
+    );
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("soft guidance"),
+        "speccy-brainstorm.md must explicitly mark `2-3` as soft guidance scaled to complexity (REQ-002 done-when item 2)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_teaches_one_question_at_a_time() {
+    let body = read_brainstorm_module_body();
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("one question at a time"),
+        "speccy-brainstorm.md must teach `one question at a time` as an explicit interaction discipline (REQ-002 done-when item 5; CHK-002)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_carries_prose_hard_gate() {
+    let body = read_brainstorm_module_body();
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("hard gate"),
+        "speccy-brainstorm.md must carry an explicit prose `hard gate` instruction (REQ-002 done-when item 3)",
+    );
+    let strong_marker = body.contains("Do NOT") || body.contains("do NOT") || body.contains("STOP");
+    assert!(
+        strong_marker,
+        "speccy-brainstorm.md must use strong gate language (`Do NOT` / `STOP`) so an attentive agent honors it (REQ-002 done-when item 3)",
+    );
+    assert!(
+        body.contains("{{ cmd_prefix }}speccy-plan"),
+        "speccy-brainstorm.md hard-gate prose must name `{{{{ cmd_prefix }}}}speccy-plan` as the gated action (REQ-002 behavior; CHK-002)",
+    );
+    let machine_marker = body.contains("<HARD-GATE>") || body.contains("<hard-gate>");
+    assert!(
+        !machine_marker,
+        "speccy-brainstorm.md must NOT introduce a machine sentinel for the gate (DEC-003 / REQ-002 done-when item 3)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_names_four_routing_destinations() {
+    let body = read_brainstorm_module_body();
+    for destination in [
+        "## Summary",
+        "## Assumptions",
+        "## Open Questions",
+        "## Notes",
+    ] {
+        assert!(
+            body.contains(destination),
+            "speccy-brainstorm.md must name `{destination}` as a routing destination (REQ-002 done-when item 4; CHK-002)",
+        );
+    }
+    assert!(
+        body.contains("### Decisions") && body.contains("<decision>"),
+        "speccy-brainstorm.md must reference `### Decisions` / `<decision>` for load-bearing trade-offs (REQ-002 done-when item 4)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_names_both_terminal_actions() {
+    let body = read_brainstorm_module_body();
+    assert!(
+        body.contains("{{ cmd_prefix }}speccy-plan"),
+        "speccy-brainstorm.md must point at `{{{{ cmd_prefix }}}}speccy-plan` as the terminal action for the new-spec path (REQ-002 done-when item 6)",
+    );
+    assert!(
+        body.contains("{{ cmd_prefix }}speccy-amend"),
+        "speccy-brainstorm.md must point at `{{{{ cmd_prefix }}}}speccy-amend` as the terminal action for the amendment path (REQ-002 done-when item 6)",
+    );
+}
+
+#[test]
+fn brainstorm_module_body_uses_cmd_prefix_consistently() {
+    // SPEC-0025 T-001 retry: the source module body must use
+    // `{{ cmd_prefix }}speccy-plan` everywhere — bare `/speccy-plan`
+    // bleeds through to the Codex mirror as a literal slash under a
+    // no-prefix host. Allow `/speccy-plan` only inside the example
+    // quoting the user's verbatim instruction ("skip the brainstorm,
+    // just write the SPEC"), which has no slash, so the assertion is
+    // unconditional: there must be zero literal `/speccy-plan`
+    // occurrences in the resource module body.
+    let body = read_brainstorm_module_body();
+    assert!(
+        !body.contains("/speccy-plan"),
+        "speccy-brainstorm.md must use `{{{{ cmd_prefix }}}}speccy-plan` rather than a hard-coded `/speccy-plan`; \
+         the literal slash bleeds into the Codex mirror (a no-prefix host)",
+    );
+    assert!(
+        !body.contains("/speccy-amend"),
+        "speccy-brainstorm.md must use `{{{{ cmd_prefix }}}}speccy-amend` rather than a hard-coded `/speccy-amend`; \
+         same prefix-leak risk as the `speccy-plan` reference",
+    );
+}
+
+#[test]
+fn brainstorm_rendered_outputs_use_host_specific_prefix() {
+    // The renderer resolves `{{ cmd_prefix }}` to `/` on Claude Code
+    // (skill invocations are slash-commands) and to empty string on
+    // Codex (skill invocations are bare). REQ-002 CHK-002 names both
+    // host-specific forms; this test exercises the rendering rather
+    // than just the module body.
+    for (host, install_root, expected_plan, expected_amend, unexpected) in [
+        (
+            HostChoice::ClaudeCode,
+            ".claude",
+            "/speccy-plan",
+            "/speccy-amend",
+            // Bare forms must not appear on Claude Code where the
+            // slash prefix is mandatory.
+            None,
+        ),
+        (
+            HostChoice::Codex,
+            ".agents",
+            "speccy-plan",
+            "speccy-amend",
+            // Slashed forms must not appear on Codex where the prefix
+            // is empty.
+            Some(("/speccy-plan", "/speccy-amend")),
+        ),
+    ] {
+        let rendered = render_host_pack(host).unwrap_or_else(|err| {
+            panic_with_test_message(&format!("render_host_pack({host:?}) should succeed: {err}"))
+        });
+        let body = find_rendered_skill(&rendered, install_root, "speccy-brainstorm");
+        assert!(
+            body.contains(expected_plan),
+            "rendered `{install_root}/skills/speccy-brainstorm/SKILL.md` must contain `{expected_plan}` as the terminal new-spec action (REQ-002 CHK-002)",
+        );
+        assert!(
+            body.contains(expected_amend),
+            "rendered `{install_root}/skills/speccy-brainstorm/SKILL.md` must contain `{expected_amend}` as the terminal amendment action (REQ-002 done-when item 6)",
+        );
+        if let Some((slashed_plan, slashed_amend)) = unexpected {
+            assert!(
+                !body.contains(slashed_plan),
+                "rendered Codex `{install_root}/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed_plan}` — Codex skill invocations are bare (no leading slash)",
+            );
+            assert!(
+                !body.contains(slashed_amend),
+                "rendered Codex `{install_root}/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed_amend}` — Codex skill invocations are bare (no leading slash)",
+            );
+        }
+    }
 }

@@ -56,7 +56,7 @@ fn split_frontmatter(source: &str) -> Option<(&str, &str)> {
 /// `skill_packs::SKILL_NAMES`. Per SPEC-0015 each ships at
 /// `<host>/<name>/SKILL.md` in the bundle and at
 /// `<dest>/<name>/SKILL.md` in the user's project.
-const SKILL_NAMES: [&str; 7] = [
+const SKILL_NAMES: [&str; 8] = [
     "speccy-init",
     "speccy-plan",
     "speccy-tasks",
@@ -64,6 +64,7 @@ const SKILL_NAMES: [&str; 7] = [
     "speccy-review",
     "speccy-ship",
     "speccy-amend",
+    "speccy-brainstorm",
 ];
 
 struct ProjectFixture {

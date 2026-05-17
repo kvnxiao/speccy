@@ -1,46 +1,49 @@
 
 # {{ cmd_prefix }}speccy-plan
 
-Renders the planning prompt: read `AGENTS.md` (which carries the
-project-wide product north star), propose the next SPEC slice, and
-write `SPEC.md`. Top-level intent surfaces (`<goals>`, `<non-goals>`,
-`<user-stories>`, optional `<assumptions>`) and per-requirement
-sub-sections (`<done-when>`, `<behavior>`, `<scenario>`) live as
-raw XML element blocks inside SPEC.md itself. With a SPEC-ID argument, renders the amendment
-prompt instead and inlines the nearest parent `MISSION.md` so
-focus-area context is in scope.
+Renders the planning prompt: the host harness auto-loads `AGENTS.md`
+(which carries the project-wide product north star), and the prompt
+walks the agent through writing or amending `SPEC.md`. Top-level
+intent surfaces (`<goals>`, `<non-goals>`, `<user-stories>`, optional
+`<assumptions>`) and per-requirement sub-sections (`<done-when>`,
+`<behavior>`, `<scenario>`) live as raw XML element blocks inside
+SPEC.md itself. With a SPEC-ID argument, renders the amendment
+prompt instead and names the nearest parent `MISSION.md` so
+focus-area context can be loaded via the host's Read primitive.
 
 ## When to use
 
-- Greenfield form (no argument): when starting a new spec slice.
-- Amendment form (`{{ cmd_prefix }}speccy-plan SPEC-NNNN`): when an existing spec
-  needs surgical edits after intent shifted mid-loop.
+- New-spec form (no argument): when starting a new spec slice. If
+  the ask is still fuzzy, run `{{ cmd_prefix }}speccy-brainstorm`
+  first to atomize the intent — this skill writes SPEC.md in a
+  single pass and assumes the framing is already agreed.
+- Amendment form (`{{ cmd_prefix }}speccy-plan SPEC-NNNN`): when an
+  existing spec needs surgical edits after intent shifted mid-loop.
 
 ## Steps
 
-1. Identify whether the user wants greenfield or amendment. If a
-   SPEC-ID was passed, it is amendment; otherwise greenfield.
+1. Identify whether the user wants a new spec or an amendment. If a
+   SPEC-ID was passed, it is amendment; otherwise new-spec.
 2. Render the prompt:
 
    ```bash
-   speccy plan          # greenfield
+   speccy plan            # new spec
    speccy plan SPEC-0007  # amendment
    ```
 
 3. Read the rendered prompt and follow it.
 
-   - **Greenfield**: the prompt inlines `AGENTS.md` (product north
-     star plus conventions) and an allocated `SPEC-NNNN` ID. Decide
-     placement: flat (`.speccy/specs/NNNN-slug/`) or under an
+   - **New spec**: the prompt names an allocated `SPEC-NNNN` ID.
+     Decide placement: flat (`.speccy/specs/NNNN-slug/`) or under an
      existing mission folder (`.speccy/specs/[focus]/NNNN-slug/`).
      Do not invent a new mission folder for a single spec.
-   - **Amendment**: the prompt inlines `AGENTS.md`, the nearest
-     parent `MISSION.md` (or a marker saying the spec is
-     ungrouped), the existing SPEC.md, and its recent changelog.
-     Produce a minimal diff and append a `## Changelog` row.
+   - **Amendment**: the prompt names the nearest parent `MISSION.md`
+     path (when one exists), the existing SPEC.md path, and its
+     recent changelog. Produce a minimal surgical diff and append a
+     `## Changelog` row.
 
-4. Surface any material questions inline in `## Open questions`.
-5. Suggest the next step: `{{ cmd_prefix }}speccy-tasks SPEC-NNNN` to decompose
-   into `TASKS.md`.
+4. Surface any material questions inline in `## Open Questions`.
+5. Suggest the next step: `{{ cmd_prefix }}speccy-tasks SPEC-NNNN` to
+   decompose into `TASKS.md`.
 
 This recipe does not loop.
