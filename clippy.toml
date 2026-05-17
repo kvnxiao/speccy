@@ -1,3 +1,4 @@
 # Allow .expect() in test code; production must use ? + typed errors.
-# See .claude/rules/rust/rust-error-handling.md and rust-testing.md.
+# `.unwrap()` is denied even in tests so failures carry a descriptive
+# message via `.expect(...)`. See `.claude/rules/rust/rust-testing.md`.
 allow-expect-in-tests = true

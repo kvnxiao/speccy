@@ -1,0 +1,5 @@
+---
+name: speccy-review
+description: Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --kind review --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `Retry:` note. Use when the user says "review T-003" or "review the next task".
+---
+{% include "modules/skills/speccy-review.md" %}

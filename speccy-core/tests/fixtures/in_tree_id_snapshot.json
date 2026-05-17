@@ -1,0 +1,616 @@
+{
+  "0001-artifact-parsers": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010",
+      "CHK-011",
+      "CHK-012"
+    ]
+  },
+  "0002-init-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ]
+  },
+  "0003-lint-engine": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010",
+      "CHK-011"
+    ]
+  },
+  "0004-status-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ]
+  },
+  "0005-plan-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ]
+  },
+  "0006-tasks-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008"
+    ]
+  },
+  "0007-next-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ]
+  },
+  "0008-implement-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0009-review-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007"
+    ]
+  },
+  "0010-check-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008"
+    ]
+  },
+  "0011-report-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004"
+    ]
+  },
+  "0012-verify-command": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007"
+    ]
+  },
+  "0013-skill-packs": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009"
+    ]
+  },
+  "0014-handoff-and-friction-conventions": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006"
+    ]
+  },
+  "0015-host-skill-layout": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006"
+    ]
+  },
+  "0016-templated-host-resources": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010"
+    ]
+  },
+  "0017-check-selector": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0018-remove-check-execution": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0019-xml-canonical-spec-md": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0020-raw-xml-spec-carrier": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0021-spec-section-xml-tags": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007",
+      "DEC-008"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0022-xml-canonical-tasks-report": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0023-single-phase-skill-primitives": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006"
+    ]
+  },
+  "0024-meaningful-hash-semantics": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
+  },
+  "0025-planner-brainstorming-phase": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003"
+    ]
+  }
+}

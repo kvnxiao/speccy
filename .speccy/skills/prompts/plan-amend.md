@@ -1,0 +1,33 @@
+# Speccy: Plan (amend `{{spec_id}}`)
+
+You are amending an existing SPEC. Produce a **minimal surgical
+diff** to the SPEC.md below. Do not rewrite sections that are still
+correct.
+
+{{mission_section}}## Existing SPEC (pointer)
+
+Before editing, read SPEC.md at `{{spec_md_path}}`. The CLI no longer
+inlines the SPEC body into this prompt; load it via your Read
+primitive.
+
+## Recent changelog
+
+{{changelog}}
+
+## Your task
+
+1. Identify the smallest change set that resolves the amendment
+   need without invalidating completed tasks.
+2. Edit `.speccy/specs/.../SPEC.md` in place.
+3. Append a new row to the `## Changelog` table describing **why**
+   the amendment was needed.
+4. If the amendment invalidates the requirement-to-check mapping,
+   edit the `<requirement id="REQ-NNN">` and nested
+   `<scenario id="CHK-NNN">` element blocks in `SPEC.md`
+   directly. The scenario body is English Given/When/Then prose.
+   Per-spec `spec.toml` is no longer used (SPEC-0019 migration)
+   and HTML-comment markers (SPEC-0019) were superseded by raw
+   element tags in SPEC-0020; the element tree is the machine
+   contract.
+
+Do not regenerate TASKS.md; the next phase will reconcile it.

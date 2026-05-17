@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: hygiene + verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust (nightly, rustfmt only)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Install Rust (stable, with clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --all-features --locked
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: cargo +nightly fmt --check
+        run: cargo +nightly fmt --all --check
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: Build speccy binary
+        run: cargo build -p speccy-cli --locked
+
+      - name: speccy verify
+        run: ./target/debug/speccy verify
+
+      - name: Materialized host packs are in sync with resources/ source
+        run: |
+          ./target/debug/speccy init --force --host claude-code
+          ./target/debug/speccy init --force --host codex
+          if ! git diff --exit-code .claude .codex .agents .speccy/skills; then
+            echo "::error::Materialized host packs drift from resources/ source. Run 'speccy init --force --host claude-code' and 'speccy init --force --host codex' locally and commit the resulting changes."
+            exit 1
+          fi

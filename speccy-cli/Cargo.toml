@@ -1,0 +1,39 @@
+[package]
+name = "speccy-cli"
+description = "Speccy CLI: deterministic feedback engine for spec-driven development."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+readme = "README.md"
+keywords = ["speccy", "cli", "spec", "feedback", "tooling"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "speccy"
+path = "src/main.rs"
+
+[dependencies]
+camino = { workspace = true }
+clap = { workspace = true }
+fs-err = { workspace = true }
+include_dir = { workspace = true }
+jiff = { workspace = true }
+minijinja = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+speccy-core = { path = "../speccy-core", version = "0.1.0" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+indoc = { workspace = true }
+predicates = { workspace = true }
+serde-saphyr = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true
