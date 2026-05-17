@@ -41,17 +41,20 @@ or `/speccy-review` first.
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what
    makes the SPEC implemented, so the status flip belongs in the
-   same PR, not in a follow-up. The byte-level edit invalidates
-   TASKS.md's `spec_hash_at_generation`; refresh it and confirm:
+   same PR, not in a follow-up. The status flip is hash-neutral
+   under SPEC-0024's hash function (`status` is excluded from
+   `spec_hash_at_generation`), so TASKS.md does not need a hash
+   refresh; running `speccy tasks SPEC-NNNN --commit` after the flip
+   only refreshes `generated_at`, which is optional. Confirm the
+   workspace is still clean:
 
    ```bash
-   speccy tasks SPEC-NNNN --commit
    speccy status
    ```
 
    `speccy status` should report no `TSK-003` mismatch for SPEC-NNNN.
-5. Run the CI gate locally as a dry-run *after* the status flip and
-   hash refresh so verify reads the post-ship tree:
+5. Run the CI gate locally as a dry-run *after* the status flip so
+   verify reads the post-ship tree:
 
    ```bash
    speccy verify

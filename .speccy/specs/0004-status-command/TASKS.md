@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0004
-spec_hash_at_generation: a3dc6e727ade88a15042e425a38c078e5ba55f2a5d5a059de0f652629942d606
-generated_at: 2026-05-14T03:25:13Z
+spec_hash_at_generation: d33aee3175c4f6a1d7703672db728488bdd51ed52d973fe71ef07832f33165c8
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0004 status-command

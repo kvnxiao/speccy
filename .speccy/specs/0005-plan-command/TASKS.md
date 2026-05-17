@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0005
-spec_hash_at_generation: fc41541e431d5565d26b6e90da2dd60fa70abaa1ab6737e5196296443b297348
-generated_at: 2026-05-14T05:28:44Z
+spec_hash_at_generation: 0f9747205df96e3f6e3e96778a44247d025f8c2703b5e83c48ddee9a0e5ce2f3
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0005 plan-command

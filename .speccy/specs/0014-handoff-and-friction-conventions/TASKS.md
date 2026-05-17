@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0014
-spec_hash_at_generation: 4630d19ed376d4b2d303886345d49f035d9eeb167050afe39fc01437c47ab15e
-generated_at: 2026-05-15T02:44:35Z
+spec_hash_at_generation: 987ee57bbb1f1e02ce7426f13965a958015a43cfca9458d4602ae82ab8c6c4f9
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0014 Handoff template + friction-to-skill-update conventions

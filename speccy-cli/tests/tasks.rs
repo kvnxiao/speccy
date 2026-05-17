@@ -270,3 +270,39 @@ fn commit_preserves_body_bytes_byte_identical() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn commit_refuses_when_spec_md_id_disagrees_with_folder_and_tasks_md_unchanged() -> TestResult {
+    // SPEC-0024 REQ-003: 3-way ID command-guard.
+    // Folder = "0001-foo" (→ SPEC-0001); SPEC.md.id = SPEC-1234;
+    // TASKS.md.spec = SPEC-0001. CLI arg matches folder/TASKS.md, so
+    // the legacy 2-way check would not fire; the 3-way guard must.
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-1234", "in-progress"),
+        &valid_spec_toml(),
+        Some(&bootstrap_tasks_md("SPEC-0001")),
+    )?;
+    let before = fs_err::read_to_string(spec_dir.join("TASKS.md").as_std_path())?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("tasks")
+        .arg("SPEC-0001")
+        .arg("--commit")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert()
+        .failure()
+        .code(1)
+        .stderr(contains("SPEC-0001"))
+        .stderr(contains("SPEC-1234"))
+        .stderr(contains("ID disagreement"));
+
+    let after = fs_err::read_to_string(spec_dir.join("TASKS.md").as_std_path())?;
+    assert_eq!(
+        before, after,
+        "TASKS.md must be byte-unchanged on 3-way disagreement",
+    );
+    Ok(())
+}

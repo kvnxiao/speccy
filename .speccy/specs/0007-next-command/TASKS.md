@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0007
-spec_hash_at_generation: 9310044bdccbf21d2cad5b28aeb1403c8516f87828e99ba5a3a97bda3db9a543
-generated_at: 2026-05-14T03:25:14Z
+spec_hash_at_generation: 461c4b4c56ec6478ee7e2de4eb04b50daf2bd7737815151adf51920fbefa0b4f
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0007 next-command

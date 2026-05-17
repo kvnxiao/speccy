@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0015
-spec_hash_at_generation: 9ff3258a500d08188ef5d2f97e541dff28b3afd19fc577252aa685ea0b28c58e
-generated_at: 2026-05-15T02:44:35Z
+spec_hash_at_generation: 7f8ba7f221d0f7d40f5d1a4201ae87db3bd7da90b3ecb742bb31d0ede3e720bd
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0015 host-skill-layout

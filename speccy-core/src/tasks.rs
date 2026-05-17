@@ -15,6 +15,7 @@
 use crate::error::ParseError;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
+use crate::workspace::derive_spec_id_from_dir;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use jiff::Timestamp;
@@ -44,6 +45,24 @@ pub enum CommitError {
         /// Value supplied as the command argument.
         in_arg: String,
     },
+    /// The three observed identifiers — folder digits, SPEC.md `id:`, and
+    /// TASKS.md `spec:` — do not all agree. The file is **not** modified.
+    /// Peer of [`CommitError::SpecIdMismatch`]; this variant catches the
+    /// broader case where SPEC.md disagrees with the folder even when the
+    /// CLI argument matches TASKS.md.
+    #[error(
+        "ID disagreement among folder=`{folder}`, SPEC.md.id=`{spec_md}`, \
+         TASKS.md.spec=`{tasks_md}`; refusing to commit (file untouched)"
+    )]
+    IdTripleMismatch {
+        /// Folder-derived ID (via [`derive_spec_id_from_dir`] on the
+        /// TASKS.md parent directory).
+        folder: String,
+        /// Value found in the SPEC.md frontmatter `id:` field.
+        spec_md: String,
+        /// Value found in the TASKS.md frontmatter `spec:` field.
+        tasks_md: String,
+    },
     /// I/O error reading or writing TASKS.md.
     #[error("I/O error processing TASKS.md")]
     Io(#[source] std::io::Error),
@@ -68,10 +87,21 @@ impl From<ParseError> for CommitError {
 /// content hash and the supplied UTC moment.
 ///
 /// `spec_id` is the canonical `SPEC-NNNN` argument from the CLI.
-/// `spec_md_sha256` is the raw SPEC.md content hash from
-/// [`crate::parse::SpecMd::sha256`]. `now_utc` is the moment captured at
-/// command start; truncated to second precision and rendered as
-/// `YYYY-MM-DDTHH:MM:SSZ` (SPEC-0006 DEC-004).
+/// `spec_md_id` is the SPEC.md frontmatter `id:` value, used by the
+/// 3-way ID consistency guard. `spec_md_sha256` is the SPEC.md content
+/// hash from [`crate::parse::SpecMd::sha256`]. `now_utc` is the moment
+/// captured at command start; truncated to second precision and rendered
+/// as `YYYY-MM-DDTHH:MM:SSZ` (SPEC-0006 DEC-004).
+///
+/// Before any write, the function performs a 3-way ID consistency check
+/// among the folder-derived ID (from the TASKS.md parent directory),
+/// `spec_md_id`, and the TASKS.md frontmatter `spec:` value. On
+/// disagreement, [`CommitError::IdTripleMismatch`] is returned and the
+/// file is not opened for writing. The check is skipped when any of the
+/// three observations is unobtainable (no parent folder match, no
+/// frontmatter, no `spec:` line). The legacy CLI-arg vs TASKS.md.spec
+/// check still fires after; if both would fire, the 3-way error takes
+/// precedence (it is a superset signal).
 ///
 /// The file's body bytes (everything after the closing `---` fence) are
 /// preserved byte-identically. Frontmatter fields that are not managed
@@ -82,13 +112,16 @@ impl From<ParseError> for CommitError {
 /// # Errors
 ///
 /// Returns [`CommitError::TasksMdNotFound`] if the file doesn't exist,
+/// [`CommitError::IdTripleMismatch`] if the folder, SPEC.md `id:`, and
+/// TASKS.md `spec:` disagree (file untouched),
 /// [`CommitError::SpecIdMismatch`] if the frontmatter `spec` value does
-/// not match `spec_id` (the file is not modified in this case),
+/// not match `spec_id` (file untouched),
 /// [`CommitError::Parse`] if the frontmatter fence is malformed, or
 /// [`CommitError::Io`] on read/write failure.
 pub fn commit_frontmatter(
     tasks_md_path: &Utf8Path,
     spec_id: &str,
+    spec_md_id: &str,
     spec_md_sha256: &[u8; 32],
     now_utc: Timestamp,
 ) -> Result<(), CommitError> {
@@ -109,7 +142,20 @@ pub fn commit_frontmatter(
     let new_content = match split {
         Split::None => prepend_fresh_frontmatter(spec_id, &hash_hex, &ts_str, &raw),
         Split::Some { yaml, body } => {
-            if let Some(existing) = find_top_level_spec(yaml)
+            let tasks_md_id = find_top_level_spec(yaml);
+
+            let folder_id = tasks_md_path.parent().and_then(derive_spec_id_from_dir);
+            if let (Some(folder), Some(tasks_md)) = (folder_id.as_ref(), tasks_md_id.as_ref())
+                && (folder != spec_md_id || spec_md_id != tasks_md.as_str())
+            {
+                return Err(CommitError::IdTripleMismatch {
+                    folder: folder.clone(),
+                    spec_md: spec_md_id.to_owned(),
+                    tasks_md: tasks_md.clone(),
+                });
+            }
+
+            if let Some(existing) = tasks_md_id
                 && existing != spec_id
             {
                 return Err(CommitError::SpecIdMismatch {

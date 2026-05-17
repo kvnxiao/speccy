@@ -569,5 +569,29 @@
       "CHK-005",
       "CHK-006"
     ]
+  },
+  "0024-meaningful-hash-semantics": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
   }
 }

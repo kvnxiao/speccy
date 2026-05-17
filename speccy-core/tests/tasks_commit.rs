@@ -58,7 +58,7 @@ fn hash_and_timestamp_replace_managed_fields_in_place() {
     let hash = sha_full(0xab);
     let now = fixed_ts();
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, now)
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, now)
         .expect("commit should succeed on well-formed file");
 
     let after = read(&fx.path);
@@ -94,7 +94,8 @@ fn bootstrap_pending_sentinel_is_replaced_on_first_commit() {
     let hash = sha_full(0x42);
     let now = fixed_ts();
 
-    commit_frontmatter(&fx.path, "SPEC-0006", &hash, now).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0006", "SPEC-0006", &hash, now)
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -123,7 +124,7 @@ fn spec_id_mismatch_returns_error_without_modifying_file() {
     let before = read(&fx.path);
     let hash = sha_full(0xff);
 
-    let result = commit_frontmatter(&fx.path, "SPEC-0006", &hash, fixed_ts());
+    let result = commit_frontmatter(&fx.path, "SPEC-0006", "SPEC-0006", &hash, fixed_ts());
     let err = result.expect_err("mismatched SPEC-IDs must return SpecIdMismatch");
     assert!(
         matches!(
@@ -148,7 +149,8 @@ fn missing_frontmatter_prepends_canonical_block() {
     let hash = sha_full(0x10);
     let now = fixed_ts();
 
-    commit_frontmatter(&fx.path, "SPEC-0006", &hash, now).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0006", "SPEC-0006", &hash, now)
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -181,7 +183,8 @@ fn other_frontmatter_fields_are_preserved_byte_identically() {
     let fx = write_tmp(src);
     let hash = sha_full(0xcc);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, fixed_ts()).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -209,7 +212,8 @@ fn non_canonical_field_order_is_preserved() {
     let hash = sha_full(0x77);
     let now = fixed_ts();
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, now).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, now)
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     let gen_at_pos = after
@@ -233,7 +237,8 @@ fn body_byte_preservation_with_lf_line_endings() {
     let fx = write_tmp(&src);
     let hash = sha_full(0x05);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, fixed_ts()).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -252,7 +257,8 @@ fn body_byte_preservation_with_crlf_line_endings() {
     let fx = write_tmp(&src);
     let hash = sha_full(0x06);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, fixed_ts()).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -271,7 +277,8 @@ fn body_byte_preservation_with_trailing_whitespace() {
     let fx = write_tmp(&src);
     let hash = sha_full(0x08);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, fixed_ts()).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -286,7 +293,7 @@ fn tasks_md_not_found_returns_typed_error() {
     let path = Utf8PathBuf::from_path_buf(dir.path().join("TASKS.md")).expect("tempdir path UTF-8");
     let hash = sha_full(0x00);
 
-    let err = commit_frontmatter(&path, "SPEC-0001", &hash, fixed_ts())
+    let err = commit_frontmatter(&path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
         .expect_err("missing file must error");
     assert!(
         matches!(&err, CommitError::TasksMdNotFound { path: p } if p == &path),
@@ -309,10 +316,10 @@ fn two_commits_in_same_second_produce_identical_bytes() {
     let hash = sha_full(0xaa);
     let now = fixed_ts();
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, now).expect("first commit");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, now).expect("first commit");
     let after_first = read(&fx.path);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, now).expect("second commit");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, now).expect("second commit");
     let after_second = read(&fx.path);
 
     assert_eq!(
@@ -333,7 +340,8 @@ fn missing_managed_field_appended_when_others_present() {
     let fx = write_tmp(src);
     let hash = sha_full(0xbe);
 
-    commit_frontmatter(&fx.path, "SPEC-0001", &hash, fixed_ts()).expect("commit should succeed");
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("commit should succeed");
 
     let after = read(&fx.path);
     assert!(
@@ -343,5 +351,158 @@ fn missing_managed_field_appended_when_others_present() {
     assert!(
         after.contains("generated_at: 2026-05-13T15:30:42Z"),
         "missing timestamp field must be appended, got: {after}",
+    );
+}
+
+/// SPEC-0024 REQ-003: place a TASKS.md inside a `NNNN-slug` subfolder so
+/// `derive_spec_id_from_dir` resolves a folder-derived ID; the 3-way
+/// guard inside `commit_frontmatter` skips when the parent folder name
+/// does not match `^\d{4}-`, so the bare `write_tmp` fixture exercises
+/// the legacy 2-way path. Use this helper to exercise the 3-way path.
+fn write_in_folder(folder_name: &str, content: &str) -> Fixture {
+    let dir = tempfile::tempdir().expect("tempdir creation should succeed");
+    let sub = dir.path().join(folder_name);
+    fs_err::create_dir_all(&sub).expect("subdir creation should succeed");
+    let std_path = sub.join("TASKS.md");
+    fs_err::write(&std_path, content).expect("writing fixture should succeed");
+    let path = Utf8PathBuf::from_path_buf(std_path).expect("tempdir path should be UTF-8");
+    Fixture { _dir: dir, path }
+}
+
+#[test]
+fn commit_succeeds_when_folder_spec_md_id_and_tasks_md_spec_all_agree() {
+    let src = indoc! {r"
+        ---
+        spec: SPEC-0001
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        body
+    "};
+    let fx = write_in_folder("0001-foo", src);
+    let hash = sha_full(0x11);
+
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect("3-way agreement must permit the commit");
+
+    let after = read(&fx.path);
+    let hex = "11".repeat(32);
+    assert!(
+        after.contains(&format!("spec_hash_at_generation: {hex}")),
+        "hash must be written when all three IDs agree, got: {after}",
+    );
+}
+
+#[test]
+fn commit_returns_id_triple_mismatch_when_spec_md_id_disagrees() {
+    let src = indoc! {r"
+        ---
+        spec: SPEC-0001
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        body content
+    "};
+    let fx = write_in_folder("0001-foo", src);
+    let before = read(&fx.path);
+    let hash = sha_full(0xee);
+
+    let err = commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-1234", &hash, fixed_ts())
+        .expect_err("SPEC.md.id disagreement with folder must return IdTripleMismatch");
+    assert!(
+        matches!(
+            &err,
+            CommitError::IdTripleMismatch { folder, spec_md, tasks_md }
+                if folder == "SPEC-0001" && spec_md == "SPEC-1234" && tasks_md == "SPEC-0001"
+        ),
+        "expected IdTripleMismatch with the three observed values, got {err:?}",
+    );
+
+    let after = read(&fx.path);
+    assert_eq!(
+        before, after,
+        "TASKS.md must be byte-unchanged on 3-way disagreement",
+    );
+}
+
+#[test]
+fn commit_leaves_file_unchanged_when_tasks_md_spec_disagrees_with_folder_and_spec_md() {
+    // Folder digits = SPEC-0001, SPEC.md.id = SPEC-0001, TASKS.md.spec = SPEC-9999.
+    // Either IdTripleMismatch or SpecIdMismatch is acceptable per the
+    // SPEC's REQ-003 <behavior>; both leave TASKS.md untouched.
+    let src = indoc! {r"
+        ---
+        spec: SPEC-9999
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        body content
+    "};
+    let fx = write_in_folder("0001-foo", src);
+    let before = read(&fx.path);
+    let hash = sha_full(0xcc);
+
+    let err = commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-0001", &hash, fixed_ts())
+        .expect_err("TASKS.md.spec disagreement must return an error");
+    assert!(
+        matches!(
+            &err,
+            CommitError::IdTripleMismatch { .. } | CommitError::SpecIdMismatch { .. }
+        ),
+        "expected IdTripleMismatch or SpecIdMismatch, got {err:?}",
+    );
+
+    let after = read(&fx.path);
+    assert_eq!(
+        before, after,
+        "TASKS.md must be byte-unchanged on disagreement",
+    );
+}
+
+#[test]
+fn id_triple_mismatch_display_contains_all_three_observed_values() {
+    let err = CommitError::IdTripleMismatch {
+        folder: "SPEC-0024".to_owned(),
+        spec_md: "SPEC-1234".to_owned(),
+        tasks_md: "SPEC-9999".to_owned(),
+    };
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("SPEC-0024"),
+        "Display must contain folder value verbatim, got: {rendered}",
+    );
+    assert!(
+        rendered.contains("SPEC-1234"),
+        "Display must contain spec_md value verbatim, got: {rendered}",
+    );
+    assert!(
+        rendered.contains("SPEC-9999"),
+        "Display must contain tasks_md value verbatim, got: {rendered}",
+    );
+}
+
+#[test]
+fn three_way_guard_skips_when_folder_id_unobtainable() {
+    // Bare tempdir name does not match `^\d{4}-`, so folder_id is None
+    // and the 3-way check skips. With spec_md_id disagreeing from
+    // folder/TASKS.md, the legacy 2-way path is the only one that can
+    // fire — and here it does not, because CLI arg equals TASKS.md.spec.
+    let src = indoc! {r"
+        ---
+        spec: SPEC-0001
+        spec_hash_at_generation: bootstrap-pending
+        generated_at: 2026-05-11T00:00:00Z
+        ---
+
+        body
+    "};
+    let fx = write_tmp(src);
+    let hash = sha_full(0x33);
+
+    commit_frontmatter(&fx.path, "SPEC-0001", "SPEC-1234", &hash, fixed_ts()).expect(
+        "3-way guard must skip when folder digits are not derivable from the parent directory name",
     );
 }

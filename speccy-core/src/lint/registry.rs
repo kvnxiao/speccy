@@ -25,6 +25,7 @@ pub const REGISTRY: &[(&str, Level)] = &[
     ("TSK-002", Level::Error),
     ("TSK-003", Level::Warn),
     ("TSK-004", Level::Error),
+    ("TSK-005", Level::Error),
     ("QST-001", Level::Info),
 ];
 

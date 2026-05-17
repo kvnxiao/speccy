@@ -43,13 +43,41 @@ pub enum StatusError {
     /// types).
     #[error("failed to serialise status JSON")]
     JsonSerialise(#[from] serde_json::Error),
+    /// Positional selector named a spec ID not present in the
+    /// workspace.
+    #[error("no spec with id `{id}` in workspace; available: {available}")]
+    UnknownSpec {
+        /// The user-supplied selector that was not found.
+        id: String,
+        /// Comma-separated list of available spec IDs (empty workspace
+        /// renders as `(none)`).
+        available: String,
+    },
 }
 
 /// `speccy status` arguments.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct StatusArgs {
+    /// Positional `SPEC-NNNN` selector. When set, only that spec is
+    /// rendered (unfiltered). Mutually exclusive with [`Self::all`] at
+    /// the clap layer.
+    pub selector: Option<String>,
+    /// When true, render every spec unfiltered. Mutually exclusive with
+    /// [`Self::selector`] at the clap layer.
+    pub all: bool,
     /// Emit JSON instead of the filtered text view.
     pub json: bool,
+}
+
+/// Which renderer the resolver is feeding. Default text mode applies
+/// the attention-list filter; JSON mode (and selector / `--all` in
+/// either) does not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderMode {
+    /// Filtered attention-list view with footer.
+    Text,
+    /// Unfiltered every-spec view, no footer.
+    Json,
 }
 
 /// One spec's derived view used by both renderers.
@@ -270,10 +298,11 @@ pub fn show_in_text_view(view: &SpecView<'_>) -> bool {
 ///
 /// # Errors
 ///
-/// Returns [`StatusError`] when the cwd cannot be resolved or
-/// `.speccy/` cannot be found.
+/// Returns [`StatusError`] when the cwd cannot be resolved, `.speccy/`
+/// cannot be found, or the positional selector names a spec ID that is
+/// not in the workspace.
 pub fn run(
-    args: StatusArgs,
+    args: &StatusArgs,
     cwd: &Utf8Path,
     out: &mut dyn std::io::Write,
 ) -> Result<(), StatusError> {
@@ -283,15 +312,81 @@ pub fn run(
     let sha = repo_sha(&project_root);
     let report = assemble(&workspace, diagnostics, sha);
 
+    let mode = if args.json {
+        RenderMode::Json
+    } else {
+        RenderMode::Text
+    };
+    let (specs_to_render, hidden_count) = resolve_specs(&report, args, mode)?;
+
     if args.json {
-        let json = build_json(&report)?;
+        let json = build_json(&report, &specs_to_render)?;
         let mut text = serde_json::to_string_pretty(&json)?;
         text.push('\n');
         write_all(out, text.as_bytes())?;
     } else {
-        render_text(&report, out)?;
+        render_text(&report, &specs_to_render, hidden_count, out)?;
     }
     Ok(())
+}
+
+/// Resolve which specs to render and how many were hidden by the
+/// default attention-list filter.
+///
+/// - With `args.selector` set, returns `(vec![&found], 0)` or an
+///   [`StatusError::UnknownSpec`] error.
+/// - With `args.all` set, returns `(every spec in workspace order, 0)`.
+/// - With neither flag and `mode == RenderMode::Json`, returns `(every spec,
+///   0)` so JSON output is unaffected by the text-mode filter.
+/// - With neither flag and `mode == RenderMode::Text`, applies the
+///   attention-list filter and reports the count of hidden specs.
+///
+/// # Errors
+///
+/// Returns [`StatusError::UnknownSpec`] when `args.selector` is set
+/// but no spec in the workspace has that `display_id`.
+pub fn resolve_specs<'a>(
+    report: &'a StatusReport<'a>,
+    args: &StatusArgs,
+    mode: RenderMode,
+) -> Result<(Vec<&'a SpecView<'a>>, usize), StatusError> {
+    if let Some(id) = &args.selector {
+        return match report.specs.iter().find(|v| v.display_id == *id) {
+            Some(view) => Ok((vec![view], 0)),
+            None => Err(StatusError::UnknownSpec {
+                id: id.clone(),
+                available: available_ids(report),
+            }),
+        };
+    }
+    if args.all {
+        return Ok((report.specs.iter().collect(), 0));
+    }
+    match mode {
+        RenderMode::Json => Ok((report.specs.iter().collect(), 0)),
+        RenderMode::Text => {
+            let total = report.specs.len();
+            let shown: Vec<&SpecView<'_>> = report
+                .specs
+                .iter()
+                .filter(|v| show_in_text_view(v))
+                .collect();
+            let hidden = total.saturating_sub(shown.len());
+            Ok((shown, hidden))
+        }
+    }
+}
+
+fn available_ids(report: &StatusReport<'_>) -> String {
+    if report.specs.is_empty() {
+        return "(none)".to_owned();
+    }
+    report
+        .specs
+        .iter()
+        .map(|v| v.display_id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn write_all(out: &mut dyn std::io::Write, bytes: &[u8]) -> Result<(), StatusError> {
@@ -309,21 +404,21 @@ pub fn resolve_cwd() -> Result<Utf8PathBuf, StatusError> {
     Utf8PathBuf::from_path_buf(std_path).map_err(|_path| StatusError::CwdNotUtf8)
 }
 
-fn render_text(report: &StatusReport<'_>, out: &mut dyn std::io::Write) -> Result<(), StatusError> {
+fn render_text(
+    report: &StatusReport<'_>,
+    specs_to_render: &[&SpecView<'_>],
+    hidden_count: usize,
+    out: &mut dyn std::io::Write,
+) -> Result<(), StatusError> {
     if report.workspace.specs.is_empty() {
         write_line(out, "No specs in workspace.")?;
         return Ok(());
     }
 
-    let shown: Vec<&SpecView<'_>> = report
-        .specs
-        .iter()
-        .filter(|v| show_in_text_view(v))
-        .collect();
-    if shown.is_empty() {
+    if specs_to_render.is_empty() {
         write_line(out, "No in-progress specs need attention.")?;
     } else {
-        for view in shown {
+        for view in specs_to_render {
             render_spec_text(view, out)?;
         }
     }
@@ -340,6 +435,14 @@ fn render_text(report: &StatusReport<'_>, out: &mut dyn std::io::Write) -> Resul
             );
             write_line(out, &line)?;
         }
+    }
+
+    if hidden_count > 0 {
+        write_line(out, "")?;
+        write_line(
+            out,
+            &format!("{hidden_count} specs hidden; pass --all to see them"),
+        )?;
     }
 
     Ok(())
@@ -393,7 +496,10 @@ fn write_line(out: &mut dyn std::io::Write, line: &str) -> Result<(), StatusErro
     out.write_all(&bytes).map_err(StatusError::Cwd)
 }
 
-/// Build the JSON output payload from a `StatusReport`.
+/// Build the JSON output payload from a `StatusReport` and a
+/// pre-resolved slice of specs to include. The slice is what
+/// [`resolve_specs`] returned for the current invocation; passing every
+/// `&SpecView` reproduces today's JSON shape byte-for-byte.
 ///
 /// # Errors
 ///
@@ -401,8 +507,11 @@ fn write_line(out: &mut dyn std::io::Write, line: &str) -> Result<(), StatusErro
 /// fails. With the current owned types this is unreachable, but the
 /// signature stays a `Result` to keep room for future fields that
 /// could introduce error cases.
-pub fn build_json(report: &StatusReport<'_>) -> Result<JsonOutput, StatusError> {
-    let specs: Vec<JsonSpec> = report.specs.iter().map(json_spec).collect();
+pub fn build_json(
+    report: &StatusReport<'_>,
+    specs_to_render: &[&SpecView<'_>],
+) -> Result<JsonOutput, StatusError> {
+    let specs: Vec<JsonSpec> = specs_to_render.iter().map(|v| json_spec(v)).collect();
     let workspace_lint = JsonLintBlock::from_diagnostics(&report.workspace_diagnostics);
     Ok(JsonOutput {
         schema_version: 1,

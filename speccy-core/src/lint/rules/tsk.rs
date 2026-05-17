@@ -4,12 +4,14 @@ use crate::error::ParseError;
 use crate::lint::types::Diagnostic;
 use crate::lint::types::Level;
 use crate::lint::types::ParsedSpec;
+use crate::workspace::derive_spec_id_from_dir;
 use crate::workspace::extract_frontmatter_field;
 use std::collections::HashSet;
 
 const TSK_001: &str = "TSK-001";
 const TSK_003: &str = "TSK-003";
 const TSK_004: &str = "TSK-004";
+const TSK_005: &str = "TSK-005";
 
 const BOOTSTRAP_SENTINEL: &str = "bootstrap-pending";
 const REQUIRED_FRONTMATTER_FIELDS: &[&str] = &["spec", "spec_hash_at_generation", "generated_at"];
@@ -29,6 +31,7 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             tsk_004_frontmatter_fields(spec, &tasks_path, tasks_md, out);
             tsk_001_covers(spec, &tasks_path, tasks_md, out);
             tsk_003_staleness(spec, &tasks_path, tasks_md, out);
+            tsk_005_id_triple(spec, &tasks_path, tasks_md, out);
         }
     }
 }
@@ -208,6 +211,41 @@ fn tsk_003_staleness(
                 .to_owned(),
         ));
     }
+}
+
+/// TSK-005: error when folder digits, SPEC.md `id:`, and TASKS.md `spec:`
+/// disagree. Skipped when any of the three is unobtainable; upstream
+/// parse-error / missing-artifact diagnostics cover those cases.
+fn tsk_005_id_triple(
+    spec: &ParsedSpec,
+    tasks_path: &camino::Utf8Path,
+    tasks_md: &crate::parse::TasksDoc,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(folder_id) = derive_spec_id_from_dir(&spec.dir) else {
+        return;
+    };
+    let Some(spec_md) = spec.spec_md_ok() else {
+        return;
+    };
+    let spec_md_id = &spec_md.frontmatter.id;
+    let Some(tasks_md_id) = extract_frontmatter_field(&tasks_md.frontmatter_raw, "spec") else {
+        return;
+    };
+
+    if folder_id == *spec_md_id && *spec_md_id == tasks_md_id {
+        return;
+    }
+
+    out.push(Diagnostic::with_file(
+        TSK_005,
+        Level::Error,
+        spec.spec_id.clone(),
+        tasks_path.to_path_buf(),
+        format!(
+            "ID disagreement: folder=`{folder_id}`, SPEC.md.id=`{spec_md_id}`, TASKS.md.spec=`{tasks_md_id}`"
+        ),
+    ));
 }
 
 fn hex_encode(bytes: &[u8; 32]) -> String {

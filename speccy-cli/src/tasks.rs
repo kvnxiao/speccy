@@ -135,7 +135,13 @@ pub fn run(args: TasksArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), T
             }));
         }
         let now = Timestamp::now();
-        commit_frontmatter(&tasks_md_path, &canonical_id, &parsed_spec.sha256, now)?;
+        commit_frontmatter(
+            &tasks_md_path,
+            &canonical_id,
+            &parsed_spec.frontmatter.id,
+            &parsed_spec.sha256,
+            now,
+        )?;
         return Ok(());
     }
 

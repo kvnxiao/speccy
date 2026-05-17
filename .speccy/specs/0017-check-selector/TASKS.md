@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0017
-spec_hash_at_generation: 2632edf109580af221480e138369db270510c0a8aed0b5d678ffe1b96baefd2b
-generated_at: 2026-05-15T02:44:35Z
+spec_hash_at_generation: 5b4313ae21421b79f6555fd436f2c2ce6984bf8557afd938ac320a93d4aeee61
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0017 speccy check polymorphic selector

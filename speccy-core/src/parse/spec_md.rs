@@ -3,9 +3,11 @@
 //! Returns frontmatter (validated against the closed `status` set), the
 //! list of REQ headings (line-based scan that skips fenced code blocks
 //! so embedded `### REQ-NNN:` examples never poison the result), the
-//! `## Changelog` table (if present), and a sha256 over the raw file
-//! bytes for staleness detection. See
-//! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-003.
+//! `## Changelog` table (if present), and a sha256 over the SPEC.md's
+//! canonical content (frontmatter minus `status`, plus body) for
+//! staleness detection. See `.speccy/specs/0001-artifact-parsers/SPEC.md`
+//! REQ-003 and `.speccy/specs/0024-meaningful-hash-semantics/SPEC.md`
+//! REQ-001.
 //!
 //! The line-based heading scan was introduced as part of SPEC-0020
 //! T-005: after the carrier switched to raw XML element tags
@@ -44,8 +46,10 @@ pub struct SpecMd {
     pub changelog: Vec<ChangelogRow>,
     /// Raw file content as read from disk.
     pub raw: String,
-    /// sha256 of the raw file bytes (frontmatter inclusive). Stable across
-    /// identical content; differs after any byte edit.
+    /// sha256 of canonical(frontmatter \ {status}) ++ body bytes. Stable
+    /// across status flips and frontmatter cosmetics (key order, whitespace,
+    /// comments inside the fence); changes on any body byte edit or
+    /// non-`status` frontmatter field change. See SPEC-0024 REQ-001.
     pub sha256: [u8; 32],
 }
 
@@ -128,6 +132,13 @@ struct RawFrontmatter {
 
 const ALLOWED_STATUSES: &[&str] = &["in-progress", "implemented", "dropped", "superseded"];
 
+/// Frontmatter fields excluded from the SPEC.md content hash.
+///
+/// Per SPEC-0024 DEC-002, the default is include-all-fields: adding a
+/// new entry here is the only way to make a frontmatter field
+/// hash-neutral, and doing so requires a SPEC amendment.
+const HASH_EXCLUDED_FRONTMATTER_FIELDS: &[&str] = &["status"];
+
 #[expect(
     clippy::unwrap_used,
     reason = "compile-time literal regex; covered by unit tests"
@@ -146,10 +157,9 @@ fn req_heading_line_regex() -> &'static Regex {
 /// `status` value, or YAML deserialisation failures.
 pub fn spec_md(path: &Utf8Path) -> Result<SpecMd, ParseError> {
     let raw = read_to_string(path)?;
-    let sha256: [u8; 32] = Sha256::digest(raw.as_bytes()).into();
-
     let frontmatter = parse_frontmatter(&raw, path)?;
     let (requirements, changelog) = parse_body(&raw);
+    let sha256 = canonical_content_sha256(&raw, &frontmatter, path)?;
 
     Ok(SpecMd {
         frontmatter,
@@ -158,6 +168,33 @@ pub fn spec_md(path: &Utf8Path) -> Result<SpecMd, ParseError> {
         raw,
         sha256,
     })
+}
+
+/// Compute `sha256(canonical_frontmatter || body)` for [`SpecMd::sha256`].
+///
+/// `canonical_frontmatter` is [`canonical_frontmatter_for_hash`]'s output;
+/// `body` is the source bytes immediately after the closing `---` fence
+/// returned by [`split_frontmatter`]. The split is re-run here (cheap) so
+/// the body slice doesn't have to be threaded through `parse_frontmatter`.
+fn canonical_content_sha256(
+    raw: &str,
+    fm: &SpecFrontmatter,
+    path: &Utf8Path,
+) -> Result<[u8; 32], ParseError> {
+    let body = match split_frontmatter(raw, path)? {
+        Split::Some { body, .. } => body,
+        Split::None => {
+            return Err(ParseError::MissingField {
+                field: "frontmatter".to_owned(),
+                context: format!("SPEC.md at {path}"),
+            });
+        }
+    };
+    let canonical_fm = canonical_frontmatter_for_hash(fm);
+    let mut hasher = Sha256::new();
+    hasher.update(&canonical_fm);
+    hasher.update(body.as_bytes());
+    Ok(hasher.finalize().into())
 }
 
 fn parse_frontmatter(raw: &str, path: &Utf8Path) -> Result<SpecFrontmatter, ParseError> {
@@ -202,6 +239,94 @@ fn parse_status(value: &str, path: &Utf8Path) -> Result<SpecStatus, ParseError> 
             allowed: ALLOWED_STATUSES.join(", "),
         }),
     }
+}
+
+/// Serialise the parts of [`SpecFrontmatter`] that contribute to the
+/// SPEC.md content hash, in a canonical YAML-shaped byte sequence.
+///
+/// Keys appear in alphabetical order; strings are double-quoted with
+/// backslash escapes for `"`, `\`, and ASCII control characters;
+/// sequences are emitted in flow style. Fields named in
+/// [`HASH_EXCLUDED_FRONTMATTER_FIELDS`] are omitted (`status` today).
+/// Two equal [`SpecFrontmatter`] values always produce byte-identical
+/// output, so source-file whitespace, key order, and comments are
+/// erased by the parse-then-emit round-trip.
+///
+/// Hand-rolled for the bounded six-field schema rather than going
+/// through a generic YAML emitter — keeps determinism a property of
+/// this file rather than a dependency's patch-version behaviour. See
+/// SPEC-0024 DEC-001.
+fn canonical_frontmatter_for_hash(fm: &SpecFrontmatter) -> Vec<u8> {
+    let mut out = String::new();
+    let push_kv = |out: &mut String, key: &str, emit: &dyn Fn(&mut String)| {
+        if HASH_EXCLUDED_FRONTMATTER_FIELDS.contains(&key) {
+            return;
+        }
+        out.push_str(key);
+        out.push_str(": ");
+        emit(out);
+        out.push('\n');
+    };
+
+    // Calls listed in alphabetical order. The exclusion check above
+    // skips any key in HASH_EXCLUDED_FRONTMATTER_FIELDS, so adding a
+    // new exclusion is a single-line edit to that constant.
+    push_kv(&mut out, "created", &|out| {
+        out.push_str(&fm.created.to_string());
+    });
+    push_kv(&mut out, "id", &|out| {
+        write_yaml_dquoted(out, &fm.id);
+    });
+    push_kv(&mut out, "slug", &|out| {
+        write_yaml_dquoted(out, &fm.slug);
+    });
+    push_kv(&mut out, "status", &|out| {
+        write_yaml_dquoted(out, fm.status.as_str());
+    });
+    push_kv(&mut out, "supersedes", &|out| {
+        out.push('[');
+        for (idx, item) in fm.supersedes.iter().enumerate() {
+            if idx > 0 {
+                out.push_str(", ");
+            }
+            write_yaml_dquoted(out, item);
+        }
+        out.push(']');
+    });
+    push_kv(&mut out, "title", &|out| {
+        write_yaml_dquoted(out, &fm.title);
+    });
+
+    out.into_bytes()
+}
+
+/// Append `s` to `out` as a YAML double-quoted scalar, escaping `"`,
+/// `\`, and ASCII control characters so the output is a function of
+/// the string's logical content alone.
+fn write_yaml_dquoted(out: &mut String, s: &str) {
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                let n = u32::from(c);
+                out.push_str("\\u00");
+                out.push(hex_nibble((n >> 4) & 0xF));
+                out.push(hex_nibble(n & 0xF));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+/// Render the low nibble of `n` as a lowercase hex digit.
+fn hex_nibble(n: u32) -> char {
+    char::from_digit(n & 0xF, 16).unwrap_or('0')
 }
 
 fn parse_body(raw: &str) -> (Vec<ReqHeading>, Vec<ChangelogRow>) {
@@ -331,11 +456,15 @@ fn extract_table_rows<'a>(table: &'a AstNode<'a>) -> Vec<ChangelogRow> {
 
 #[cfg(test)]
 mod tests {
+    use super::HASH_EXCLUDED_FRONTMATTER_FIELDS;
+    use super::SpecFrontmatter;
     use super::SpecStatus;
+    use super::canonical_frontmatter_for_hash;
     use super::spec_md;
     use crate::error::ParseError;
     use camino::Utf8PathBuf;
     use indoc::indoc;
+    use jiff::civil::Date;
     use tempfile::TempDir;
 
     struct Fixture {
@@ -549,5 +678,449 @@ mod tests {
         let a = spec_md(&fx_a.path).expect("parse a should succeed");
         let b = spec_md(&fx_b.path).expect("parse b should succeed");
         assert_eq!(a.sha256, b.sha256);
+    }
+
+    fn sample_frontmatter() -> SpecFrontmatter {
+        SpecFrontmatter {
+            id: "SPEC-0001".to_owned(),
+            slug: "artifact-parsers".to_owned(),
+            title: "Test".to_owned(),
+            status: SpecStatus::InProgress,
+            created: Date::new(2026, 5, 11).expect("valid date"),
+            supersedes: vec![],
+        }
+    }
+
+    #[test]
+    fn hash_excluded_frontmatter_fields_contains_only_status() {
+        assert_eq!(HASH_EXCLUDED_FRONTMATTER_FIELDS, &["status"]);
+    }
+
+    #[test]
+    fn canonical_frontmatter_is_deterministic() {
+        let fm = sample_frontmatter();
+        let a = canonical_frontmatter_for_hash(&fm);
+        let b = canonical_frontmatter_for_hash(&fm);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn canonical_frontmatter_omits_status_field() {
+        let fm = sample_frontmatter();
+        let bytes = canonical_frontmatter_for_hash(&fm);
+        let text = String::from_utf8(bytes).expect("canonical output is UTF-8");
+        assert!(
+            !text.contains("status:"),
+            "canonical output must not emit a `status:` key, got:\n{text}",
+        );
+        assert!(
+            !text.contains("in-progress"),
+            "canonical output must not leak the status value, got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn canonical_frontmatter_invariant_under_status_flip() {
+        let mut in_progress = sample_frontmatter();
+        in_progress.status = SpecStatus::InProgress;
+        let mut implemented = sample_frontmatter();
+        implemented.status = SpecStatus::Implemented;
+        let a = canonical_frontmatter_for_hash(&in_progress);
+        let b = canonical_frontmatter_for_hash(&implemented);
+        assert_eq!(
+            a, b,
+            "status-only difference must not perturb the canonical output"
+        );
+    }
+
+    #[test]
+    fn canonical_frontmatter_keys_in_alphabetical_order() {
+        let fm = sample_frontmatter();
+        let bytes = canonical_frontmatter_for_hash(&fm);
+        let text = String::from_utf8(bytes).expect("canonical output is UTF-8");
+        let created_pos = text
+            .find("created:")
+            .expect("canonical output should contain `created:`");
+        let id_pos = text
+            .find("id:")
+            .expect("canonical output should contain `id:`");
+        let slug_pos = text
+            .find("slug:")
+            .expect("canonical output should contain `slug:`");
+        let supersedes_pos = text
+            .find("supersedes:")
+            .expect("canonical output should contain `supersedes:`");
+        let title_pos = text
+            .find("title:")
+            .expect("canonical output should contain `title:`");
+        assert!(
+            created_pos < id_pos
+                && id_pos < slug_pos
+                && slug_pos < supersedes_pos
+                && supersedes_pos < title_pos,
+            "keys must appear in alphabetical order, got:\n{text}",
+        );
+    }
+
+    #[test]
+    fn canonical_frontmatter_changes_with_non_status_fields() {
+        let baseline = sample_frontmatter();
+        let baseline_bytes = canonical_frontmatter_for_hash(&baseline);
+
+        let mut alt_id = sample_frontmatter();
+        alt_id.id = "SPEC-9999".to_owned();
+        assert_ne!(
+            baseline_bytes,
+            canonical_frontmatter_for_hash(&alt_id),
+            "changing `id` must perturb the canonical output",
+        );
+
+        let mut alt_slug = sample_frontmatter();
+        alt_slug.slug = "different".to_owned();
+        assert_ne!(
+            baseline_bytes,
+            canonical_frontmatter_for_hash(&alt_slug),
+            "changing `slug` must perturb the canonical output",
+        );
+
+        let mut alt_title = sample_frontmatter();
+        alt_title.title = "Different title".to_owned();
+        assert_ne!(
+            baseline_bytes,
+            canonical_frontmatter_for_hash(&alt_title),
+            "changing `title` must perturb the canonical output",
+        );
+
+        let mut alt_created = sample_frontmatter();
+        alt_created.created = Date::new(2026, 5, 12).expect("valid date");
+        assert_ne!(
+            baseline_bytes,
+            canonical_frontmatter_for_hash(&alt_created),
+            "changing `created` must perturb the canonical output",
+        );
+
+        let mut alt_supersedes = sample_frontmatter();
+        alt_supersedes.supersedes = vec!["SPEC-0000".to_owned()];
+        assert_ne!(
+            baseline_bytes,
+            canonical_frontmatter_for_hash(&alt_supersedes),
+            "changing `supersedes` must perturb the canonical output",
+        );
+    }
+
+    #[test]
+    fn canonical_frontmatter_equates_explicit_and_default_empty_supersedes() {
+        let src_with_explicit = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            supersedes: []
+            ---
+
+            body
+        "};
+        let src_default = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(src_with_explicit);
+        let fx_b = write_tmp(src_default);
+        let parsed_a = spec_md(&fx_a.path).expect("parse a should succeed");
+        let parsed_b = spec_md(&fx_b.path).expect("parse b should succeed");
+        assert_eq!(
+            parsed_a.frontmatter, parsed_b.frontmatter,
+            "default and explicit empty `supersedes:` must parse equal",
+        );
+        let a = canonical_frontmatter_for_hash(&parsed_a.frontmatter);
+        let b = canonical_frontmatter_for_hash(&parsed_b.frontmatter);
+        assert_eq!(
+            a, b,
+            "canonical output must be identical for default vs explicit empty `supersedes:`",
+        );
+    }
+
+    #[test]
+    fn canonical_frontmatter_invariant_under_source_key_reordering() {
+        let src_original = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let src_reordered = indoc! {r"
+            ---
+            slug: x
+            created: 2026-05-11
+            title: y
+            id: SPEC-0001
+            status: in-progress
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(src_original);
+        let fx_b = write_tmp(src_reordered);
+        let parsed_a = spec_md(&fx_a.path).expect("parse original should succeed");
+        let parsed_b = spec_md(&fx_b.path).expect("parse reordered should succeed");
+        let a = canonical_frontmatter_for_hash(&parsed_a.frontmatter);
+        let b = canonical_frontmatter_for_hash(&parsed_b.frontmatter);
+        assert_eq!(
+            a, b,
+            "source-file key reordering must not perturb the canonical output",
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_invariant_under_status_flip() {
+        let in_progress = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let implemented = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: implemented
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(in_progress);
+        let fx_b = write_tmp(implemented);
+        let a = spec_md(&fx_a.path).expect("parse in-progress should succeed");
+        let b = spec_md(&fx_b.path).expect("parse implemented should succeed");
+        assert_eq!(
+            a.sha256, b.sha256,
+            "flipping `status:` must not perturb SpecMd.sha256",
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_invariant_under_source_key_reordering() {
+        let original = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let reordered = indoc! {r"
+            ---
+            slug: x
+            created: 2026-05-11
+            title: y
+            id: SPEC-0001
+            status: in-progress
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(original);
+        let fx_b = write_tmp(reordered);
+        let a = spec_md(&fx_a.path).expect("parse original should succeed");
+        let b = spec_md(&fx_b.path).expect("parse reordered should succeed");
+        assert_eq!(
+            a.sha256, b.sha256,
+            "source-file key reordering must not perturb SpecMd.sha256",
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_changes_when_id_changes() {
+        let base = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let alt = indoc! {r"
+            ---
+            id: SPEC-9999
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(base);
+        let fx_b = write_tmp(alt);
+        let a = spec_md(&fx_a.path).expect("parse base should succeed");
+        let b = spec_md(&fx_b.path).expect("parse alt should succeed");
+        assert_ne!(
+            a.sha256, b.sha256,
+            "changing `id:` must perturb SpecMd.sha256"
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_changes_when_slug_changes() {
+        let base = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: original
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let alt = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: different
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(base);
+        let fx_b = write_tmp(alt);
+        let a = spec_md(&fx_a.path).expect("parse base should succeed");
+        let b = spec_md(&fx_b.path).expect("parse alt should succeed");
+        assert_ne!(
+            a.sha256, b.sha256,
+            "changing `slug:` must perturb SpecMd.sha256"
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_changes_when_title_changes() {
+        let base = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: First title
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let alt = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: Second title
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(base);
+        let fx_b = write_tmp(alt);
+        let a = spec_md(&fx_a.path).expect("parse base should succeed");
+        let b = spec_md(&fx_b.path).expect("parse alt should succeed");
+        assert_ne!(
+            a.sha256, b.sha256,
+            "changing `title:` must perturb SpecMd.sha256"
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_changes_when_created_changes() {
+        let base = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let alt = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-12
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(base);
+        let fx_b = write_tmp(alt);
+        let a = spec_md(&fx_a.path).expect("parse base should succeed");
+        let b = spec_md(&fx_b.path).expect("parse alt should succeed");
+        assert_ne!(
+            a.sha256, b.sha256,
+            "changing `created:` must perturb SpecMd.sha256"
+        );
+    }
+
+    #[test]
+    fn spec_md_sha256_changes_when_supersedes_changes() {
+        let base = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let alt = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            supersedes: [SPEC-0000]
+            ---
+
+            body
+        "};
+        let fx_a = write_tmp(base);
+        let fx_b = write_tmp(alt);
+        let a = spec_md(&fx_a.path).expect("parse base should succeed");
+        let b = spec_md(&fx_b.path).expect("parse alt should succeed");
+        assert_ne!(
+            a.sha256, b.sha256,
+            "changing `supersedes:` must perturb SpecMd.sha256",
+        );
     }
 }

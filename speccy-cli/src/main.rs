@@ -68,6 +68,15 @@ enum Command {
     },
     /// Print workspace overview (text by default; `--json` for envelope).
     Status {
+        /// `SPEC-NNNN` to render exactly one spec, unfiltered. Cannot
+        /// be combined with `--all`. Omit to use the default
+        /// attention-list view (or pass `--all`).
+        #[arg(value_name = "SELECTOR", conflicts_with = "all")]
+        selector: Option<String>,
+        /// Render every spec in workspace order, unfiltered. Cannot
+        /// be combined with a positional `SPEC-NNNN` selector.
+        #[arg(long)]
+        all: bool,
         /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]
         json: bool,
@@ -113,7 +122,11 @@ fn dispatch(command: Command) -> u8 {
         Command::Implement { task_ref } => run_implement(task_ref),
         Command::Review { task_ref, persona } => run_review(task_ref, persona),
         Command::Report { spec_id } => run_report(spec_id),
-        Command::Status { json } => run_status(json),
+        Command::Status {
+            selector,
+            all,
+            json,
+        } => run_status(selector, all, json),
         Command::Next { kind, json } => run_next(kind.as_deref(), json),
         Command::Check { selector } => run_check(selector),
         Command::Verify { json } => run_verify(json),
@@ -451,7 +464,7 @@ fn invoke_report(cwd: &Utf8PathBuf, spec_id: String) -> u8 {
     }
 }
 
-fn run_status(json: bool) -> u8 {
+fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
     let cwd = match speccy_cli::status::resolve_cwd() {
         Ok(p) => p,
         Err(e) => {
@@ -460,8 +473,15 @@ fn run_status(json: bool) -> u8 {
         }
     };
     let mut stdout = std::io::stdout().lock();
-    let result =
-        speccy_cli::status::run(speccy_cli::status::StatusArgs { json }, &cwd, &mut stdout);
+    let result = speccy_cli::status::run(
+        &speccy_cli::status::StatusArgs {
+            selector,
+            all,
+            json,
+        },
+        &cwd,
+        &mut stdout,
+    );
     if stdout.flush().is_err() {
         // stdout closed; nothing more to do.
     }

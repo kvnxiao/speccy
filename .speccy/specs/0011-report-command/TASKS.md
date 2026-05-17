@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0011
-spec_hash_at_generation: bfcedb17b739f46c24e022152ddb6d60171813d4b890bcd27f3eaa220c9621c7
-generated_at: 2026-05-14T03:25:15Z
+spec_hash_at_generation: fdf6c0cc1e5c03ad4900e0dae9a514f0d3cb743cfe5a7f0821f6e585a2281f45
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0011 report-command

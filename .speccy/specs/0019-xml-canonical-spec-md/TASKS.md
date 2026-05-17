@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0019
-spec_hash_at_generation: 58b4ddf88da32fb0e19ab3bfd7711a39acc0a8eb65bb5613e93f16d0179ba817
-generated_at: 2026-05-16T02:00:18Z
+spec_hash_at_generation: ce5d56b5b0c1b2a730d3a7e3ac0915616cbd7e25057c4e00894fd4924e27b9c0
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0019 Canonical marker-structured SPEC.md

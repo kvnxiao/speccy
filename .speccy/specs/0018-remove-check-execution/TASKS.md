@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0018
-spec_hash_at_generation: 273cf754003cb1825dbc3a8ee6e5cfae6a7f171388219785a0191b6ff90f3111
-generated_at: 2026-05-15T18:31:02Z
+spec_hash_at_generation: 27a6af34ed4492207333fecdb1978a7179b70353b28624aaa279c1a28f8974f5
+generated_at: 2026-05-17T17:37:23Z
 ---
 
 # Tasks: SPEC-0018 Remove check execution
