@@ -17,18 +17,18 @@ agents to surface skill edits under `## Skill updates`. Six new
 content-shape tests in `speccy-cli/tests/skill_packs.rs` gate the
 conventions and pass cleanly under `cargo test --workspace`.
 
-## Requirements coverage
+<report spec="SPEC-0014">
 
-| Requirement | Checks | Result |
-|-------------|--------|--------|
-| REQ-001: Six-field handoff template in implementer prompt | CHK-001, CHK-002 | proved |
-| REQ-002: Friction-to-skill-update pattern documented | CHK-003, CHK-004, CHK-005 | proved |
-| REQ-003: Skill-update surfacing in REPORT.md | CHK-006 | proved |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
 
-All six SPEC-0014 checks resolve to executable `cargo test`
-invocations against `speccy-cli/tests/skill_packs.rs`. `speccy
-verify` exercises them on the Linux CI runner; on Windows the same
-checks pass via direct `cargo test` invocation.
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004 CHK-005">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+</report>
 
 ## Task summary
 

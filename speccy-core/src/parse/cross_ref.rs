@@ -8,9 +8,26 @@
 //!
 //! Pure, deterministic, idempotent. See
 //! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-006.
+//!
+//! # SPEC-0022 workspace-load cross-reference validation
+//!
+//! [`validate_workspace_xml`] is the second public entry point in this
+//! module: it ties the typed [`crate::parse::TasksDoc`] and
+//! [`crate::parse::ReportDoc`] models against their parent
+//! [`SpecDoc`], surfacing dangling REQ ids, dangling CHK ids, and missing
+//! coverage as diagnostics. It is reachable from the workspace loader
+//! through [`crate::workspace::validate_workspace_xml`], the seam T-007
+//! flips on after the corpus migration in T-005 / T-006 — until then,
+//! the in-tree TASKS.md / REPORT.md files still use the legacy
+//! checkbox/Markdown form, and the loader does **not** route them
+//! through this validator.
 
+use crate::error::ParseError;
+use crate::parse::ReportDoc;
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
+use crate::parse::TasksDoc;
+use camino::Utf8Path;
 use std::collections::HashSet;
 
 /// Symmetric diff between SPEC.md REQ headings and `<requirement>`
@@ -60,4 +77,115 @@ pub fn cross_ref(spec: &SpecMd, doc: &SpecDoc) -> CrossRef {
         only_in_markers,
         in_both,
     }
+}
+
+/// SPEC-0022 cross-reference validation between SPEC, TASKS, and REPORT.
+///
+/// Surfaces four classes of drift as [`ParseError`] diagnostics:
+///
+/// - **Dangling REQ from TASKS**
+///   ([`ParseError::TaskCoversDanglingRequirement`]): a `<task>` whose
+///   `covers="REQ-NNN"` includes a `REQ-NNN` the parent SPEC.md does not
+///   declare.
+/// - **Dangling REQ from REPORT**
+///   ([`ParseError::CoverageDanglingRequirement`]): a `<coverage
+///   req="REQ-NNN">` row whose `REQ-NNN` is not in SPEC.md.
+/// - **Dangling CHK from REPORT** ([`ParseError::CoverageDanglingScenario`]): a
+///   `<coverage>` element listing a `CHK-NNN` that is not nested under the
+///   matching `<requirement>` in SPEC.md.
+/// - **Missing coverage** ([`ParseError::MissingRequirementCoverage`]):
+///   REPORT.md is present but does not cover every requirement in SPEC. The
+///   diagnostic names every uncovered requirement (not just the first).
+///
+/// Skip rule: when `report` is `None` (in-flight implementation with no
+/// REPORT.md yet) the missing-coverage check is skipped. TASKS.md
+/// dangling-requirement validation still runs whenever `tasks` is `Some`.
+///
+/// `tasks_path` and `report_path` are used only to populate diagnostics;
+/// this function does no filesystem IO.
+///
+/// All four classes are collected before returning, so the caller sees
+/// every diagnostic in one pass rather than only the first.
+///
+/// # Errors
+///
+/// Returns a [`Vec<ParseError>`]. The caller surfaces them through the
+/// existing per-spec parse-failure channel.
+#[must_use = "the returned diagnostics are the entire purpose of this call"]
+pub fn validate_workspace_xml(
+    spec: &SpecDoc,
+    tasks: Option<&TasksDoc>,
+    tasks_path: Option<&Utf8Path>,
+    report: Option<&ReportDoc>,
+    report_path: Option<&Utf8Path>,
+) -> Vec<ParseError> {
+    let mut diagnostics: Vec<ParseError> = Vec::new();
+
+    let spec_req_ids: HashSet<&str> = spec.requirements.iter().map(|r| r.id.as_str()).collect();
+
+    if let (Some(tasks_doc), Some(path)) = (tasks, tasks_path) {
+        for task in &tasks_doc.tasks {
+            for req in &task.covers {
+                if !spec_req_ids.contains(req.as_str()) {
+                    diagnostics.push(ParseError::TaskCoversDanglingRequirement {
+                        path: path.to_path_buf(),
+                        task_id: task.id.clone(),
+                        requirement_id: req.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    if let (Some(report_doc), Some(path)) = (report, report_path) {
+        // Dangling REQ from REPORT, and dangling CHK from REPORT.
+        for row in &report_doc.coverage {
+            if !spec_req_ids.contains(row.req.as_str()) {
+                diagnostics.push(ParseError::CoverageDanglingRequirement {
+                    path: path.to_path_buf(),
+                    requirement_id: row.req.clone(),
+                });
+                // No point checking scenarios against a requirement that
+                // does not exist; the dangling-REQ diagnostic is the
+                // headline. Skip per-CHK checks for this row.
+                continue;
+            }
+            // Requirement exists; check each CHK against the SPEC-side
+            // scenario set under that requirement.
+            let scenario_ids: HashSet<&str> = spec
+                .requirements
+                .iter()
+                .find(|r| r.id == row.req)
+                .map(|r| r.scenarios.iter().map(|s| s.id.as_str()).collect())
+                .unwrap_or_default();
+            for chk in &row.scenarios {
+                if !scenario_ids.contains(chk.as_str()) {
+                    diagnostics.push(ParseError::CoverageDanglingScenario {
+                        path: path.to_path_buf(),
+                        requirement_id: row.req.clone(),
+                        scenario_id: chk.clone(),
+                    });
+                }
+            }
+        }
+
+        // Missing-coverage check: every SPEC requirement must have a
+        // coverage row in REPORT.md. Collect *all* uncovered ids so the
+        // diagnostic lists them in one shot.
+        let covered: HashSet<&str> = report_doc.coverage.iter().map(|c| c.req.as_str()).collect();
+        let uncovered: Vec<String> = spec
+            .requirements
+            .iter()
+            .filter(|r| !covered.contains(r.id.as_str()))
+            .map(|r| r.id.clone())
+            .collect();
+        if !uncovered.is_empty() {
+            diagnostics.push(ParseError::MissingRequirementCoverage {
+                path: path.to_path_buf(),
+                requirement_ids: uncovered,
+            });
+        }
+    }
+
+    diagnostics
 }

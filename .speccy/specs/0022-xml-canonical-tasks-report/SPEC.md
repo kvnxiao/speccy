@@ -2,7 +2,7 @@
 id: SPEC-0022
 slug: xml-canonical-tasks-report
 title: Raw XML element tags for TASKS.md and REPORT.md
-status: in-progress
+status: implemented
 created: 2026-05-15
 supersedes: []
 ---
@@ -132,7 +132,7 @@ coverage. The body inside each task remains Markdown.
 - Valid task states are exactly:
   `pending`, `in-progress`, `in-review`, `completed`.
 - `covers` is required and contains one or more `REQ-\d{3,}` ids
-  separated by spaces.
+  separated by single ASCII spaces.
 - Every covered requirement id is cross-checked against the parent
   SPEC.md element tree at workspace load time.
 - Each task contains exactly one `<task-scenarios>` block with
@@ -186,14 +186,16 @@ Outcome and narrative sections remain Markdown.
   element carrying `req`, `result`, and `scenarios` attributes,
   closed by `</coverage>`.
 - Valid coverage results are:
-  `satisfied`, `partial`, `deferred`, `dropped`.
-- `scenarios` is required for `satisfied` and `partial`, and may be
-  empty for `deferred` or `dropped`.
+  `satisfied`, `partial`, `deferred`.
+- `scenarios` is required and contains zero or more `CHK-\d{3,}` ids
+  separated by single ASCII spaces; the attribute must be present
+  but may be empty for `deferred`.
 - Coverage requirement ids must exist in the parent SPEC.md.
 - Scenario ids listed in a coverage element must be nested under the
   matching requirement in the parent SPEC.md.
-- Every non-dropped requirement in the parent SPEC.md must have one
-  coverage element in REPORT.md.
+- Every requirement in the parent SPEC.md must have exactly one
+  coverage element in REPORT.md. Dropped requirements are removed
+  from SPEC.md via amendment rather than carried as report coverage.
 - Markdown inside each coverage block is preserved as explanatory
   prose.
 </done-when>
@@ -246,8 +248,9 @@ introduced by SPEC-0020.
 - Parse/render/parse round-trips preserve the typed task/report
   structure.
 - Existing public APIs for `speccy next`, `speccy status`,
-  `speccy implement`, `speccy review`, and `speccy report` keep their
-  external behavior while reading from the new typed models.
+  `speccy implement`, `speccy review`, `speccy report`, and
+  `speccy verify` keep their external behavior while reading from
+  the new typed models.
 </done-when>
 
 <behavior>
@@ -470,9 +473,10 @@ checkbox and report-table conventions remain in history.
 - [ ] Should `TASKS.md` keep a visible checkbox glyph generated from
       XML state for human scanning? Lean no; use visible state text
       only if dogfooding shows task lists are too hard to scan.
-- [ ] Should REPORT.md require coverage for dropped requirements?
-      Lean no; dropped requirements should be visible in SPEC.md
-      status or changelog rather than report coverage.
+- Resolved: REPORT.md does **not** carry coverage for dropped
+  requirements. Dropped requirements are removed from SPEC.md via
+  amendment and visible in the SPEC's Changelog; `dropped` is not a
+  valid `<coverage>` result.
 
 ## Assumptions
 
@@ -505,6 +509,7 @@ checkbox and report-table conventions remain in history.
 | 2026-05-15 | human/kevin | Dropped the `speccy-` prefix on element names to match SPEC-0020 DEC-002; tag names are now bare semantic words (`task`, `coverage`, `tasks`, `report`, `task-scenarios`). |
 | 2026-05-15 | human/kevin | Recorded HTML5-disjointness invariant in Assumptions; this spec's element set is already disjoint and inherits the SPEC-0020 unit test. |
 | 2026-05-16 | human/kevin | Renumbered from SPEC-0021 to SPEC-0022. New SPEC-0021 now occupies the section-level XML element expansion for SPEC.md; this spec is resequenced to land after it so the parser already supports the wider whitelist when TASKS.md and REPORT.md migration runs. |
+| 2026-05-16 | human/kevin | Pre-decomposition amendments: (1) `covers` and `scenarios` attribute formats explicitly single-ASCII-space-separated; (2) added `speccy verify` to REQ-003 done-when public-API list to match its scenario; (3) dropped `dropped` from the `<coverage>` result enum and required exactly one coverage element per surviving SPEC requirement, since dropped requirements are removed by amendment instead. |
 </changelog>
 
 ## Notes

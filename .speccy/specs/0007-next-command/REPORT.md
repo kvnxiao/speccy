@@ -17,15 +17,24 @@ fires when all tasks are `[x]` and any REPORT.md is missing.
 schema_version=1 envelope from SPEC-0004. Landed in commit
 `ffad1ec`.
 
-## Requirements coverage
+<report spec="SPEC-0007">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Default priority (no --kind) | delivered |
-| REQ-002 | --kind implement and --kind review filters | delivered |
-| REQ-003 | Report and blocked kinds | delivered |
-| REQ-004 | JSON contract | delivered |
-| REQ-005 | Text output | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-005 CHK-006">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-007 CHK-008">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+</report>
 
 ## Notes
 

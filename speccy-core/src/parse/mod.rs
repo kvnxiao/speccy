@@ -1,4 +1,8 @@
-//! Parsers for Speccy's five artifact files plus cross-reference utilities.
+//! Parsers for Speccy's artifact files plus cross-reference utilities.
+//!
+//! After SPEC-0022 the heuristic checkbox-list TASKS.md parser and the
+//! frontmatter-only REPORT.md parser are gone; TASKS.md and REPORT.md
+//! are parsed exclusively through [`task_xml`] / [`report_xml`].
 //!
 //! The public API is intentionally narrow: one function per artifact, plus
 //! two pure analysis helpers (`cross_ref`, `supersession_index`). Every
@@ -28,19 +32,21 @@
 pub mod cross_ref;
 pub mod frontmatter;
 pub mod markdown;
-pub mod report_md;
+pub mod report_xml;
 pub mod spec_md;
 pub mod spec_xml;
 pub mod supersession;
-pub mod tasks_md;
+pub mod task_xml;
 pub mod toml_files;
+pub mod xml_scanner;
 
 pub use cross_ref::CrossRef;
 pub use cross_ref::cross_ref;
-pub use report_md::ReportFrontmatter;
-pub use report_md::ReportMd;
-pub use report_md::ReportOutcome;
-pub use report_md::report_md;
+pub use report_xml::CoverageResult;
+pub use report_xml::ReportDoc;
+pub use report_xml::RequirementCoverage;
+pub use report_xml::parse as parse_report_xml;
+pub use report_xml::render as render_report_xml;
 pub use spec_md::ChangelogRow;
 pub use spec_md::ReqHeading;
 pub use spec_md::SpecFrontmatter;
@@ -58,12 +64,11 @@ pub use spec_xml::parse as parse_spec_xml;
 pub use spec_xml::render as render_spec_xml;
 pub use supersession::SupersessionIndex;
 pub use supersession::supersession_index;
-pub use tasks_md::Task;
-pub use tasks_md::TaskState;
-pub use tasks_md::TaskWarning;
-pub use tasks_md::TasksFrontmatter;
-pub use tasks_md::TasksMd;
-pub use tasks_md::tasks_md;
+pub use task_xml::Task;
+pub use task_xml::TaskState;
+pub use task_xml::TasksDoc;
+pub use task_xml::parse as parse_task_xml;
+pub use task_xml::render as render_task_xml;
 pub use toml_files::ProjectConfig;
 pub use toml_files::SpeccyConfig;
 pub use toml_files::speccy_toml;

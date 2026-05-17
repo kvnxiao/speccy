@@ -502,6 +502,7 @@ mod tests {
                 "test-fixture".to_owned(),
             )),
             tasks_md: None,
+            report_md: None,
             spec_md_mtime: None,
             tasks_md_mtime: None,
         }

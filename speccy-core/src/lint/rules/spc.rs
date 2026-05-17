@@ -198,7 +198,7 @@ fn spc_007_implemented_open_tasks(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) 
     let open_count = tasks_md
         .tasks
         .iter()
-        .filter(|t| !matches!(t.state, TaskState::Done))
+        .filter(|t| !matches!(t.state, TaskState::Completed))
         .count();
     if open_count > 0 {
         out.push(Diagnostic::with_file(
@@ -207,7 +207,7 @@ fn spc_007_implemented_open_tasks(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) 
             spec.spec_id.clone(),
             spec.spec_md_path.clone(),
             format!(
-                "{id} has status `implemented` but {open_count} task(s) are not `[x]`",
+                "{id} has status `implemented` but {open_count} task(s) are not `completed`",
                 id = spec_md.frontmatter.id,
             ),
         ));

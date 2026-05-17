@@ -4,10 +4,10 @@ use crate::error::ParseError;
 use crate::lint::types::Diagnostic;
 use crate::lint::types::Level;
 use crate::lint::types::ParsedSpec;
+use crate::workspace::extract_frontmatter_field;
 use std::collections::HashSet;
 
 const TSK_001: &str = "TSK-001";
-const TSK_002: &str = "TSK-002";
 const TSK_003: &str = "TSK-003";
 const TSK_004: &str = "TSK-004";
 
@@ -26,18 +26,28 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     match tasks_result {
         Err(err) => emit_tasks_parse_error(spec, &tasks_path, err, out),
         Ok(tasks_md) => {
-            for warning in &tasks_md.warnings {
-                out.push(Diagnostic::with_location(
-                    TSK_002,
-                    Level::Error,
-                    spec.spec_id.clone(),
-                    tasks_path.clone(),
-                    u32::try_from(warning.line).unwrap_or(0),
-                    warning.message.clone(),
-                ));
-            }
+            tsk_004_frontmatter_fields(spec, &tasks_path, tasks_md, out);
             tsk_001_covers(spec, &tasks_path, tasks_md, out);
             tsk_003_staleness(spec, &tasks_path, tasks_md, out);
+        }
+    }
+}
+
+fn tsk_004_frontmatter_fields(
+    spec: &ParsedSpec,
+    tasks_path: &camino::Utf8Path,
+    tasks_md: &crate::parse::TasksDoc,
+    out: &mut Vec<Diagnostic>,
+) {
+    for field in REQUIRED_FRONTMATTER_FIELDS {
+        if extract_frontmatter_field(&tasks_md.frontmatter_raw, field).is_none() {
+            out.push(Diagnostic::with_file(
+                TSK_004,
+                Level::Error,
+                spec.spec_id.clone(),
+                tasks_path.to_path_buf(),
+                format!("TASKS.md frontmatter is missing required field `{field}`"),
+            ));
         }
     }
 }
@@ -99,7 +109,7 @@ fn emit_tasks_parse_error(
 fn tsk_001_covers(
     spec: &ParsedSpec,
     tasks_path: &camino::Utf8Path,
-    tasks_md: &crate::parse::TasksMd,
+    tasks_md: &crate::parse::TasksDoc,
     out: &mut Vec<Diagnostic>,
 ) {
     let mut known_reqs: HashSet<&str> = HashSet::new();
@@ -122,6 +132,7 @@ fn tsk_001_covers(
     }
 
     for task in &tasks_md.tasks {
+        let task_line = u32::try_from(task.line_in(&tasks_md.raw)).unwrap_or(0);
         for covered in &task.covers {
             if !known_reqs.contains(covered.as_str()) {
                 out.push(Diagnostic::with_location(
@@ -129,7 +140,7 @@ fn tsk_001_covers(
                     Level::Error,
                     spec.spec_id.clone(),
                     tasks_path.to_path_buf(),
-                    u32::try_from(task.line).unwrap_or(0),
+                    task_line,
                     format!(
                         "task `{tid}` covers `{covered}` but that REQ is not declared in SPEC.md",
                         tid = task.id,
@@ -143,10 +154,13 @@ fn tsk_001_covers(
 fn tsk_003_staleness(
     spec: &ParsedSpec,
     tasks_path: &camino::Utf8Path,
-    tasks_md: &crate::parse::TasksMd,
+    tasks_md: &crate::parse::TasksDoc,
     out: &mut Vec<Diagnostic>,
 ) {
-    let stored_hash = tasks_md.frontmatter.spec_hash_at_generation.as_str();
+    let stored_hash_owned =
+        extract_frontmatter_field(&tasks_md.frontmatter_raw, "spec_hash_at_generation")
+            .unwrap_or_default();
+    let stored_hash = stored_hash_owned.as_str();
 
     if stored_hash == BOOTSTRAP_SENTINEL {
         out.push(Diagnostic::with_file(

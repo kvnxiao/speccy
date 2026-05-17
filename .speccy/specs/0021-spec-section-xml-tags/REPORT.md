@@ -4,12 +4,15 @@ outcome: delivered
 generated_at: 2026-05-16T07:00:00Z
 ---
 
+# Report: SPEC-0021 Section-level XML element tags for SPEC.md
+
 ## Outcome
 
 delivered
 
-## Requirements coverage
+<report spec="SPEC-0021">
 
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
 - **REQ-001 — SPEC.md element whitelist evolves: six additions, two
   retirements.** Proved by CHK-001 (canonical-order parse, missing
   `<behavior>`, duplicate `<goals>`, retired-tag rejection,
@@ -18,12 +21,18 @@ delivered
   fixture tests under `speccy-core/tests/fixtures/spec_xml/` plus
   the HTML5 disjointness assertion in `parse/spec_xml/mod.rs`'s
   whitelist module.
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
 - **REQ-002 — Typed SpecDoc surface extends without renaming.**
   Proved by CHK-002 (parse → render → parse round-trip,
   in-requirement element order, omitted-`<assumptions>` render,
   canonical top-level order without `<spec>` / `<overview>`).
   Backed by `speccy-core/tests/spec_xml_roundtrip.rs` and the
   expanded `tests/fixtures/spec_xml/canonical.md` fixture.
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
 - **REQ-003 — Migration rewrites every in-tree SPEC.md.** Proved by
   CHK-003 (post-SPEC-0020 SPEC.md migrates intent surfaces while
   preserving headings/frontmatter; a requirement without `Done when`
@@ -32,6 +41,9 @@ delivered
   `xtask/migrate-spec-sections-0021` tool (since deleted per T-006),
   the in-tree corpus diff visible in this PR's `.speccy/specs/*/SPEC.md`
   rewrites, and `speccy-core/tests/in_tree_specs.rs`.
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
 - **REQ-004 — Docs, prompts, and shipped skills cite the new tags.**
   Proved by CHK-004 (implementer prompt cites `<behavior>` /
   `<done-when>`; reviewer-tests prompt cites `<behavior>` /
@@ -40,6 +52,9 @@ delivered
   uses the new tags). Backed by `resources/modules/personas/*.md`,
   `resources/modules/prompts/implementer.md`, and the updated
   `.speccy/ARCHITECTURE.md` grammar table.
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
 - **REQ-005 — Sequence enables SPEC-0022 to reuse the wider
   whitelist.** Proved by CHK-005 (SPEC-0021 ships first; the HTML5
   disjointness unit test centralises the whitelist so SPEC-0022's
@@ -47,6 +62,9 @@ delivered
   Backed by the SPEC-0022 placeholder spec at
   `.speccy/specs/0022-xml-canonical-tasks-report/SPEC.md` and the
   whitelist module in `speccy-core/src/parse/spec_xml/mod.rs`.
+</coverage>
+
+</report>
 
 ## Task summary
 

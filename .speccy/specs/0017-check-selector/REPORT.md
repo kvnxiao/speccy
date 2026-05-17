@@ -21,21 +21,24 @@ execution arm to the existing `execute_checks` path so live
 streaming, IN-FLIGHT categorisation, and summary totals are reused
 verbatim.
 
-## Requirements coverage
+<report spec="SPEC-0017">
 
-| Requirement | Checks | Result |
-|-------------|--------|--------|
-| REQ-001: Polymorphic selector parser | CHK-001 | proved |
-| REQ-002: Spec-scoped execution (`SPEC-NNNN`) | CHK-002 | proved |
-| REQ-003: Task-scoped execution (`T-NNN`, `SPEC-NNNN/T-NNN`) | CHK-003 | proved |
-| REQ-004: Bare `CHK-NNN` preserved; qualified check scoped | CHK-004 | proved |
-| REQ-005: Documentation surface updated | CHK-005 | proved (manual) |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
 
-CHK-001..CHK-004 resolve to executable `cargo test` invocations
-(`--test check_selector -- parser`, `--test check -- spec_selector`,
-`--test check -- task_selector`, `--test check -- bare_chk_preserved`).
-CHK-005 is the documentation-surface manual check from the SPEC's
-own design.
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+</report>
 
 ## Task summary
 

@@ -70,8 +70,7 @@ fn amendment_prompt_rendered_when_tasks_md_present() -> TestResult {
         .success()
         .stdout(contains("Speccy: Tasks (amend"))
         .stdout(contains("SPEC-0001"))
-        .stdout(contains("Preserve `[x]` tasks"))
-        .stdout(contains("**T-001**"));
+        .stdout(contains("<task id=\"T-001\""));
     Ok(())
 }
 
@@ -192,7 +191,7 @@ fn commit_requires_tasks_md_succeeds_when_present() -> TestResult {
         "--commit should replace the sentinel: {tasks_md}",
     );
     assert!(
-        tasks_md.contains("- [ ] **T-001**: first"),
+        tasks_md.contains("<task id=\"T-001\""),
         "body must be preserved verbatim: {tasks_md}",
     );
     Ok(())

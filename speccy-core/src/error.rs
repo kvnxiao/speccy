@@ -123,7 +123,7 @@ pub enum ParseError {
     /// A marker comment carried an attribute outside the set allowed for
     /// that marker name.
     #[error(
-        "unknown attribute `{attribute}` on speccy marker `{marker_name}` in {path} at byte offset {offset}"
+        "unknown attribute `{attribute}` on speccy marker `{marker_name}` in {path} at byte offset {offset} (allowed: {allowed})"
     )]
     UnknownMarkerAttribute {
         /// Path of the offending file.
@@ -134,6 +134,10 @@ pub enum ParseError {
         attribute: String,
         /// Byte offset of the marker's start in the source.
         offset: usize,
+        /// Comma-separated set of attribute names allowed on this
+        /// element, included in the diagnostic so the caller knows
+        /// which attributes are valid.
+        allowed: String,
     },
 
     /// A marker comment was syntactically malformed (non-line-isolated,
@@ -308,6 +312,205 @@ pub enum ParseError {
         element_name: String,
         /// Byte offset of the offending duplicate's start in the source.
         offset: usize,
+    },
+
+    /// A `<task>` carried a `state` attribute value outside the closed set
+    /// (`pending | in-progress | in-review | completed`). SPEC-0022 REQ-001.
+    #[error("task `{task_id}` in {path} has invalid state `{value}`: must be one of {allowed}")]
+    InvalidTaskState {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Offending value.
+        value: String,
+        /// Comma-separated set of allowed state values.
+        allowed: String,
+    },
+
+    /// A `<task>` was missing a required attribute (`covers`). SPEC-0022
+    /// REQ-001.
+    #[error("task `{task_id}` in {path} is missing required attribute `{attribute}`")]
+    MissingTaskAttribute {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Attribute name that should have been present.
+        attribute: String,
+    },
+
+    /// A `<task>` `covers` attribute value did not match the SPEC-0022
+    /// grammar (single ASCII space separated `REQ-\d{3,}` ids). The
+    /// diagnostic quotes the grammar verbatim.
+    #[error(
+        "task `{task_id}` in {path} has invalid `covers` value `{value}`: must be single ASCII space separated `REQ-\\d{{3,}}` ids"
+    )]
+    InvalidCoversFormat {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Offending raw attribute value.
+        value: String,
+    },
+
+    /// A `<task>` is missing a required nested element (`task-scenarios`).
+    /// SPEC-0022 REQ-001.
+    #[error("task `{task_id}` in {path} is missing required `<{element_name}>` element")]
+    MissingTaskSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Element name that should have been present inside the task.
+        element_name: String,
+    },
+
+    /// A `<task>` carries two or more occurrences of a nested element
+    /// that SPEC-0022 caps at exactly one (`task-scenarios`).
+    #[error(
+        "task `{task_id}` in {path} has duplicate `<{element_name}>` element at byte offset {offset}"
+    )]
+    DuplicateTaskSection {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Element name that was repeated.
+        element_name: String,
+        /// Byte offset of the offending duplicate's start in the source.
+        offset: usize,
+    },
+
+    /// A `<coverage>` `result` attribute value was outside the closed set
+    /// (`satisfied | partial | deferred`). SPEC-0022 REQ-002. The legacy
+    /// `dropped` value is intentionally rejected — dropped requirements
+    /// are removed from SPEC.md via amendment.
+    #[error(
+        "coverage for `{req}` in {path} has invalid result `{value}`: must be one of {allowed}"
+    )]
+    InvalidCoverageResult {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        req: String,
+        /// Offending value.
+        value: String,
+        /// Comma-separated set of allowed result values.
+        allowed: String,
+    },
+
+    /// A `<coverage>` element was missing a required attribute
+    /// (`req`, `result`, or `scenarios`). SPEC-0022 REQ-002. The
+    /// `scenarios` attribute must be present even when empty.
+    #[error(
+        "coverage element in {path} at byte offset {offset} is missing required attribute `{attribute}`"
+    )]
+    MissingCoverageAttribute {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Attribute name that should have been present.
+        attribute: String,
+        /// Byte offset of the offending coverage element's open tag.
+        offset: usize,
+    },
+
+    /// A `<coverage result="satisfied">` element carried no scenario ids.
+    /// SPEC-0022 REQ-002: `satisfied` requires ≥1 `CHK-\d{3,}` id in
+    /// `scenarios`.
+    #[error(
+        "coverage for `{req}` in {path} has result `satisfied` but no scenario ids: `satisfied` requires at least one CHK id"
+    )]
+    SatisfiedRequiresScenarios {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        req: String,
+    },
+
+    /// A `<coverage result="partial">` element carried no scenario ids.
+    /// SPEC-0022 REQ-002: `partial` requires ≥1 `CHK-\d{3,}` id in
+    /// `scenarios`.
+    #[error(
+        "coverage for `{req}` in {path} has result `partial` but no scenario ids: `partial` requires at least one CHK id"
+    )]
+    PartialRequiresScenarios {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        req: String,
+    },
+
+    /// A `<coverage>` `scenarios` attribute value did not match the
+    /// SPEC-0022 grammar (single ASCII space separated `CHK-\d{3,}` ids).
+    /// The diagnostic quotes the grammar verbatim.
+    #[error(
+        "coverage for `{req}` in {path} has invalid `scenarios` value `{value}`: must be single ASCII space separated `CHK-\\d{{3,}}` ids"
+    )]
+    InvalidScenariosFormat {
+        /// Path of the offending file.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        req: String,
+        /// Offending raw attribute value.
+        value: String,
+    },
+
+    /// A `<task>` `covers` attribute names a requirement id that the
+    /// parent SPEC.md does not declare. SPEC-0022 REQ-001 cross-ref.
+    #[error(
+        "task `{task_id}` in {path} covers dangling requirement `{requirement_id}`: the parent SPEC.md has no `{requirement_id}`"
+    )]
+    TaskCoversDanglingRequirement {
+        /// Path of the offending TASKS.md.
+        path: Utf8PathBuf,
+        /// Id of the offending task.
+        task_id: String,
+        /// Requirement id named by `covers` that does not exist in SPEC.md.
+        requirement_id: String,
+    },
+
+    /// A `<coverage>` element names a requirement id that the parent
+    /// SPEC.md does not declare. SPEC-0022 REQ-002 cross-ref.
+    #[error(
+        "coverage for dangling requirement `{requirement_id}` in {path}: the parent SPEC.md has no `{requirement_id}`"
+    )]
+    CoverageDanglingRequirement {
+        /// Path of the offending REPORT.md.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        requirement_id: String,
+    },
+
+    /// A `<coverage>` element lists a scenario id that is not nested
+    /// under the matching `<requirement>` in SPEC.md. SPEC-0022 REQ-002
+    /// cross-ref.
+    #[error(
+        "coverage for `{requirement_id}` in {path} lists dangling scenario `{scenario_id}`: SPEC-side `{requirement_id}` has no `{scenario_id}`"
+    )]
+    CoverageDanglingScenario {
+        /// Path of the offending REPORT.md.
+        path: Utf8PathBuf,
+        /// Requirement id named by the coverage element's `req` attribute.
+        requirement_id: String,
+        /// Scenario id that is missing from the SPEC-side requirement.
+        scenario_id: String,
+    },
+
+    /// REPORT.md is present but one or more SPEC.md requirements have no
+    /// `<coverage>` row. SPEC-0022 REQ-002 cross-ref. Every uncovered
+    /// requirement id is listed in the diagnostic.
+    #[error(
+        "REPORT.md at {path} is missing coverage for requirement(s): {}",
+        .requirement_ids.join(", ")
+    )]
+    MissingRequirementCoverage {
+        /// Path of the offending REPORT.md.
+        path: Utf8PathBuf,
+        /// Every requirement id in SPEC.md that lacks a coverage row,
+        /// in SPEC.md declaration order.
+        requirement_ids: Vec<String>,
     },
 
     /// A `<requirement>` violates the SPEC-0021 DEC-002 ordering rule

@@ -63,23 +63,27 @@ fn tasks_md(spec_id: &str, rows: &[(char, &str, &str)]) -> String {
     let mut body = String::new();
     write!(
         body,
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks\n\n## Phase\n",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n",
     )
     .expect("writes to String are infallible");
     for (state, id, title) in rows {
-        let glyph = glyph_for(*state);
-        writeln!(body, "- {glyph} **{id}**: {title}").expect("writes to String are infallible");
-        writeln!(body, "  - Covers: REQ-001").expect("writes to String are infallible");
+        let state_str = state_for(*state);
+        write!(
+            body,
+            "<task id=\"{id}\" state=\"{state_str}\" covers=\"REQ-001\">\n{title}\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writes to String are infallible");
     }
+    body.push_str("</tasks>\n");
     body
 }
 
-fn glyph_for(state: char) -> &'static str {
+fn state_for(state: char) -> &'static str {
     match state {
-        '~' => "[~]",
-        '?' => "[?]",
-        'x' => "[x]",
-        _ => "[ ]",
+        '~' => "in-progress",
+        '?' => "in-review",
+        'x' => "completed",
+        _ => "pending",
     }
 }
 

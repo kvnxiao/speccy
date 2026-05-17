@@ -19,15 +19,24 @@ XML carrier, and architecture docs plus shipped skills teach the new
 form. `speccy verify` exits 0 against the post-ship workspace (21 specs,
 115 requirements, 153 scenarios, 0 errors).
 
-## Requirements coverage
+<report spec="SPEC-0020">
 
-| Requirement | Scenarios | Pinning tests |
-|---|---|---|
-| REQ-001: SPEC.md uses raw XML element tags | CHK-001 | `speccy-core/src/parse/spec_xml/mod.rs` — 34 unit tests covering happy-path nesting, orphan-scenario errors, duplicate-id errors, unquoted-attribute rejection, line-isolation rules, unknown-element fallback to body, unknown-attribute errors, id-pattern errors, verbatim body preservation (`<thinking>`/`<example>`/`<T>`/`A & B`/fenced code/links), fenced-block protection, inline-backtick protection, byte-range span correctness, optional `<decision>`, `<open-question resolved>` validation, frontmatter reuse, `speccy_whitelist_is_disjoint_from_html5_element_set` (via `is_html5_element_name`) |
-| REQ-002: HTML-comment marker form is removed and rejected | CHK-002 | `speccy-core/src/parse/spec_xml/mod.rs::legacy_html_comment_marker_open_errors_with_dedicated_variant`, `..._close_...`, `legacy_marker_inside_fenced_code_is_not_an_error`, `legacy_marker_in_inline_prose_is_not_an_error`; `speccy-core/src/parse/mod.rs:22-26` `compile_fail` doctest pinning the deleted `parse_spec_markers` symbols; `speccy-core/tests/workspace_loader.rs::spec_markers_module_file_is_gone`, `..._legacy_marker_error`, `..._spc_001_diagnostic`; `speccy-core/tests/spec_xml_roundtrip.rs::render_emits_no_legacy_html_comment_markers`; `speccy-cli/tests/shipped_skills_no_legacy_markers.rs::active_guidance_does_not_teach_legacy_html_comment_markers` + `architecture_md_legacy_marker_mention_is_historical_only` |
-| REQ-003: Parser and renderer expose XML-backed Rust structs | CHK-003 | `speccy-core/tests/spec_xml_roundtrip.rs` — 9 integration tests (canonical roundtrip field-by-field, struct-order driven render, decision attribute stability, boundary whitespace normalisation, idempotent double-render, no-legacy-comment-marker grep, blank-line-after-close convention, decision-status roundtrip, top-level shape); `speccy-core/tests/workspace_loader.rs::duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001` |
-| REQ-004: Migration rewrites all in-tree SPEC.md files | CHK-004 | `speccy-core/tests/in_tree_specs.rs::every_in_tree_spec_md_parses_with_xml_parser_and_matches_snapshot` (id-set equality against the pre-migration snapshot at `speccy-core/tests/fixtures/in_tree_id_snapshot.json`), `every_migrated_spec_md_has_blank_line_after_each_close_tag` (fence-aware corpus assertion), `spec_0019_fenced_example_preserves_legacy_marker_form`, `spec_0020_fenced_example_preserves_raw_xml_form`; `speccy-cli/tests/verify_after_migration.rs::speccy_verify_exits_zero_on_migrated_in_tree_workspace`; `speccy-core/tests/docs_sweep.rs::migration_xtask_directories_are_deleted` |
-| REQ-005: Docs, prompts, and shipped skills teach the XML element form | CHK-005 | `speccy-core/tests/docs_sweep.rs::architecture_md_documents_xml_element_grammar` (asserts `<requirement`, `<scenario`, `<decision`, `<changelog`, `<open-question`, `<overview`, `HTML5` are present); three `prompt_template.rs::spec_0020_*_template_teaches_xml_element_grammar` tests (plan-greenfield, plan-amend, implementer); `speccy-cli/tests/shipped_skills_no_legacy_markers.rs` corpus grep over `resources/modules/`, `.claude/skills/`, `.agents/skills/`, `.codex/agents/`, `.speccy/skills/` with allow-listed `.speccy/ARCHITECTURE.md` historical blockquote |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+</report>
 
 ## Task summary
 

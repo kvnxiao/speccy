@@ -240,12 +240,16 @@ fn tasks_md_fixture(spec_id: &str, tasks: &[(&str, &str)]) -> String {
     let mut out = format!(
         "---\nspec: {spec_id}\nspec_hash_at_generation: \
          bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n\
-         # Tasks: {spec_id}\n\n",
+         # Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n",
     );
     for (task_id, covers) in tasks {
-        writeln!(out, "- [ ] **{task_id}**: stub\n  - Covers: {covers}\n")
-            .expect("writeln to String must not fail");
+        writeln!(
+            out,
+            "<task id=\"{task_id}\" state=\"pending\" covers=\"{covers}\">\nstub\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
+        )
+        .expect("writeln to String must not fail");
     }
+    out.push_str("</tasks>\n");
     out
 }
 
@@ -697,7 +701,7 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
         | 2026-05-11 | t | init |
         </changelog>
     "#};
-    let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100, REQ-200")]);
+    let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100 REQ-200")]);
     write_spec(&ws.root, "0020-dedup", spec_md, "", Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0020/T-001"))?;

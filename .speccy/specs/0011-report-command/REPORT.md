@@ -14,14 +14,21 @@ inline `Retry:` notes, and inlines SPEC.md, TASKS.md, AGENTS.md, and
 the retry summary into the embedded `report.md` template before
 budget trimming. Landed in commit `6a4ee36`.
 
-## Requirements coverage
+<report spec="SPEC-0011">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | SPEC-ID validation and spec lookup | delivered |
-| REQ-002 | Completeness gate | delivered |
-| REQ-003 | Retry count computation per task | delivered |
-| REQ-004 | Render report prompt | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+</report>
 
 ## Notes
 

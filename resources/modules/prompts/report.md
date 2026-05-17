@@ -1,7 +1,7 @@
 # Speccy: Report `{{spec_id}}`
 
-Every task in this spec is now `[x]`. Your job is to author
-`REPORT.md` — the durable summary of what shipped.
+Every task in this spec is now `state="completed"`. Your job is to
+author `REPORT.md` — the durable summary of what shipped.
 
 ## Project conventions
 
@@ -21,16 +21,23 @@ Every task in this spec is now `[x]`. Your job is to author
 
 ## Your task
 
-1. Read SPEC.md, every task entry and its inline notes, and the retry
-   summary above.
+1. Read SPEC.md, every `<task>` element and its inline notes, and
+   the retry summary above.
 2. Write `.speccy/specs/.../REPORT.md` with frontmatter
-   (`spec`, `outcome`, `generated_at`) and these sections, in this
+   (`spec`, `outcome`, `generated_at`) followed by a root
+   `<report spec="{{spec_id}}">` element. Use these sections, in this
    order, under the literal headings shown:
    - `## Outcome` — one of `delivered`, `partial`, or `abandoned`.
-   - `## Requirements coverage` — every REQ-NNN with the check IDs
-     covering it and a short note on which project test(s) satisfy
-     each scenario. Speccy does not execute checks; do not write
-     `PASS` / `FAIL` here.
+   - `## Requirements coverage` — emit one
+     `<coverage req="REQ-NNN" result="satisfied|partial|deferred"
+     scenarios="CHK-NNN CHK-NNN">…</coverage>` element per surviving
+     SPEC requirement. **Do not write a Markdown coverage table.**
+     The `<coverage>` element body is plain Markdown — use it for a
+     short note on which project test(s) satisfy each scenario.
+     Speccy does not execute checks; do not write `PASS` / `FAIL`
+     here. `deferred` rows may carry an empty `scenarios=""`
+     attribute. If a requirement was removed entirely, amend SPEC.md
+     instead of writing a `<coverage>` row for it.
    - `## Task summary` — total tasks, count retried, anything that
      triggered a SPEC amendment.
    - `## Out-of-scope items absorbed` — edits implementers made for

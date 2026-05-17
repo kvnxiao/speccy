@@ -2,14 +2,16 @@
 # {{ cmd_prefix }}speccy-work
 
 Drives the implementation loop. The main agent repeatedly asks
-the CLI for the next `[ ]` task and spawns an implementer sub-agent
-with the rendered prompt until no open tasks remain.
+the CLI for the next `state="pending"` task and spawns an
+implementer sub-agent with the rendered prompt until no open tasks
+remain. Task state lives in the `state` attribute on each `<task>`
+XML element in TASKS.md.
 
 ## When to use
 
 After `{{ cmd_prefix }}speccy-tasks` has written `TASKS.md` and the spec hash has been
 committed. Can be rerun after `{{ cmd_prefix }}speccy-review` flips tasks back to
-`[ ]` (retry path).
+`state="pending"` (retry path).
 
 ## Steps
 
@@ -31,10 +33,11 @@ committed. Can be rerun after `{{ cmd_prefix }}speccy-review` flips tasks back t
    ```
 
 4. Spawn an implementer sub-agent with that prompt. The sub-agent
-   flips the task `[ ]` -> `[~]` on start, writes tests + code, runs
-   the project's own test command (`cargo test`, `pnpm test`, etc.)
-   locally (using `speccy check SPEC-NNNN/T-NNN` to re-read the
-   scenarios it is satisfying), and flips `[~]` -> `[?]` on finish.
+   flips the task's `state` from `pending` to `in-progress` on
+   start, writes tests + code, runs the project's own test command
+   (`cargo test`, `pnpm test`, etc.) locally (using `speccy check
+   SPEC-NNNN/T-NNN` to re-read the scenarios it is satisfying), and
+   flips `state` from `in-progress` to `in-review` on finish.
 5. After the sub-agent returns, go back to step 1.
 
 ### Loop exit criteria

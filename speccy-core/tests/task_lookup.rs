@@ -62,16 +62,30 @@ fn spec_md_for(id: &str) -> String {
     body.replace("__ID__", id)
 }
 
-fn tasks_md_with(spec_id: &str, body: &str) -> String {
+/// Build a TASKS.md fixture body from a list of `(task_id, covers,
+/// body)` triples. `body` is the verbatim body text of the `<task>`
+/// element; the helper wraps it in `<task>` and adds a placeholder
+/// `<task-scenarios>` so the new XML grammar parses cleanly.
+fn tasks_md_xml(spec_id: &str, tasks: &[(&str, &str, &str)]) -> String {
+    use std::fmt::Write as _;
+    let mut body = format!("<tasks spec=\"{spec_id}\">\n\n");
+    for (task_id, covers, task_body) in tasks {
+        write!(
+            body,
+            "<task id=\"{task_id}\" state=\"pending\" covers=\"{covers}\">\n{task_body}\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writes to String are infallible");
+    }
+    body.push_str("</tasks>\n");
     format!(
         "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n{body}",
     )
 }
 
-fn make_fixture(spec_id: &str, tasks_body: &str) -> TestResult<Fixture> {
+fn make_fixture(spec_id: &str, tasks: &[(&str, &str, &str)]) -> TestResult<Fixture> {
     let spec = spec_md_for(spec_id);
-    let tasks = tasks_md_with(spec_id, tasks_body);
-    write_spec_fixture(&spec, Some(&tasks))
+    let body = tasks_md_xml(spec_id, tasks);
+    write_spec_fixture(&spec, Some(&body))
 }
 
 fn make_workspace(fixtures: &[&Fixture]) -> Workspace {
@@ -147,11 +161,8 @@ fn ref_parsing_rejects_invalid_formats() {
 
 #[test]
 fn workspace_lookup_finds_unique_unqualified_match() -> TestResult {
-    let fx1 = make_fixture("SPEC-0001", "- [ ] **T-001**: first\n  - Covers: REQ-001\n")?;
-    let fx2 = make_fixture(
-        "SPEC-0002",
-        "- [ ] **T-002**: second\n  - Covers: REQ-001\n",
-    )?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "first")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-002", "REQ-001", "second")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let task_ref = parse_ref("T-001").expect("ref should parse");
@@ -159,13 +170,13 @@ fn workspace_lookup_finds_unique_unqualified_match() -> TestResult {
     assert_eq!(location.spec_id, "SPEC-0001");
     assert_eq!(location.task.id, "T-001");
     assert!(
-        location.task_entry_raw.contains("**T-001**"),
-        "task_entry_raw should contain the task line: {entry}",
+        location.task_entry_raw.contains("<task id=\"T-001\""),
+        "task_entry_raw should contain the task element: {entry}",
         entry = location.task_entry_raw,
     );
     assert!(
-        location.task_entry_raw.contains("Covers: REQ-001"),
-        "task_entry_raw should contain sub-list bullets: {entry}",
+        location.task_entry_raw.contains("covers=\"REQ-001\""),
+        "task_entry_raw should contain covers attribute: {entry}",
         entry = location.task_entry_raw,
     );
     Ok(())
@@ -173,11 +184,8 @@ fn workspace_lookup_finds_unique_unqualified_match() -> TestResult {
 
 #[test]
 fn workspace_lookup_finds_task_in_other_spec() -> TestResult {
-    let fx1 = make_fixture("SPEC-0001", "- [ ] **T-001**: first\n  - Covers: REQ-001\n")?;
-    let fx2 = make_fixture(
-        "SPEC-0002",
-        "- [ ] **T-002**: second\n  - Covers: REQ-001\n",
-    )?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "first")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-002", "REQ-001", "second")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let task_ref = parse_ref("T-002").expect("ref should parse");
@@ -189,14 +197,8 @@ fn workspace_lookup_finds_task_in_other_spec() -> TestResult {
 
 #[test]
 fn workspace_lookup_qualified_scopes_to_one_spec() -> TestResult {
-    let fx1 = make_fixture(
-        "SPEC-0001",
-        "- [ ] **T-001**: in spec-1\n  - Covers: REQ-001\n",
-    )?;
-    let fx2 = make_fixture(
-        "SPEC-0002",
-        "- [ ] **T-001**: in spec-2\n  - Covers: REQ-001\n",
-    )?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "in spec-1")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-001", "REQ-001", "in spec-2")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let qualified = parse_ref("SPEC-0001/T-001").expect("qualified must parse");
@@ -222,7 +224,7 @@ fn workspace_lookup_qualified_scopes_to_one_spec() -> TestResult {
 
 #[test]
 fn workspace_lookup_missing_task_returns_not_found() -> TestResult {
-    let fx = make_fixture("SPEC-0001", "- [ ] **T-001**: only\n")?;
+    let fx = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "only")])?;
     let workspace = make_workspace(&[&fx]);
 
     let task_ref = parse_ref("T-999").expect("ref should parse");
@@ -236,8 +238,8 @@ fn workspace_lookup_missing_task_returns_not_found() -> TestResult {
 
 #[test]
 fn workspace_lookup_qualified_missing_in_named_spec_returns_not_found() -> TestResult {
-    let fx1 = make_fixture("SPEC-0001", "- [ ] **T-001**: in spec-1\n")?;
-    let fx2 = make_fixture("SPEC-0002", "- [ ] **T-002**: in spec-2\n")?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "in spec-1")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-002", "REQ-001", "in spec-2")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let qualified = parse_ref("SPEC-0001/T-002").expect("qualified parses");
@@ -252,7 +254,7 @@ fn workspace_lookup_qualified_missing_in_named_spec_returns_not_found() -> TestR
 #[test]
 fn workspace_lookup_skips_specs_with_failed_tasks_md_parse() -> TestResult {
     // Spec with valid TASKS.md
-    let fx_valid = make_fixture("SPEC-0001", "- [ ] **T-001**: real\n  - Covers: REQ-001\n")?;
+    let fx_valid = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "real")])?;
 
     // Spec with malformed TASKS.md (frontmatter missing).
     let dir = tempfile::tempdir()?;
@@ -284,14 +286,8 @@ fn workspace_lookup_skips_specs_with_failed_tasks_md_parse() -> TestResult {
 
 #[test]
 fn ambiguity_two_specs_returns_candidates_in_ascending_order() -> TestResult {
-    let fx1 = make_fixture(
-        "SPEC-0001",
-        "- [ ] **T-001**: in spec-1\n  - Covers: REQ-001\n",
-    )?;
-    let fx2 = make_fixture(
-        "SPEC-0002",
-        "- [ ] **T-001**: in spec-2\n  - Covers: REQ-001\n",
-    )?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "in spec-1")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-001", "REQ-001", "in spec-2")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let task_ref = parse_ref("T-001").expect("ref parses");
@@ -313,9 +309,9 @@ fn ambiguity_two_specs_returns_candidates_in_ascending_order() -> TestResult {
 
 #[test]
 fn ambiguity_three_specs_returns_all_candidates() -> TestResult {
-    let fx1 = make_fixture("SPEC-0001", "- [ ] **T-007**: a\n  - Covers: REQ-001\n")?;
-    let fx2 = make_fixture("SPEC-0003", "- [ ] **T-007**: b\n  - Covers: REQ-001\n")?;
-    let fx3 = make_fixture("SPEC-0005", "- [ ] **T-007**: c\n  - Covers: REQ-001\n")?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-007", "REQ-001", "a")])?;
+    let fx2 = make_fixture("SPEC-0003", &[("T-007", "REQ-001", "b")])?;
+    let fx3 = make_fixture("SPEC-0005", &[("T-007", "REQ-001", "c")])?;
     let workspace = make_workspace(&[&fx1, &fx2, &fx3]);
 
     let task_ref = parse_ref("T-007").expect("ref parses");
@@ -341,14 +337,8 @@ fn ambiguity_three_specs_returns_all_candidates() -> TestResult {
 
 #[test]
 fn ambiguity_bypassed_by_qualified_form() -> TestResult {
-    let fx1 = make_fixture(
-        "SPEC-0001",
-        "- [ ] **T-001**: in spec-1\n  - Covers: REQ-001\n",
-    )?;
-    let fx2 = make_fixture(
-        "SPEC-0002",
-        "- [ ] **T-001**: in spec-2\n  - Covers: REQ-001\n",
-    )?;
+    let fx1 = make_fixture("SPEC-0001", &[("T-001", "REQ-001", "in spec-1")])?;
+    let fx2 = make_fixture("SPEC-0002", &[("T-001", "REQ-001", "in spec-2")])?;
     let workspace = make_workspace(&[&fx1, &fx2]);
 
     let qualified = parse_ref("SPEC-0001/T-001").expect("qualified parses");

@@ -16,15 +16,24 @@ refuses on `.cursor/`-only. `.speccy/skills/` mirrors shared
 personas so project-local overrides can shadow the embedded bundle.
 Landed in commit `5041dc0`.
 
-## Requirements coverage
+<report spec="SPEC-0002">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Scaffold the .speccy/ workspace | delivered |
-| REQ-002 | Existence check and --force semantics | delivered |
-| REQ-003 | Host detection precedence | delivered |
-| REQ-004 | Skill-pack copy | delivered |
-| REQ-005 | Exit codes | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004 CHK-005">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-007 CHK-008">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+</report>
 
 ## Notes
 

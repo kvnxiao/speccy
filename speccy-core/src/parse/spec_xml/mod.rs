@@ -32,18 +32,18 @@
 //! REQ-003 for the contract this module satisfies, and DEC-002/DEC-003
 //! for the disjointness invariant and the line-aware scanner decision.
 
-mod html5_names;
-
 use crate::error::ParseError;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
-use crate::parse::markdown::parse_markdown;
+pub use crate::parse::xml_scanner::ElementSpan;
+pub use crate::parse::xml_scanner::HTML5_ELEMENT_NAMES;
+use crate::parse::xml_scanner::RawTag;
+use crate::parse::xml_scanner::ScanConfig;
+use crate::parse::xml_scanner::collect_code_fence_byte_ranges;
+pub use crate::parse::xml_scanner::is_html5_element_name;
+use crate::parse::xml_scanner::scan_tags;
+use crate::parse::xml_scanner::unknown_attribute_error;
 use camino::Utf8Path;
-use comrak::Arena;
-use comrak::nodes::AstNode;
-use comrak::nodes::NodeValue;
-pub use html5_names::HTML5_ELEMENT_NAMES;
-pub use html5_names::is_html5_element_name;
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::OnceLock;
@@ -181,18 +181,6 @@ pub struct OpenQuestion {
     pub span: ElementSpan,
 }
 
-/// Byte range covering an element's *open* tag in the source string.
-///
-/// `&source[start..end]` always begins with `<` followed by the recognised
-/// element name so diagnostics can re-point at the offending tag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ElementSpan {
-    /// Inclusive byte offset of the leading `<` of the open tag.
-    pub start: usize,
-    /// Exclusive byte offset just past the trailing `>` of the open tag.
-    pub end: usize,
-}
-
 const ALLOWED_DECISION_STATUSES: &[&str] = &["accepted", "rejected", "deferred", "superseded"];
 const ALLOWED_RESOLVED_VALUES: &[&str] = &["true", "false"];
 
@@ -225,58 +213,38 @@ pub const SPECCY_ELEMENT_NAMES: &[&str] = &[
 /// instead of silently treating them as Markdown body.
 const RETIRED_ELEMENT_NAMES: &[&str] = &["spec", "overview"];
 
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn open_tag_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| {
-        // `<NAME>` or `<NAME attr="value" ...>`. Attribute values must be
-        // double-quoted; unquoted values are a parse error and fall
-        // through the shape regex below for a clearer diagnostic.
-        Regex::new(r#"^<([a-z][a-z-]*)((?:\s+[A-Za-z_][\w-]*="[^"]*")*)\s*>$"#).unwrap()
-    })
+/// Concatenate [`SPECCY_ELEMENT_NAMES`] and [`RETIRED_ELEMENT_NAMES`]
+/// to drive structure-shaped malformed-tag diagnostics. Retired names
+/// still need malformed-shape diagnostics so that, say, an unclosed
+/// `<spec ...` line gets the retirement diagnostic from the scanner
+/// rather than silently being treated as Markdown.
+fn build_structure_shaped_names() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> =
+        Vec::with_capacity(SPECCY_ELEMENT_NAMES.len() + RETIRED_ELEMENT_NAMES.len());
+    names.extend_from_slice(SPECCY_ELEMENT_NAMES);
+    names.extend_from_slice(RETIRED_ELEMENT_NAMES);
+    names
 }
 
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn close_tag_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^</([a-z][a-z-]*)\s*>$").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn shape_open_regex() -> &'static Regex {
-    // Detects a line that *looks* like an open tag (`<name...>`) so we
-    // can produce structured diagnostics for malformed cases (unquoted
-    // attribute values, junk after the closing `>`, etc.) instead of
-    // silently treating them as Markdown body.
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^<([a-z][a-z-]*)(\s|>)").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn shape_close_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^</([a-z][a-z-]*)").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn attribute_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r#"\s+([A-Za-z_][\w-]*)="([^"]*)""#).unwrap())
+/// Run the shared XML scanner with the SPEC.md whitelist, retired-name
+/// set, and SPEC-0019 legacy-marker detection enabled. Centralising the
+/// configuration keeps [`parse`] short and gives a single grep target
+/// for "what tags does SPEC.md recognise".
+fn scan_spec_tags(
+    source: &str,
+    body: &str,
+    body_offset: usize,
+    path: &Utf8Path,
+) -> Result<Vec<RawTag>, ParseError> {
+    let code_fence_ranges = collect_code_fence_byte_ranges(source);
+    let structure_shaped_names = build_structure_shaped_names();
+    let cfg = ScanConfig {
+        whitelist: SPECCY_ELEMENT_NAMES,
+        structure_shaped_names: &structure_shaped_names,
+        retired_names: RETIRED_ELEMENT_NAMES,
+        detect_legacy_markers: true,
+    };
+    scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
 }
 
 #[expect(
@@ -304,25 +272,6 @@ fn chk_id_regex() -> &'static Regex {
 fn dec_id_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"^DEC-\d{3,}$").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn legacy_marker_regex() -> &'static Regex {
-    // Matches the SPEC-0019 HTML-comment marker form when it is the only
-    // non-whitespace content on a line. Capture 1: optional leading slash
-    // (close marker). Capture 2: element name. The leading `^` plus
-    // trailing `$` anchors keep inline-backtick legitimate documentation
-    // such as `<!-- speccy:requirement id="REQ-001" -->` (rendered inside
-    // prose, surrounded by backticks and parentheses) from tripping the
-    // diagnostic — only line-isolated legacy markers are flagged, matching
-    // the line-isolation rule the raw XML element scanner enforces.
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| {
-        Regex::new(r"(?m)^\s*<!--\s*(/?)speccy:([a-z][a-z-]*)(?:\s[^>]*)?-->\s*$").unwrap()
-    })
 }
 
 /// Parse a raw-XML-structured SPEC.md source string.
@@ -360,9 +309,7 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
 
     let heading = extract_level1_heading(body, path)?;
 
-    let code_fence_ranges = collect_code_fence_byte_ranges(source);
-
-    let raw_tags = scan_tags(source, body, body_offset, &code_fence_ranges, path)?;
+    let raw_tags = scan_spec_tags(source, body, body_offset, path)?;
     let tree = assemble(raw_tags, source, path)?;
 
     let mut ctx = ProcessCtx {
@@ -458,9 +405,9 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
 /// 2. A blank line, then the level-1 heading (`# {heading}`).
 /// 3. `<goals>`, `<non-goals>`, `<user-stories>` top-level sections.
 /// 4. Every [`Requirement`] in [`SpecDoc::requirements`] order. Each
-///    requirement renders its prose (with nested `<done-when>`,
-///    `<behavior>`, and `<scenario>` tag lines stripped out), then
-///    `<done-when>` and `<behavior>`, then every nested [`Scenario`] in
+///    requirement renders its prose (with nested `<done-when>`, `<behavior>`,
+///    and `<scenario>` tag lines stripped out), then `<done-when>` and
+///    `<behavior>`, then every nested [`Scenario`] in
 ///    [`Requirement::scenarios`] order.
 /// 5. Every [`Decision`] in [`SpecDoc::decisions`] order.
 /// 6. Every [`OpenQuestion`] in [`SpecDoc::open_questions`] order.
@@ -794,7 +741,9 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
             });
             Ok(())
         }
-        Block::Goals { body, span } => assign_top_section(&mut ctx.goals, "goals", body, span, ctx.path),
+        Block::Goals { body, span } => {
+            assign_top_section(&mut ctx.goals, "goals", body, span, ctx.path)
+        }
         Block::NonGoals { body, span } => {
             assign_top_section(&mut ctx.non_goals, "non-goals", body, span, ctx.path)
         }
@@ -1124,368 +1073,6 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone)]
-struct RawTag {
-    name: String,
-    is_close: bool,
-    attrs: Vec<(String, String)>,
-    span: ElementSpan,
-    /// Absolute byte offset where the body content begins (immediately
-    /// after the newline that terminates the open tag line). For close
-    /// tags this is the offset to use as the body's exclusive end —
-    /// matching the open tag's `body_start` semantics.
-    body_start: usize,
-    /// Absolute byte offset of this tag's start (used to bound the body
-    /// of the matching open tag when this is a close tag).
-    body_end_after_tag: usize,
-}
-
-fn scan_tags(
-    source: &str,
-    body: &str,
-    body_offset: usize,
-    code_fence_ranges: &[(usize, usize)],
-    path: &Utf8Path,
-) -> Result<Vec<RawTag>, ParseError> {
-    let mut tags: Vec<RawTag> = Vec::new();
-    let mut line_start_in_body: usize = 0;
-
-    while line_start_in_body <= body.len() {
-        let Some(line_info) = next_line(body, body_offset, line_start_in_body, path)? else {
-            break;
-        };
-
-        if !range_inside_any_fence(
-            line_info.abs_line_start,
-            line_info.abs_line_end_excl,
-            code_fence_ranges,
-        ) {
-            classify_line(source, body, body_offset, &line_info, &mut tags, path)?;
-        }
-
-        line_start_in_body = line_info.next_start_in_body;
-    }
-
-    Ok(tags)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct LineInfo<'a> {
-    line: &'a str,
-    abs_line_start: usize,
-    abs_line_end_excl: usize,
-    next_start_in_body: usize,
-}
-
-fn next_line<'a>(
-    body: &'a str,
-    body_offset: usize,
-    line_start_in_body: usize,
-    path: &Utf8Path,
-) -> Result<Option<LineInfo<'a>>, ParseError> {
-    let remainder = body.get(line_start_in_body..).unwrap_or("");
-    let (line, next_start_in_body) = if let Some(nl) = remainder.find('\n') {
-        let line_end = line_start_in_body
-            .checked_add(nl)
-            .ok_or_else(|| overflow_error(path))?;
-        let next = line_end
-            .checked_add(1)
-            .ok_or_else(|| overflow_error(path))?;
-        (body.get(line_start_in_body..line_end).unwrap_or(""), next)
-    } else if remainder.is_empty() {
-        return Ok(None);
-    } else {
-        (remainder, body.len().saturating_add(1))
-    };
-
-    let abs_line_start = body_offset
-        .checked_add(line_start_in_body)
-        .ok_or_else(|| overflow_error(path))?;
-    let abs_line_end_excl = abs_line_start
-        .checked_add(line.len())
-        .ok_or_else(|| overflow_error(path))?;
-
-    Ok(Some(LineInfo {
-        line,
-        abs_line_start,
-        abs_line_end_excl,
-        next_start_in_body,
-    }))
-}
-
-fn overflow_error(path: &Utf8Path) -> ParseError {
-    ParseError::MalformedMarker {
-        path: path.to_path_buf(),
-        offset: 0,
-        reason: "byte arithmetic overflow during line scan".to_owned(),
-    }
-}
-
-fn classify_line(
-    source: &str,
-    body: &str,
-    body_offset: usize,
-    line_info: &LineInfo<'_>,
-    tags: &mut Vec<RawTag>,
-    path: &Utf8Path,
-) -> Result<(), ParseError> {
-    let line = line_info.line;
-    let abs_line_start = line_info.abs_line_start;
-    let abs_line_end_excl = line_info.abs_line_end_excl;
-    let next_start_in_body = line_info.next_start_in_body;
-
-    // Surface stray SPEC-0019 HTML-comment markers as a dedicated
-    // diagnostic before falling through to the XML element scanner.
-    if let Some(legacy) = detect_legacy_marker(line, abs_line_start, path) {
-        return Err(legacy);
-    }
-
-    let trimmed = line.trim_start();
-    let leading_ws = line.len().saturating_sub(trimmed.len());
-    let abs_tag_offset = abs_line_start
-        .checked_add(leading_ws)
-        .unwrap_or(abs_line_start);
-    let line_for_regex = trimmed.trim_end();
-
-    if let Some(caps) = open_tag_regex().captures(line_for_regex) {
-        let name = caps
-            .get(1)
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_default();
-        if RETIRED_ELEMENT_NAMES.contains(&name.as_str()) {
-            return Err(ParseError::RetiredMarkerName {
-                path: path.to_path_buf(),
-                marker_name: name,
-                offset: abs_tag_offset,
-            });
-        }
-        if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
-            return Ok(());
-        }
-        let attr_blob = caps.get(2).map_or("", |m| m.as_str());
-        let body_start = body_offset
-            .checked_add(next_start_in_body.min(body.len()))
-            .unwrap_or(source.len());
-        tags.push(build_open_tag(
-            name,
-            attr_blob,
-            abs_tag_offset,
-            abs_line_end_excl,
-            body_start,
-        ));
-        Ok(())
-    } else if let Some(caps) = close_tag_regex().captures(line_for_regex) {
-        let name = caps
-            .get(1)
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_default();
-        if RETIRED_ELEMENT_NAMES.contains(&name.as_str()) {
-            return Err(ParseError::RetiredMarkerName {
-                path: path.to_path_buf(),
-                marker_name: name,
-                offset: abs_tag_offset,
-            });
-        }
-        if !SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
-            return Ok(());
-        }
-        tags.push(RawTag {
-            name,
-            is_close: true,
-            attrs: Vec::new(),
-            span: ElementSpan {
-                start: abs_tag_offset,
-                end: abs_line_end_excl,
-            },
-            body_start: abs_line_end_excl,
-            body_end_after_tag: abs_tag_offset,
-        });
-        Ok(())
-    } else {
-        detect_malformed_tag(line, trimmed, abs_tag_offset, path)
-    }
-}
-
-fn build_open_tag(
-    name: String,
-    attr_blob: &str,
-    abs_tag_offset: usize,
-    abs_line_end_excl: usize,
-    body_start: usize,
-) -> RawTag {
-    let mut attrs: Vec<(String, String)> = Vec::new();
-    for ac in attribute_regex().captures_iter(attr_blob) {
-        let k = ac.get(1).map(|m| m.as_str().to_owned()).unwrap_or_default();
-        let v = ac.get(2).map(|m| m.as_str().to_owned()).unwrap_or_default();
-        attrs.push((k, v));
-    }
-    RawTag {
-        name,
-        is_close: false,
-        attrs,
-        span: ElementSpan {
-            start: abs_tag_offset,
-            end: abs_line_end_excl,
-        },
-        body_start,
-        body_end_after_tag: abs_tag_offset,
-    }
-}
-
-fn detect_legacy_marker(line: &str, abs_line_start: usize, path: &Utf8Path) -> Option<ParseError> {
-    let caps = legacy_marker_regex().captures(line)?;
-    // capture 0 includes the line's leading and trailing whitespace (the
-    // regex is anchored with `^\s*` ... `\s*$`); trim it for the diagnostic.
-    let raw_match = caps.get(0).map_or("", |m| m.as_str()).trim();
-    let leading_ws = line.len().saturating_sub(line.trim_start().len());
-    let abs_offset = abs_line_start
-        .checked_add(leading_ws)
-        .unwrap_or(abs_line_start);
-    let slash = caps.get(1).map_or("", |m| m.as_str());
-    let name = caps.get(2).map_or("", |m| m.as_str());
-    let suggested = if slash == "/" {
-        format!("</{name}>")
-    } else {
-        format!("<{name} ...>")
-    };
-    Some(ParseError::LegacyMarker {
-        path: path.to_path_buf(),
-        offset: abs_offset,
-        legacy_form: raw_match.to_owned(),
-        suggested_element: suggested,
-    })
-}
-
-fn detect_malformed_tag(
-    line: &str,
-    trimmed: &str,
-    abs_tag_offset: usize,
-    path: &Utf8Path,
-) -> Result<(), ParseError> {
-    if let Some(shape_caps) = shape_open_regex().captures(trimmed) {
-        let name = shape_caps
-            .get(1)
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_default();
-        if SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
-            return Err(ParseError::MalformedMarker {
-                path: path.to_path_buf(),
-                offset: abs_tag_offset,
-                reason: diagnose_malformed_open(line, trimmed, &name),
-            });
-        }
-    } else if let Some(shape_caps) = shape_close_regex().captures(trimmed) {
-        let name = shape_caps
-            .get(1)
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_default();
-        if SPECCY_ELEMENT_NAMES.contains(&name.as_str()) {
-            let reason = if line.trim() != line.trim_end() || line.trim_start() != trimmed {
-                "speccy XML close tags must appear on their own line".to_owned()
-            } else if !trimmed.trim_end().ends_with('>') {
-                "speccy XML close tag is missing the closing `>`".to_owned()
-            } else {
-                "speccy XML close tag is malformed".to_owned()
-            };
-            return Err(ParseError::MalformedMarker {
-                path: path.to_path_buf(),
-                offset: abs_tag_offset,
-                reason,
-            });
-        }
-    }
-    Ok(())
-}
-
-/// Build a human-readable reason for a malformed open tag line. We do
-/// best-effort classification (line-isolation vs unquoted attribute
-/// value vs missing `>`); the diagnostic surfaces the offending tag
-/// name and byte offset regardless.
-fn diagnose_malformed_open(line: &str, trimmed: &str, _name: &str) -> String {
-    let stripped = trimmed.trim_end();
-    if line.trim_start() != trimmed || line.trim_end() != line {
-        // Either the line had non-whitespace prefix before our match,
-        // or trailing prose after the tag.
-        return "speccy XML element tags must appear on their own line".to_owned();
-    }
-    if !stripped.ends_with('>') {
-        return "speccy XML open tag is missing the closing `>`".to_owned();
-    }
-    // The shape regex matched but the strict open-tag regex did not —
-    // the offender is almost always an unquoted attribute value.
-    "attribute values must be double-quoted".to_owned()
-}
-
-fn range_inside_any_fence(
-    line_start: usize,
-    line_end_excl: usize,
-    fences: &[(usize, usize)],
-) -> bool {
-    for (s, e) in fences {
-        if line_start >= *s && line_end_excl <= *e {
-            return true;
-        }
-    }
-    false
-}
-
-fn collect_code_fence_byte_ranges(source: &str) -> Vec<(usize, usize)> {
-    let arena = Arena::new();
-    let root = parse_markdown(&arena, source);
-
-    let mut ranges: Vec<(usize, usize)> = Vec::new();
-    walk_for_code_fences(root, source, &mut ranges);
-    ranges
-}
-
-fn walk_for_code_fences<'a>(root: &'a AstNode<'a>, source: &str, out: &mut Vec<(usize, usize)>) {
-    for node in root.descendants() {
-        let ast = node.data.borrow();
-        if let NodeValue::CodeBlock(_) = &ast.value {
-            let start_line = ast.sourcepos.start.line;
-            let end_line = ast.sourcepos.end.line;
-            if let Some((s, e)) = line_range_to_byte_range(source, start_line, end_line) {
-                out.push((s, e));
-            }
-        }
-    }
-}
-
-fn line_range_to_byte_range(
-    source: &str,
-    start_line_1: usize,
-    end_line_1: usize,
-) -> Option<(usize, usize)> {
-    if start_line_1 == 0 || end_line_1 < start_line_1 {
-        return None;
-    }
-    let mut line_no: usize = 1;
-    let mut start_byte: Option<usize> = None;
-    let mut end_byte: Option<usize> = None;
-    let mut current_line_start: usize = 0;
-
-    for (idx, ch) in source.char_indices() {
-        if line_no == start_line_1 && start_byte.is_none() {
-            start_byte = Some(current_line_start);
-        }
-        if ch == '\n' {
-            if line_no == end_line_1 {
-                end_byte = Some(idx.checked_add(1)?);
-                break;
-            }
-            line_no = line_no.checked_add(1)?;
-            current_line_start = idx.checked_add(1)?;
-        }
-    }
-    if line_no == start_line_1 && start_byte.is_none() {
-        start_byte = Some(current_line_start);
-    }
-    if end_byte.is_none() {
-        end_byte = Some(source.len());
-    }
-    Some((start_byte?, end_byte?))
-}
-
 fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseError> {
     for line in body.lines() {
         let trimmed = line.trim_start();
@@ -1583,12 +1170,13 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
 
     for (k, v) in &t.attrs {
         if !allowed_attrs.contains(&k.as_str()) {
-            return Err(ParseError::UnknownMarkerAttribute {
-                path: path.to_path_buf(),
-                marker_name: t.name.clone(),
-                attribute: k.clone(),
-                offset: t.span.start,
-            });
+            return Err(unknown_attribute_error(
+                path,
+                &t.name,
+                k,
+                t.span.start,
+                allowed_attrs,
+            ));
         }
         validate_attribute_value(&t.name, k, v, path)?;
     }

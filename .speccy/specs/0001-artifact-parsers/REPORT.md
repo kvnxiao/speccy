@@ -14,18 +14,33 @@ and supersession-index helpers. Landed in commit `66f5459` on
 2026-05-11; CHK-paths corrected in `131c5de` once the workspace
 flattened to root-level crates.
 
-## Requirements coverage
+<report spec="SPEC-0001">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | TOML config parsers | delivered |
-| REQ-002 | Frontmatter extraction | delivered |
-| REQ-003 | SPEC.md parsing | delivered |
-| REQ-004 | TASKS.md parsing | delivered |
-| REQ-005 | REPORT.md frontmatter parsing | delivered |
-| REQ-006 | Cross-reference SPEC.md against spec.toml | delivered |
-| REQ-007 | Public API and hygiene for speccy-core | delivered |
-| REQ-008 | Supersession index across the workspace | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002 CHK-007">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-004 CHK-005">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-008">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+<coverage req="REQ-007" result="satisfied" scenarios="CHK-010 CHK-011">
+</coverage>
+
+<coverage req="REQ-008" result="satisfied" scenarios="CHK-012">
+</coverage>
+
+</report>
 
 ## Notes
 

@@ -16,12 +16,12 @@ use speccy_core::lint::ParsedSpec;
 use speccy_core::lint::Workspace;
 use speccy_core::lint::run;
 use speccy_core::lint::types::Diagnostic;
+use speccy_core::parse::parse_report_xml;
 use speccy_core::parse::parse_spec_xml;
-use speccy_core::parse::report_md;
+use speccy_core::parse::parse_task_xml;
 use speccy_core::parse::spec_md;
 use speccy_core::parse::supersession::SupersessionIndex;
 use speccy_core::parse::supersession::supersession_index;
-use speccy_core::parse::tasks_md;
 use tempfile::TempDir;
 
 /// Shared boxed-error result type so helpers can propagate failures
@@ -86,7 +86,28 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
             })
             .and_then(|src| parse_spec_xml(&src, &fx.spec_md_path))
     };
-    let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| tasks_md(p));
+    let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| {
+        fs_err::read_to_string(p.as_std_path())
+            .map_err(|e| speccy_core::ParseError::Io {
+                path: p.clone(),
+                source: e,
+            })
+            .and_then(|src| parse_task_xml(&src, p))
+    });
+    let report_md_path = fx.dir_path.join("REPORT.md");
+    let report_md_result =
+        if fs_err::metadata(report_md_path.as_std_path()).is_ok_and(|m| m.is_file()) {
+            Some(
+                fs_err::read_to_string(report_md_path.as_std_path())
+                    .map_err(|e| speccy_core::ParseError::Io {
+                        path: report_md_path.clone(),
+                        source: e,
+                    })
+                    .and_then(|src| parse_report_xml(&src, &report_md_path)),
+            )
+        } else {
+            None
+        };
 
     let spec_md_mtime = fs_err::metadata(fx.spec_md_path.as_std_path())
         .ok()
@@ -105,6 +126,7 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
         spec_md: spec_md_result,
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
+        report_md: report_md_result,
         spec_md_mtime,
         tasks_md_mtime,
     }
@@ -193,11 +215,11 @@ pub fn valid_spec_md_default() -> String {
     valid_spec_md("SPEC-0001")
 }
 
-/// Deliberately-unused helper that keeps the `report_md` import alive
-/// for future integration tests. Renamed without a leading underscore so
-/// `dead_code` fires on it in every test binary; this makes the
-/// module-level `#![expect(dead_code, ...)]` fulfilled regardless of
-/// which subset of helpers a given test target uses.
+/// Deliberately-unused helper that keeps the `parse_report_xml` import
+/// alive for future integration tests. Renamed without a leading
+/// underscore so `dead_code` fires on it in every test binary; this
+/// makes the module-level `#![expect(dead_code, ...)]` fulfilled
+/// regardless of which subset of helpers a given test target uses.
 pub fn touch_report_md_for_future_tests() {
-    let _ = report_md;
+    let _ = parse_report_xml;
 }

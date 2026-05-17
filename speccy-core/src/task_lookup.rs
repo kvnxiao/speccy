@@ -15,7 +15,7 @@
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
 use crate::parse::Task;
-use crate::parse::TasksMd;
+use crate::parse::TasksDoc;
 use crate::workspace::Workspace;
 use camino::Utf8PathBuf;
 use regex::Regex;
@@ -76,7 +76,7 @@ pub struct TaskLocation<'a> {
     /// that as an error themselves.
     pub spec_doc: Option<&'a SpecDoc>,
     /// Parsed TASKS.md for the containing spec.
-    pub tasks_md: &'a TasksMd,
+    pub tasks_md: &'a TasksDoc,
     /// The matched task entry.
     pub task: &'a Task,
     /// Verbatim task subtree from TASKS.md (task line + indented
@@ -170,27 +170,28 @@ pub fn find<'a>(
     workspace: &'a Workspace,
     task_ref: &TaskRef,
 ) -> Result<TaskLocation<'a>, LookupError> {
-    let candidates: Vec<(String, &'a crate::lint::ParsedSpec, &'a TasksMd, &'a Task)> =
+    let candidates: Vec<(String, &'a crate::lint::ParsedSpec, &'a TasksDoc, &'a Task)> =
         collect_candidates(workspace, task_ref);
 
-    let single = |candidates: &[(String, &'a crate::lint::ParsedSpec, &'a TasksMd, &'a Task)]| {
-        let (sid, parsed, tasks_md, task) =
-            candidates.first().ok_or_else(|| LookupError::NotFound {
+    let single =
+        |candidates: &[(String, &'a crate::lint::ParsedSpec, &'a TasksDoc, &'a Task)]| {
+            let (sid, parsed, tasks_md, task) =
+                candidates.first().ok_or_else(|| LookupError::NotFound {
+                    task_ref: task_ref.as_arg(),
+                })?;
+            let entry = extract_task_entry(parsed, tasks_md, task);
+            let parsed_spec_md = parsed.spec_md_ok().ok_or_else(|| LookupError::NotFound {
                 task_ref: task_ref.as_arg(),
             })?;
-        let entry = extract_task_entry(parsed, tasks_md, task)?;
-        let parsed_spec_md = parsed.spec_md_ok().ok_or_else(|| LookupError::NotFound {
-            task_ref: task_ref.as_arg(),
-        })?;
-        Ok(TaskLocation {
-            spec_id: sid.clone(),
-            spec_md: parsed_spec_md,
-            spec_doc: parsed.spec_doc_ok(),
-            tasks_md,
-            task,
-            task_entry_raw: entry,
-        })
-    };
+            Ok(TaskLocation {
+                spec_id: sid.clone(),
+                spec_md: parsed_spec_md,
+                spec_doc: parsed.spec_doc_ok(),
+                tasks_md,
+                task,
+                task_entry_raw: entry,
+            })
+        };
 
     match (task_ref, candidates.len()) {
         (TaskRef::Qualified { .. } | TaskRef::Unqualified { .. }, 1) => single(&candidates),
@@ -211,7 +212,7 @@ pub fn find<'a>(
 fn collect_candidates<'a>(
     workspace: &'a Workspace,
     task_ref: &TaskRef,
-) -> Vec<(String, &'a crate::lint::ParsedSpec, &'a TasksMd, &'a Task)> {
+) -> Vec<(String, &'a crate::lint::ParsedSpec, &'a TasksDoc, &'a Task)> {
     let target_task_id = task_ref.task_id();
     let scope_spec_id = match task_ref {
         TaskRef::Qualified { spec_id, .. } => Some(spec_id.as_str()),
@@ -245,71 +246,33 @@ fn collect_candidates<'a>(
 }
 
 fn extract_task_entry(
-    parsed: &crate::lint::ParsedSpec,
-    tasks_md: &TasksMd,
+    _parsed: &crate::lint::ParsedSpec,
+    tasks_md: &TasksDoc,
     task: &Task,
-) -> Result<String, LookupError> {
-    let Some(path) = parsed.tasks_md_path.as_deref() else {
-        return Ok(format!("- {} **{}**", task.state.as_glyph(), task.id));
-    };
-    let raw = fs_err::read_to_string(path.as_std_path()).map_err(|source| LookupError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    Ok(extract_entry_from_raw(&raw, tasks_md, task))
+) -> String {
+    extract_entry_from_raw(&tasks_md.raw, task)
 }
 
-fn extract_entry_from_raw(raw: &str, tasks_md: &TasksMd, task: &Task) -> String {
-    let lines: Vec<&str> = raw.lines().collect();
-    let total = lines.len();
-    let task_idx = task.line.saturating_sub(1);
-    if task_idx >= total {
+/// Slice the verbatim `<task>...</task>` block out of `raw`, given the
+/// task's open-tag span. Walks forward line-by-line from the open tag
+/// and stops after the first line whose trimmed content is `</task>`.
+fn extract_entry_from_raw(raw: &str, task: &Task) -> String {
+    let start = task.span.start;
+    let Some(after) = raw.get(start..) else {
         return String::new();
-    }
-
-    let next_task_line = tasks_md
-        .tasks
-        .iter()
-        .filter(|t| t.line > task.line)
-        .map(|t| t.line)
-        .min();
-
-    let stop_idx = next_task_line.map_or(total, |line| line.saturating_sub(1).min(total));
-
-    let block = collect_block_lines(&lines, task_idx, stop_idx);
-    let trimmed = trim_trailing_blanks(block);
-    trimmed.join("\n")
-}
-
-fn collect_block_lines<'a>(lines: &[&'a str], start: usize, stop: usize) -> Vec<&'a str> {
-    let mut out: Vec<&str> = Vec::new();
-    let Some(first) = lines.get(start) else {
-        return out;
     };
-    out.push(first);
-
-    let mut i = start.saturating_add(1);
-    while i < stop {
-        let Some(line) = lines.get(i) else {
-            break;
-        };
-        let trimmed_empty = line.trim().is_empty();
-        let indented = line.starts_with(' ') || line.starts_with('\t');
-        if trimmed_empty || indented {
-            out.push(line);
-        } else {
+    let mut end_offset = after.len();
+    let mut cursor: usize = 0;
+    for line in after.split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(['\r', '\n']).trim();
+        cursor = cursor.saturating_add(line.len());
+        if trimmed == "</task>" {
+            end_offset = cursor;
             break;
         }
-        i = i.saturating_add(1);
     }
-    out
-}
-
-fn trim_trailing_blanks(mut block: Vec<&str>) -> Vec<&str> {
-    while block.last().is_some_and(|l| l.trim().is_empty()) {
-        block.pop();
-    }
-    block
+    let slice = after.get(..end_offset).unwrap_or(after);
+    slice.trim_end_matches(['\r', '\n']).to_owned()
 }
 
 #[expect(
@@ -335,34 +298,8 @@ mod tests {
     use super::TaskRef;
     use super::extract_entry_from_raw;
     use super::parse_ref;
-    use crate::parse::Task;
-    use crate::parse::TaskState;
-    use crate::parse::TasksFrontmatter;
-    use crate::parse::TasksMd;
-
-    fn make_tasks_md(tasks: Vec<Task>) -> TasksMd {
-        TasksMd {
-            frontmatter: TasksFrontmatter {
-                spec: "SPEC-0001".to_owned(),
-                spec_hash_at_generation: "bootstrap-pending".to_owned(),
-                generated_at: "2026-05-11T00:00:00Z".to_owned(),
-            },
-            tasks,
-            warnings: Vec::new(),
-        }
-    }
-
-    fn make_task(id: &str, line: usize) -> Task {
-        Task {
-            id: id.to_owned(),
-            title: "x".to_owned(),
-            state: TaskState::Open,
-            covers: Vec::new(),
-            suggested_files: Vec::new(),
-            notes: Vec::new(),
-            line,
-        }
-    }
+    use crate::parse::parse_task_xml;
+    use camino::Utf8Path;
 
     #[test]
     fn parse_unqualified_accepts_minimum_3_digits() {
@@ -406,39 +343,16 @@ mod tests {
     }
 
     #[test]
-    fn extract_entry_pulls_task_line_and_sublist() {
-        let raw = "---\nspec: SPEC-0001\nspec_hash_at_generation: x\ngenerated_at: y\n---\n\n# Tasks\n\n- [ ] **T-001**: first\n  - Covers: REQ-001\n  - Suggested files: `a.rs`\n\n- [ ] **T-002**: second\n";
-        let tm = make_tasks_md(vec![make_task("T-001", 9), make_task("T-002", 13)]);
-        let first_task = tm.tasks.first().expect("fixture has at least one task");
-        let entry = extract_entry_from_raw(raw, &tm, first_task);
-        assert!(entry.contains("**T-001**"));
-        assert!(entry.contains("Covers: REQ-001"));
+    fn extract_entry_pulls_xml_task_block() {
+        let raw = "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nFirst task body line.\n\n- Suggested files: `a.rs`\n\n<task-scenarios>\n- Scenario one.\n</task-scenarios>\n</task>\n\n<task id=\"T-002\" state=\"pending\" covers=\"REQ-001\">\nSecond task.\n\n<task-scenarios>\n- Scenario two.\n</task-scenarios>\n</task>\n\n</tasks>\n";
+        let doc =
+            parse_task_xml(raw, Utf8Path::new("TASKS.md")).expect("fixture must parse as TasksDoc");
+        let first = doc.tasks.first().expect("fixture has at least one task");
+        let entry = extract_entry_from_raw(raw, first);
+        assert!(entry.contains("<task id=\"T-001\""));
+        assert!(entry.contains("First task body line."));
         assert!(entry.contains("Suggested files: `a.rs`"));
-        assert!(!entry.contains("**T-002**"));
-        assert!(
-            !entry.ends_with('\n'),
-            "trailing blank lines should be trimmed: {entry:?}",
-        );
-    }
-
-    #[test]
-    fn extract_entry_handles_last_task_in_file() {
-        let raw = "---\nspec: SPEC-0001\nspec_hash_at_generation: x\ngenerated_at: y\n---\n\n# Tasks\n\n- [ ] **T-001**: only\n  - Covers: REQ-001\n";
-        let tm = make_tasks_md(vec![make_task("T-001", 9)]);
-        let first_task = tm.tasks.first().expect("fixture has at least one task");
-        let entry = extract_entry_from_raw(raw, &tm, first_task);
-        assert!(entry.contains("**T-001**"));
-        assert!(entry.contains("Covers: REQ-001"));
-    }
-
-    #[test]
-    fn extract_entry_stops_at_next_unindented_line() {
-        let raw = "- [ ] **T-001**: a\n  - Covers: REQ-001\n\n## New section\nbody after\n- [ ] **T-002**: b\n";
-        let tm = make_tasks_md(vec![make_task("T-001", 1), make_task("T-002", 6)]);
-        let first_task = tm.tasks.first().expect("fixture has at least one task");
-        let entry = extract_entry_from_raw(raw, &tm, first_task);
-        assert!(entry.contains("**T-001**"));
-        assert!(!entry.contains("New section"));
-        assert!(!entry.contains("body after"));
+        assert!(entry.contains("</task>"));
+        assert!(!entry.contains("T-002"));
     }
 }

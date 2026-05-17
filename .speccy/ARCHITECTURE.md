@@ -146,8 +146,8 @@ speccy review TASK-ID             Phase 4 prompt (reviewer)
 speccy report SPEC-ID             Phase 5 prompt (REPORT.md)
 speccy status                     Show state, lint findings  (--json)
 speccy next [--kind K]            Next actionable thing      (--json)
-                                    --kind implement -> next [ ] task
-                                    --kind review    -> next [?] task
+                                    --kind implement -> next state="pending" task
+                                    --kind review    -> next state="in-review" task
                                     default          -> highest-priority
 speccy check [SELECTOR]           Render check scenarios (no execution)
                                     no arg:            all scenarios across all specs
@@ -316,18 +316,18 @@ loop:
   spawn implementer sub-agent with prompt
 
   sub-agent:
-    - flips [ ] -> [~] with session marker
+    - flips state="pending" -> state="in-progress" with session marker
     - implements the task
     - runs the project's own test command locally (fail-fast on red);
       uses `speccy check SPEC-NNNN/T-NNN` only to render the
       scenarios it is satisfying
     - leaves inline notes for out-of-scope work or unknowns
-    - flips [~] -> [?]
+    - flips state="in-progress" -> state="in-review"
 ```
 
 Concurrency is the main agent's choice. Two sub-agents may pick
-different `[ ]` tasks in parallel; they will conflict in git if
-they touch the same files. Speccy does not lock.
+different `state="pending"` tasks in parallel; they will conflict
+in git if they touch the same files. Speccy does not lock.
 
 ## Phase 4: Review loop (skill-orchestrated)
 
@@ -347,12 +347,12 @@ loop:
       - appends "Review ({persona}, pass|blocking): ..." inline
 
   if all persona reviews PASS:
-    flip [?] -> [x]
+    flip state="in-review" -> state="completed"
   else:
-    flip [?] -> [ ] and append "Retry: ..." note
+    flip state="in-review" -> state="pending" and append "Retry: ..." note
 ```
 
-Failed tasks return to `[ ]`. The main agent reads `speccy next
+Failed tasks return to `state="pending"`. The main agent reads `speccy next
 --kind implement --json` again and Phase 3 picks them back up.
 
 The default reviewer persona fan-out is: **business**, **tests**,
@@ -386,64 +386,92 @@ touch GitHub.
 
 # TASKS.md State Model
 
-Four checkbox states. All standard markdown.
+Four task states, carried by the `state` attribute on each `<task>`
+XML element (see "TASKS.md format" below for the full grammar).
 
-| Marker | Meaning | Who sets it |
+| `state` value | Meaning | Who sets it |
 |---|---|---|
-| `[ ]` | Needs work (new or retry) | Initial generation; reviewer on blocking |
-| `[~]` | In-progress (claimed by an implementer) | Implementer when starting |
-| `[?]` | Implementation done, awaiting review | Implementer when finishing |
-| `[x]` | All persona reviews passed | Main agent after review loop |
+| `pending` | Needs work (new or retry) | Initial generation; reviewer on blocking |
+| `in-progress` | Claimed by an implementer | Implementer when starting |
+| `in-review` | Implementation done, awaiting review | Implementer when finishing |
+| `completed` | All persona reviews passed | Main agent after review loop |
 
-A retry is just `[ ]` with prior notes attached. We do not introduce
-a `[!]` state because the inline notes already say "this is a
-retry; see review findings." Adding a state would add cases for
-skills to handle without adding information.
+A retry is just `state="pending"` with prior notes attached. We do
+not introduce a fifth state because the inline notes already say
+"this is a retry; see review findings." Adding a state would add
+cases for skills to handle without adding information.
+
+> Historical note (SPEC-0022 migration): before SPEC-0022, task state
+> was carried by leading Markdown checkbox glyphs. The mapping is
+> `[ ]` -> `pending`, `[~]` -> `in-progress`, `[?]` -> `in-review`,
+> `[x]` -> `completed`. Post-SPEC-0022 the checkbox form is no longer
+> the machine contract; the parser reads state from the `state`
+> attribute on the `<task>` element and ignores any glyph in the
+> task body.
 
 ## Conventions for inline notes
 
-Implementer notes:
+Inline notes are ordinary Markdown bullets nested inside a `<task>`
+element. Implementer notes when claiming a task:
 
 ```markdown
-- [~] **T-002** (session-abc, 2026-05-11T18:00Z): Add password_hash column
-  - Covers: REQ-002
-  - Suggested files: `migrations/`, `db/schema/users.ts`
+<task id="T-002" state="in-progress" covers="REQ-002">
+## T-002: Add password_hash column
+
+<task-scenarios>
+Given a `users` table without a password hash column,
+when the migration runs forward,
+then the resulting schema has a non-null `password_hash` column.
+</task-scenarios>
+
+- Suggested files: `migrations/`, `db/schema/users.ts`
+- Implementer claim (session-abc, 2026-05-11T18:00Z).
+</task>
 ```
 
 When the implementer finishes:
 
 ```markdown
-- [?] **T-002**: Add password_hash column
-  - Covers: REQ-002
-  - Suggested files: `migrations/`, `db/schema/users.ts`
-  - Implementer note (session-abc): Renamed existing `password` column.
-    Added migration to hash plaintext rows. **Out of scope**: touched
-    `tests/migration_helpers.ts` to fix a test helper assuming plaintext.
+<task id="T-002" state="in-review" covers="REQ-002">
+## T-002: Add password_hash column
+
+<task-scenarios>...</task-scenarios>
+
+- Suggested files: `migrations/`, `db/schema/users.ts`
+- Implementer note (session-abc): Renamed existing `password` column.
+  Added migration to hash plaintext rows. **Out of scope**: touched
+  `tests/migration_helpers.ts` to fix a test helper assuming plaintext.
+</task>
 ```
 
-After review:
+After review (blocked, flipped back to `pending`):
 
 ```markdown
-- [ ] **T-002**: Add password_hash column
-  - Covers: REQ-002
-  - Implementer note (session-abc): ...
-  - Review (business, pass): matches REQ-002 intent.
-  - Review (tests, pass): hash assertion present.
-  - Review (security, blocking): bcrypt cost 10; policy requires >=12.
-    See `src/auth/password.ts:14`.
-  - Review (style, pass): conventions OK.
-  - Retry: address bcrypt cost.
+<task id="T-002" state="pending" covers="REQ-002">
+## T-002: Add password_hash column
+
+<task-scenarios>...</task-scenarios>
+
+- Implementer note (session-abc): ...
+- Review (business, pass): matches REQ-002 intent.
+- Review (tests, pass): hash assertion present.
+- Review (security, blocking): bcrypt cost 10; policy requires >=12.
+  See `src/auth/password.ts:14`.
+- Review (style, pass): conventions OK.
+- Retry: address bcrypt cost.
+</task>
 ```
 
 The implementer picking this up reads all notes, addresses
-blockers, flips back to `[~]`, and so on.
+blockers, flips `state` back to `in-progress`, and so on.
 
 ## Concurrent pickup
 
-`[~]` with a session marker is enough for `speccy next --kind
-implement` to skip in-progress tasks. If two agents race to claim
-the same `[ ]` task, git will conflict on the TASKS.md edit and one
-will lose. That is acceptable for v1.
+`state="in-progress"` with a session marker is enough for
+`speccy next --kind implement` to skip in-progress tasks. If two
+agents race to claim the same `state="pending"` task, git will
+conflict on the TASKS.md edit and one will lose. That is acceptable
+for v1.
 
 A future harness may add file-locking, ticket queues, or worktree
 isolation. Speccy v1 does not.
@@ -685,7 +713,7 @@ new spec replaces it.
 `status` transitions:
 
 ```text
-in-progress -> implemented      All tasks [x], REPORT.md written, PR merged.
+in-progress -> implemented      All tasks state="completed", REPORT.md written, PR merged.
 in-progress -> dropped          Intent abandoned. Add a Changelog row stating why.
 implemented -> superseded       A later spec declared `supersedes` pointing here.
 in-progress -> superseded       Rare; replaced before completion.
@@ -693,7 +721,7 @@ in-progress -> superseded       Rare; replaced before completion.
 
 Skills (specifically `/speccy:ship` and `/speccy:amend`) update `status`.
 The CLI doesn't auto-transition state — it surfaces inconsistencies via lint
-(e.g. `status: implemented` but tasks aren't all `[x]`).
+(e.g. `status: implemented` but some tasks have `state != "completed"`).
 
 ### Changelog table
 
@@ -736,14 +764,15 @@ test specification** in prose. Each bullet is one Given/When/Then
 scenario that maps to one or more Checks. These describe integration
 or end-to-end behavior at the requirement level.
 
-Unit-level tests live in TASKS.md (see below) as `**Tests to write:**`
-bullets on each task. This split is intentional:
+Unit-level tests live in TASKS.md (see below) as `<task-scenarios>`
+element blocks nested inside each `<task>`. This split is
+intentional:
 
 - **SPEC.md behavior**: what the system does, observable from outside.
   Maps to `<scenario>` element blocks nested under each
   requirement; the project's integration tests must satisfy them.
-- **TASKS.md tests**: what each implementation slice must verify.
-  Maps to unit tests the implementer writes before code.
+- **TASKS.md `<task-scenarios>`**: what each implementation slice
+  must verify. Maps to unit tests the implementer writes before code.
 
 Agents writing implementation code translate these prose tests into
 executable tests in the project's framework, then implement to make
@@ -773,6 +802,10 @@ and how it has evolved.
 
 ## TASKS.md format
 
+`TASKS.md` is Markdown with structure carried by raw XML element
+tags. Frontmatter records the generating spec hash; the body wraps
+each task in a `<task>` element nested under a single `<tasks>` root.
+
 ```markdown
 ---
 spec: SPEC-001
@@ -782,74 +815,138 @@ generated_at: 2026-05-11T18:00:00Z
 
 # Tasks: SPEC-001 User signup
 
-## Phase 1: Schema
-- [ ] **T-001**: Add `users` table migration with unique email index
-  - Covers: REQ-001
-  - Tests to write:
-    - When the migration runs forward, the `users` table exists with
-      a unique index on `email`.
-    - When the same email is inserted twice, the second insert fails
-      with a uniqueness violation.
-  - Suggested files: `migrations/`, `db/schema/users.ts`
+<tasks spec="SPEC-001">
 
-- [ ] **T-002**: Add `password_hash` column to `users`
-  - Covers: REQ-002
-  - Tests to write:
-    - When a user row is inserted with `password_hash`, the column
-      stores a non-null hashed value.
-    - The schema rejects rows missing `password_hash`.
-  - Suggested files: `migrations/`, `db/schema/users.ts`
+## Phase 1: Schema
+
+<task id="T-001" state="pending" covers="REQ-001">
+## T-001: Add `users` table migration with unique email index
+
+<task-scenarios>
+Given a fresh database,
+when the migration runs forward,
+then the `users` table exists with a unique index on `email`.
+
+Given an existing row with email `alice@example.com`,
+when a second insert uses the same email,
+then the insert fails with a uniqueness violation.
+</task-scenarios>
+
+- Suggested files: `migrations/`, `db/schema/users.ts`
+</task>
+
+<task id="T-002" state="pending" covers="REQ-002">
+## T-002: Add `password_hash` column to `users`
+
+<task-scenarios>
+Given a row inserted with a non-empty `password_hash` value,
+when the row is read back,
+then the column stores the hashed value verbatim.
+
+Given an insert without `password_hash`,
+when the database constraint fires,
+then the row is rejected.
+</task-scenarios>
+
+- Suggested files: `migrations/`, `db/schema/users.ts`
+</task>
 
 ## Phase 2: API
-- [ ] **T-003**: Implement `POST /api/signup` handler
-  - Covers: REQ-001
-  - Tests to write:
-    - When a request includes valid credentials, the handler returns
-      200 with a session token and persists a user row.
-    - When a request includes a duplicate email, the handler returns
-      409 with an error message containing "already exists".
-    - When a request includes an uppercase email, it is normalized
-      to lowercase before insertion.
-    - When a request includes a malformed email, the handler returns
-      400 with a validation error.
-  - Suggested files: `src/auth/signup.ts`, `tests/auth/signup.spec.ts`
 
-- [ ] **T-004**: Wire password hashing into signup flow
-  - Covers: REQ-002
-  - Tests to write:
-    - When signup succeeds, the persisted `password_hash` is a valid
-      hash (not the original password).
-    - When the hashing routine is called with the same input twice,
-      the resulting hashes differ (salt is applied).
-  - Suggested files: `src/auth/signup.ts`, `src/auth/password.ts`
+<task id="T-003" state="pending" covers="REQ-001">
+## T-003: Implement `POST /api/signup` handler
+
+<task-scenarios>
+Given a request with valid credentials,
+when the handler runs,
+then it returns 200 with a session token and persists a user row.
+
+Given a request with a duplicate email,
+when the handler runs,
+then it returns 409 with a message containing "already exists".
+
+Given a request with an uppercase email,
+when the handler runs,
+then the email is normalized to lowercase before insertion.
+
+Given a request with a malformed email,
+when the handler runs,
+then it returns 400 with a validation error.
+</task-scenarios>
+
+- Suggested files: `src/auth/signup.ts`, `tests/auth/signup.spec.ts`
+</task>
+
+<task id="T-004" state="pending" covers="REQ-002">
+## T-004: Wire password hashing into signup flow
+
+<task-scenarios>
+Given a successful signup,
+when the user row is inspected,
+then `password_hash` is a valid hash and is not the plaintext password.
+
+Given the hashing routine invoked twice with identical input,
+when the resulting hashes are compared,
+then they differ (salt is applied).
+</task-scenarios>
+
+- Suggested files: `src/auth/signup.ts`, `src/auth/password.ts`
+</task>
+
+</tasks>
 ```
+
+### TASKS.md element grammar
+
+The element shapes mirror the SPEC.md grammar described above
+(line-isolated open and close tags, double-quoted attributes,
+deterministic rendering).
+
+| Element | Cardinality | Parent | Required attributes | Notes |
+|---|---|---|---|---|
+| `tasks` | required, single | top-level | `spec="SPEC-NNNN"` | Wraps every `<task>` in the file. |
+| `task` | required, 1+ | inside `<tasks>` | `id="T-NNN"`, `state="..."`, `covers="REQ-NNN[ REQ-NNN]*"` | Body is Markdown plus exactly one `<task-scenarios>` element. |
+| `task-scenarios` | required, single per `<task>` | inside `<task>` | none | Slice-level Given/When/Then prose. Must be non-empty. |
+
+Valid `state` attribute values are exactly `pending`, `in-progress`,
+`in-review`, `completed`. The `covers` attribute is one or more
+`REQ-\d{3,}` ids separated by single ASCII spaces. Every covered
+requirement id is cross-checked against the parent SPEC.md element
+tree at workspace load time. Unknown attributes on a known Speccy
+element are parse errors.
 
 Conventions:
 
-- `**T-NNN**` IDs are stable within the file.
-- `Covers:` is parsed by `speccy next` to know which requirements
-  a task touches.
-- `Tests to write:` lists unit-level test obligations in prose. The
-  implementer translates each bullet into an executable test in the
-  project's framework, **writes the test before implementing the
-  code path**, and ensures it passes before flipping the task to
-  `[?]`.
-- `Suggested files:` is advisory; Speccy does not enforce write
-  scope.
-- Phase headings are decorative.
+- `T-NNN` ids in `<task id="...">` are unique within the file. The
+  level-2 heading inside the body is decorative for human readers;
+  the parser reads the id from the attribute.
+- `covers="..."` is parsed by `speccy next` to know which
+  requirements a task touches.
+- `<task-scenarios>` carries the slice-level validation contract.
+  The implementer translates each Given/When/Then in the block into
+  an executable test in the project's framework, **writes the test
+  before implementing the code path**, and ensures it passes before
+  flipping the task's `state` to `in-review`.
+- `Suggested files:` bullets are advisory; Speccy does not enforce
+  write scope.
+- Phase headings outside `<task>` elements are decorative.
 
-The `Tests to write:` convention is what makes TDD legible without
+The `<task-scenarios>` convention is what makes TDD legible without
 making it a CLI gate. Skills prompt the implementer to write tests
-first; the reviewer-tests persona checks that the listed tests exist
-and meaningfully exercise the claimed behavior. Speccy itself
-doesn't verify the order of edits — that's a review concern.
+first; the reviewer-tests persona checks that the listed scenarios
+exist as tests and meaningfully exercise the claimed behavior.
+Speccy itself doesn't verify the order of edits — that's a review
+concern.
 
-Speccy parses TASKS.md only to:
+Speccy parses TASKS.md to:
 
-- count `[ ]` / `[~]` / `[?]` / `[x]` markers
-- find the next actionable task line
-- detect "suggested files" hints
-- read inline notes for status reporting
+- read each task's `id`, `state`, and `covers` from the `<task>`
+  element attributes
+- read the slice-level scenarios from the nested `<task-scenarios>`
+  block
+- find the next actionable task (`state="pending"`)
+- detect "suggested files" hints in the task body
+- preserve inline notes for status reporting
 
 It does not validate note format or persona-review prose.
 
@@ -1033,6 +1130,10 @@ used by CLI internals, prompt slicing, and tests.
 Generated by the agent at the end of Phase 5. Speccy renders the
 prompt; the agent writes the file.
 
+REPORT.md is Markdown with requirement coverage carried by raw XML
+element tags, mirroring SPEC.md and TASKS.md. Outcome and narrative
+sections remain plain Markdown.
+
 Suggested shape:
 
 ```markdown
@@ -1044,12 +1145,22 @@ generated_at: 2026-05-11T19:00:00Z
 
 # Report: SPEC-001 User signup
 
+<report spec="SPEC-001">
+
 ## Outcome
 delivered | partial | abandoned
 
 ## Requirements coverage
-- REQ-001 Account creation -- CHK-001, CHK-002 (project tests in `tests/auth/signup.spec.ts`)
-- REQ-002 Password storage -- CHK-003 (project tests in `tests/auth/password.spec.ts`)
+
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+Account creation — project tests in `tests/auth/signup.spec.ts`
+exercise CHK-001 and CHK-002 end to end.
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003">
+Password storage — project tests in `tests/auth/password.spec.ts`
+exercise CHK-003.
+</coverage>
 
 ## Task summary
 - 6 tasks completed
@@ -1067,7 +1178,40 @@ delivered | partial | abandoned
 
 ## PR
 [link filled in by agent after `gh pr create`]
+
+</report>
 ```
+
+### REPORT.md element grammar
+
+| Element | Cardinality | Parent | Required attributes | Notes |
+|---|---|---|---|---|
+| `report` | required, single | top-level | `spec="SPEC-NNNN"` | Wraps every `<coverage>` element in the file. |
+| `coverage` | required, exactly one per surviving SPEC requirement | inside `<report>` | `req="REQ-NNN"`, `result="..."`, `scenarios="CHK-NNN[ CHK-NNN]*"` | Body is plain Markdown explanatory prose. |
+
+### Coverage results
+
+Valid `result` attribute values are exactly `satisfied`, `partial`,
+and `deferred`.
+
+- `satisfied` — every scenario nested under the requirement in
+  SPEC.md is exercised by a project test that the implementer or
+  reviewer can point at.
+- `partial` — some scenarios are exercised; others remain. The body
+  prose names which ones and why.
+- `deferred` — coverage is intentionally pushed to a later spec.
+  `scenarios=""` is permitted on `deferred` rows.
+
+There is **no** `dropped` value. If a requirement is genuinely no
+longer in scope it is removed from SPEC.md via amendment (with a
+Changelog row stating why) rather than carried as a `<coverage>`
+row. The renderer enforces "exactly one `<coverage>` per surviving
+SPEC requirement"; a requirement that was dropped from the SPEC
+disappears from REPORT.md alongside it.
+
+`scenarios` is one or more `CHK-\d{3,}` ids separated by single
+ASCII spaces. Each scenario id must be nested under the matching
+`<requirement>` in SPEC.md; dangling ids are workspace-load errors.
 
 REPORT.md is the durable record of what happened during the loop.
 Future agents reading the repo can reconstruct intent from SPEC.md
@@ -1236,14 +1380,14 @@ Or:
 
 ## State transitions
 
-The reviewer sub-agent **does not** flip the task's checkbox. That
-would create a race when multiple persona reviewers run in
-parallel. The main agent's `/speccy:review` skill flips state
-after all persona reviews have completed for the task:
+The reviewer sub-agent **does not** flip the task's `state`
+attribute. That would create a race when multiple persona reviewers
+run in parallel. The main agent's `/speccy:review` skill flips
+state after all persona reviews have completed for the task:
 
-- All `pass` -> `[?]` becomes `[x]`.
-- Any `blocking` -> `[?]` becomes `[ ]`, plus a `Retry:` note
-  summarizing the blockers.
+- All `pass` -> `state="in-review"` becomes `state="completed"`.
+- Any `blocking` -> `state="in-review"` becomes `state="pending"`,
+  plus a `Retry:` note summarizing the blockers.
 
 This puts state-mutation atomicity in one place (the orchestrating
 skill) and keeps persona sub-agents to a single inline append per
@@ -1280,10 +1424,11 @@ speccy plan SPEC-001         # renders "amend this SPEC.md" prompt
 speccy tasks SPEC-001        # renders "amend TASKS.md" prompt
                              # because TASKS.md already exists
 # Agent edits TASKS.md surgically:
-#   - keeps [x] tasks (already done) unless invalidated by changes
-#   - keeps [~] / [?] tasks unless invalidated
-#   - flips invalidated [x] tasks back to [ ] with "spec amended" note
-#   - adds new tasks for new requirements
+#   - keeps state="completed" tasks unless invalidated by changes
+#   - keeps state="in-progress" / state="in-review" tasks unless invalidated
+#   - flips invalidated state="completed" tasks back to state="pending"
+#     with a "spec amended" note
+#   - adds new <task> elements for new requirements
 #   - removes tasks for dropped requirements
 
 speccy tasks SPEC-001 --commit
@@ -1294,9 +1439,9 @@ The cleverness lives in the skill prompt templates:
 
 - `prompts/plan-amend.md` instructs: "do not rewrite the spec;
   produce a minimal diff against existing SPEC.md."
-- `prompts/tasks-amend.md` instructs: "preserve [x] tasks unless
-  the spec change invalidates them; add a 'spec amended' note next
-  to flipped tasks."
+- `prompts/tasks-amend.md` instructs: "preserve `state=\"completed\"`
+  tasks unless the spec change invalidates them; add a 'spec amended'
+  note next to flipped tasks."
 
 The CLI renders these context-aware prompts based on whether the
 target file exists. No `speccy amend` command; the existing
@@ -1430,11 +1575,11 @@ A typical full-loop session in Claude Code looks like:
 [agent writes TASKS.md, then speccy tasks --commit]
 
 /speccy:work SPEC-001
-[main agent loops, spawning impl sub-agents until all tasks are [?]]
+[main agent loops, spawning impl sub-agents until all tasks are state="in-review"]
 
 /speccy:review SPEC-001
 [main agent loops, spawning review sub-agents per persona per task;
- flips state; loop alternates with /speccy:work until all tasks [x]]
+ flips state; loop alternates with /speccy:work until all tasks state="completed"]
 
 /speccy:ship SPEC-001
 [agent writes REPORT.md, opens PR]
@@ -1572,7 +1717,7 @@ When the next actionable thing is review:
 The skill iterates over `personas` and invokes
 `prompt_command_template` for each.
 
-When all tasks are `[x]` and the report is pending:
+When all tasks are `state="completed"` and the report is pending:
 
 ```json
 {
@@ -1584,7 +1729,7 @@ When all tasks are `[x]` and the report is pending:
 ```
 
 When nothing is actionable but state is incomplete (e.g. all tasks
-`[~]` claimed by other sessions):
+`state="in-progress"` claimed by other sessions):
 
 ```json
 {
@@ -1618,7 +1763,7 @@ SPC-005  SPEC.md frontmatter status value is not one of: in-progress,
          implemented, dropped, superseded
 SPC-006  status = superseded but no other spec in the workspace
          declares `supersedes` pointing to this spec
-SPC-007  status = implemented but tasks are not all [x] (informational)
+SPC-007  status = implemented but some tasks have state != "completed" (informational)
 
 REQ-001  Requirement has no nested <scenario> element
 REQ-002  Reserved (formerly: requirement's check IDs reference
@@ -1667,7 +1812,7 @@ These are not v1 features. Each was considered and rejected.
 | Per-requirement delta markers (`[ADDED]`/`[MODIFIED]`/`[REMOVED]`) | SPEC.md frontmatter `status` + `supersedes` + `## Changelog` table cover lifecycle. |
 | Archive folder for completed specs | Frontmatter `status` is the indicator. Filesystem reorganization adds friction with no information gain. |
 | Task `writes` globs and scope enforcement | LLMs declare them wrong; enforcement was net-negative. |
-| Claim files / leases | No locking. Markdown checkbox + session marker is enough. |
+| Claim files / leases | No locking. `state="in-progress"` + session marker on the `<task>` element is enough. |
 | TDD exception registry | Don't gate on TDD. Review's job. |
 | `critical` flag on requirements | All requirements equal. |
 | `origin` field | Brownfield context is the planner skill's responsibility, not a TOML field. |
@@ -1727,7 +1872,7 @@ V1 makes these failures loud:
 - TASKS.md is stale relative to SPEC.md (hash or mtime drift)
 - Open question in SPEC.md is unchecked
 - Reviewer persona returns `blocking`
-- Task is `[?]` but at least one persona review is missing
+- Task is `state="in-review"` but at least one persona review is missing
 
 V1 intentionally does not catch:
 
@@ -1787,13 +1932,14 @@ fenced code blocks with example markdown (this document does too),
 and regex cannot reliably skip those contexts. The 4-crate cost is
 worth the robustness.
 
-TASKS.md is parsed by walking the comrak event stream for list
-items, detecting the leading checkbox glyph (`[ ]` / `[~]` / `[?]`
-/ `[x]`), then using a small regex on the item's inline content to
-extract the `T-NNN` ID from a strong/bold span. Sub-list items are
-notes attached to the parent task. No regex for structure; regex
-only for ID extraction from already-isolated heading or strong-text
-nodes.
+TASKS.md and REPORT.md share the same line-aware XML element
+scanner as SPEC.md. `speccy-core::parse::task_xml` extracts the
+`<tasks>` / `<task>` / `<task-scenarios>` tree; `report_xml`
+extracts the `<report>` / `<coverage>` tree. Body Markdown inside
+each element is preserved verbatim except for trailing whitespace
+normalization at element boundaries. No regex is used for
+structure; element opens, closes, and attributes are parsed
+line-by-line with fenced-code awareness inherited from SPEC.md.
 
 ## Spec ID allocation
 
@@ -1880,8 +2026,8 @@ structured failure info.
 When multiple specs have actionable work:
 
 1. Lowest spec ID first.
-2. Within a spec, prefer `[?]` review-ready tasks over `[ ]` open
-   tasks (so reviews don't accumulate).
+2. Within a spec, prefer `state="in-review"` review-ready tasks
+   over `state="pending"` open tasks (so reviews don't accumulate).
 3. `--kind implement` or `--kind review` overrides the within-spec
    preference and filters to the requested kind across all specs.
 
@@ -1927,10 +2073,10 @@ truncation. v1 does not implement smarter retrieval.
 
 In this order:
 
-1. Artifact parser: `speccy.toml`, SPEC.md (YAML frontmatter +
-   marker tree via `speccy-core::parse::spec_markers` + Changelog
-   table), TASKS.md (YAML frontmatter + state extraction),
-   REPORT.md frontmatter
+1. Artifact parser: `speccy.toml`, SPEC.md (YAML frontmatter + XML
+   element tree via `speccy-core::parse::spec_xml` + Changelog
+   table), TASKS.md (YAML frontmatter + `task_xml` element tree),
+   REPORT.md (YAML frontmatter + `report_xml` element tree)
 2. `speccy init` -- scaffold + host skill copy
 3. Lint engine with the codes listed above
 4. `speccy status` (text + `--json`)

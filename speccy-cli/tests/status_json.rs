@@ -182,7 +182,7 @@ fn stale_reasons_in_declared_order() -> TestResult {
     let ws = Workspace::new()?;
     // Hash mismatch with no mtime drift -> only HashDrift.
     let spec_md = spec_md_template("SPEC-0001", "in-progress");
-    let tasks_md = "---\nspec: SPEC-0001\nspec_hash_at_generation: 0000000000000000000000000000000000000000000000000000000000000000\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks\n".to_owned();
+    let tasks_md = "---\nspec: SPEC-0001\nspec_hash_at_generation: 0000000000000000000000000000000000000000000000000000000000000000\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n</tasks>\n".to_owned();
     write_spec(
         &ws.root,
         "0001-stale",

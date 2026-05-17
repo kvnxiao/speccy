@@ -425,14 +425,10 @@ fn invoke_report(cwd: &Utf8PathBuf, spec_id: String) -> u8 {
         Ok(()) => 0,
         Err(ReportError::Incomplete { id, offending }) => {
             eprintln!(
-                "speccy report: {id} has incomplete tasks; all tasks must be [x] before report",
+                "speccy report: {id} has incomplete tasks; every task must have state=\"completed\" before report",
             );
             for task in &offending {
-                eprintln!(
-                    "  {id}: {state}",
-                    id = task.id,
-                    state = task.state.as_glyph()
-                );
+                eprintln!("  {id}: {state}", id = task.id, state = task.state.as_str());
             }
             1
         }

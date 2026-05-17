@@ -83,6 +83,11 @@ by hypothetical broader audiences are out of scope for v1.
   project-configurable before v1.
 - Whether the `serde-saphyr` `0.0.x` dependency surfaces stabilization
   pain (API churn, behavioral changes) before Speccy's first release.
+- Loader-switch bootstrap friction: `speccy implement <SPEC>/<TASK>`
+  can't render its own prompt when the task is to swap the workspace
+  loader (surfaced during SPEC-0022 T-007). A direct
+  `task_xml::parse`-on-spec-folder fallback would fix it, but the
+  shape of the right escape hatch isn't decided yet.
 
 Non-goals and the full list of "what we deliberately don't do" are
 catalogued in `.speccy/ARCHITECTURE.md`'s "What We Deliberately Don't

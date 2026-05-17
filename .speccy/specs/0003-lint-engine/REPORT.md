@@ -14,17 +14,30 @@ single-no-op-command anti-pattern (VAL-002). Landed in commit
 `cbc0eaa`; consumed by both `speccy status` (SPEC-0004) and
 `speccy verify` (SPEC-0012).
 
-## Requirements coverage
+<report spec="SPEC-0003">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | SPC-* lint codes (spec structure) | delivered |
-| REQ-002 | REQ-* lint codes (requirement coverage) | delivered |
-| REQ-003 | VAL-* lint codes (check definitions) | delivered |
-| REQ-004 | TSK-* lint codes (task structure) | delivered |
-| REQ-005 | QST-001 lint code (open questions) | delivered |
-| REQ-006 | Public API and lint::run entry point | delivered |
-| REQ-007 | Lint code stability contract | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002 CHK-003">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-005 CHK-006">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-007 CHK-008">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-010">
+</coverage>
+
+<coverage req="REQ-007" result="satisfied" scenarios="CHK-011">
+</coverage>
+
+</report>
 
 ## Notes
 

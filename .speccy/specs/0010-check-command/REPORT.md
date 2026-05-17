@@ -16,16 +16,27 @@ least one fail, 2 = invocation error. Landed in commit `68f94de`;
 in-progress filter added in `a5b5fea` so failures on `in-progress`
 specs are reported as IN-FLIGHT without gating the exit code.
 
-## Requirements coverage
+<report spec="SPEC-0010">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Check discovery | delivered |
-| REQ-002 | CHK-ID filtering | delivered |
-| REQ-003 | Shell execution and live streaming | delivered |
-| REQ-004 | Exit code semantics | delivered |
-| REQ-005 | Manual check rendering | delivered |
-| REQ-006 | Output format and summary | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-004 CHK-005">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-007">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-008">
+</coverage>
+
+</report>
 
 ## Notes
 

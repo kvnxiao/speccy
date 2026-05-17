@@ -14,17 +14,30 @@ supersession inverse, and lint integration. Default text view
 filters to in-progress specs; `--all` includes every status. Landed
 in commit `703ba4b`; lint-by-status filter refined in `cb9a4f0`.
 
-## Requirements coverage
+<report spec="SPEC-0004">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Workspace scan | delivered |
-| REQ-002 | Staleness detection | delivered |
-| REQ-003 | Task state aggregation | delivered |
-| REQ-004 | Supersession inverse | delivered |
-| REQ-005 | Lint integration | delivered |
-| REQ-006 | Text view with default filter | delivered |
-| REQ-007 | JSON output with stable schema | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-007 CHK-008">
+</coverage>
+
+<coverage req="REQ-007" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+</report>
 
 ## Notes
 

@@ -10,15 +10,16 @@ project tests; comparing the diff and the tests against the
 `<behavior>` and `<scenario>` elements inside each covered
 `<requirement>` is your job. Mocks that pass without touching real code paths are your
 primary worry. You produce one inline review note; the
-orchestrating skill flips the checkbox.
+orchestrating skill flips the task's `state` attribute.
 
 ## Focus
 
 - For each `CHK-NNN` covering this task, read its `<scenario>`
   element block in `SPEC.md` and ask: does some project test in
   the diff actually drive the Given/When/Then it describes?
-- Each `Tests to write:` bullet from the task is translated into an
-  executable test that exercises the *actual* behaviour.
+- Each Given/When/Then scenario inside the task's
+  `<task-scenarios>` block is translated into an executable test
+  that exercises the *actual* behaviour.
 - Negative paths -- duplicate inserts, invalid input, auth failures --
   have explicit assertions, not just absence of crashes.
 - Boundary conditions and edge cases named in the requirement's

@@ -14,17 +14,30 @@ Skill packs for both supported hosts: 7 recipe skills under
 tests enforce that every persona / recipe / prompt is loadable in
 its host's expected location. Landed in commit `758f9c8`.
 
-## Requirements coverage
+<report spec="SPEC-0013">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Shared persona files | delivered |
-| REQ-002 | Shared prompt templates | delivered |
-| REQ-003 | Claude Code recipe skills | delivered |
-| REQ-004 | Codex recipe skills | delivered |
-| REQ-005 | Persona content shape | delivered |
-| REQ-006 | Recipe content shape | delivered |
-| REQ-007 | Files load in their host | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-007">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-008">
+</coverage>
+
+<coverage req="REQ-007" result="satisfied" scenarios="CHK-009">
+</coverage>
+
+</report>
 
 ## Notes
 

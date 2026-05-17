@@ -11,14 +11,19 @@
 //!
 //! See `.speccy/specs/0004-status-command/SPEC.md` REQ-001..REQ-004.
 
+use crate::error::ParseError;
 use crate::lint::ParsedSpec;
+use crate::parse::ReportDoc;
+use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
-use crate::parse::TasksMd;
+use crate::parse::TasksDoc;
+use crate::parse::cross_ref::validate_workspace_xml as cross_ref_validate_workspace_xml;
+use crate::parse::report_xml;
 use crate::parse::spec_md;
 use crate::parse::spec_xml;
 use crate::parse::supersession::SupersessionIndex;
 use crate::parse::supersession::supersession_index;
-use crate::parse::tasks_md;
+use crate::parse::task_xml;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use regex::Regex;
@@ -193,7 +198,7 @@ pub fn scan(project_root: &Utf8Path) -> Workspace {
 #[must_use = "the returned Staleness drives both text and JSON output"]
 pub fn stale_for(
     spec: &SpecMd,
-    tasks: Option<&TasksMd>,
+    tasks: Option<&TasksDoc>,
     spec_mtime: Option<SystemTime>,
     tasks_mtime: Option<SystemTime>,
 ) -> Staleness {
@@ -201,7 +206,10 @@ pub fn stale_for(
         return Staleness::fresh();
     };
 
-    if tasks.frontmatter.spec_hash_at_generation == BOOTSTRAP_PENDING {
+    let stored_hash = extract_frontmatter_field(&tasks.frontmatter_raw, "spec_hash_at_generation")
+        .unwrap_or_default();
+
+    if stored_hash == BOOTSTRAP_PENDING {
         return Staleness {
             stale: true,
             reasons: vec![StaleReason::BootstrapPending],
@@ -211,7 +219,7 @@ pub fn stale_for(
     let mut reasons = Vec::new();
 
     let current_hash = hex_of_sha256(&spec.sha256);
-    if tasks.frontmatter.spec_hash_at_generation != current_hash {
+    if stored_hash != current_hash {
         reasons.push(StaleReason::HashDrift);
     }
 
@@ -300,32 +308,32 @@ fn first_paragraph<'a>(
 /// Zeroed when TASKS.md is absent or failed to parse.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TaskCounts {
-    /// `[ ]`: needs work.
+    /// `pending`: needs work.
     pub open: usize,
-    /// `[~]`: claimed by an implementer.
+    /// `in-progress`: claimed by an implementer.
     pub in_progress: usize,
-    /// `[?]`: awaiting review.
+    /// `in-review`: awaiting review.
     pub awaiting_review: usize,
-    /// `[x]`: all persona reviews passed.
+    /// `completed`: all persona reviews passed.
     pub done: usize,
 }
 
 impl TaskCounts {
     /// Build counts from a parsed TASKS.md.
     #[must_use = "the returned counts drive status output"]
-    pub fn from_tasks(tasks: &TasksMd) -> Self {
+    pub fn from_tasks(tasks: &TasksDoc) -> Self {
         use crate::parse::TaskState;
         let mut counts = Self::default();
         for task in &tasks.tasks {
             match task.state {
-                TaskState::Open => counts.open = counts.open.saturating_add(1),
+                TaskState::Pending => counts.open = counts.open.saturating_add(1),
                 TaskState::InProgress => {
                     counts.in_progress = counts.in_progress.saturating_add(1);
                 }
-                TaskState::AwaitingReview => {
+                TaskState::InReview => {
                     counts.awaiting_review = counts.awaiting_review.saturating_add(1);
                 }
-                TaskState::Done => counts.done = counts.done.saturating_add(1),
+                TaskState::Completed => counts.done = counts.done.saturating_add(1),
             }
         }
         counts
@@ -405,14 +413,22 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     // marker parser.
     let stray_spec_toml = fs_err::metadata(spec_toml_path.as_std_path()).is_ok();
     let spec_doc_result = if stray_spec_toml {
-        Err(crate::error::ParseError::StraySpecToml {
+        Err(ParseError::StraySpecToml {
             path: spec_toml_path.clone(),
         })
     } else {
         parse_spec_doc(&spec_md_path)
     };
     let tasks_md_result = if has_tasks {
-        Some(tasks_md(&tasks_md_path))
+        Some(parse_one_tasks_xml(&tasks_md_path))
+    } else {
+        None
+    };
+
+    let report_md_path = dir.join("REPORT.md");
+    let has_report = fs_err::metadata(report_md_path.as_std_path()).is_ok_and(|m| m.is_file());
+    let report_md_result = if has_report {
+        Some(parse_one_report_xml(&report_md_path))
     } else {
         None
     };
@@ -442,9 +458,40 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
         spec_md: spec_md_result,
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
+        report_md: report_md_result,
         spec_md_mtime,
         tasks_md_mtime,
     }
+}
+
+/// Extract a top-level YAML scalar field from raw frontmatter, without
+/// running a full YAML parse. Returns the trimmed (quote-stripped)
+/// value when present, else `None`.
+#[must_use = "frontmatter field extraction is the entire purpose"]
+pub fn extract_frontmatter_field(yaml: &str, field: &str) -> Option<String> {
+    for line in yaml.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix(field) else {
+            continue;
+        };
+        let Some(rest) = rest.strip_prefix(':') else {
+            continue;
+        };
+        let trimmed = rest.trim();
+        let stripped = trimmed
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .or_else(|| {
+                trimmed
+                    .strip_prefix('\'')
+                    .and_then(|s| s.strip_suffix('\''))
+            })
+            .unwrap_or(trimmed);
+        return Some(stripped.to_owned());
+    }
+    None
 }
 
 /// Parse the typed `SpecDoc` from a SPEC.md path, propagating I/O and
@@ -455,11 +502,101 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
 /// HTML-comment marker form is rejected via
 /// [`crate::error::ParseError::LegacyMarker`] with a diagnostic that
 /// names the equivalent raw XML element form.
-fn parse_spec_doc(
-    spec_md_path: &Utf8Path,
-) -> Result<crate::parse::SpecDoc, crate::error::ParseError> {
+fn parse_spec_doc(spec_md_path: &Utf8Path) -> Result<SpecDoc, ParseError> {
     let source = crate::parse::toml_files::read_to_string(spec_md_path)?;
     spec_xml::parse(&source, spec_md_path)
+}
+
+/// Inputs to [`validate_workspace_xml`] — the typed XML models for one
+/// spec folder and the paths they came from. Paths are used for
+/// diagnostics only; this function does no filesystem IO.
+///
+/// The shape mirrors the seam T-007 will switch the real loader over to
+/// once the in-tree corpus has been migrated by T-005 / T-006.
+#[derive(Debug)]
+pub struct XmlValidationInput<'a> {
+    /// Parsed SPEC.md element tree for the spec under validation.
+    pub spec: &'a SpecDoc,
+    /// Parsed TASKS.md element tree, when present.
+    pub tasks: Option<&'a TasksDoc>,
+    /// Path to TASKS.md, used in diagnostics. Required when
+    /// `tasks` is `Some`.
+    pub tasks_path: Option<&'a Utf8Path>,
+    /// Parsed REPORT.md element tree, when present. When `None`, the
+    /// missing-coverage check is skipped (REQ-002 skip rule).
+    pub report: Option<&'a ReportDoc>,
+    /// Path to REPORT.md, used in diagnostics. Required when
+    /// `report` is `Some`.
+    pub report_path: Option<&'a Utf8Path>,
+}
+
+/// SPEC-0022 cross-reference validation entry point reachable from the
+/// workspace layer.
+///
+/// Thin wrapper over [`crate::parse::cross_ref::validate_workspace_xml`]
+/// that lets `workspace.rs` own the call site for the seam T-007 will
+/// flip on. The wrapper itself does no work beyond forwarding the
+/// inputs — the validation logic lives in `cross_ref.rs` so the
+/// `ParseError` variants and the SPEC ↔ TASKS / REPORT graph stay
+/// adjacent to the existing SPEC-internal cross-ref helper.
+///
+/// **History:** SPEC-0022 / T-007 flipped the loader over to drive
+/// `task_xml::parse` and `report_xml::parse` directly. The legacy
+/// heuristic `tasks_md` / `report_md` parsers are gone; this is the
+/// only TASKS.md / REPORT.md path through the workspace today.
+#[must_use = "the returned diagnostics are the entire purpose of this call"]
+pub fn validate_workspace_xml(input: &XmlValidationInput<'_>) -> Vec<ParseError> {
+    cross_ref_validate_workspace_xml(
+        input.spec,
+        input.tasks,
+        input.tasks_path,
+        input.report,
+        input.report_path,
+    )
+}
+
+/// Per-spec typed-XML artifact parse results, populated by
+/// [`parse_one_spec_xml_artifacts`].
+///
+/// Each field is `None` if the corresponding file is absent on disk,
+/// otherwise `Some(Result<_, ParseError>)` so call sites can decide
+/// whether to surface the parse failure or skip the spec.
+#[derive(Debug)]
+pub struct SpecXmlArtifacts {
+    /// Typed TASKS.md model parse result, or `None` if TASKS.md is absent.
+    pub tasks: Option<Result<TasksDoc, ParseError>>,
+    /// Typed REPORT.md model parse result, or `None` if REPORT.md is absent.
+    pub report: Option<Result<ReportDoc, ParseError>>,
+}
+
+/// Parse the TASKS.md and REPORT.md typed XML models for one spec
+/// folder, when those files exist on disk.
+#[must_use = "the returned typed XML results carry parse diagnostics the caller must surface"]
+pub fn parse_one_spec_xml_artifacts(spec_dir: &Utf8Path) -> SpecXmlArtifacts {
+    let tasks_path = spec_dir.join("TASKS.md");
+    let report_path = spec_dir.join("REPORT.md");
+
+    let tasks = if fs_err::metadata(tasks_path.as_std_path()).is_ok_and(|m| m.is_file()) {
+        Some(parse_one_tasks_xml(&tasks_path))
+    } else {
+        None
+    };
+    let report = if fs_err::metadata(report_path.as_std_path()).is_ok_and(|m| m.is_file()) {
+        Some(parse_one_report_xml(&report_path))
+    } else {
+        None
+    };
+    SpecXmlArtifacts { tasks, report }
+}
+
+fn parse_one_tasks_xml(path: &Utf8Path) -> Result<TasksDoc, ParseError> {
+    let source = crate::parse::toml_files::read_to_string(path)?;
+    task_xml::parse(&source, path)
+}
+
+fn parse_one_report_xml(path: &Utf8Path) -> Result<ReportDoc, ParseError> {
+    let source = crate::parse::toml_files::read_to_string(path)?;
+    report_xml::parse(&source, path)
 }
 
 fn hex_of_sha256(bytes: &[u8; 32]) -> String {

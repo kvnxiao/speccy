@@ -91,7 +91,7 @@ pub fn run(
     let agents = load_agents_md(&project_root);
     let template = load_template("implementer.md")?;
 
-    let suggested_files = format_suggested_files(&location.task.suggested_files);
+    let suggested_files = format_suggested_files(&location.task.suggested_files());
     // After SPEC-0019 REQ-005, prompt slicing reads `SpecDoc` and emits
     // only the requirements this task covers (plus frontmatter, summary,
     // and decision context). Falls back to the raw SPEC.md when the

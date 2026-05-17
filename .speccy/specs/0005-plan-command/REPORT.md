@@ -14,16 +14,27 @@ subsequent commands: `load_template`, `render`, `load_agents_md`,
 `allocate_next_spec_id`, and `trim_to_budget` (with ARCHITECTURE.md's
 five-step drop ordering). Landed in commit `960a5a1`.
 
-## Requirements coverage
+<report spec="SPEC-0005">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Greenfield prompt rendering | delivered |
-| REQ-002 | Amendment prompt rendering | delivered |
-| REQ-003 | Spec ID allocation | delivered |
-| REQ-004 | AGENTS.md loading | delivered |
-| REQ-005 | Template loading and placeholder substitution | delivered |
-| REQ-006 | Context-budget trimming | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-006 CHK-007">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-008">
+</coverage>
+
+</report>
 
 ## Notes
 

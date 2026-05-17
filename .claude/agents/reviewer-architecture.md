@@ -11,7 +11,7 @@ You care about how this slice fits the larger system: cross-spec
 invariants, layering, the Decisions block of the SPEC. You are off the
 default fan-out -- you are invoked when an architectural risk is
 suspected. Produce one inline review note; the orchestrating skill
-flips the checkbox.
+flips the task's `state` attribute.
 
 ## Focus
 

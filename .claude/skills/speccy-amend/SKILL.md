@@ -34,10 +34,11 @@ reconciliation are not forgotten.
    speccy tasks SPEC-0007
    ```
 
-4. Follow the prompt: preserve `[x]` tasks unless the SPEC change
-   invalidated them (those flip back to `[ ]` with a `Retry: spec
-   amended; ...` note); add tasks for new requirements; remove tasks
-   for dropped requirements.
+4. Follow the prompt: preserve `state="completed"` tasks unless the
+   SPEC change invalidated them (those flip their `state` back to
+   `pending` with a `Retry: spec amended; ...` note); add new
+   `<task>` elements for newly added requirements; remove `<task>`
+   elements for dropped requirements.
 5. Record the new spec hash:
 
    ```bash
@@ -52,4 +53,4 @@ This recipe is a single pass, not a loop -- but step 6 is the gate. If
 the lint still fires, repeat from step 1 (something was missed).
 
 Suggest the next step: `/speccy-work SPEC-0007` to pick up any tasks
-that flipped back to `[ ]`.
+that flipped back to `state="pending"`.

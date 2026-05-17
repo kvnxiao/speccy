@@ -11,7 +11,7 @@
 
 use camino::Utf8PathBuf;
 use indoc::indoc;
-use speccy_core::parse::tasks_md;
+use speccy_core::parse::parse_task_xml;
 use speccy_core::workspace::TaskCounts;
 use speccy_core::workspace::scan;
 use tempfile::TempDir;
@@ -36,27 +36,63 @@ fn write_tasks(content: &str) -> TestResult<TasksFixture> {
     Ok(TasksFixture { _dir: dir, path })
 }
 
+fn parse(path: &camino::Utf8Path) -> TestResult<speccy_core::parse::TasksDoc> {
+    let raw = fs_err::read_to_string(path.as_std_path())?;
+    Ok(parse_task_xml(&raw, path)?)
+}
+
 #[test]
-fn counts_match_glyph_distribution() -> TestResult {
-    let src = indoc! {r"
+fn counts_match_state_distribution() -> TestResult {
+    let src = indoc! {r#"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
         generated_at: 2026-05-11T00:00:00Z
         ---
 
-        # Tasks
+        # Tasks: SPEC-0001
 
-        ## Phase 1
-        - [ ] **T-001**: a
-        - [ ] **T-002**: b
-        - [~] **T-003**: c
-        ## Phase 2
-        - [?] **T-004**: d
-        - [x] **T-005**: e
-    "};
+        <tasks spec="SPEC-0001">
+
+        <task id="T-001" state="pending" covers="REQ-001">
+        a
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        <task id="T-002" state="pending" covers="REQ-001">
+        b
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        <task id="T-003" state="in-progress" covers="REQ-001">
+        c
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        <task id="T-004" state="in-review" covers="REQ-001">
+        d
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        <task id="T-005" state="completed" covers="REQ-001">
+        e
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        </tasks>
+    "#};
     let fx = write_tasks(src)?;
-    let parsed = tasks_md(&fx.path)?;
+    let parsed = parse(&fx.path)?;
     let counts = TaskCounts::from_tasks(&parsed);
     assert_eq!(
         counts,
@@ -72,45 +108,26 @@ fn counts_match_glyph_distribution() -> TestResult {
 
 #[test]
 fn empty_tasks_yield_zero_counts() -> TestResult {
-    let src = indoc! {r"
+    let src = indoc! {r#"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
         generated_at: 2026-05-11T00:00:00Z
         ---
 
-        # Tasks
+        # Tasks: SPEC-0001
 
-        ## Phase 1: empty
-    "};
+        <tasks spec="SPEC-0001">
+        </tasks>
+    "#};
     let fx = write_tasks(src)?;
-    let parsed = tasks_md(&fx.path)?;
+    let parsed = parse(&fx.path)?;
     let counts = TaskCounts::from_tasks(&parsed);
     assert_eq!(counts, TaskCounts::default());
     assert_eq!(counts.open, 0);
     assert_eq!(counts.in_progress, 0);
     assert_eq!(counts.awaiting_review, 0);
     assert_eq!(counts.done, 0);
-    Ok(())
-}
-
-#[test]
-fn malformed_task_ids_are_skipped() -> TestResult {
-    let src = indoc! {r"
-        ---
-        spec: SPEC-0001
-        spec_hash_at_generation: bootstrap-pending
-        generated_at: 2026-05-11T00:00:00Z
-        ---
-
-        - [ ] **TASK-001**: malformed prefix
-        - [ ] **T-002**: well-formed
-    "};
-    let fx = write_tasks(src)?;
-    let parsed = tasks_md(&fx.path)?;
-    let counts = TaskCounts::from_tasks(&parsed);
-    // Only the well-formed task should be counted.
-    assert_eq!(counts.open, 1);
     Ok(())
 }
 
@@ -133,20 +150,6 @@ fn workspace_specs_without_tasks_md_have_zero_via_default() -> TestResult {
 
             ### REQ-001: First
         "},
-    )?;
-    fs_err::write(
-        dir.join("spec.toml").as_std_path(),
-        indoc! {r#"
-            schema_version = 1
-
-            [[requirements]]
-            id = "REQ-001"
-            checks = ["CHK-001"]
-
-            [[checks]]
-            id = "CHK-001"
-            scenario = "x"
-        "#},
     )?;
     let ws = scan(&root);
     let only = ws.specs.first().expect("one spec");

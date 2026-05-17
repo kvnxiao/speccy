@@ -38,9 +38,74 @@ fn write_agents(ws: &Workspace, body: &str) -> TestResult {
 }
 
 fn tasks_md_with(spec_id: &str, body: &str) -> String {
+    let body = convert_legacy_to_xml(spec_id, body);
     format!(
         "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n{body}",
     )
+}
+
+/// Translate a legacy bullet-checkbox TASKS.md body into the XML grammar.
+/// Used by test fixtures that pre-date SPEC-0022's loader switch.
+#[expect(
+    clippy::format_push_string,
+    reason = "narrow test-only legacy-to-XML transform; flattening hurts readability"
+)]
+fn convert_legacy_to_xml(spec_id: &str, body: &str) -> String {
+    let mut out = format!("<tasks spec=\"{spec_id}\">\n\n");
+    let mut current: Option<(String, String, String, Vec<String>)> = None;
+    let push = |out: &mut String, cur: (String, String, String, Vec<String>)| {
+        let (id, state, title, notes) = cur;
+        let covers = notes
+            .iter()
+            .find_map(|n| n.strip_prefix("Covers:").map(|c| c.trim().to_owned()))
+            .unwrap_or_else(|| "REQ-001".to_owned());
+        out.push_str(&format!(
+            "<task id=\"{id}\" state=\"{state}\" covers=\"{covers}\">\n{title}\n"
+        ));
+        for note in &notes {
+            out.push_str("- ");
+            out.push_str(note);
+            out.push('\n');
+        }
+        out.push_str("\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n");
+    };
+    for line in body.lines() {
+        let trimmed_start = line.trim_start();
+        if let Some(rest) = trimmed_start.strip_prefix("- [")
+            && let Some((glyph, after)) = rest.split_once("] ")
+            && let Some(after) = after.strip_prefix("**")
+            && let Some((id, title)) = after.split_once("**")
+        {
+            let title = title.trim_start_matches(':').trim().to_owned();
+            let state = match glyph {
+                "~" => "in-progress",
+                "?" => "in-review",
+                "x" => "completed",
+                _ => "pending",
+            }
+            .to_owned();
+            if let Some(cur) = current.take() {
+                push(&mut out, cur);
+            }
+            current = Some((id.to_owned(), state, title, Vec::new()));
+            continue;
+        }
+        if let Some(rest) = trimmed_start.strip_prefix("- ")
+            && let Some(ref mut cur) = current
+        {
+            cur.3.push(rest.to_owned());
+            continue;
+        }
+        if current.is_none() && !line.is_empty() {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if let Some(cur) = current.take() {
+        push(&mut out, cur);
+    }
+    out.push_str("</tasks>\n");
+    out
 }
 
 fn capture_stdout(ws: &Workspace, task_ref: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -109,12 +174,12 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
     );
     // {{task_entry}}
     assert!(
-        out.contains("**T-001**: implement signup"),
-        "task_entry missing"
+        out.contains("<task id=\"T-001\""),
+        "task_entry missing the <task> element"
     );
     assert!(
-        out.contains("Covers: REQ-001"),
-        "task sub-list bullets missing"
+        out.contains("covers=\"REQ-001\""),
+        "task covers attribute missing"
     );
     // {{suggested_files}}
     assert!(
@@ -273,7 +338,7 @@ fn error_paths_and_integration_valid_task_exits_zero() -> TestResult {
     cmd.assert()
         .success()
         .stdout(contains("Speccy: Implement `T-001`"))
-        .stdout(contains("**T-001**: implement signup"));
+        .stdout(contains("<task id=\"T-001\""));
     Ok(())
 }
 

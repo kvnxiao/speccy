@@ -196,16 +196,27 @@ fn spc_006_does_not_fire_when_incoming_edge_exists() -> TestResult {
 #[test]
 fn spc_007_fires_on_implemented_with_open_tasks() -> TestResult {
     let spec_md = valid_spec_md("SPEC-0001").replace("status: in-progress", "status: implemented");
-    let tasks_md = indoc! {r"
+    let tasks_md = indoc! {r#"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
         generated_at: 2026-05-11T00:00:00Z
         ---
 
-        - [ ] **T-001**: still open
-          - Covers: REQ-001
-    "};
+        # Tasks: SPEC-0001
+
+        <tasks spec="SPEC-0001">
+
+        <task id="T-001" state="pending" covers="REQ-001">
+        still open
+
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        </tasks>
+    "#};
     let fx = write_spec_fixture(&spec_md, Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     let info = diags
@@ -219,16 +230,27 @@ fn spc_007_fires_on_implemented_with_open_tasks() -> TestResult {
 #[test]
 fn spc_007_does_not_fire_on_implemented_when_all_done() -> TestResult {
     let spec_md = valid_spec_md("SPEC-0001").replace("status: in-progress", "status: implemented");
-    let tasks_md = indoc! {r"
+    let tasks_md = indoc! {r#"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
         generated_at: 2026-05-11T00:00:00Z
         ---
 
-        - [x] **T-001**: done
-          - Covers: REQ-001
-    "};
+        # Tasks: SPEC-0001
+
+        <tasks spec="SPEC-0001">
+
+        <task id="T-001" state="completed" covers="REQ-001">
+        done
+
+        <task-scenarios>
+        - placeholder.
+        </task-scenarios>
+        </task>
+
+        </tasks>
+    "#};
     let fx = write_spec_fixture(&spec_md, Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_no_code(&diags, "SPC-007");

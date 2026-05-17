@@ -16,16 +16,27 @@ chains project-local override (`.speccy/skills/personas/`) before
 the embedded bundle. Diff helper shells out to `git diff HEAD`
 with fallbacks. Landed in commit `f4720fe`.
 
-## Requirements coverage
+<report spec="SPEC-0009">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Persona registry | delivered |
-| REQ-002 | Persona file resolution | delivered |
-| REQ-003 | --persona argument validation | delivered |
-| REQ-004 | Diff computation with fallback chain | delivered |
-| REQ-005 | Render reviewer prompt | delivered |
-| REQ-006 | Reuse SPEC-0008's task lookup; error mapping | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002 CHK-003">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-007">
+</coverage>
+
+</report>
 
 ## Notes
 

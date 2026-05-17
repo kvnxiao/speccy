@@ -22,10 +22,13 @@ exists, renders the amendment prompt instead.
 
    The CLI picks the initial or amendment template based on whether
    `TASKS.md` already exists.
-2. Follow the prompt: write `TASKS.md` with one `- [ ] **T-NNN**` line
-   per task, plus `Covers:`, `Tests to write:`, and `Suggested files:`
-   bullets. For amendment, edit surgically; preserve `[x]` tasks
-   unless invalidated.
+2. Follow the prompt: write `TASKS.md` as Markdown with a single
+   `<tasks spec="SPEC-NNNN">` root element wrapping one
+   `<task id="T-NNN" state="pending" covers="REQ-NNN">...</task>`
+   block per task. Each `<task>` body contains a `<task-scenarios>`
+   element with slice-level Given/When/Then prose and an optional
+   `Suggested files:` bullet. For amendment, edit surgically;
+   preserve `state="completed"` tasks unless invalidated.
 3. After writing, record the current spec hash:
 
    ```bash

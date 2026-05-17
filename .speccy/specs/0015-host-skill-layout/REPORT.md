@@ -18,19 +18,21 @@ both per their vendors' documented project-local scan paths. Each
 SKILL.md carries `name` + `description` frontmatter rewritten for
 natural-language activation.
 
-## Requirements coverage
+<report spec="SPEC-0015">
 
-| Requirement | Checks | Result |
-|-------------|--------|--------|
-| REQ-001: Bundle source layout (per-skill directory with SKILL.md) | CHK-001, CHK-002 | proved |
-| REQ-002: Install destinations (.claude/skills/ + .agents/skills/) | CHK-003, CHK-004 | proved |
-| REQ-003: SKILL.md frontmatter shape (`name` + `description`) | CHK-005 | proved |
-| REQ-004: Description quality for natural-language activation | CHK-006 | proved |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
 
-All six SPEC-0015 checks resolve to executable `cargo test`
-invocations across `speccy-cli/tests/skill_packs.rs` and
-`speccy-cli/tests/init.rs`. `cargo test --workspace` runs green
-locally and on CI.
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+</report>
 
 ## Task summary
 

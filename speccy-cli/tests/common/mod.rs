@@ -156,6 +156,6 @@ pub fn valid_spec_toml() -> String {
 
 pub fn bootstrap_tasks_md(spec_id: &str) -> String {
     format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n- [ ] **T-001**: first\n  - Covers: REQ-001\n",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nfirst\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n</tasks>\n",
     )
 }

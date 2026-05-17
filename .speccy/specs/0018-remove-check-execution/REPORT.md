@@ -19,25 +19,24 @@ contract. The arbitrary-command sink that previously lived in
 `#[serde(deny_unknown_fields)]` on `RawCheck` and a static
 `include_str!`-based regression guard.
 
-## Requirements coverage
+<report spec="SPEC-0018">
 
-| Requirement | Scenarios | Result |
-|-------------|-----------|--------|
-| REQ-001: Check schema collapses to `id` and `scenario` | CHK-001 | proved |
-| REQ-002: `speccy check` renders scenarios only | CHK-002 | proved |
-| REQ-003: `speccy verify` is shape-only | CHK-003 | proved |
-| REQ-004: Execution code and tests are deleted | CHK-004 | proved |
-| REQ-005: Docs and shipped skills teach the new contract | CHK-005 | proved |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
 
-Scenarios are validated by unit and integration tests in
-`speccy-core/src/parse/toml_files.rs`,
-`speccy-core/tests/in_tree_spec_tomls.rs`,
-`speccy-cli/tests/check.rs`, `speccy-cli/tests/verify.rs`,
-`speccy-cli/tests/init.rs`, and `speccy-cli/tests/ci_workflow.rs`.
-The post-SPEC reviewer-tests contract (do not treat `speccy check`
-exit codes as evidence) and the ARCHITECTURE.md "Feedback, Not
-Enforcement" stance are pinned by verbatim content assertions in
-`speccy-cli/tests/init.rs`.
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+</report>
 
 ## Task summary
 

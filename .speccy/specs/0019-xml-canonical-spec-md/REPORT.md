@@ -19,53 +19,24 @@ shipped skill packs teach the marker form; the ephemeral
 `xtask/migrate-spec-markers-0019` tool was deleted before the ship
 commit.
 
-## Requirements coverage
+<report spec="SPEC-0019">
 
-| Requirement | Scenarios | Result |
-|-------------|-----------|--------|
-| REQ-001: SPEC.md marker grammar is strict and Markdown-friendly | CHK-001 | proved |
-| REQ-002: Per-spec spec.toml is removed | CHK-002 | proved |
-| REQ-003: Parser and renderer are backed by Rust structs | CHK-003 | proved |
-| REQ-004: Migration rewrites all in-tree specs | CHK-004 | proved |
-| REQ-005: Prompts, docs, and slicing consume the marker tree | CHK-005 | proved |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
 
-Scenarios are validated by tests across `speccy-core` and
-`speccy-cli`:
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
 
-- **CHK-001 (REQ-001):** `speccy-core::parse::spec_markers` unit
-  tests (line-isolation, attribute-quoting, unknown-name and
-  unknown-attribute errors, id-regex enforcement, duplicate-id
-  detection, scenario-must-nest-in-requirement, fence-skipping)
-  plus the round-trip fixtures under
-  `speccy-core/tests/spec_markers_roundtrip.rs`.
-- **CHK-002 (REQ-002):** `speccy-core/src/workspace.rs` rejection
-  path emits `ParseError::StraySpecToml`; covered by
-  `speccy-core/tests/workspace_scan.rs` and exercised
-  end-to-end by `speccy-core/tests/in_tree_specs.rs::no_spec_toml_files_remain_under_speccy_specs`.
-- **CHK-003 (REQ-003):** `speccy-core::parse::spec_markers::parse`
-  / `render` produce structurally equivalent `SpecDoc` values
-  across parse/render/parse, with byte-range `MarkerSpan`s for
-  diagnostics; verified by
-  `speccy-core/tests/spec_markers_roundtrip.rs` and the unknown-
-  attribute diagnostic test inside the parser module.
-- **CHK-004 (REQ-004):** the migration tool's behavioural tests
-  (preserve ordering, orphan-scenario detection, in-fence skip,
-  `--force`) plus the corpus-level
-  `speccy-core/tests/in_tree_specs.rs::every_in_tree_spec_md_parses_with_marker_parser`
-  and the end-to-end gate
-  `speccy-cli/tests/verify_after_migration.rs`, which spawns
-  `speccy verify` against the migrated workspace and asserts
-  exit 0 plus a `0 errors` stdout substring.
-- **CHK-005 (REQ-005):** `speccy-core/tests/docs_sweep.rs` (five
-  assertions: ARCHITECTURE.md only mentions `spec.toml` in
-  historical context; ARCHITECTURE.md documents the marker grammar
-  by mentioning `speccy:{requirement,scenario,decision,changelog}`;
-  ARCHITECTURE.md pins DEC-003's "no public `speccy fmt`" contract
-  via a line that mentions both `speccy fmt` and `DEC-003`;
-  `xtask/migrate-spec-markers-0019` is deleted; shipped skills
-  under `resources/modules/` and rendered host mirrors no longer
-  instruct agents to edit per-spec `spec.toml` outside historical
-  notes).
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+</report>
 
 ## Task summary
 

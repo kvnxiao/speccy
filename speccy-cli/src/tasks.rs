@@ -17,8 +17,8 @@ use jiff::Timestamp;
 use regex::Regex;
 use speccy_core::ParseError;
 use speccy_core::parse::SpecMd;
+use speccy_core::parse::parse_task_xml;
 use speccy_core::parse::spec_md;
-use speccy_core::parse::tasks_md;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
@@ -171,12 +171,12 @@ fn render_amendment(
     // Parse TASKS.md to validate it is well-formed; on failure return a
     // typed error. The rendered prompt inlines the raw bytes (not the
     // parsed structure) so the agent reads exactly what's on disk.
-    tasks_md(tasks_md_path).map_err(|source| TasksError::Parse {
+    let tasks_raw = fs_err::read_to_string(tasks_md_path.as_std_path())?;
+    parse_task_xml(&tasks_raw, tasks_md_path).map_err(|source| TasksError::Parse {
         artifact: "TASKS.md",
         id: canonical_id.to_owned(),
         source: Box::new(source),
     })?;
-    let tasks_raw = fs_err::read_to_string(tasks_md_path.as_std_path())?;
 
     let agents = load_agents_md(project_root);
     let template = load_template("tasks-amend.md")?;

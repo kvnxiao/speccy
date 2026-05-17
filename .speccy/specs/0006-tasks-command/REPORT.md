@@ -14,15 +14,24 @@ the `--commit` sub-action performs a body-byte-preserving frontmatter
 rewrite that records the SPEC.md sha256 + `generated_at` timestamp.
 Landed in commit `727f48f`.
 
-## Requirements coverage
+<report spec="SPEC-0006">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Initial prompt rendering | delivered |
-| REQ-002 | Amendment prompt rendering | delivered |
-| REQ-003 | --commit records spec hash and timestamp | delivered |
-| REQ-004 | --commit preserves TASKS.md body bytes | delivered |
-| REQ-005 | SPEC-ID argument validation and state checks | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003 CHK-004 CHK-005">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-006">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-007 CHK-008">
+</coverage>
+
+</report>
 
 ## Notes
 

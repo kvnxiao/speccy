@@ -1,9 +1,10 @@
 //! Public types for the lint engine.
 
 use crate::error::ParseError;
+use crate::parse::ReportDoc;
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
-use crate::parse::TasksMd;
+use crate::parse::TasksDoc;
 use crate::parse::supersession::SupersessionIndex;
 use camino::Utf8PathBuf;
 use std::time::SystemTime;
@@ -152,8 +153,13 @@ pub struct ParsedSpec {
     /// the stray `spec.toml` lint also surfaces here as a parse
     /// failure.
     pub spec_doc: Result<SpecDoc, ParseError>,
-    /// Parsed TASKS.md (or the parse error), if a TASKS.md exists.
-    pub tasks_md: Option<Result<TasksMd, ParseError>>,
+    /// Parsed TASKS.md typed XML model (or the parse error), if a
+    /// TASKS.md exists. SPEC-0022 retired the heuristic checkbox-list
+    /// parser; this is now the only TASKS.md representation.
+    pub tasks_md: Option<Result<TasksDoc, ParseError>>,
+    /// Parsed REPORT.md typed XML model (or the parse error), if a
+    /// REPORT.md exists.
+    pub report_md: Option<Result<ReportDoc, ParseError>>,
     /// Modification time of `SPEC.md`, captured by the workspace
     /// scanner. Used by TSK-003 mtime drift detection. `None` if mtime
     /// could not be read.
@@ -180,7 +186,14 @@ impl ParsedSpec {
     /// Convenience: return the parsed TASKS.md if present and parsed
     /// successfully.
     #[must_use = "callers must handle the None case (absent or parse failure)"]
-    pub fn tasks_md_ok(&self) -> Option<&TasksMd> {
+    pub fn tasks_md_ok(&self) -> Option<&TasksDoc> {
         self.tasks_md.as_ref().and_then(|r| r.as_ref().ok())
+    }
+
+    /// Convenience: return the parsed REPORT.md if present and parsed
+    /// successfully.
+    #[must_use = "callers must handle the None case (absent or parse failure)"]
+    pub fn report_md_ok(&self) -> Option<&ReportDoc> {
+        self.report_md.as_ref().and_then(|r| r.as_ref().ok())
     }
 }

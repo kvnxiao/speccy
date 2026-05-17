@@ -5,14 +5,16 @@ description: Run Speccy's adversarial multi-persona review on every task awaitin
 
 # /speccy-review
 
-Drives the review loop. For each `[?]` task, the main agent
-spawns one reviewer sub-agent per persona in parallel; collects their
-inline notes; and flips the task to `[x]` (all pass) or back to `[ ]`
-(any blocking, plus a `Retry:` note).
+Drives the review loop. For each `state="in-review"` task, the
+main agent spawns one reviewer sub-agent per persona in parallel;
+collects their inline notes; and flips the task's `state` to
+`completed` (all pass) or back to `pending` (any blocking, plus a
+`Retry:` note). State lives in the `state` attribute on each
+`<task>` XML element in TASKS.md.
 
 ## When to use
 
-After `/speccy-work` has flipped tasks to `[?]`. Re-enter after retry
+After `/speccy-work` has flipped tasks to `state="in-review"`. Re-enter after retry
 implementations complete.
 
 ## Steps
@@ -51,9 +53,10 @@ implementations complete.
    ```
 
 5. After all four return, read the appended notes. If every persona
-   wrote `pass`, flip `[?]` -> `[x]`. If any wrote `blocking`, flip
-   `[?]` -> `[ ]` and append a `Retry: ...` note summarising the
-   blockers.
+   wrote `pass`, flip the task's `state` from `in-review` to
+   `completed`. If any wrote `blocking`, flip `state` from
+   `in-review` to `pending` and append a `Retry: ...` note
+   summarising the blockers.
 6. Go back to step 1.
 
 ### Loop exit criteria
@@ -61,5 +64,6 @@ implementations complete.
 - `speccy next --kind review --json` returns empty.
 - The user interrupts.
 
-After exit, if any tasks are `[ ]` (retries), suggest `/speccy-work
-SPEC-NNNN` again. Otherwise suggest `/speccy-ship SPEC-NNNN`.
+After exit, if any tasks are `state="pending"` (retries), suggest
+`/speccy-work SPEC-NNNN` again. Otherwise suggest
+`/speccy-ship SPEC-NNNN`.

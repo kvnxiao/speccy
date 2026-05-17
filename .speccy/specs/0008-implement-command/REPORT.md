@@ -15,15 +15,24 @@ AGENTS.md, and suggested-files inlined. Lands
 surfaces `Ambiguous` with candidate spec IDs) which SPEC-0009 reuses
 for review. Landed in commit `2b1ee4c`.
 
-## Requirements coverage
+<report spec="SPEC-0008">
 
-| Requirement | Title | Status |
-|---|---|---|
-| REQ-001 | Task reference parsing | delivered |
-| REQ-002 | Workspace task lookup | delivered |
-| REQ-003 | Ambiguity error with candidate list | delivered |
-| REQ-004 | Render implementer prompt | delivered |
-| REQ-005 | Argument and state error handling | delivered |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
+</coverage>
+
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-002">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-003">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
+</coverage>
+
+</report>
 
 ## Notes
 

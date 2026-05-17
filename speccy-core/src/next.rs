@@ -133,20 +133,20 @@ fn pick_actionable(workspace: &Workspace, kind_filter: Option<KindFilter>) -> Op
         };
         match kind_filter {
             None => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::AwaitingReview) {
+                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::InReview) {
                     return Some(make_review(spec_id, task));
                 }
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Open) {
+                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
                     return Some(make_implement(spec_id, task));
                 }
             }
             Some(KindFilter::Implement) => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Open) {
+                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
                     return Some(make_implement(spec_id, task));
                 }
             }
             Some(KindFilter::Review) => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::AwaitingReview) {
+                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::InReview) {
                     return Some(make_review(spec_id, task));
                 }
             }
@@ -165,7 +165,7 @@ fn detect_report(workspace: &Workspace) -> Option<NextResult> {
             continue;
         }
         saw_task = true;
-        if tasks.tasks.iter().any(|t| t.state != TaskState::Done) {
+        if tasks.tasks.iter().any(|t| t.state != TaskState::Completed) {
             return None;
         }
     }
@@ -211,10 +211,10 @@ fn blocked_reason_for(workspace: &Workspace, kind_filter: Option<KindFilter>) ->
         for task in &tasks.tasks {
             any_task = true;
             match task.state {
-                TaskState::Open => any_open = true,
-                TaskState::AwaitingReview => any_review = true,
+                TaskState::Pending => any_open = true,
+                TaskState::InReview => any_review = true,
                 TaskState::InProgress => any_in_progress = true,
-                TaskState::Done => {
+                TaskState::Completed => {
                     if !report_md_exists(spec) {
                         any_unreported_done = true;
                     }
@@ -274,9 +274,9 @@ fn make_implement(spec_id: &str, task: &crate::parse::Task) -> NextResult {
     NextResult::Implement {
         spec: spec_id.to_owned(),
         task: task.id.clone(),
-        task_line: task.title.clone(),
+        task_line: task.title(),
         covers: task.covers.clone(),
-        suggested_files: task.suggested_files.clone(),
+        suggested_files: task.suggested_files(),
     }
 }
 
@@ -284,7 +284,7 @@ fn make_review(spec_id: &str, task: &crate::parse::Task) -> NextResult {
     NextResult::Review {
         spec: spec_id.to_owned(),
         task: task.id.clone(),
-        task_line: task.title.clone(),
+        task_line: task.title(),
         personas: default_personas(),
     }
 }

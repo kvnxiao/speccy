@@ -12,23 +12,27 @@ generated_at: 2026-05-14T23:42:18Z
 after two retries and one mid-loop SPEC amendment to reconcile
 DEC-004 with REQ-002 / REQ-004 expansion requirements.
 
-## Requirements coverage
+<report spec="SPEC-0016">
 
-| Requirement | Checks | Result |
-|-------------|--------|--------|
-| REQ-001: Single-source content modules | CHK-001, CHK-002 | proved |
-| REQ-002: Host-templated skill packs install to correct destinations | CHK-003, CHK-004 | proved |
-| REQ-003: Per-host reviewer subagent files | CHK-005, CHK-006 | proved |
-| REQ-004: `/speccy-review` skill prefers host-native subagents | CHK-007 | proved |
-| REQ-005: Dogfooded outputs stay in sync via CI | CHK-008 | proved |
-| REQ-006: Rendering is deterministic and idempotent | CHK-009, CHK-010 | proved |
+<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
+</coverage>
 
-All ten SPEC-0016 checks resolve to executable `cargo test`
-invocations in `spec.toml`; full workspace `cargo test --workspace`
-runs green locally. `speccy verify` is the CI gate on Linux runners;
-on Windows it cannot recompile the live `speccy.exe` (file lock),
-but the same checks pass via direct `cargo test` invocation. CI
-behaviour is unchanged.
+<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004">
+</coverage>
+
+<coverage req="REQ-003" result="satisfied" scenarios="CHK-005 CHK-006">
+</coverage>
+
+<coverage req="REQ-004" result="satisfied" scenarios="CHK-007">
+</coverage>
+
+<coverage req="REQ-005" result="satisfied" scenarios="CHK-008">
+</coverage>
+
+<coverage req="REQ-006" result="satisfied" scenarios="CHK-009 CHK-010">
+</coverage>
+
+</report>
 
 ## Task summary
 

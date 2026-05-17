@@ -6,14 +6,16 @@ Renders the report prompt, writes `REPORT.md`, runs
 
 ## When to use
 
-After `{{ cmd_prefix }}speccy-review` has flipped every task to `[x]`. If any task is
-still `[ ]`, `[~]`, or `[?]`, `speccy report` refuses with the offending
-IDs -- pick up `{{ cmd_prefix }}speccy-work` or `{{ cmd_prefix }}speccy-review` first.
+After `{{ cmd_prefix }}speccy-review` has flipped every task to
+`state="completed"`. If any task is still `state="pending"`,
+`state="in-progress"`, or `state="in-review"`, `speccy report`
+refuses with the offending IDs -- pick up `{{ cmd_prefix }}speccy-work`
+or `{{ cmd_prefix }}speccy-review` first.
 
 ## Steps
 
-1. Confirm all tasks for the spec are `[x]` (workspace overview;
-   locate the spec row for SPEC-NNNN in the output):
+1. Confirm all tasks for the spec are `state="completed"` (workspace
+   overview; locate the spec row for SPEC-NNNN in the output):
 
    ```bash
    speccy status
@@ -26,9 +28,11 @@ IDs -- pick up `{{ cmd_prefix }}speccy-work` or `{{ cmd_prefix }}speccy-review` 
    ```
 
 3. Follow the prompt: write `.speccy/specs/NNNN-slug/REPORT.md` with
-   frontmatter (`spec`, `outcome`, `generated_at`), the requirements
-   coverage table, retry counts, and any out-of-scope items
-   implementers absorbed.
+   frontmatter (`spec`, `outcome`, `generated_at`), a `<report>`
+   root element wrapping one `<coverage req="REQ-NNN"
+   result="satisfied|partial|deferred" scenarios="CHK-NNN...">`
+   element per surviving SPEC requirement, retry counts, and any
+   out-of-scope items implementers absorbed.
 4. Flip the SPEC's frontmatter status. Edit
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what
