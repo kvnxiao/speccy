@@ -1,6 +1,6 @@
 ---
 spec: SPEC-0008
-spec_hash_at_generation: 705e5d3a48a279968e7507afe74f8cef0d298360b124cb9727d6ecce1505eb06
+spec_hash_at_generation: 159514626e8fe2a2166ba01407b19af1b17c92ad7830dfc4c4065d1d91d82bbb
 generated_at: 2026-05-14T03:25:14Z
 ---
 
