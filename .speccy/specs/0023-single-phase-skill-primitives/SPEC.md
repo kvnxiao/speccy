@@ -2,7 +2,7 @@
 id: SPEC-0023
 slug: single-phase-skill-primitives
 title: Single-phase skill primitives for the development loop
-status: in-progress
+status: implemented
 created: 2026-05-17
 supersedes: []
 ---

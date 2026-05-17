@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0023
-spec_hash_at_generation: ddd02ae487aed84f009e5cc2b34b4c28b222e0cfb68bcefe51190e42efe4f6bb
-generated_at: 2026-05-17T05:53:47Z
+spec_hash_at_generation: 87a0227fbb8b04b5145913e4bca8163746b82d1da86cfaedc6270ff61fbf5357
+generated_at: 2026-05-17T07:39:42Z
 ---
 
 # Tasks: SPEC-0023 Single-phase skill primitives for the development loop
