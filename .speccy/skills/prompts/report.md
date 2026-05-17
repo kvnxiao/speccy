@@ -3,17 +3,17 @@
 Every task in this spec is now `state="completed"`. Your job is to
 author `REPORT.md` — the durable summary of what shipped.
 
-## Project conventions
+## SPEC (pointer)
 
-{{agents}}
+Before writing the report, read SPEC.md at `{{spec_md_path}}`. The
+CLI no longer inlines the SPEC body into this prompt; load it via
+your Read primitive.
 
-## SPEC (full)
+## TASKS (pointer)
 
-{{spec_md}}
-
-## TASKS (full)
-
-{{tasks_md}}
+Read TASKS.md at `{{tasks_md_path}}`. The CLI no longer inlines the
+TASKS body into this prompt; load it via your Read primitive when
+walking task entries and inline notes.
 
 ## Retry summary (derived from inline `Retry:` notes)
 

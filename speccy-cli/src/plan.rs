@@ -1,25 +1,31 @@
 //! `speccy plan` command logic.
 //!
 //! Renders the Phase 1 prompt that an agent reads to author or amend a
-//! SPEC.md + spec.toml pair. The CLI never invokes a model; it loads
-//! `AGENTS.md` (carrier of the project-wide product north star), the
-//! existing `SPEC.md` and nearest parent `MISSION.md` when amending,
-//! substitutes placeholders into an embedded markdown template, trims
-//! to the budget, and writes the rendered prompt to stdout.
+//! SPEC.md. The CLI never invokes a model; it substitutes placeholders
+//! into an embedded markdown template, trims to the budget, and writes
+//! the rendered prompt to stdout.
 //!
 //! Two forms:
 //!
-//! - `speccy plan` (no arg) -- greenfield. Loads `AGENTS.md`, allocates the
-//!   next available `SPEC-NNNN` ID (walking nested mission folders under
-//!   `.speccy/specs/`), renders `plan-greenfield.md`. No `VISION.md` is read:
-//!   the noun has been retired.
-//! - `speccy plan SPEC-NNNN` -- amendment. Reads the named SPEC.md (which may
-//!   live flat under `.speccy/specs/NNNN-slug/` or grouped under
-//!   `.speccy/specs/[focus]/NNNN-slug/`), walks upward from the spec dir for
-//!   the nearest parent `MISSION.md`, renders `plan-amend.md` (the agent is
-//!   asked for a minimal surgical edit, not a rewrite).
+//! - `speccy plan` (no arg) -- greenfield. Allocates the next available
+//!   `SPEC-NNNN` ID (walking nested mission folders under `.speccy/specs/`),
+//!   renders `plan-greenfield.md`. No `VISION.md` is read: the noun has been
+//!   retired.
+//! - `speccy plan SPEC-NNNN` -- amendment. Locates the named spec directory
+//!   (which may live flat under `.speccy/specs/NNNN-slug/` or grouped under
+//!   `.speccy/specs/[focus]/NNNN-slug/`) and renders `plan-amend.md`. The
+//!   rendered prompt names the SPEC.md repo-relative path plus a Read
+//!   instruction for the nearest parent `MISSION.md`, when one exists.
 //!
-//! See `.speccy/specs/0005-plan-command/SPEC.md`.
+//! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
+//! retired the inlined-`SPEC.md` / `MISSION.md` flows: modern AI coding
+//! harnesses auto-load `AGENTS.md` themselves, and every harness ships
+//! a Read primitive the agent uses to fetch SPEC.md / MISSION.md by
+//! path on demand. The rendered prompt names the file's repo-relative
+//! path; the body is no longer inlined.
+//!
+//! See `.speccy/specs/0005-plan-command/SPEC.md` and
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -31,8 +37,6 @@ use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
 use speccy_core::prompt::allocate_next_spec_id;
-use speccy_core::prompt::find_nearest_mission_md;
-use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
 use speccy_core::prompt::trim_to_budget;
@@ -125,13 +129,11 @@ pub fn run(args: PlanArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), Pl
 }
 
 fn render_greenfield(project_root: &Utf8Path) -> Result<String, PlanError> {
-    let agents = load_agents_md(project_root);
     let specs_dir = project_root.join(".speccy").join("specs");
     let next_id = allocate_next_spec_id(&specs_dir);
 
     let template = load_template("plan-greenfield.md")?;
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
-    vars.insert("agents", agents);
     vars.insert("next_spec_id", next_id);
     Ok(render(template, &vars))
 }
@@ -146,18 +148,72 @@ fn render_amendment(project_root: &Utf8Path, raw_id: &str) -> Result<String, Pla
         source: Box::new(source),
     })?;
 
-    let agents = load_agents_md(project_root);
-    let mission = find_nearest_mission_md(&spec_dir, &specs_root);
+    // SPEC-0023 REQ-006: SPEC.md and MISSION.md are no longer inlined.
+    // The rendered prompt names the SPEC.md repo-relative path and, when
+    // the focus has a MISSION.md, a Read instruction for it. Flat
+    // single-focus projects (no MISSION.md) emit an empty mission
+    // section so the rendered prompt does not name a non-existent file.
+    let spec_md_path = relative_path_string(project_root, &spec_path);
+    let mission_section = mission_section(project_root, &spec_dir, &specs_root);
     let changelog = format_changelog(&parsed);
 
     let template = load_template("plan-amend.md")?;
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", canonical_id);
-    vars.insert("spec_md", parsed.raw);
-    vars.insert("agents", agents);
-    vars.insert("mission", mission);
+    vars.insert("spec_md_path", spec_md_path);
+    vars.insert("mission_section", mission_section);
     vars.insert("changelog", changelog);
     Ok(render(template, &vars))
+}
+
+/// Compute the repo-relative path of `target` as a forward-slash string
+/// suitable for embedding in rendered prompts. Falls back to the
+/// absolute path string when `target` is not under `project_root` (a
+/// configuration the workspace scanner does not produce).
+fn relative_path_string(project_root: &Utf8Path, target: &Utf8Path) -> String {
+    target
+        .strip_prefix(project_root)
+        .unwrap_or(target)
+        .as_str()
+        .replace('\\', "/")
+}
+
+/// Build the `## Mission context` section for the plan-amend prompt.
+///
+/// Returns the section heading plus a one-sentence Read instruction
+/// naming the nearest enclosing `MISSION.md` when one exists. Returns an
+/// empty string when no enclosing `MISSION.md` is found, so the rendered
+/// prompt surfaces neither the heading nor a Read instruction for a
+/// non-existent file (per SPEC-0023 REQ-006).
+fn mission_section(project_root: &Utf8Path, spec_dir: &Utf8Path, specs_root: &Utf8Path) -> String {
+    let Some(mission_path) = find_nearest_mission_md_path(spec_dir, specs_root) else {
+        return String::new();
+    };
+    let rel = relative_path_string(project_root, &mission_path);
+    format!(
+        "## Mission context\n\n\
+         Before editing, read the parent MISSION.md at `{rel}`. The CLI \
+         no longer inlines the MISSION body into this prompt; load it via \
+         your Read primitive.\n\n"
+    )
+}
+
+/// Walk upward from `spec_dir` toward `specs_root` (inclusive) looking
+/// for the nearest enclosing `MISSION.md`. Returns the absolute path
+/// when found, else `None`.
+fn find_nearest_mission_md_path(spec_dir: &Utf8Path, specs_root: &Utf8Path) -> Option<Utf8PathBuf> {
+    let mut cursor = spec_dir.parent()?;
+    loop {
+        let candidate = cursor.join("MISSION.md");
+        if fs_err::metadata(candidate.as_std_path()).is_ok_and(|m| m.is_file()) {
+            return Some(candidate);
+        }
+        if cursor == specs_root {
+            break;
+        }
+        cursor = cursor.parent()?;
+    }
+    None
 }
 
 fn validate_spec_id(raw: &str) -> Result<String, PlanError> {

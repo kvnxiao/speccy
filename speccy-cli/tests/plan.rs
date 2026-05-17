@@ -2,6 +2,10 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "tests use assert! macros and return Result for ? propagation in setup"
+)]
 //! End-to-end tests for `speccy plan` (greenfield + amendment).
 //! Exercises SPEC-0005 REQ-001..REQ-007 through the binary entry point.
 
@@ -21,16 +25,41 @@ fn write_agents(ws: &Workspace, body: &str) -> TestResult {
 }
 
 #[test]
-fn greenfield_renders_agents_and_next_spec_id() -> TestResult {
+fn greenfield_renders_next_spec_id() -> TestResult {
     let ws = Workspace::new()?;
+    // SPEC-0023 REQ-005: AGENTS.md is no longer inlined into the rendered
+    // prompt; modern AI coding harnesses auto-load it themselves. Writing
+    // AGENTS.md here would only confirm the renderer ignores it, which the
+    // negative `does_not_inline_agents_md` test below pins explicitly.
     write_agents(&ws, "# Agents\nUse Rust.\n")?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("plan").current_dir(ws.root.as_std_path());
-    cmd.assert()
-        .success()
-        .stdout(contains("Use Rust"))
-        .stdout(contains("SPEC-0001"));
+    cmd.assert().success().stdout(contains("SPEC-0001"));
+    Ok(())
+}
+
+#[test]
+fn greenfield_does_not_inline_agents_md() -> TestResult {
+    let ws = Workspace::new()?;
+    write_agents(&ws, "# Agents\nUSE_RUST_SENTINEL\n")?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("plan").current_dir(ws.root.as_std_path());
+    let out = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).into_owned();
+    assert!(
+        stdout.contains("SPEC-0001"),
+        "greenfield should still render the next ID: {stdout}"
+    );
+    assert!(
+        !stdout.contains("USE_RUST_SENTINEL"),
+        "AGENTS.md body must not be inlined into the rendered prompt: {stdout}",
+    );
+    assert!(
+        !stdout.contains("{{agents}}"),
+        "the retired `{{agents}}` placeholder must not appear in rendered output: {stdout}",
+    );
     Ok(())
 }
 
@@ -93,19 +122,6 @@ fn greenfield_walks_mission_folders_for_id_allocation() -> TestResult {
 }
 
 #[test]
-fn greenfield_missing_agents_warns_but_still_renders() -> TestResult {
-    let ws = Workspace::new()?;
-
-    let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("plan").current_dir(ws.root.as_std_path());
-    cmd.assert()
-        .success()
-        .stdout(contains("AGENTS.md missing"))
-        .stderr(contains("AGENTS.md not found"));
-    Ok(())
-}
-
-#[test]
 fn plan_outside_workspace_exits_with_clear_error() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let path = camino::Utf8PathBuf::from_path_buf(tmp.path().to_path_buf())
@@ -120,7 +136,9 @@ fn plan_outside_workspace_exits_with_clear_error() -> TestResult {
 }
 
 #[test]
-fn amend_form_inlines_existing_flat_spec_md() -> TestResult {
+fn amend_form_names_existing_flat_spec_md_path() -> TestResult {
+    // SPEC-0023 REQ-006: the rendered prompt names the SPEC.md
+    // repo-relative path; the body is not inlined.
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\nrules\n")?;
     write_spec(
@@ -135,16 +153,30 @@ fn amend_form_inlines_existing_flat_spec_md() -> TestResult {
     cmd.arg("plan")
         .arg("SPEC-0001")
         .current_dir(ws.root.as_std_path());
-    cmd.assert()
+    let assert = cmd
+        .assert()
         .success()
         .stdout(contains("SPEC-0001"))
-        .stdout(contains("Example SPEC-0001"))
-        .stdout(contains("no parent MISSION.md"));
+        .stdout(contains(".speccy/specs/0001-foo/SPEC.md"));
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        !stdout.contains("Example SPEC-0001"),
+        "SPEC.md body must not be inlined into the rendered prompt: {stdout}",
+    );
+    // Flat single-focus project: no MISSION.md exists anywhere on disk,
+    // so the rendered prompt must not name one. The retired
+    // "no parent MISSION.md" marker is also gone.
+    assert!(
+        !stdout.contains("MISSION.md"),
+        "flat single-focus project must not surface any MISSION.md Read instruction: {stdout}",
+    );
     Ok(())
 }
 
 #[test]
-fn amend_form_resolves_mission_grouped_spec_and_inlines_mission_md() -> TestResult {
+fn amend_form_resolves_mission_grouped_spec_and_names_mission_md_path() -> TestResult {
+    // SPEC-0023 REQ-006: the rendered prompt names the MISSION.md and
+    // SPEC.md repo-relative paths; the bodies are not inlined.
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\n")?;
     write_spec(
@@ -169,21 +201,35 @@ fn amend_form_resolves_mission_grouped_spec_and_inlines_mission_md() -> TestResu
     cmd.arg("plan")
         .arg("SPEC-0042")
         .current_dir(ws.root.as_std_path());
-    cmd.assert()
+    let assert = cmd
+        .assert()
         .success()
         .stdout(contains("SPEC-0042"))
-        .stdout(contains("Example SPEC-0042"))
-        .stdout(contains("# Mission: auth"))
-        .stdout(contains("signup, login, password reset"));
+        .stdout(contains(".speccy/specs/auth/0042-signup/SPEC.md"))
+        .stdout(contains(".speccy/specs/auth/MISSION.md"))
+        .stdout(contains("## Mission context"));
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        !stdout.contains("Example SPEC-0042"),
+        "SPEC.md body must not be inlined into the rendered prompt: {stdout}",
+    );
+    assert!(
+        !stdout.contains("# Mission: auth"),
+        "MISSION.md body must not be inlined into the rendered prompt: {stdout}",
+    );
+    assert!(
+        !stdout.contains("signup, login, password reset"),
+        "MISSION.md body must not be inlined into the rendered prompt: {stdout}",
+    );
     Ok(())
 }
 
 #[test]
-fn amend_form_for_mission_grouped_spec_without_mission_md_yields_ungrouped_marker() -> TestResult {
-    // Edge case: a spec lives inside a focus folder but the focus
-    // folder has no MISSION.md (e.g. created prematurely, or planned
-    // but never written). The walker must still return the ungrouped
-    // marker rather than failing.
+fn amend_form_for_mission_grouped_spec_without_mission_md_emits_no_mission_read() -> TestResult {
+    // SPEC-0023 REQ-006: a spec lives inside a focus folder but the
+    // focus folder has no MISSION.md. The rendered prompt must surface
+    // no Read instruction for a non-existent file (the retired
+    // "ungrouped" marker is gone).
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\n")?;
     write_spec(
@@ -199,10 +245,24 @@ fn amend_form_for_mission_grouped_spec_without_mission_md_yields_ungrouped_marke
     cmd.arg("plan")
         .arg("SPEC-0042")
         .current_dir(ws.root.as_std_path());
-    cmd.assert()
+    let assert = cmd
+        .assert()
         .success()
         .stdout(contains("SPEC-0042"))
-        .stdout(contains("no parent MISSION.md"));
+        .stdout(contains(".speccy/specs/auth/0042-signup/SPEC.md"));
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        !stdout.contains("MISSION.md"),
+        "no MISSION.md exists on disk, so the rendered prompt must not name one: {stdout}",
+    );
+    assert!(
+        !stdout.contains("no parent MISSION.md"),
+        "the retired `no parent MISSION.md` marker must not appear: {stdout}",
+    );
+    assert!(
+        !stdout.contains("## Mission context"),
+        "the `## Mission context` heading must be suppressed when no MISSION.md exists: {stdout}",
+    );
     Ok(())
 }
 

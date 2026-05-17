@@ -66,9 +66,10 @@ mod tests {
     fn loads_plan_greenfield_template() {
         let body = load_template("plan-greenfield.md")
             .expect("plan-greenfield.md must ship in the embedded bundle");
+        // SPEC-0023 REQ-005: the `{{agents}}` placeholder is retired.
         assert!(
-            body.contains("{{agents}}"),
-            "plan-greenfield stub must contain `{{{{agents}}}}` placeholder",
+            !body.contains("{{agents}}"),
+            "plan-greenfield template must not contain the retired `{{{{agents}}}}` placeholder",
         );
         assert!(
             body.contains("{{next_spec_id}}"),
@@ -84,17 +85,29 @@ mod tests {
     fn loads_plan_amend_template() {
         let body =
             load_template("plan-amend.md").expect("plan-amend.md must ship in the embedded bundle");
+        // SPEC-0023 REQ-006: the `{{spec_md}}` / `{{mission}}` placeholders
+        // are retired. The rendered prompt names the SPEC.md and MISSION.md
+        // repo-relative paths instead so the agent reads them via the
+        // host's Read primitive on demand.
         assert!(
-            body.contains("{{spec_md}}"),
-            "plan-amend stub must contain `{{{{spec_md}}}}` placeholder",
+            !body.contains("{{spec_md}}"),
+            "plan-amend template must not contain the retired `{{{{spec_md}}}}` placeholder",
+        );
+        assert!(
+            !body.contains("{{mission}}"),
+            "plan-amend template must not contain the retired `{{{{mission}}}}` placeholder",
+        );
+        assert!(
+            body.contains("{{spec_md_path}}"),
+            "plan-amend template must contain `{{{{spec_md_path}}}}` placeholder for the SPEC.md Read instruction",
+        );
+        assert!(
+            body.contains("{{mission_section}}"),
+            "plan-amend template must contain `{{{{mission_section}}}}` placeholder for the optional MISSION.md section",
         );
         assert!(
             body.contains("{{spec_id}}"),
             "plan-amend stub must contain `{{{{spec_id}}}}` placeholder",
-        );
-        assert!(
-            body.contains("{{mission}}"),
-            "plan-amend template must contain `{{{{mission}}}}` placeholder for nearest-parent MISSION.md content",
         );
     }
 

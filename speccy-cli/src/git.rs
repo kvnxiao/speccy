@@ -1,27 +1,19 @@
 //! Best-effort git shell-outs.
 //!
-//! Two helpers:
+//! One helper:
 //!
 //! - [`repo_sha`] — returns `HEAD`'s SHA for the JSON status contract.
-//! - [`diff_for_review`] — computes the reviewer-prompt diff with a three-step
-//!   fallback chain (working tree vs HEAD; HEAD vs HEAD~1; literal "no diff"
-//!   note).
 //!
-//! Both treat git unavailability as a non-fatal lookup: shell-out
-//! failures degrade to documented fallbacks rather than propagating an
-//! error.
+//! Treats git unavailability as a non-fatal lookup: shell-out failures
+//! degrade to the empty string rather than propagating an error.
+//!
+//! SPEC-0023 REQ-003 retired the reviewer-prompt diff helper: the
+//! rendered prompt now instructs the reviewer agent to run `git diff`
+//! itself, so the CLI no longer computes a diff.
 
 use camino::Utf8Path;
 use std::process::Command;
 use std::process::Stdio;
-
-/// Literal placeholder inlined into the reviewer prompt when neither
-/// fallback produced any diff content.
-///
-/// Documented in SPEC-0009 REQ-004; reviewer prompts treat this string
-/// as a signal to fall back on SPEC.md and prior task notes alone.
-pub const NO_DIFF_FALLBACK: &str =
-    "<!-- no diff available; review based on SPEC.md and task notes alone -->";
 
 /// Look up `HEAD`'s SHA in the git repository containing `cwd`.
 ///
@@ -49,44 +41,6 @@ pub fn repo_sha(cwd: &Utf8Path) -> String {
         return String::new();
     };
     text.trim().to_owned()
-}
-
-/// Compute the diff to inline into the reviewer prompt.
-///
-/// Fallback chain per SPEC-0009 REQ-004:
-/// 1. `git diff HEAD` — captures uncommitted edits.
-/// 2. If step 1 succeeds but is empty (clean working tree), try `git diff
-///    HEAD~1 HEAD` — captures the most recent commit.
-/// 3. If step 2 fails or is empty, return [`NO_DIFF_FALLBACK`].
-///
-/// Any spawn failure or non-success exit at any step short-circuits to
-/// the fallback note; the diff is informational and reviewers operate
-/// from SPEC.md and task notes when it is absent.
-#[must_use = "the rendered diff is the function's output"]
-pub fn diff_for_review(cwd: &Utf8Path) -> String {
-    if let Some(text) = run_diff(cwd, &["diff", "HEAD"]).filter(|s| !s.is_empty()) {
-        return text;
-    }
-    if let Some(text) = run_diff(cwd, &["diff", "HEAD~1", "HEAD"]).filter(|s| !s.is_empty()) {
-        return text;
-    }
-    NO_DIFF_FALLBACK.to_owned()
-}
-
-fn run_diff(cwd: &Utf8Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd.as_std_path())
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = std::str::from_utf8(&output.stdout).ok()?;
-    Some(text.to_owned())
 }
 
 #[cfg(test)]

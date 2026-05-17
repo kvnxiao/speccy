@@ -2,13 +2,22 @@
 //!
 //! Renders the Phase 5 report prompt for one spec. The CLI never invokes
 //! a model: it locates the spec via [`speccy_core::workspace::scan`],
-//! refuses unless every task is `[x]`, derives a per-task retry count
-//! from inline notes beginning with `Retry:`, inlines SPEC.md / TASKS.md
-//! / AGENTS.md / the retry summary into the embedded `report.md`
-//! template, applies budget trimming, and writes the rendered prompt to
-//! stdout.
+//! refuses unless every task is `state="completed"`, derives a per-task
+//! retry count from inline notes beginning with `Retry:`, and renders
+//! the report prompt with file-reference instructions for SPEC.md and
+//! TASKS.md plus the retry summary into the embedded `report.md`
+//! template; applies budget trimming, and writes the rendered prompt
+//! to stdout.
 //!
-//! See `.speccy/specs/0011-report-command/SPEC.md`.
+//! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
+//! retired the inlined-`SPEC.md` / `TASKS.md` flows: modern AI coding
+//! harnesses auto-load `AGENTS.md` themselves, and every harness ships
+//! a Read primitive the agent uses to fetch SPEC.md / TASKS.md by path
+//! on demand. The rendered prompt names the files' repo-relative paths;
+//! the bodies are no longer inlined.
+//!
+//! See `.speccy/specs/0011-report-command/SPEC.md` and
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -19,7 +28,6 @@ use speccy_core::parse::TaskState;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
-use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
 use speccy_core::prompt::trim_to_budget;
@@ -144,7 +152,12 @@ pub fn run(args: &ReportArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
         })?;
     let parsed = workspace.specs.swap_remove(position);
 
-    let parsed_spec_md = parsed.spec_md.map_err(|source| ReportError::Parse {
+    // SPEC.md must parse cleanly: this is the gate that prevents the
+    // rendered report prompt from pointing at a broken SPEC. The
+    // parsed value itself is discarded — SPEC-0023 REQ-006 retired
+    // SPEC.md body inlining, so the renderer only needs the file's
+    // repo-relative path.
+    let _spec_md_parsed_gate = parsed.spec_md.map_err(|source| ReportError::Parse {
         artifact: "SPEC.md",
         id: canonical_id.clone(),
         source: Box::new(source),
@@ -175,18 +188,20 @@ pub fn run(args: &ReportArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
         .ok_or_else(|| ReportError::TasksMdRequired {
             id: canonical_id.clone(),
         })?;
-    let tasks_raw = fs_err::read_to_string(tasks_md_path.as_std_path())?;
 
     let retry_summary = format_retry_summary(&parsed_tasks_md.tasks);
-    let agents = load_agents_md(&project_root);
     let template = load_template("report.md")?;
 
+    // SPEC-0023 REQ-006: SPEC.md / TASKS.md are no longer inlined. The
+    // rendered prompt names the repo-relative paths; the agent reads
+    // them via the host's Read primitive on demand.
+    let spec_md_path = relative_path_string(&project_root, &parsed.spec_md_path);
+    let tasks_md_path_rel = relative_path_string(&project_root, &tasks_md_path);
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", canonical_id);
-    vars.insert("spec_md", parsed_spec_md.raw);
-    vars.insert("tasks_md", tasks_raw);
+    vars.insert("spec_md_path", spec_md_path);
+    vars.insert("tasks_md_path", tasks_md_path_rel);
     vars.insert("retry_summary", retry_summary);
-    vars.insert("agents", agents);
 
     let rendered = render(template, &vars);
     let TrimResult { output, .. } = trim_to_budget(rendered, DEFAULT_BUDGET);
@@ -195,6 +210,18 @@ pub fn run(args: &ReportArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
         out.write_all(b"\n")?;
     }
     Ok(())
+}
+
+/// Compute the repo-relative path of `target` as a forward-slash string
+/// suitable for embedding in rendered prompts. Falls back to the
+/// absolute path string when `target` is not under `project_root` (a
+/// configuration the workspace scanner does not produce).
+fn relative_path_string(project_root: &Utf8Path, target: &Utf8Path) -> String {
+    target
+        .strip_prefix(project_root)
+        .unwrap_or(target)
+        .as_str()
+        .replace('\\', "/")
 }
 
 fn validate_spec_id(raw: &str) -> Result<String, ReportError> {

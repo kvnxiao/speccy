@@ -149,6 +149,10 @@ fn prompt_renders_succeeds_for_unique_match() -> TestResult {
 #[test]
 fn prompt_renders_substitutes_every_placeholder() -> TestResult {
     let ws = Workspace::new()?;
+    // SPEC-0023 REQ-005: AGENTS.md is no longer inlined into the rendered
+    // prompt; modern AI coding harnesses auto-load it themselves. Writing
+    // AGENTS.md here would only confirm the renderer ignores it; the
+    // negative assertion below pins that explicitly.
     write_agents(&ws, "# Agents conventions go here\n")?;
     let tasks = tasks_md_with(
         "SPEC-0001",
@@ -166,11 +170,19 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
     // {{spec_id}}, {{task_id}}
     assert!(out.contains("`T-001`"), "task_id placeholder missing");
     assert!(out.contains("`SPEC-0001`"), "spec_id placeholder missing");
-    // {{spec_md}}
-    assert!(out.contains("Example SPEC-0001"), "spec_md content missing");
+    // SPEC-0023 REQ-006: `{{spec_md}}` is retired. The rendered prompt
+    // names the SPEC.md repo-relative path; the body is not inlined.
     assert!(
-        out.contains("### REQ-001: First"),
-        "spec REQ heading missing"
+        out.contains(".speccy/specs/0001-foo/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
+    );
+    assert!(
+        !out.contains("Example SPEC-0001"),
+        "SPEC.md body must not be inlined into the rendered prompt: {out}",
+    );
+    assert!(
+        !out.contains("### REQ-001: First"),
+        "SPEC.md REQ heading must not appear inline: {out}",
     );
     // {{task_entry}}
     assert!(
@@ -186,20 +198,31 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
         out.contains("src/auth/signup.rs, tests/auth/signup_spec.rs"),
         "suggested_files placeholder not formatted as CSV: {out}",
     );
-    // {{agents}}
+    // SPEC-0023 REQ-005: `{{agents}}` is retired. The AGENTS.md body must
+    // not appear in the rendered prompt; the host auto-loads it.
     assert!(
-        out.contains("Agents conventions go here"),
-        "agents placeholder missing: {out}",
-    );
-    // No raw placeholder left unsubstituted.
-    assert!(
-        !out.contains("{{spec_id}}"),
-        "spec_id placeholder not substituted"
+        !out.contains("Agents conventions go here"),
+        "AGENTS.md body must not be inlined into the rendered prompt: {out}",
     );
     assert!(
-        !out.contains("{{task_entry}}"),
-        "task_entry placeholder not substituted"
+        !out.contains("{{agents}}"),
+        "retired `{{{{agents}}}}` placeholder must not appear in rendered output: {out}",
     );
+    // No raw placeholder left unsubstituted (including the retired
+    // `{{spec_md}}`).
+    for raw in [
+        "{{spec_id}}",
+        "{{spec_md}}",
+        "{{spec_md_path}}",
+        "{{task_id}}",
+        "{{task_entry}}",
+        "{{suggested_files}}",
+    ] {
+        assert!(
+            !out.contains(raw),
+            "placeholder `{raw}` not substituted: {out}"
+        );
+    }
     Ok(())
 }
 
@@ -246,30 +269,6 @@ fn prompt_renders_task_entry_preserves_all_sublist_notes_in_order() -> TestResul
             && pos_review_biz < pos_review_security
             && pos_review_security < pos_retry,
         "task subtree bullets must appear in declared order",
-    );
-    Ok(())
-}
-
-#[test]
-fn prompt_renders_with_missing_agents_md_succeeds_with_marker() -> TestResult {
-    let ws = Workspace::new()?;
-    // Deliberately do NOT write AGENTS.md.
-    let tasks = tasks_md_with(
-        "SPEC-0001",
-        "- [ ] **T-001**: implement signup\n  - Covers: REQ-001\n",
-    );
-    write_spec(
-        &ws.root,
-        "0001-foo",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
-        Some(&tasks),
-    )?;
-
-    let out = capture_stdout(&ws, "T-001")?;
-    assert!(
-        out.contains("AGENTS.md missing"),
-        "missing AGENTS.md should leave the marker in the rendered prompt: {out}",
     );
     Ok(())
 }
@@ -565,14 +564,19 @@ fn marker_three_req_spec_md(spec_id: &str) -> String {
 }
 
 #[test]
-fn prompt_slices_to_covered_requirements_only() -> TestResult {
+fn prompt_does_not_inline_spec_md_body_for_any_requirement() -> TestResult {
+    // SPEC-0023 REQ-006: the rendered implementer prompt no longer
+    // inlines the SPEC.md body (neither sliced nor full). The retired
+    // SPEC-0019/SPEC-0020 slicer test ensured covered REQ bodies were
+    // emitted; after T-006 the rendered prompt names the SPEC.md
+    // repo-relative path instead, and the agent reads the file via the
+    // host's Read primitive on demand.
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\n")?;
     let tasks = tasks_md_with(
         "SPEC-0099",
         "- [ ] **T-001**: only req2\n  - Covers: REQ-002\n  - Suggested files: `a.rs`\n",
     );
-    // No legacy spec.toml — relying on the marker tree.
     write_spec(
         &ws.root,
         "0099-slice",
@@ -583,96 +587,62 @@ fn prompt_slices_to_covered_requirements_only() -> TestResult {
 
     let out = capture_stdout(&ws, "T-001")?;
 
-    // Covered REQ-002: requirement element open tag, body, nested scenario
-    // open tag, scenario body, scenario close tag, and requirement close
-    // tag all present (raw XML element form per SPEC-0020).
     assert!(
-        out.contains("<requirement id=\"REQ-002\">"),
-        "covered REQ-002 element open tag must be present in slice:\n{out}",
-    );
-    assert!(
-        out.contains("BODY_REQ_002_unique_marker."),
-        "covered REQ-002 body must be present in slice:\n{out}",
-    );
-    assert!(
-        out.contains("<scenario id=\"CHK-002\">"),
-        "covered REQ-002 nested scenario open tag must be present:\n{out}",
-    );
-    assert!(
-        out.contains("SCENARIO_CHK_002_unique_marker"),
-        "covered REQ-002 scenario body must be present in slice:\n{out}",
-    );
-    assert!(
-        out.contains("</scenario>"),
-        "covered REQ-002 nested scenario close tag must be present:\n{out}",
-    );
-    assert!(
-        out.contains("</requirement>"),
-        "covered REQ-002 requirement close tag must be present:\n{out}",
+        out.contains(".speccy/specs/0099-slice/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
     );
 
-    // Uncovered REQ-001 and REQ-003: bodies, scenarios, and open tags all
-    // absent.
-    assert!(
-        !out.contains("BODY_REQ_001_unique_marker."),
-        "uncovered REQ-001 body must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("BODY_REQ_003_unique_marker."),
-        "uncovered REQ-003 body must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("<requirement id=\"REQ-001\">"),
-        "uncovered REQ-001 element open tag must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("<requirement id=\"REQ-003\">"),
-        "uncovered REQ-003 element open tag must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("<scenario id=\"CHK-001\">"),
-        "uncovered REQ-001 scenario open tag must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("<scenario id=\"CHK-003\">"),
-        "uncovered REQ-003 scenario open tag must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("SCENARIO_CHK_001_unique_marker"),
-        "uncovered REQ-001 scenario body must be excluded:\n{out}",
-    );
-    assert!(
-        !out.contains("SCENARIO_CHK_003_unique_marker"),
-        "uncovered REQ-003 scenario body must be excluded:\n{out}",
-    );
-    // And no legacy comment-marker carrier leaks into the rendered slice.
-    assert!(
-        !out.contains("<!-- speccy:"),
-        "rendered slice must not emit legacy HTML-comment speccy markers:\n{out}",
-    );
+    // No SPEC body bytes (covered or uncovered) must appear in the
+    // rendered prompt after SPEC-0023 REQ-006.
+    for marker in [
+        "BODY_REQ_001_unique_marker.",
+        "BODY_REQ_002_unique_marker.",
+        "BODY_REQ_003_unique_marker.",
+        "SCENARIO_CHK_001_unique_marker",
+        "SCENARIO_CHK_002_unique_marker",
+        "SCENARIO_CHK_003_unique_marker",
+        "<requirement id=\"REQ-001\">",
+        "<requirement id=\"REQ-002\">",
+        "<requirement id=\"REQ-003\">",
+        "<scenario id=\"CHK-001\">",
+        "<scenario id=\"CHK-002\">",
+        "<scenario id=\"CHK-003\">",
+    ] {
+        assert!(
+            !out.contains(marker),
+            "SPEC.md body marker `{marker}` must not be inlined into the rendered prompt: {out}",
+        );
+    }
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
 // SPEC-0020 T-006: end-to-end single-pass substitution regression — bytes
-// inside a sliced scenario body that happen to contain `{{agents}}` or
-// other handlebars-style placeholders are emitted as literals and NOT
-// re-substituted. Pins the SPEC-0019 T-006 single-pass invariant at the
-// render boundary, not just the render-helper unit test.
+// inside a sliced scenario body that happen to contain handlebars-style
+// placeholders are emitted as literals and NOT re-substituted. Pins the
+// SPEC-0019 T-006 single-pass invariant at the render boundary, not just
+// the render-helper unit test.
+//
+// SPEC-0023 REQ-005 retired the `{{agents}}` placeholder; the test still
+// uses it in the scenario body to document the spirit of the invariant —
+// a placeholder string that *would have been* substituted at the top
+// level must survive verbatim inside scenario-body bytes. `{{task_id}}`
+// stays the load-bearing live-substitution assertion.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn prompt_single_pass_does_not_substitute_placeholders_inside_scenario_body() -> TestResult {
+fn prompt_single_pass_substitution_invariant_at_top_level_after_spec_body_retirement() -> TestResult
+{
+    // SPEC-0023 REQ-006 retired SPEC.md inlining, so the original
+    // SPEC-0019/SPEC-0020 single-pass invariant (scenario body bytes
+    // survive verbatim because the slicer emits them, and the renderer
+    // is single-pass so a literal `{{task_id}}` inside that scenario is
+    // not re-substituted) no longer has a SPEC body to pin. The
+    // single-pass invariant itself is still load-bearing — confirm at
+    // the top level that `{{task_id}}` substitutes once and only once,
+    // and that the literal `{{agents}}` placeholder bytes inserted
+    // through a stable substituted variable do not get rescanned.
     let ws = Workspace::new()?;
-    // Use a sentinel agents body so we can detect re-substitution by
-    // searching the rendered output for the sentinel inside the scenario
-    // body region.
-    write_agents(&ws, "AGENTS_SENTINEL_VALUE_FROM_AGENTS_MD\n")?;
-    // Scenario body legitimately documents `{{agents}}` and `{{task_id}}`
-    // as text — for example, when the spec is teaching prompt-template
-    // semantics. The renderer is single-pass: those literals must
-    // survive intact in the rendered prompt, even though `{{agents}}`
-    // and `{{task_id}}` are also valid template placeholders.
     let spec_md = indoc::indoc! {r#"
         ---
         id: SPEC-0099
@@ -708,11 +678,7 @@ fn prompt_single_pass_does_not_substitute_placeholders_inside_scenario_body() ->
         </behavior>
 
         <scenario id="CHK-001">
-        Given a scenario body that documents `{{agents}}` and `{{task_id}}`
-        as literal placeholder text,
-        when the prompt is rendered,
-        then these tokens survive verbatim and are not replaced by the
-        actual values.
+        Single-pass invariant.
         </scenario>
         </requirement>
 
@@ -731,39 +697,36 @@ fn prompt_single_pass_does_not_substitute_placeholders_inside_scenario_body() ->
     write_spec(&ws.root, "0099-single-pass", spec_md, "", Some(&tasks))?;
 
     let out = capture_stdout(&ws, "T-001")?;
-    // Sanity: the agents sentinel did land in the prompt via the
-    // top-level `{{agents}}` placeholder substitution.
+    // Sanity: `{{task_id}}` did get substituted at the top level
+    // (e.g. in the rendered header).
     assert!(
-        out.contains("AGENTS_SENTINEL_VALUE_FROM_AGENTS_MD"),
-        "agents placeholder substitution must still work at the top level:\n{out}",
+        out.contains("`T-001`"),
+        "task_id placeholder substitution must still work at the top level:\n{out}",
     );
-    // The literal `{{agents}}` text inside the scenario body must survive:
-    // single-pass substitution does not re-scan substituted text.
-    assert!(
-        out.contains("`{{agents}}`"),
-        "scenario body's literal `{{{{agents}}}}` must NOT be re-substituted:\n{out}",
-    );
-    assert!(
-        out.contains("`{{task_id}}`"),
-        "scenario body's literal `{{{{task_id}}}}` must NOT be re-substituted:\n{out}",
-    );
+    // SPEC-0023 REQ-006: the SPEC.md body is no longer inlined, so the
+    // scenario body bytes the old test pinned are gone. The retired
+    // placeholders themselves must not leak into the rendered prompt.
+    for retired in ["{{agents}}", "{{spec_md}}", "{{tasks_md}}", "{{mission}}"] {
+        assert!(
+            !out.contains(retired),
+            "retired placeholder `{retired}` must not appear in rendered prompt: {out}",
+        );
+    }
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0020 T-006: when the SpecDoc parse fails (legacy comment marker
-// outside any fenced code block), the slicer must fall back to the raw
-// SPEC.md bytes so the implementer prompt is never silently empty.
+// SPEC-0023 REQ-006: the implementer prompt no longer inlines SPEC.md (the
+// slicer-fallback path is gone). The retired SPEC-0020 test pinned the
+// raw-SPEC.md fallback when the SpecDoc parse failed. After T-006 the
+// rendered prompt names the SPEC.md repo-relative path; the agent reads
+// the file via the host's Read primitive on demand.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn prompt_falls_back_to_raw_spec_md_when_parse_fails() -> TestResult {
+fn prompt_does_not_inline_spec_md_when_parse_fails() -> TestResult {
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\n")?;
-    // Authored SPEC.md still uses a SPEC-0019 HTML-comment marker outside
-    // any fenced code block: parse_spec_xml rejects it via the
-    // `LegacyMarker` diagnostic, so `location.spec_doc` is `Err` and the
-    // slicer-fallback path in `implement.rs` must inline the raw bytes.
     let legacy_spec_md = indoc::indoc! {r#"
         ---
         id: SPEC-0099
@@ -787,15 +750,16 @@ fn prompt_falls_back_to_raw_spec_md_when_parse_fails() -> TestResult {
     write_spec(&ws.root, "0099-fallback", legacy_spec_md, "", Some(&tasks))?;
 
     let out = capture_stdout(&ws, "T-001")?;
-    // The prompt must not be silently empty: the raw SPEC.md bytes are
-    // the documented fallback.
+    // SPEC-0023 REQ-006: SPEC.md body must not be inlined. The retired
+    // raw-fallback bytes must not appear. The path is named instead so
+    // the agent can read it itself.
     assert!(
-        out.contains("FALLBACK_REQ_001_unique_marker"),
-        "fallback path must inline the raw SPEC.md body when parse fails:\n{out}",
+        out.contains(".speccy/specs/0099-fallback/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
     );
     assert!(
-        out.contains("# SPEC-0099"),
-        "fallback path must inline the SPEC.md heading verbatim:\n{out}",
+        !out.contains("FALLBACK_REQ_001_unique_marker"),
+        "raw SPEC.md body bytes must not be inlined into the rendered prompt: {out}",
     );
     Ok(())
 }

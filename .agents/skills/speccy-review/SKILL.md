@@ -1,67 +1,91 @@
 ---
 name: speccy-review
-description: Run Speccy's adversarial multi-persona review on every task awaiting review — business, tests, security, and style reviewers fan out in parallel and either pass the task or send it back with blocking notes. Use when the user says "review the implementation", "run the reviewers", "do a multi-persona review", or has just finished implementing and wants to validate.
+description: Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --kind review --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `Retry:` note. Use when the user says "review T-003" or "review the next task".
 ---
 
 # speccy-review
 
-Drives the review loop. For each `state="in-review"` task, the
-main agent spawns one reviewer sub-agent per persona in parallel;
-collects their inline notes; and flips the task's `state` to
-`completed` (all pass) or back to `pending` (any blocking, plus a
-`Retry:` note). State lives in the `state` attribute on each
-`<task>` XML element in TASKS.md.
+Runs one round of adversarial review on one task per invocation and
+exits. With an optional `[SPEC-NNNN/T-NNN]` selector argument, the
+session reviews that specific task. Without an argument, the session
+resolves the next reviewable task via
+`speccy next --kind review --json` and reviews that one. Task state
+lives in the `state` attribute on each `<task>` XML element in
+TASKS.md.
+
+This is a single-task primitive. It does not iterate over the
+remaining `in-review` tasks; composition across tasks belongs to a
+caller (a human at the terminal, the `/loop` skill, or a future
+orchestrator).
+
+Within the one task under review, the skill fans out to four
+parallel persona sub-agents (default fan-out: `business`, `tests`,
+`security`, `style`). That fan-out is intrinsic to the primitive —
+adversarial diversity comes from fresh contexts per persona — and is
+bounded to one round of four sub-agents on one task.
 
 ## When to use
 
-After `speccy-work` has flipped tasks to `state="in-review"`. Re-enter after retry
-implementations complete.
+- With a selector (`speccy-review SPEC-0007/T-003`):
+  when the task to review is already known.
+- Without an argument: when picking up wherever `TASKS.md` left off.
+  The session reviews one task and exits.
+
+The target task must already be in `state="in-review"` (typically
+flipped there by `speccy-work`).
 
 ## Steps
 
-1. Query the CLI for the next reviewable task:
+1. Resolve the target task.
 
-   ```bash
-   speccy next --kind review --json
-   ```
+   - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
+   - Otherwise, query the CLI:
 
-2. If the result is empty or `blocked`, exit the loop.
-3. The JSON includes a `personas` array (default fan-out:
-   `business`, `tests`, `security`, `style`).
-4. Spawn the four reviewer sub-agents in parallel via the
-   host-native subagent primitive. Each sub-agent appends exactly
-   one inline note to the task in TASKS.md.
+     ```bash
+     speccy next --kind review --json
+     ```
+
+     If the result is `kind: blocked` or empty, exit and report that
+     no reviewable tasks remain. Otherwise, construct the
+     disambiguated `<spec>/<task>` form from the JSON's `spec` and
+     `task` fields (the bare `prompt_command` field is ambiguous
+     across specs — every spec has its own `T-001`).
+
+2. Fan out four reviewer sub-agents in parallel via the host-native
+   sub-agent primitive, one per persona in the default fan-out:
+   `business`, `tests`, `security`, `style`. Each sub-agent's prompt
+   is the bash command form below, not the CLI-rendered prompt text
+   inlined into the spawn call. The CLI command remains the source
+   of truth for what each persona reads.
 
    Prose-spawn the four reviewer subagents by name in parallel:
    `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
-   `reviewer-style`. Codex resolves each name to its TOML file at
+   `reviewer-style`. The prompt for each spawn is:
+
+   > Run `speccy review SPEC-NNNN/T-NNN --persona <persona>` and
+   > follow its output. Your only deliverable is a single inline
+   > note appended to TASKS.md.
+
+   Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name
+   into the command. Codex resolves each name to its TOML file at
    `.codex/agents/reviewer-<persona>.toml`, so the persona body is
    already loaded as the sub-agent's developer instructions.
 
-   Fallback for harnesses that do not recognise the subagent type:
-   render the persona prompt to stdout with the existing CLI and
-   splice the output into the spawned sub-agent's system prompt
-   directly:
+3. After all four sub-agents return, aggregate the four inline notes
+   they appended to the task subtree. Exit transition:
 
-   ```bash
-   speccy review SPEC-NNNN/T-003 --persona business
-   speccy review SPEC-NNNN/T-003 --persona tests
-   speccy review SPEC-NNNN/T-003 --persona security
-   speccy review SPEC-NNNN/T-003 --persona style
-   ```
+   - If every persona note is `pass`, flip the task's `state="..."`
+     attribute from `in-review` to `completed`.
+   - If any persona note is `blocking`, flip `state="..."` from
+     `in-review` to `pending` and append a `Retry: ...` bullet to
+     the task subtree summarising the blockers.
 
-5. After all four return, read the appended notes. If every persona
-   wrote `pass`, flip the task's `state` from `in-review` to
-   `completed`. If any wrote `blocking`, flip `state` from
-   `in-review` to `pending` and append a `Retry: ...` note
-   summarising the blockers.
-6. Go back to step 1.
+4. Exit. Do not pick up another `in-review` task. If the caller
+   wants another task reviewed, the caller invokes this skill again.
 
-### Loop exit criteria
-
-- `speccy next --kind review --json` returns empty.
-- The user interrupts.
-
-After exit, if any tasks are `state="pending"` (retries), suggest
-`speccy-work SPEC-NNNN` again. Otherwise suggest
+After exit, the next reasonable step depends on TASKS.md state: if
+any task is `state="pending"` (a retry), suggest
+`speccy-work SPEC-NNNN`. If any remain
+`state="in-review"`, suggest `speccy-review SPEC-NNNN`
+again. If all tasks are `state="completed"`, suggest
 `speccy-ship SPEC-NNNN`.

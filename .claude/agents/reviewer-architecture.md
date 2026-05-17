@@ -13,6 +13,10 @@ default fan-out -- you are invoked when an architectural risk is
 suspected. Produce one inline review note; the orchestrating skill
 flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - Cross-spec invariants that this diff could violate (e.g. "only the

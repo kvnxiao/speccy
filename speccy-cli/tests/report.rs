@@ -501,54 +501,52 @@ fn prompt_renders_and_integration_substitutes_every_placeholder() -> TestResult 
     )?;
     let out = capture_stdout(&ws, "SPEC-0001")?;
     assert!(out.contains("`SPEC-0001`"), "spec_id placeholder missing");
+    // SPEC-0023 REQ-006: `{{spec_md}}` and `{{tasks_md}}` are retired.
+    // The rendered prompt names the repo-relative paths; the bodies are
+    // not inlined.
     assert!(
-        out.contains("Example SPEC-0001"),
-        "spec_md content missing: {out}",
+        out.contains(".speccy/specs/0001-foo/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
     );
     assert!(
-        out.contains("<task id=\"T-001\""),
-        "tasks_md content missing",
+        out.contains(".speccy/specs/0001-foo/TASKS.md"),
+        "rendered prompt must name the TASKS.md repo-relative path: {out}",
+    );
+    assert!(
+        !out.contains("Example SPEC-0001"),
+        "SPEC.md body must not be inlined into the rendered prompt: {out}",
+    );
+    assert!(
+        !out.contains("<task id=\"T-001\""),
+        "TASKS.md body must not be inlined into the rendered prompt: {out}",
     );
     assert!(
         out.contains("- T-001: 1 retry"),
         "retry_summary placeholder content missing (singular): {out}",
     );
+    // SPEC-0023 REQ-005: `{{agents}}` is retired. The AGENTS.md body
+    // must not appear in the rendered prompt; the host auto-loads it.
     assert!(
-        out.contains("Agents conventions go here"),
-        "agents placeholder missing",
+        !out.contains("Agents conventions go here"),
+        "AGENTS.md body must not be inlined into the rendered prompt: {out}",
     );
     assert!(
-        !out.contains("{{spec_id}}"),
-        "spec_id placeholder not substituted",
+        !out.contains("{{agents}}"),
+        "retired `{{{{agents}}}}` placeholder must not appear in rendered output: {out}",
     );
-    assert!(
-        !out.contains("{{retry_summary}}"),
-        "retry_summary placeholder not substituted",
-    );
-    assert!(
-        !out.contains("{{tasks_md}}"),
-        "tasks_md placeholder not substituted",
-    );
-    Ok(())
-}
-
-#[test]
-fn prompt_renders_and_integration_missing_agents_md_leaves_marker() -> TestResult {
-    let ws = Workspace::new()?;
-    // Deliberately do NOT write AGENTS.md.
-    let tasks = tasks_md_with("SPEC-0001", "- [x] **T-001**: done\n  - Covers: REQ-001\n");
-    write_spec(
-        &ws.root,
-        "0001-foo",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
-        Some(&tasks),
-    )?;
-    let out = capture_stdout(&ws, "SPEC-0001")?;
-    assert!(
-        out.contains("AGENTS.md missing"),
-        "missing AGENTS.md should leave the marker in the rendered prompt: {out}",
-    );
+    for raw in [
+        "{{spec_id}}",
+        "{{spec_md}}",
+        "{{spec_md_path}}",
+        "{{tasks_md}}",
+        "{{tasks_md_path}}",
+        "{{retry_summary}}",
+    ] {
+        assert!(
+            !out.contains(raw),
+            "placeholder `{raw}` not substituted: {out}"
+        );
+    }
     Ok(())
 }
 

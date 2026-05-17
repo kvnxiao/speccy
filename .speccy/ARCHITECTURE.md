@@ -107,21 +107,24 @@ TASKS.md / MISSION.md / AGENTS.md.
 
 # Core Development Loop
 
-The full loop is five phases, alternating between planning and
-agent-orchestrated loops:
+The full loop is five phases. Phases 3 and 4 are single-task
+primitives: one invocation, one task, one state transition recorded
+in TASKS.md. Composing those invocations into a batch is a caller
+concern, not the skill's.
 
 ```
-1. plan        agent writes SPEC.md (PRD-shaped, marker-structured)
-2. tasks       agent writes TASKS.md (sized for one sub-agent each)
-3. impl loop   main agent spawns implementer sub-agents per task
-4. review loop main agent spawns reviewer sub-agents per persona per task
-5. report      agent writes REPORT.md and opens PR
+1. plan       agent writes SPEC.md (PRD-shaped, marker-structured)
+2. tasks      agent writes TASKS.md (one task sized for one agent session)
+3. implement  agent implements one task; exits with state transition
+4. review     agent fans out four personas on one task; exits with state transition
+5. report     agent writes REPORT.md and opens PR
 ```
 
 The CLI does not spawn sub-agents. The CLI does not run loops. The
 CLI renders prompts, queries artifact state, runs checks, and
-records nothing about its own execution. Loops live in the harness
-or in skills.
+records nothing about its own execution. Multi-task composition
+lives in the caller (a human at the terminal, the existing `/loop`
+skill, or a future orchestrator).
 
 ---
 
@@ -303,63 +306,75 @@ If TASKS.md already exists, the prompt is an **amendment** prompt:
 preserve completed tasks, modify or remove invalidated tasks, add
 new ones for new requirements.
 
-## Phase 3: Implementation loop (skill-orchestrated)
+## Phase 3: Implementation (single-task primitive)
 
-The `/speccy:work` skill, run by the main agent, executes this loop:
+The `/speccy:work` skill is a single-task primitive. One invocation
+implements one task and exits with one state transition recorded in
+TASKS.md.
 
-```text
-loop:
-  next = `speccy next --kind implement --json`
-  if next is empty: break
+With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
+that specific task. Without an argument the session resolves the next
+implementable task via `speccy next --kind implement --json` and
+implements that one. In either case the session:
 
-  prompt = `speccy implement {next.task}`
-  spawn implementer sub-agent with prompt
+- flips `state="pending"` to `state="in-progress"` on the target task,
+- renders the implementer prompt via `speccy implement SPEC-NNNN/T-NNN`,
+- writes tests first, then code; runs the project's own test command
+  locally and fails fast on red; uses `speccy check SPEC-NNNN/T-NNN`
+  only to render the scenarios it is satisfying,
+- appends one implementer note using the six-field handoff template
+  the prompt supplies,
+- flips `state="in-progress"` to `state="in-review"`, and exits.
 
-  sub-agent:
-    - flips state="pending" -> state="in-progress" with session marker
-    - implements the task
-    - runs the project's own test command locally (fail-fast on red);
-      uses `speccy check SPEC-NNNN/T-NNN` only to render the
-      scenarios it is satisfying
-    - leaves inline notes for out-of-scope work or unknowns
-    - flips state="in-progress" -> state="in-review"
-```
+The session does not pick up another task on its way out. If two
+implementers run in parallel against different `state="pending"`
+tasks and touch the same files, they conflict in git; Speccy does
+not lock.
 
-Concurrency is the main agent's choice. Two sub-agents may pick
-different `state="pending"` tasks in parallel; they will conflict
-in git if they touch the same files. Speccy does not lock.
+Composing multiple Phase 3 invocations into a batch is a future
+Layer-2 concern not built today. The interim composer is the
+existing `/loop` skill, which iterates the primitive on its caller's
+behalf.
 
-## Phase 4: Review loop (skill-orchestrated)
+## Phase 4: Review (single-task primitive)
 
-The `/speccy:review` skill, run by the main agent, executes this:
+The `/speccy:review` skill is a single-task primitive. One invocation
+runs one round of adversarial review on one task and exits with one
+state transition recorded in TASKS.md.
 
-```text
-loop:
-  next = `speccy next --kind review --json`
-  if next is empty: break
+With an optional `[SPEC-NNNN/T-NNN]` selector the session reviews
+that specific task. Without an argument the session resolves the
+next reviewable task via `speccy next --kind review --json` and
+reviews that one. In either case the session:
 
-  for persona in next.personas:
-    prompt = `speccy review {next.task} --persona {persona}`
-    spawn reviewer sub-agent with prompt
+- fans out four reviewer sub-agents in parallel within this single
+  task, one per persona in the default fan-out (`business`, `tests`,
+  `security`, `style`); each sub-agent's prompt is the bash form
+  `Run speccy review SPEC-NNNN/T-NNN --persona <persona> and follow
+  its output`, with the persona body already loaded from
+  `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
+- aggregates the four inline notes appended to the task subtree,
+- flips `state="in-review"` to `state="completed"` if every persona
+  note is `pass`; otherwise flips `state="in-review"` to
+  `state="pending"` and appends a `Retry: ...` bullet summarising the
+  blockers, and exits.
 
-    sub-agent:
-      - reads task + diff + SPEC.md
-      - appends "Review ({persona}, pass|blocking): ..." inline
+The within-task four-persona fan-out is intrinsic to the primitive,
+not orchestration: adversarial diversity requires fresh contexts per
+persona, and the fan-out is bounded to four sub-agents on one task
+in one round (DEC-002). Failed tasks return to `state="pending"` for
+a later Phase 3 invocation to pick up.
 
-  if all persona reviews PASS:
-    flip state="in-review" -> state="completed"
-  else:
-    flip state="in-review" -> state="pending" and append "Retry: ..." note
-```
+The default fan-out is **business**, **tests**, **security**,
+**style**. The other personas (**architecture**, **docs**) are
+available via `--persona` but not in the default set. Projects can
+override the default later in `speccy.toml` if necessary; v1 ships
+with this default.
 
-Failed tasks return to `state="pending"`. The main agent reads `speccy next
---kind implement --json` again and Phase 3 picks them back up.
-
-The default reviewer persona fan-out is: **business**, **tests**,
-**security**, **style**. The other personas (**architecture**,
-**docs**) are available via `--persona` but not in the default fan-
-out. Projects can override the default set in `speccy.toml` later
-if necessary; v1 ships with this default.
+Composing multiple Phase 4 invocations into a batch is a future
+Layer-2 concern not built today. The interim composer is the
+existing `/loop` skill, which iterates the primitive on its caller's
+behalf.
 
 ## Phase 5: Report and PR
 
@@ -394,7 +409,7 @@ XML element (see "TASKS.md format" below for the full grammar).
 | `pending` | Needs work (new or retry) | Initial generation; reviewer on blocking |
 | `in-progress` | Claimed by an implementer | Implementer when starting |
 | `in-review` | Implementation done, awaiting review | Implementer when finishing |
-| `completed` | All persona reviews passed | Main agent after review loop |
+| `completed` | All persona reviews passed | Reviewer skill at exit of review primitive |
 
 A retry is just `state="pending"` with prior notes attached. We do
 not introduce a fifth state because the inline notes already say
@@ -1380,18 +1395,17 @@ Or:
 
 ## State transitions
 
-The reviewer sub-agent **does not** flip the task's `state`
-attribute. That would create a race when multiple persona reviewers
-run in parallel. The main agent's `/speccy:review` skill flips
-state after all persona reviews have completed for the task:
+Each persona sub-agent **does not** flip the task's `state`
+attribute. That would create a race when the four personas run in
+parallel. The `/speccy:review` skill flips state once after all four
+persona reviews have completed for the task:
 
 - All `pass` -> `state="in-review"` becomes `state="completed"`.
 - Any `blocking` -> `state="in-review"` becomes `state="pending"`,
   plus a `Retry:` note summarizing the blockers.
 
-This puts state-mutation atomicity in one place (the orchestrating
-skill) and keeps persona sub-agents to a single inline append per
-review.
+This puts state-mutation atomicity in one place (the skill session)
+and keeps persona sub-agents to a single inline append per review.
 
 ## Why personas live in skills, not CLI
 
@@ -1506,8 +1520,8 @@ resources/
       speccy-init.md
       speccy-plan.md
       speccy-tasks.md
-      speccy-work.md         Implementation loop
-      speccy-review.md       Review loop
+      speccy-work.md         Implement one task (single-task primitive)
+      speccy-review.md       Review one task (single-task primitive)
       speccy-amend.md        SPEC.md + TASKS.md surgical edit
       speccy-ship.md         Run report, open PR
     personas/
@@ -1560,12 +1574,12 @@ Each top-level skill is a recipe:
 - `/speccy:init` -- bootstrap the project
 - `/speccy:plan` -- Phase 1 (AGENTS.md north star + optional MISSION.md -> SPEC)
 - `/speccy:tasks` -- Phase 2 (SPEC -> TASKS)
-- `/speccy:work` -- Phase 3 (impl loop)
-- `/speccy:review` -- Phase 4 (review loop)
+- `/speccy:work` -- Phase 3 (implement one task)
+- `/speccy:review` -- Phase 4 (review one task)
 - `/speccy:amend` -- Mid-loop spec change
 - `/speccy:ship` -- Phase 5 (report + PR)
 
-A typical full-loop session in Claude Code looks like:
+A typical full session in Claude Code looks like:
 
 ```
 /speccy:plan
@@ -1574,12 +1588,17 @@ A typical full-loop session in Claude Code looks like:
 /speccy:tasks SPEC-001
 [agent writes TASKS.md, then speccy tasks --commit]
 
-/speccy:work SPEC-001
-[main agent loops, spawning impl sub-agents until all tasks are state="in-review"]
+/speccy:work SPEC-001/T-001
+[agent implements one task, flips state="pending" -> state="in-review", exits]
 
-/speccy:review SPEC-001
-[main agent loops, spawning review sub-agents per persona per task;
- flips state; loop alternates with /speccy:work until all tasks state="completed"]
+/speccy:review SPEC-001/T-001
+[agent fans out four personas on one task, aggregates notes,
+ flips state="in-review" -> state="completed" (or back to "pending"
+ with a Retry note), exits]
+
+[caller re-invokes /speccy:work and /speccy:review on the remaining
+ tasks; the existing /loop skill is the interim composer for batched
+ iteration]
 
 /speccy:ship SPEC-001
 [agent writes REPORT.md, opens PR]

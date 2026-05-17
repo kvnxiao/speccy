@@ -2,22 +2,27 @@
 //!
 //! Renders the Phase 3 implementer prompt for one task. The CLI never
 //! invokes a model: it locates the task across the workspace via
-//! [`speccy_core::task_lookup::find`], inlines SPEC.md / AGENTS.md /
-//! task subtree / suggested-files into the embedded `implementer.md`
-//! template, applies budget trimming, and writes the rendered prompt to
-//! stdout.
+//! [`speccy_core::task_lookup::find`] and inlines the task subtree and
+//! suggested-files list into the embedded `implementer.md` template,
+//! applies budget trimming, and writes the rendered prompt to stdout.
 //!
-//! See `.speccy/specs/0008-implement-command/SPEC.md`.
+//! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
+//! retired the inlined-`SPEC.md` flow: modern AI coding harnesses
+//! auto-load `AGENTS.md` themselves, and every harness ships a Read
+//! primitive the agent uses to fetch SPEC.md by path on demand. The
+//! rendered prompt names the SPEC.md repo-relative path; the body is
+//! no longer inlined.
+//!
+//! See `.speccy/specs/0008-implement-command/SPEC.md` and
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
-use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
-use speccy_core::prompt::slice_for_task;
 use speccy_core::prompt::trim_to_budget;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskRef;
@@ -88,26 +93,19 @@ pub fn run(
     let workspace = scan(&project_root);
     let location = find(&workspace, &task_ref)?;
 
-    let agents = load_agents_md(&project_root);
     let template = load_template("implementer.md")?;
 
     let suggested_files = format_suggested_files(&location.task.suggested_files());
-    // After SPEC-0019 REQ-005, prompt slicing reads `SpecDoc` and emits
-    // only the requirements this task covers (plus frontmatter, summary,
-    // and decision context). Falls back to the raw SPEC.md when the
-    // marker tree failed to parse — the lint engine has already flagged
-    // that as SPC-001, so the agent at least sees something to act on.
-    let spec_md_slice = location.spec_doc.map_or_else(
-        || location.spec_md.raw.clone(),
-        |doc| slice_for_task(doc, &location.task.covers),
-    );
+    // SPEC-0023 REQ-006: SPEC.md is no longer inlined. The rendered
+    // prompt names the repo-relative path; the agent reads the file via
+    // the host's Read primitive on demand.
+    let spec_md_path = spec_md_path_relative(&project_root, location.spec_dir);
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", location.spec_id.clone());
-    vars.insert("spec_md", spec_md_slice);
+    vars.insert("spec_md_path", spec_md_path);
     vars.insert("task_id", location.task.id.clone());
     vars.insert("task_entry", location.task_entry_raw.clone());
     vars.insert("suggested_files", suggested_files);
-    vars.insert("agents", agents);
 
     let rendered = render(template, &vars);
     let TrimResult { output, .. } = trim_to_budget(rendered, DEFAULT_BUDGET);
@@ -116,6 +114,20 @@ pub fn run(
         out.write_all(b"\n")?;
     }
     Ok(())
+}
+
+/// Compute the repo-relative path to `<spec_dir>/SPEC.md`.
+///
+/// `project_root` is the absolute path to the project root (where
+/// `.speccy/` lives); `spec_dir` is the absolute path to the spec
+/// directory. Returns a forward-slash path string suitable for embedding
+/// in the rendered prompt; falls back to the absolute spec path string
+/// if the relative computation fails (which would only happen if
+/// `spec_dir` were not under `project_root`, a configuration the
+/// workspace scanner does not produce).
+fn spec_md_path_relative(project_root: &Utf8Path, spec_dir: &Utf8Path) -> String {
+    let relative = spec_dir.strip_prefix(project_root).unwrap_or(spec_dir);
+    relative.join("SPEC.md").as_str().replace('\\', "/")
 }
 
 fn format_suggested_files(files: &[String]) -> String {

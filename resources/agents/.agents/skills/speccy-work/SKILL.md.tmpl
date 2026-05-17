@@ -1,5 +1,5 @@
 ---
 name: speccy-work
-description: Drive Speccy's implementation loop — work through each open task in TASKS.md one at a time, spawning an implementer sub-agent per task until none remain. Use when the user says "implement the tasks", "start working on SPEC-NNNN", "build out the spec", "run the work loop", or wants to resume coding against an existing task list.
+description: Implement one Speccy task per invocation and exit. With an optional `SPEC-NNNN/T-NNN` selector, the session implements that task; without a selector, it resolves the next implementable task via `speccy next --kind implement --json` and implements only that one. Use when the user says "implement T-003", "work the next task", "run the implementer", "pick up the next pending task in SPEC-NNNN", or wants to implement one slice against an existing task list.
 ---
 {% include "modules/skills/speccy-work.md" %}

@@ -4,17 +4,11 @@ You are amending an existing SPEC. Produce a **minimal surgical
 diff** to the SPEC.md below. Do not rewrite sections that are still
 correct.
 
-## Project conventions
+{{mission_section}}## Existing SPEC (pointer)
 
-{{agents}}
-
-## Mission context
-
-{{mission}}
-
-## Existing SPEC
-
-{{spec_md}}
+Before editing, read SPEC.md at `{{spec_md_path}}`. The CLI no longer
+inlines the SPEC body into this prompt; load it via your Read
+primitive.
 
 ## Recent changelog
 

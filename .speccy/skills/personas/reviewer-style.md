@@ -8,6 +8,10 @@ and formatters the project uses. Your job is to catch drift early,
 where it is cheap to fix. Produce one inline review note; the
 orchestrating skill flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - Conventions from `AGENTS.md` and any referenced rule files

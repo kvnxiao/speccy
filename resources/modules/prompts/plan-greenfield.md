@@ -1,13 +1,6 @@
 # Speccy: Plan (greenfield)
 
-You are drafting a new SPEC for an existing speccy workspace. The
-project-wide product north star is carried in `AGENTS.md` below —
-read it for what we're building, who for, the v1 outcome, the
-quality bar, and known unknowns.
-
-## Project conventions and product north star
-
-{{agents}}
+You are drafting a new SPEC for an existing speccy workspace.
 
 ## Your task
 

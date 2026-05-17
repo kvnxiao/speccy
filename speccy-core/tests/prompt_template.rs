@@ -16,9 +16,11 @@ fn loads_plan_greenfield_template_from_embedded_bundle() {
         body.contains("{{next_spec_id}}"),
         "greenfield template missing {{next_spec_id}} placeholder",
     );
+    // SPEC-0023 REQ-005: the `{{agents}}` placeholder is retired; modern
+    // AI coding harnesses auto-load `AGENTS.md` themselves.
     assert!(
-        body.contains("{{agents}}"),
-        "greenfield template missing {{agents}} placeholder",
+        !body.contains("{{agents}}"),
+        "greenfield template must not contain the retired {{agents}} placeholder",
     );
     assert!(
         !body.contains("{{vision}}"),
@@ -34,13 +36,30 @@ fn loads_plan_amend_template_from_embedded_bundle() {
         body.contains("{{spec_id}}"),
         "amend template missing {{spec_id}} placeholder",
     );
+    // SPEC-0023 REQ-006: the `{{spec_md}}` and `{{mission}}` placeholders
+    // are retired. The rendered prompt names the SPEC.md and MISSION.md
+    // repo-relative paths instead so the agent reads them via the host's
+    // Read primitive on demand.
     assert!(
-        body.contains("{{spec_md}}"),
-        "amend template missing {{spec_md}} placeholder",
+        !body.contains("{{spec_md}}"),
+        "amend template must not contain the retired {{spec_md}} placeholder",
     );
     assert!(
-        body.contains("{{mission}}"),
-        "amend template missing {{mission}} placeholder for nearest-parent MISSION.md",
+        !body.contains("{{mission}}"),
+        "amend template must not contain the retired {{mission}} placeholder",
+    );
+    assert!(
+        body.contains("{{spec_md_path}}"),
+        "amend template missing {{spec_md_path}} placeholder for the SPEC.md Read instruction",
+    );
+    assert!(
+        body.contains("{{mission_section}}"),
+        "amend template missing {{mission_section}} placeholder for the optional MISSION.md section",
+    );
+    // SPEC-0023 REQ-005: the `{{agents}}` placeholder is retired.
+    assert!(
+        !body.contains("{{agents}}"),
+        "amend template must not contain the retired {{agents}} placeholder",
     );
 }
 

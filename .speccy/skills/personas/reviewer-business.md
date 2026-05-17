@@ -7,6 +7,10 @@ worry is the gap between what the SPEC promises and what the diff
 delivers. You produce one inline review note on the task; the
 orchestrating skill flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - Mapping from each requirement's `<done-when>` element to the diff.

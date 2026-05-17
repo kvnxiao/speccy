@@ -15,14 +15,15 @@
 //! Covers SPEC-0009:
 //! - CHK-004 (`persona_arg_validation`): `--persona` required, validated
 //!   against the six-entry registry, case-sensitive.
-//! - CHK-005 (`diff_fallback_chain`): exercised separately in `git_diff.rs` to
-//!   keep this binary fast; this file verifies only that the literal `{{diff}}`
-//!   placeholder is substituted.
 //! - CHK-006 (`prompt_renders`): template loaded, every placeholder
 //!   substituted, budget trimming applied, output to stdout.
 //! - CHK-007 (`shared_task_lookup_and_integration`): reuses
 //!   `task_lookup::find`; ambiguity stderr suggests the `speccy review
 //!   SPEC-NNNN/T-NNN --persona <name>` form.
+//!
+//! SPEC-0023 REQ-003 retired the inlined-diff path; the rendered prompt
+//! no longer contains a `{{diff}}` placeholder, and the reviewer agent
+//! fetches the diff via `git diff` itself.
 
 mod common;
 
@@ -163,9 +164,20 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
         out.contains("(security)"),
         "persona placeholder missing: {out}",
     );
-    // {{spec_md}}
-    assert!(out.contains("Example SPEC-0001"), "spec_md missing");
-    assert!(out.contains("### REQ-001: First"), "REQ heading missing");
+    // SPEC-0023 REQ-006: `{{spec_md}}` is retired. The rendered prompt
+    // names the SPEC.md repo-relative path; the body is not inlined.
+    assert!(
+        out.contains(".speccy/specs/0001-foo/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
+    );
+    assert!(
+        !out.contains("Example SPEC-0001"),
+        "SPEC.md body must not be inlined into the rendered prompt: {out}",
+    );
+    assert!(
+        !out.contains("### REQ-001: First"),
+        "SPEC.md REQ heading must not appear inline: {out}",
+    );
     // {{task_entry}}
     assert!(
         out.contains("<task id=\"T-001\""),
@@ -175,28 +187,34 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
         out.contains("Implementer note: done."),
         "task subtree bullets missing"
     );
-    // {{agents}}
+    // SPEC-0023 REQ-005: `{{agents}}` is retired. The AGENTS.md body
+    // must not appear in the rendered prompt; the host auto-loads it.
     assert!(
-        out.contains("Agents conventions go here"),
-        "agents missing: {out}",
+        !out.contains("Agents conventions go here"),
+        "AGENTS.md body must not be inlined into the rendered prompt: {out}",
     );
-    // {{diff}} — outside a git repo this is the documented fallback
-    // string; the test ensures the placeholder was substituted (not
-    // left literal).
+    // SPEC-0023 REQ-003: `{{diff}}` is gone — the rendered prompt
+    // instructs the reviewer agent to run `git diff` itself.
     assert!(
         !out.contains("{{diff}}"),
-        "diff placeholder not substituted"
+        "diff placeholder must not appear in rendered prompt: {out}",
+    );
+    assert!(
+        out.contains("git diff"),
+        "rendered prompt must instruct the agent to run `git diff`: {out}",
     );
     // {{persona_content}} — embedded fallback stub content lands here.
     assert!(
         !out.contains("{{persona_content}}"),
         "persona_content placeholder not substituted",
     );
-    // No raw placeholders left unsubstituted.
+    // No raw placeholders left unsubstituted (including the retired
+    // `{{agents}}` and `{{spec_md}}`).
     for raw in [
         "{{task_id}}",
         "{{spec_id}}",
         "{{spec_md}}",
+        "{{spec_md_path}}",
         "{{task_entry}}",
         "{{agents}}",
         "{{persona}}",
@@ -478,36 +496,49 @@ fn help_succeeds() -> TestResult {
     Ok(())
 }
 
-// -- CHK-005: diff_fallback_chain placeholder substitution -----------------
+// -- SPEC-0023 REQ-003: rendered prompt no longer inlines the diff ---------
 
 #[test]
-fn diff_placeholder_is_substituted_with_fallback_outside_repo() -> TestResult {
+fn rendered_prompt_omits_inline_diff_and_instructs_git_fetch() -> TestResult {
     let ws = Workspace::new()?;
     seed_one_task(&ws)?;
     let out = capture_stdout(&ws, "T-001", "security")?;
-    // Outside a git repo, the documented fallback is inlined as the
-    // diff content; the placeholder must not be left literal.
+    // SPEC-0023 REQ-003: no literal placeholder, no fallback note, and
+    // no `diff --git` line — the prompt now tells the reviewer agent
+    // to run `git diff` itself.
     assert!(
         !out.contains("{{diff}}"),
-        "diff placeholder must be substituted"
+        "diff placeholder must not appear in rendered prompt: {out}",
     );
     assert!(
-        out.contains("no diff available"),
-        "outside-repo diff must use the fallback note: {out}",
+        !out.contains("no diff available"),
+        "rendered prompt must not contain the retired fallback note: {out}",
+    );
+    assert!(
+        !out.lines().any(|line| line.starts_with("diff --git")),
+        "rendered prompt must not contain an inlined `diff --git` line: {out}",
+    );
+    assert!(
+        out.contains("git diff"),
+        "rendered prompt must instruct the agent to run `git diff`: {out}",
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0019 T-006: reviewer prompt is task-scoped — the scenario text the
-// reviewer sees equals the marker body bytes from SPEC.md.
+// SPEC-0023 REQ-006: the reviewer prompt no longer inlines the SPEC.md body
+// — neither sliced nor verbatim. The retired SPEC-0019/SPEC-0020 tests pinned
+// the slicer contract (`reviewer_tests_scenario_text_equals_marker_body_bytes`,
+// `reviewer_tests_multi_paragraph_scenario_body_renders_verbatim`,
+// `reviewer_prompt_falls_back_to_raw_spec_md_when_parse_fails`). After
+// T-006 the rendered prompt names the SPEC.md repo-relative path; the
+// agent reads the file via the host's Read primitive on demand.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
+fn reviewer_prompt_does_not_inline_spec_body_for_grouped_spec() -> TestResult {
     let ws = Workspace::new()?;
     write_agents(&ws, "# Agents\n")?;
-    let containing_spec = "SPEC-0099";
     let spec_md = indoc::indoc! {r#"
         ---
         id: SPEC-0099
@@ -531,24 +562,9 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
         - Example story.
         </user-stories>
 
-        <requirement id="REQ-001">
-        ### REQ-001: First
-        unrelated body
-        <done-when>
-        - placeholder.
-        </done-when>
-
-        <behavior>
-        - placeholder.
-        </behavior>
-
-        <scenario id="CHK-001">
-        unrelated scenario
-        </scenario>
-        </requirement>
         <requirement id="REQ-002">
         ### REQ-002: Second
-        body for REQ-002
+        REVIEWER_NO_INLINE_REQ_002_unique_marker
         <done-when>
         - placeholder.
         </done-when>
@@ -560,7 +576,7 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
         <scenario id="CHK-002">
         Given REQ-002,
         when the reviewer reads the prompt,
-        then the scenario body bytes equal this text.
+        then the scenario body bytes are not inlined.
         </scenario>
         </requirement>
 
@@ -573,216 +589,26 @@ fn reviewer_tests_scenario_text_equals_marker_body_bytes() -> TestResult {
         </changelog>
     "#};
     let tasks = tasks_md_with(
-        containing_spec,
+        "SPEC-0099",
         "- [?] **T-001**: only req2\n  - Covers: REQ-002\n  - Implementer note: done.\n",
     );
     write_spec(&ws.root, "0099-review-slice", spec_md, "", Some(&tasks))?;
 
     let out = capture_stdout(&ws, "T-001", "tests")?;
-
-    // Extract the CHK-002 scenario body bytes from the source.
-    let start_tag = "<scenario id=\"CHK-002\">\n";
-    let end_tag = "</scenario>";
-    let after_start = spec_md
-        .find(start_tag)
-        .map(|i| i + start_tag.len())
-        .expect("fixture must contain CHK-002 open tag");
-    let tail = spec_md
-        .get(after_start..)
-        .expect("after_start must be a valid char boundary in fixture");
-    let before_end = tail
-        .find(end_tag)
-        .map(|j| after_start + j)
-        .expect("fixture must contain matching close tag");
-    let body_bytes = spec_md
-        .get(after_start..before_end)
-        .expect("body slice must lie on valid char boundaries in fixture")
-        .trim_end_matches('\n');
-
-    // The full scenario body (multi-line) must appear in the rendered
-    // prompt as a contiguous substring — that's how the reviewer sees
-    // the validation scenario.
+    // SPEC-0023 REQ-006: the SPEC.md body must not appear in the
+    // rendered prompt — neither the requirement body nor the scenario
+    // body. The path is named instead.
     assert!(
-        out.contains(body_bytes),
-        "reviewer prompt must include the CHK-002 scenario body bytes verbatim;\n\
-         body_bytes={body_bytes:?}\n\
-         out={out}",
+        out.contains(".speccy/specs/0099-review-slice/SPEC.md"),
+        "rendered prompt must name the SPEC.md repo-relative path: {out}",
     );
-
-    // And the unrelated REQ-001 marker body must NOT appear (task-scoped
-    // slicing excludes uncovered requirements).
     assert!(
-        !out.contains("unrelated scenario"),
-        "uncovered REQ-001's scenario body must be excluded from slice:\n{out}",
+        !out.contains("REVIEWER_NO_INLINE_REQ_002_unique_marker"),
+        "SPEC.md body must not be inlined into the rendered prompt: {out}",
     );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// SPEC-0020 T-006: when the scenario body spans multiple Markdown
-// paragraphs and includes a fenced code block plus literal `<` / `>`
-// characters, the reviewer prompt must surface the full body bytes
-// verbatim and contiguous with the source.
-// ---------------------------------------------------------------------------
-
-#[test]
-fn reviewer_tests_multi_paragraph_scenario_body_renders_verbatim() -> TestResult {
-    let ws = Workspace::new()?;
-    write_agents(&ws, "# Agents\n")?;
-    // Multi-paragraph scenario body. Contains:
-    // - A fenced code block (with literal `<thinking>` inside, which the line-aware
-    //   scanner must NOT promote to structure).
-    // - Literal `<` / `>` Markdown characters in prose.
-    // - Multiple paragraphs separated by blank lines.
-    // These are exactly the inputs SPEC-0020 DEC-003 calls out as
-    // requiring byte-verbatim preservation.
-    let spec_md = indoc::indoc! {r#"
-        ---
-        id: SPEC-0099
-        slug: x
-        title: Reviewer multi-paragraph fixture
-        status: in-progress
-        created: 2026-05-15
-        ---
-
-        # SPEC-0099
-
-        <goals>
-        Example goals.
-        </goals>
-
-        <non-goals>
-        Example non-goals.
-        </non-goals>
-
-        <user-stories>
-        - Example story.
-        </user-stories>
-
-        <requirement id="REQ-002">
-        ### REQ-002: Reviewer surfaces multi-paragraph bodies verbatim
-        body for REQ-002.
-        <done-when>
-        - placeholder.
-        </done-when>
-
-        <behavior>
-        - placeholder.
-        </behavior>
-
-        <scenario id="CHK-002">
-        Given a scenario whose body contains literal `<thinking>` and
-        comparison expressions like `a < b > c`,
-
-        when the reviewer reads the rendered prompt,
-
-        then the body bytes must round-trip verbatim:
-
-        ```rust
-        fn assert_lt<T: Ord>(a: T, b: T) {
-            assert!(a < b, "<expected> a < b");
-        }
-        ```
-
-        And the trailing prose paragraph too.
-        </scenario>
-        </requirement>
-
-        ## Changelog
-
-        <changelog>
-        | Date | Author | Summary |
-        |------|--------|---------|
-        | 2026-05-15 | t | init |
-        </changelog>
-    "#};
-    let tasks = tasks_md_with(
-        "SPEC-0099",
-        "- [?] **T-001**: only req2\n  - Covers: REQ-002\n  - Implementer note: done.\n",
-    );
-    write_spec(&ws.root, "0099-reviewer-multi", spec_md, "", Some(&tasks))?;
-
-    let out = capture_stdout(&ws, "T-001", "tests")?;
-
-    // Extract the CHK-002 scenario body bytes from the source verbatim.
-    let start_tag = "<scenario id=\"CHK-002\">\n";
-    let end_tag = "</scenario>";
-    let after_start = spec_md
-        .find(start_tag)
-        .map(|i| i + start_tag.len())
-        .expect("fixture must contain CHK-002 open tag");
-    let tail = spec_md
-        .get(after_start..)
-        .expect("after_start must be a valid char boundary in fixture");
-    let before_end = tail
-        .find(end_tag)
-        .map(|j| after_start + j)
-        .expect("fixture must contain matching close tag");
-    let body_bytes = spec_md
-        .get(after_start..before_end)
-        .expect("body slice must lie on valid char boundaries in fixture")
-        .trim_end_matches('\n');
-
-    // Sanity: the fixture really does contain the load-bearing pieces.
-    assert!(body_bytes.contains("`<thinking>`"));
-    assert!(body_bytes.contains("```rust"));
-    assert!(body_bytes.contains("a < b > c"));
-
-    // The full multi-paragraph scenario body must appear in the rendered
-    // prompt as a contiguous substring: byte-for-byte preservation
-    // across the fenced code block, the literal `<`/`>` characters, and
-    // the paragraph breaks.
     assert!(
-        out.contains(body_bytes),
-        "reviewer prompt must include the CHK-002 multi-paragraph body bytes verbatim;\n\
-         body_bytes={body_bytes:?}\n\
-         out={out}",
-    );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// SPEC-0020 T-006: when the SpecDoc parse fails (legacy comment marker
-// outside any fenced code block), the reviewer slicer must fall back to
-// the raw SPEC.md bytes so the reviewer prompt is never silently empty.
-// ---------------------------------------------------------------------------
-
-#[test]
-fn reviewer_prompt_falls_back_to_raw_spec_md_when_parse_fails() -> TestResult {
-    let ws = Workspace::new()?;
-    write_agents(&ws, "# Agents\n")?;
-    let legacy_spec_md = indoc::indoc! {r#"
-        ---
-        id: SPEC-0099
-        slug: x
-        title: Legacy fallback fixture
-        status: in-progress
-        created: 2026-05-15
-        ---
-
-        # SPEC-0099
-
-        <!-- speccy:requirement id="REQ-001" -->
-        ### REQ-001: First
-        REVIEWER_FALLBACK_REQ_001_unique_marker
-        <!-- /speccy:requirement -->
-    "#};
-    let tasks = tasks_md_with(
-        "SPEC-0099",
-        "- [?] **T-001**: covers req1\n  - Covers: REQ-001\n  - Implementer note: done.\n",
-    );
-    write_spec(
-        &ws.root,
-        "0099-rev-fallback",
-        legacy_spec_md,
-        "",
-        Some(&tasks),
-    )?;
-
-    let out = capture_stdout(&ws, "T-001", "tests")?;
-    assert!(
-        out.contains("REVIEWER_FALLBACK_REQ_001_unique_marker"),
-        "reviewer fallback path must inline the raw SPEC.md body when parse fails:\n{out}",
+        !out.contains("then the scenario body bytes are not inlined"),
+        "scenario body must not be inlined into the rendered prompt: {out}",
     );
     Ok(())
 }

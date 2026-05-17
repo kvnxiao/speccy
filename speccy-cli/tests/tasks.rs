@@ -28,7 +28,12 @@ fn write_agents(ws: &Workspace, body: &str) -> TestResult {
 #[test]
 fn initial_prompt_rendered_when_tasks_md_absent() -> TestResult {
     let ws = Workspace::new()?;
-    write_agents(&ws, "# Agents\nuse rust\n")?;
+    // SPEC-0023 REQ-005: AGENTS.md is no longer inlined; modern AI
+    // coding harnesses auto-load it themselves. SPEC-0023 REQ-006: the
+    // SPEC.md body is also no longer inlined; the rendered prompt names
+    // the repo-relative path so the agent reads it via the host's Read
+    // primitive on demand.
+    write_agents(&ws, "# Agents\nUSE_RUST_SENTINEL\n")?;
     write_spec(
         &ws.root,
         "0001-foo",
@@ -45,8 +50,21 @@ fn initial_prompt_rendered_when_tasks_md_absent() -> TestResult {
         .success()
         .stdout(contains("Speccy: Tasks (initial decomposition"))
         .stdout(contains("SPEC-0001"))
-        .stdout(contains("use rust"))
-        .stdout(contains("Example SPEC-0001"));
+        .stdout(contains(".speccy/specs/0001-foo/SPEC.md"));
+    let out = Command::cargo_bin("speccy")?
+        .arg("tasks")
+        .arg("SPEC-0001")
+        .current_dir(ws.root.as_std_path())
+        .output()?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !stdout.contains("USE_RUST_SENTINEL"),
+        "AGENTS.md body must not be inlined into the rendered prompt: {stdout}",
+    );
+    assert!(
+        !stdout.contains("Example SPEC-0001"),
+        "SPEC.md body must not be inlined into the rendered prompt: {stdout}",
+    );
     Ok(())
 }
 
@@ -66,11 +84,20 @@ fn amendment_prompt_rendered_when_tasks_md_present() -> TestResult {
     cmd.arg("tasks")
         .arg("SPEC-0001")
         .current_dir(ws.root.as_std_path());
-    cmd.assert()
+    // SPEC-0023 REQ-006: the rendered prompt names the SPEC.md and
+    // TASKS.md repo-relative paths; the bodies are not inlined.
+    let assert = cmd
+        .assert()
         .success()
         .stdout(contains("Speccy: Tasks (amend"))
         .stdout(contains("SPEC-0001"))
-        .stdout(contains("<task id=\"T-001\""));
+        .stdout(contains(".speccy/specs/0001-foo/SPEC.md"))
+        .stdout(contains(".speccy/specs/0001-foo/TASKS.md"));
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        !stdout.contains("<task id=\"T-001\""),
+        "TASKS.md body must not be inlined into the rendered prompt: {stdout}",
+    );
     Ok(())
 }
 

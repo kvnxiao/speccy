@@ -10,6 +10,10 @@ read the SPEC, the diff, and any implementer notes; your single
 deliverable is a security verdict on this slice of work. Produce one
 inline review note; the orchestrating skill flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - Authentication and authorization boundaries -- who can call this

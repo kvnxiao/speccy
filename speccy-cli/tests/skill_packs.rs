@@ -172,11 +172,11 @@ const PROMPT_FILES: &[&str] = &[
     "report.md",
 ];
 
-const LOOP_RECIPES: &[&str] = &[
-    "speccy-work/SKILL.md",
-    "speccy-review/SKILL.md",
-    "speccy-amend/SKILL.md",
-];
+// After SPEC-0023 REQ-001 / REQ-002, `speccy-work` and `speccy-review`
+// are single-task primitives — one invocation, one task, exit — and
+// no longer declare loop exit criteria. `speccy-amend` is the only
+// remaining loop recipe.
+const LOOP_RECIPES: &[&str] = &["speccy-amend/SKILL.md"];
 
 const SKILL_NAMES: &[&str] = &[
     "speccy-init",
@@ -282,11 +282,7 @@ fn assert_placeholders(template: &str, expected: &[&str], file_name: &str) {
 #[test]
 fn prompt_placeholders_match_commands() {
     let plan_greenfield = read_prompt("plan-greenfield.md");
-    assert_placeholders(
-        plan_greenfield,
-        &["agents", "next_spec_id"],
-        "plan-greenfield.md",
-    );
+    assert_placeholders(plan_greenfield, &["next_spec_id"], "plan-greenfield.md");
     // Negative: the retired `{{vision}}` placeholder must not appear
     // anywhere in plan-greenfield.md (Vision was swapped for Mission
     // and the product north star now lives in AGENTS.md).
@@ -298,21 +294,21 @@ fn prompt_placeholders_match_commands() {
     let plan_amend = read_prompt("plan-amend.md");
     assert_placeholders(
         plan_amend,
-        &["spec_id", "spec_md", "agents", "mission"],
+        &["spec_id", "spec_md_path", "mission_section"],
         "plan-amend.md",
     );
 
     let tasks_generate = read_prompt("tasks-generate.md");
     assert_placeholders(
         tasks_generate,
-        &["spec_id", "spec_md", "agents"],
+        &["spec_id", "spec_md_path"],
         "tasks-generate.md",
     );
 
     let tasks_amend = read_prompt("tasks-amend.md");
     assert_placeholders(
         tasks_amend,
-        &["spec_id", "spec_md", "tasks_md", "agents"],
+        &["spec_id", "spec_md_path", "tasks_md_path"],
         "tasks-amend.md",
     );
 
@@ -321,37 +317,71 @@ fn prompt_placeholders_match_commands() {
         implementer,
         &[
             "spec_id",
-            "spec_md",
+            "spec_md_path",
             "task_id",
             "task_entry",
             "suggested_files",
-            "agents",
         ],
         "implementer.md",
     );
 
     let reviewer_required = &[
         "spec_id",
-        "spec_md",
+        "spec_md_path",
         "task_id",
         "task_entry",
-        "diff",
         "persona",
         "persona_content",
-        "agents",
     ];
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
         let body = read_prompt(&file);
         assert_placeholders(body, reviewer_required, &file);
+        // SPEC-0023 REQ-003: the rendered prompt no longer inlines the
+        // branch diff; the template instructs the reviewer agent to run
+        // `git diff` itself instead.
+        assert!(
+            !body.contains("{{diff}}"),
+            "reviewer template `{file}` must not contain the retired `{{{{diff}}}}` placeholder",
+        );
+        assert!(
+            body.contains("git diff"),
+            "reviewer template `{file}` must instruct the agent to run `git diff`",
+        );
     }
 
     let report = read_prompt("report.md");
     assert_placeholders(
         report,
-        &["spec_id", "spec_md", "tasks_md", "retry_summary", "agents"],
+        &["spec_id", "spec_md_path", "tasks_md_path", "retry_summary"],
         "report.md",
     );
+
+    // SPEC-0023 REQ-005: the `{{agents}}` placeholder is retired
+    // workspace-wide. Modern AI coding harnesses auto-load `AGENTS.md`
+    // themselves; the CLI no longer inlines it. Assert across every
+    // prompt template.
+    for name in PROMPT_FILES {
+        let body = read_prompt(name);
+        assert!(
+            !body.contains("{{agents}}"),
+            "template `{name}` must not contain the retired `{{{{agents}}}}` placeholder (SPEC-0023 REQ-005)",
+        );
+    }
+
+    // SPEC-0023 REQ-006: the `{{spec_md}}`, `{{tasks_md}}`, and
+    // `{{mission}}` interpolations are retired workspace-wide. Rendered
+    // prompts now name the file's repo-relative path and the agent
+    // reads it via the host's Read primitive on demand.
+    for name in PROMPT_FILES {
+        let body = read_prompt(name);
+        for retired in ["{{spec_md}}", "{{tasks_md}}", "{{mission}}"] {
+            assert!(
+                !body.contains(retired),
+                "template `{name}` must not contain the retired `{retired}` placeholder (SPEC-0023 REQ-006)",
+            );
+        }
+    }
 
     // Negative: an obvious typo must not appear in any template.
     let typo = "{{spec_idd}}";
@@ -1045,10 +1075,16 @@ fn speccy_review_skill_prefers_native_subagents() {
         );
     }
 
-    // Both rendered outputs must carry the explicit
-    // `speccy review T-NNN --persona X` fallback example so the
-    // existing CLI path is one search away when the subagent type is
-    // unrecognised.
+    // Both rendered outputs must carry the bash command form
+    // `speccy review <SPEC-NNNN/T-NNN> --persona <persona>` as the
+    // payload the spawned sub-agent runs. SPEC-0023 REQ-002 retired the
+    // per-persona "explicit fallback example" requirement — the spawn
+    // prompt now uses placeholders that the orchestrator fills in
+    // when invoking the sub-agent — but `speccy review` and
+    // `--persona` must still appear so the CLI path is one search
+    // away. Persona-by-name presence is enforced above via
+    // `subagent_type:` (Claude) and `reviewer-<persona>` prose
+    // (Codex).
     for (label, body) in [
         (
             "claude-code .claude/skills/speccy-review/SKILL.md",
@@ -1058,19 +1094,12 @@ fn speccy_review_skill_prefers_native_subagents() {
     ] {
         assert!(
             body.contains("speccy review"),
-            "rendered `{label}` must contain the literal `speccy review` CLI command as a fallback reference; got:\n{body}",
+            "rendered `{label}` must contain the literal `speccy review` CLI command; got:\n{body}",
         );
         assert!(
             body.contains("--persona "),
-            "rendered `{label}` must show a `--persona <name>` example for the fallback path; got:\n{body}",
+            "rendered `{label}` must show a `--persona <persona>` example in the spawn prompt; got:\n{body}",
         );
-        for persona in DEFAULT_REVIEWER_PERSONAS {
-            let needle = format!("--persona {persona}");
-            assert!(
-                body.contains(&needle),
-                "rendered `{label}` must include an explicit `--persona {persona}` example in the fallback block; got:\n{body}",
-            );
-        }
     }
 }
 

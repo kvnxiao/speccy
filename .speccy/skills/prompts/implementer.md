@@ -6,13 +6,11 @@ attribute from `pending` / `in-progress` to `in-review` in TASKS.md
 and append your implementer note inline using the handoff template
 below.
 
-## Project conventions
+## SPEC (pointer)
 
-{{agents}}
-
-## SPEC (full)
-
-{{spec_md}}
+Before starting, read SPEC.md at `{{spec_md_path}}`. The CLI no
+longer inlines the SPEC body into this prompt; load it via your Read
+primitive when you need it.
 
 ## Task entry (verbatim from TASKS.md)
 

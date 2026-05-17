@@ -3,17 +3,17 @@
 You are amending an existing TASKS.md after the SPEC changed.
 Produce a **minimal surgical edit**. Do not regenerate the file.
 
-## Project conventions
+## SPEC (pointer)
 
-{{agents}}
+Before reconciling, read SPEC.md at `{{spec_md_path}}`. The CLI no
+longer inlines the SPEC body into this prompt; load it via your Read
+primitive.
 
-## SPEC (current)
+## TASKS.md (pointer)
 
-{{spec_md}}
-
-## TASKS.md (existing)
-
-{{tasks_md}}
+Read the existing TASKS.md at `{{tasks_md_path}}`. The CLI no longer
+inlines the TASKS body into this prompt; load it via your Read
+primitive before producing the surgical diff.
 
 ## Your task
 

@@ -12,6 +12,10 @@ the state of the code after this diff lands. You are off the default
 fan-out -- invoked when a diff plausibly drifts documentation. Produce
 one inline review note; the orchestrating skill flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - Public-API doc comments accurately describe the post-diff behaviour.

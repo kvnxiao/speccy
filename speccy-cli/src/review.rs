@@ -4,14 +4,21 @@
 //! CLI never invokes a model: it locates the task across the workspace
 //! via [`speccy_core::task_lookup::find`], resolves the persona content
 //! via [`speccy_core::personas::resolve_file`] (project-local override
-//! before embedded bundle), captures the implementer diff via
-//! [`crate::git::diff_for_review`], inlines all of that plus AGENTS.md
-//! into the embedded `reviewer-<persona>.md` template, applies budget
-//! trimming, and writes the rendered prompt to stdout.
+//! before embedded bundle), inlines that into the embedded
+//! `reviewer-<persona>.md` template, applies budget trimming, and writes
+//! the rendered prompt to stdout. SPEC-0023 REQ-003 moved diff fetching
+//! out of the CLI: the rendered prompt instructs the reviewer agent to
+//! run `git diff` itself, scoped to the task's suggested files.
+//! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
+//! retired the inlined-`SPEC.md` flow: modern AI coding harnesses
+//! auto-load `AGENTS.md` themselves, and every harness ships a Read
+//! primitive the reviewer uses to fetch SPEC.md by path on demand. The
+//! rendered prompt names the SPEC.md repo-relative path; the body is
+//! no longer inlined.
 //!
-//! See `.speccy/specs/0009-review-command/SPEC.md`.
+//! See `.speccy/specs/0009-review-command/SPEC.md` and
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
 
-use crate::git::diff_for_review;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::personas::ALL as PERSONAS_ALL;
@@ -20,10 +27,8 @@ use speccy_core::personas::resolve_file as resolve_persona_file;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
-use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
-use speccy_core::prompt::slice_for_task;
 use speccy_core::prompt::trim_to_budget;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskRef;
@@ -104,30 +109,24 @@ pub fn run(args: &ReviewArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     let workspace = scan(&project_root);
     let location = find(&workspace, &task_ref)?;
 
-    let agents = load_agents_md(&project_root);
     let persona_content = resolve_persona_file(&args.persona, &project_root)?;
     let template_name = format!("reviewer-{}.md", args.persona);
     let template = load_template(&template_name)?;
 
-    let diff = diff_for_review(&project_root);
-
-    // After SPEC-0019 REQ-005, prompt slicing reads `SpecDoc` and emits
-    // only the requirements this task covers (plus frontmatter, summary,
-    // and decision context). Falls back to the raw SPEC.md when the
-    // marker tree failed to parse.
-    let spec_md_slice = location.spec_doc.map_or_else(
-        || location.spec_md.raw.clone(),
-        |doc| slice_for_task(doc, &location.task.covers),
-    );
+    // SPEC-0023 REQ-006: SPEC.md is no longer inlined. The rendered
+    // prompt names the repo-relative path; the agent reads the file via
+    // the host's Read primitive on demand.
+    let spec_md_path = spec_md_path_relative(&project_root, location.spec_dir);
+    // SPEC-0023 REQ-003: the rendered prompt no longer inlines the
+    // branch diff. The reviewer agent fetches it via `git diff` itself,
+    // scoped to the task's suggested files.
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", location.spec_id.clone());
-    vars.insert("spec_md", spec_md_slice);
+    vars.insert("spec_md_path", spec_md_path);
     vars.insert("task_id", location.task.id.clone());
     vars.insert("task_entry", location.task_entry_raw.clone());
-    vars.insert("diff", diff);
     vars.insert("persona", args.persona.clone());
     vars.insert("persona_content", persona_content);
-    vars.insert("agents", agents);
 
     let rendered = render(template, &vars);
     let TrimResult { output, .. } = trim_to_budget(rendered, DEFAULT_BUDGET);
@@ -136,6 +135,20 @@ pub fn run(args: &ReviewArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
         out.write_all(b"\n")?;
     }
     Ok(())
+}
+
+/// Compute the repo-relative path to `<spec_dir>/SPEC.md`.
+///
+/// `project_root` is the absolute path to the project root (where
+/// `.speccy/` lives); `spec_dir` is the absolute path to the spec
+/// directory. Returns a forward-slash path string suitable for embedding
+/// in the rendered prompt; falls back to the absolute spec path string
+/// if the relative computation fails (which would only happen if
+/// `spec_dir` were not under `project_root`, a configuration the
+/// workspace scanner does not produce).
+fn spec_md_path_relative(project_root: &Utf8Path, spec_dir: &Utf8Path) -> String {
+    let relative = spec_dir.strip_prefix(project_root).unwrap_or(spec_dir);
+    relative.join("SPEC.md").as_str().replace('\\', "/")
 }
 
 /// Resolve current working directory as a `Utf8PathBuf`.

@@ -17,6 +17,7 @@ use crate::parse::SpecMd;
 use crate::parse::Task;
 use crate::parse::TasksDoc;
 use crate::workspace::Workspace;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use regex::Regex;
 use std::sync::OnceLock;
@@ -68,6 +69,12 @@ impl TaskRef {
 pub struct TaskLocation<'a> {
     /// Stable `SPEC-NNNN` of the spec containing the task.
     pub spec_id: String,
+    /// Absolute path to the directory holding `SPEC.md` and `TASKS.md`
+    /// for the matched spec (e.g.
+    /// `<project_root>/.speccy/specs/0022-xml-canonical-tasks-report`).
+    /// Callers strip `project_root` to compute the repo-relative path
+    /// surfaced in rendered prompts after SPEC-0023 REQ-006.
+    pub spec_dir: &'a Utf8Path,
     /// Parsed SPEC.md for the containing spec.
     pub spec_md: &'a SpecMd,
     /// Parsed SPEC.md marker tree (after SPEC-0019) for the containing
@@ -185,6 +192,7 @@ pub fn find<'a>(
             })?;
             Ok(TaskLocation {
                 spec_id: sid.clone(),
+                spec_dir: parsed.dir.as_path(),
                 spec_md: parsed_spec_md,
                 spec_doc: parsed.spec_doc_ok(),
                 tasks_md,

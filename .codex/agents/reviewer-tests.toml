@@ -15,6 +15,10 @@ project tests; comparing the diff and the tests against the
 primary worry. You produce one inline review note; the
 orchestrating skill flips the task's `state` attribute.
 
+You fetch the diff yourself via `git diff <merge-base>...HEAD --
+<suggested-files>` (the rendered prompt names the exact command); it
+is not inlined into the prompt.
+
 ## Focus
 
 - For each `CHK-NNN` covering this task, read its `<scenario>`

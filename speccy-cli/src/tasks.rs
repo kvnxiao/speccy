@@ -9,20 +9,25 @@
 //! - `speccy tasks SPEC-NNNN --commit` — rewrite frontmatter via
 //!   [`speccy_core::tasks::commit_frontmatter`].
 //!
-//! See `.speccy/specs/0006-tasks-command/SPEC.md`.
+//! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
+//! retired the inlined-`SPEC.md` / `TASKS.md` flows: rendered prompts
+//! now name the file's repo-relative path and the agent reads it via
+//! the host's Read primitive on demand. TASKS.md is still parsed to
+//! validate well-formedness (amendment form refuses on parse failure).
+//!
+//! See `.speccy/specs/0006-tasks-command/SPEC.md` and
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use jiff::Timestamp;
 use regex::Regex;
 use speccy_core::ParseError;
-use speccy_core::parse::SpecMd;
 use speccy_core::parse::parse_task_xml;
 use speccy_core::parse::spec_md;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
-use speccy_core::prompt::load_agents_md;
 use speccy_core::prompt::load_template;
 use speccy_core::prompt::render;
 use speccy_core::prompt::trim_to_budget;
@@ -134,10 +139,21 @@ pub fn run(args: TasksArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), T
         return Ok(());
     }
 
+    // SPEC-0023 REQ-006: SPEC.md / TASKS.md are no longer inlined. The
+    // rendered prompts name the repo-relative paths; the agent reads
+    // them via the host's Read primitive on demand. TASKS.md is still
+    // parsed during amendment to surface well-formedness errors.
+    let spec_md_path_rel = relative_path_string(&project_root, &spec_md_path);
     let rendered = if tasks_present {
-        render_amendment(&project_root, &canonical_id, &parsed_spec, &tasks_md_path)?
+        let tasks_md_path_rel = relative_path_string(&project_root, &tasks_md_path);
+        render_amendment(
+            &canonical_id,
+            &spec_md_path_rel,
+            &tasks_md_path_rel,
+            &tasks_md_path,
+        )?
     } else {
-        render_initial(&project_root, &canonical_id, &parsed_spec)?
+        render_initial(&canonical_id, &spec_md_path_rel)?
     };
 
     let TrimResult { output, .. } = trim_to_budget(rendered, DEFAULT_BUDGET);
@@ -148,29 +164,24 @@ pub fn run(args: TasksArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), T
     Ok(())
 }
 
-fn render_initial(
-    project_root: &Utf8Path,
-    canonical_id: &str,
-    parsed_spec: &SpecMd,
-) -> Result<String, TasksError> {
-    let agents = load_agents_md(project_root);
+fn render_initial(canonical_id: &str, spec_md_path: &str) -> Result<String, TasksError> {
     let template = load_template("tasks-generate.md")?;
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", canonical_id.to_owned());
-    vars.insert("spec_md", parsed_spec.raw.clone());
-    vars.insert("agents", agents);
+    vars.insert("spec_md_path", spec_md_path.to_owned());
     Ok(render(template, &vars))
 }
 
 fn render_amendment(
-    project_root: &Utf8Path,
     canonical_id: &str,
-    parsed_spec: &SpecMd,
+    spec_md_path: &str,
+    tasks_md_path_rel: &str,
     tasks_md_path: &Utf8Path,
 ) -> Result<String, TasksError> {
     // Parse TASKS.md to validate it is well-formed; on failure return a
-    // typed error. The rendered prompt inlines the raw bytes (not the
-    // parsed structure) so the agent reads exactly what's on disk.
+    // typed error. The rendered prompt names the repo-relative path
+    // rather than inlining the body; parsing here is the well-formedness
+    // gate, not a content-extraction step.
     let tasks_raw = fs_err::read_to_string(tasks_md_path.as_std_path())?;
     parse_task_xml(&tasks_raw, tasks_md_path).map_err(|source| TasksError::Parse {
         artifact: "TASKS.md",
@@ -178,14 +189,24 @@ fn render_amendment(
         source: Box::new(source),
     })?;
 
-    let agents = load_agents_md(project_root);
     let template = load_template("tasks-amend.md")?;
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", canonical_id.to_owned());
-    vars.insert("spec_md", parsed_spec.raw.clone());
-    vars.insert("tasks_md", tasks_raw);
-    vars.insert("agents", agents);
+    vars.insert("spec_md_path", spec_md_path.to_owned());
+    vars.insert("tasks_md_path", tasks_md_path_rel.to_owned());
     Ok(render(template, &vars))
+}
+
+/// Compute the repo-relative path of `target` as a forward-slash string
+/// suitable for embedding in rendered prompts. Falls back to the
+/// absolute path string when `target` is not under `project_root` (a
+/// configuration the workspace scanner does not produce).
+fn relative_path_string(project_root: &Utf8Path, target: &Utf8Path) -> String {
+    target
+        .strip_prefix(project_root)
+        .unwrap_or(target)
+        .as_str()
+        .replace('\\', "/")
 }
 
 fn validate_spec_id(raw: &str) -> Result<String, TasksError> {

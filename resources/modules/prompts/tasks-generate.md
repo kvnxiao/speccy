@@ -4,13 +4,11 @@ You are decomposing a SPEC into the smallest sequence of
 implementation tasks that an implementer sub-agent can pick up one
 at a time.
 
-## Project conventions
+## SPEC to decompose (pointer)
 
-{{agents}}
-
-## SPEC to decompose
-
-{{spec_md}}
+Before decomposing, read SPEC.md at `{{spec_md_path}}`. The CLI no
+longer inlines the SPEC body into this prompt; load it via your Read
+primitive to walk the requirement headings and decision context.
 
 ## Your task
 
