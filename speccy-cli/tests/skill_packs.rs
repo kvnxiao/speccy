@@ -869,7 +869,11 @@ fn shipped_skill_md_frontmatter_shape() {
 
 #[test]
 fn shipped_descriptions_natural_language_triggers() {
-    const MAX_DESCRIPTION_CHARS: usize = 500;
+    // Codex hard-rejects descriptions over 1024 Unicode chars at skill load
+    // (codex-rs/core-skills/src/loader.rs::MAX_DESCRIPTION_LEN; see
+    // openai/codex#13941). This is the binding constraint; Claude Code's
+    // documented 1536-char cap is softer (truncation). SPEC-0026 DEC-001.
+    const MAX_DESCRIPTION_CHARS: usize = 1024;
     for (_host, install_root) in HOST_SKILL_ROOTS {
         for skill in SKILL_NAMES {
             let body = read_wrapper_template(install_root, skill);

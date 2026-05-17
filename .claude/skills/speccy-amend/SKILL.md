@@ -1,6 +1,6 @@
 ---
 name: speccy-amend
-description: Orchestrate a mid-loop SPEC change — surgically edit SPEC.md with a Changelog row, reconcile TASKS.md, and re-record the spec hash so the SPEC and task list are back in sync. Use when the user says "amend SPEC-NNNN", "the requirements shifted", or when speccy reports the SPEC and tasks are out of sync.
+description: 'Orchestrate a mid-loop SPEC change — surgically edit SPEC.md with a Changelog row, reconcile TASKS.md, and re-record the spec hash so the SPEC and task list are back in sync. Use when the user says "amend SPEC-NNNN", "the requirements shifted", or when speccy reports the SPEC and tasks are out of sync. Requires: an existing `SPEC.md`. If no `SPEC.md` exists yet → prefer speccy-plan to draft one. Do NOT trigger for cosmetic edits to SPEC.md that do not change Requirements — direct edits are fine.'
 ---
 
 # /speccy-amend

@@ -1,5 +1,5 @@
 ---
 name: speccy-work
-description: Implement one Speccy task per invocation and exit. With an optional `SPEC-NNNN/T-NNN` selector, the session implements that task; without a selector, it resolves the next implementable task via `speccy next --kind implement --json` and implements only that one. Use when the user says "implement T-003", "work the next task", "run the implementer", "pick up the next pending task in SPEC-NNNN", or wants to implement one slice against an existing task list.
+description: 'Implement one Speccy task per invocation and exit. With an optional `SPEC-NNNN/T-NNN` selector, the session implements that task; without a selector, it resolves the next implementable task via `speccy next --kind implement --json` and implements only that one. Use when the user says "implement T-003", "work the next task", "run the implementer", "pick up the next pending task in SPEC-NNNN", or wants to implement one slice against an existing task list. Requires: `TASKS.md` with ≥1 `state="pending"` task. If no `TASKS.md` → prefer speccy-tasks. If no `SPEC.md` → prefer speccy-plan. If no `.speccy/` → prefer speccy-init. Do NOT trigger for generic "fix bug" or "refactor X" asks that are not scoped to an existing Speccy task.'
 ---
 {% include "modules/skills/speccy-work.md" %}

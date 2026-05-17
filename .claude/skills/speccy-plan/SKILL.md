@@ -1,6 +1,6 @@
 ---
 name: speccy-plan
-description: Draft a new Speccy SPEC from the `AGENTS.md` product north star, or amend an existing one when intent shifts. Use when the user wants to "write a spec", "draft a SPEC", "spec out X", "plan a new feature with speccy", or asks to amend an existing spec by ID.
+description: 'Draft a new Speccy SPEC from the `AGENTS.md` product north star, or amend an existing one when intent shifts. Use when the user wants to "write a spec", "draft a SPEC", "spec out X", "plan a new feature with speccy", or asks to amend an existing spec by ID. Requires: `.speccy/` and `AGENTS.md`. If `.speccy/` is absent → prefer speccy-init. Do NOT trigger on fuzzy asks lacking concrete scope — prefer speccy-brainstorm first to atomize the ask.'
 ---
 
 # /speccy-plan

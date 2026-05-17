@@ -612,5 +612,28 @@
       "CHK-002",
       "CHK-003"
     ]
+  },
+  "0026-skill-router-anti-triggers": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005"
+    ]
   }
 }
