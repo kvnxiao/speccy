@@ -195,21 +195,7 @@ fn tsk_003_staleness(
                     "TASKS.md may be stale: stored `spec_hash_at_generation` = `{stored_hash}` but current SPEC.md sha256 = `{current}`. Run `/speccy:amend` to reconcile."
                 ),
             ));
-            return;
         }
-    }
-
-    if let (Some(spec_mtime), Some(tasks_mtime)) = (spec.spec_md_mtime, spec.tasks_md_mtime)
-        && spec_mtime > tasks_mtime
-    {
-        out.push(Diagnostic::with_file(
-            TSK_003,
-            Level::Warn,
-            spec.spec_id.clone(),
-            tasks_path.to_path_buf(),
-            "TASKS.md may be stale: SPEC.md mtime is newer than TASKS.md mtime. Run `/speccy:amend` to reconcile."
-                .to_owned(),
-        ));
     }
 }
 

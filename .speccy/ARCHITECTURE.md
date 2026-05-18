@@ -1483,16 +1483,13 @@ both at far lower cost.
 
 When SPEC.md is edited mid-loop (between Phase 2 and Phase 5),
 TASKS.md may no longer reflect the current spec. Speccy detects
-this two ways:
+this via the content hash: TASKS.md frontmatter's
+`spec_hash_at_generation` stores the sha256 of SPEC.md at the time
+TASKS.md was generated. `speccy status` recomputes the current
+hash and compares; a mismatch is the sole stale signal beyond the
+`bootstrap-pending` sentinel.
 
-1. **Content hash.** TASKS.md frontmatter's
-   `spec_hash_at_generation` stores the sha256 of SPEC.md at the
-   time TASKS.md was generated. `speccy status` recomputes the
-   current hash and compares.
-2. **Modification time.** `speccy status` also compares SPEC.md
-   mtime against TASKS.md mtime as a fallback signal.
-
-If either drifts, `speccy status` reports:
+If it drifts, `speccy status` reports:
 
 ```text
 SPEC-001: TASKS.md may be stale.
@@ -1888,7 +1885,7 @@ V1 makes these failures loud:
 - A referenced `CHK-NNN` has no matching `[[checks]]` row
 - A `[[checks]]` row is unreferenced by any requirement
 - TASKS.md references requirements that don't exist
-- TASKS.md is stale relative to SPEC.md (hash or mtime drift)
+- TASKS.md is stale relative to SPEC.md (hash drift)
 - Open question in SPEC.md is unchecked
 - Reviewer persona returns `blocking`
 - Task is `state="in-review"` but at least one persona review is missing

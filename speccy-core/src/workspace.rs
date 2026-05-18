@@ -29,7 +29,6 @@ use camino::Utf8PathBuf;
 use regex::Regex;
 use std::fmt::Write as _;
 use std::sync::OnceLock;
-use std::time::SystemTime;
 use thiserror::Error;
 
 /// Sentinel string used in TASKS.md frontmatter before SPEC-0006's
@@ -93,9 +92,6 @@ pub enum StaleReason {
     /// TASKS.md frontmatter `spec_hash_at_generation` does not equal the
     /// current SPEC.md sha256.
     HashDrift,
-    /// SPEC.md filesystem mtime is strictly greater than TASKS.md's
-    /// mtime.
-    MtimeDrift,
     /// TASKS.md frontmatter contains the [`BOOTSTRAP_PENDING`] sentinel.
     BootstrapPending,
 }
@@ -107,7 +103,6 @@ impl StaleReason {
     pub const fn as_str(self) -> &'static str {
         match self {
             StaleReason::HashDrift => "hash-drift",
-            StaleReason::MtimeDrift => "mtime-drift",
             StaleReason::BootstrapPending => "bootstrap-pending",
         }
     }
@@ -188,20 +183,13 @@ pub fn scan(project_root: &Utf8Path) -> Workspace {
 
 /// Compute staleness for one spec's TASKS.md.
 ///
-/// `tasks` is the parsed TASKS.md or `None` if absent. `spec_mtime` and
-/// `tasks_mtime` are the captured filesystem mtimes (or `None` if
-/// metadata was unavailable).
+/// `tasks` is the parsed TASKS.md or `None` if absent.
 ///
 /// The [`StaleReason::BootstrapPending`] sentinel short-circuits the
 /// rest of the check: when the frontmatter carries `bootstrap-pending`,
 /// it is the sole reason.
 #[must_use = "the returned Staleness drives both text and JSON output"]
-pub fn stale_for(
-    spec: &SpecMd,
-    tasks: Option<&TasksDoc>,
-    spec_mtime: Option<SystemTime>,
-    tasks_mtime: Option<SystemTime>,
-) -> Staleness {
+pub fn stale_for(spec: &SpecMd, tasks: Option<&TasksDoc>) -> Staleness {
     let Some(tasks) = tasks else {
         return Staleness::fresh();
     };
@@ -221,12 +209,6 @@ pub fn stale_for(
     let current_hash = hex_of_sha256(&spec.sha256);
     if stored_hash != current_hash {
         reasons.push(StaleReason::HashDrift);
-    }
-
-    if let (Some(sm), Some(tm)) = (spec_mtime, tasks_mtime)
-        && sm > tm
-    {
-        reasons.push(StaleReason::MtimeDrift);
     }
 
     Staleness {
@@ -433,17 +415,6 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
         None
     };
 
-    let spec_md_mtime = fs_err::metadata(spec_md_path.as_std_path())
-        .ok()
-        .and_then(|m| m.modified().ok());
-    let tasks_md_mtime = if has_tasks {
-        fs_err::metadata(tasks_md_path.as_std_path())
-            .ok()
-            .and_then(|m| m.modified().ok())
-    } else {
-        None
-    };
-
     let spec_id = spec_md_result
         .as_ref()
         .ok()
@@ -459,8 +430,6 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
         report_md: report_md_result,
-        spec_md_mtime,
-        tasks_md_mtime,
     }
 }
 

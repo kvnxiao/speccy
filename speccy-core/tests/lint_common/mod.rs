@@ -109,15 +109,6 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
             None
         };
 
-    let spec_md_mtime = fs_err::metadata(fx.spec_md_path.as_std_path())
-        .ok()
-        .and_then(|m| m.modified().ok());
-    let tasks_md_mtime = fx.tasks_md_path.as_ref().and_then(|p| {
-        fs_err::metadata(p.as_std_path())
-            .ok()
-            .and_then(|m| m.modified().ok())
-    });
-
     ParsedSpec {
         spec_id,
         dir: fx.dir_path.clone(),
@@ -127,8 +118,6 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,
         report_md: report_md_result,
-        spec_md_mtime,
-        tasks_md_mtime,
     }
 }
 

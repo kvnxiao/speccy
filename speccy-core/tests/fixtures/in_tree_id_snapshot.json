@@ -656,5 +656,26 @@
       "CHK-003",
       "CHK-004"
     ]
+  },
+  "0028-retire-mtime-drift-stale-signal": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004"
+    ]
   }
 }

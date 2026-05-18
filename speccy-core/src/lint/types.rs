@@ -7,7 +7,6 @@ use crate::parse::SpecMd;
 use crate::parse::TasksDoc;
 use crate::parse::supersession::SupersessionIndex;
 use camino::Utf8PathBuf;
-use std::time::SystemTime;
 
 /// Severity of a lint diagnostic. Used by `speccy verify` to map
 /// diagnostics onto exit-code policy (Error -> 1; Warn and Info -> 0).
@@ -160,13 +159,6 @@ pub struct ParsedSpec {
     /// Parsed REPORT.md typed XML model (or the parse error), if a
     /// REPORT.md exists.
     pub report_md: Option<Result<ReportDoc, ParseError>>,
-    /// Modification time of `SPEC.md`, captured by the workspace
-    /// scanner. Used by TSK-003 mtime drift detection. `None` if mtime
-    /// could not be read.
-    pub spec_md_mtime: Option<SystemTime>,
-    /// Modification time of `TASKS.md`, captured by the workspace
-    /// scanner. `None` if absent or unreadable.
-    pub tasks_md_mtime: Option<SystemTime>,
 }
 
 impl ParsedSpec {

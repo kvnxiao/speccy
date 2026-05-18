@@ -124,12 +124,9 @@ Compute whether each spec's TASKS.md is stale relative to SPEC.md.
 <done-when>
 - For each spec with a TASKS.md, compute
   `Staleness { stale: bool, reasons: Vec<StaleReason> }` where
-  `StaleReason` is one of `HashDrift`, `MtimeDrift`,
-  `BootstrapPending`.
+  `StaleReason` is one of `HashDrift`, `BootstrapPending`.
 - `HashDrift`: TASKS.md frontmatter `spec_hash_at_generation`
   doesn't equal the parsed SPEC.md's computed sha256.
-- `MtimeDrift`: SPEC.md filesystem mtime is strictly greater than
-  TASKS.md's mtime.
 - `BootstrapPending`: `spec_hash_at_generation` equals the literal
   string `bootstrap-pending`. When this fires, no other reasons are
   added (the sentinel short-circuits the rest of the check).
@@ -138,27 +135,21 @@ Compute whether each spec's TASKS.md is stale relative to SPEC.md.
 </done-when>
 
 <behavior>
-- Given hash match AND TASKS.md mtime >= SPEC.md mtime, then
-  `stale = false`.
+- Given hash match, then `stale = false`.
 - Given hash mismatch, then `stale = true` with `HashDrift` in
   reasons.
-- Given hash match but SPEC.md mtime > TASKS.md mtime, then
-  `stale = true` with `MtimeDrift`.
 - Given `spec_hash_at_generation: bootstrap-pending`, then
   `stale = true` with `BootstrapPending` as the sole reason.
 </behavior>
 
 <scenario id="CHK-003">
-- Given hash match AND TASKS.md mtime >= SPEC.md mtime, then
-  `stale = false`.
+- Given hash match, then `stale = false`.
 - Given hash mismatch, then `stale = true` with `HashDrift` in
   reasons.
-- Given hash match but SPEC.md mtime > TASKS.md mtime, then
-  `stale = true` with `MtimeDrift`.
 - Given `spec_hash_at_generation: bootstrap-pending`, then
   `stale = true` with `BootstrapPending` as the sole reason.
 
-stale_for returns HashDrift, MtimeDrift, or BootstrapPending appropriately; bootstrap-pending sentinel short-circuits other reasons; specs without TASKS.md are not stale.
+stale_for returns HashDrift or BootstrapPending appropriately; bootstrap-pending sentinel short-circuits other reasons; specs without TASKS.md are not stale.
 </scenario>
 
 </requirement>
@@ -333,7 +324,7 @@ Render structured JSON for harness consumption.
   string form would force every harness to re-parse them.)
 - Output is deterministic: spec order is ascending by spec ID;
   diagnostics within a spec are ordered by `(code, file, line)`;
-  `stale_reasons` are in declared order (`HashDrift`, `MtimeDrift`,
+  `stale_reasons` are in declared order (`HashDrift`,
   `BootstrapPending`).
 - Output is pretty-printed.
 </done-when>
@@ -496,7 +487,7 @@ pub struct Staleness {
     pub reasons: Vec<StaleReason>,
 }
 
-pub enum StaleReason { HashDrift, MtimeDrift, BootstrapPending }
+pub enum StaleReason { HashDrift, BootstrapPending }
 
 pub enum WorkspaceError {
     NoSpeccyDir,                             // walked up to filesystem root
@@ -541,9 +532,6 @@ the new types until SPEC-0010 and SPEC-0012 land.
   a given input struct with fixed field order.
 - `git rev-parse HEAD` exits non-zero when not in a git repo or
   HEAD is unset; we treat both as `repo_sha = ""`.
-- Filesystem mtime is reliable enough for staleness detection.
-  CI environments that mass-touch files at checkout time may
-  produce false-positive staleness; that's acceptable in v1.
 </assumptions>
 
 ## Changelog
@@ -553,6 +541,7 @@ the new types until SPEC-0010 and SPEC-0012 land.
 |------------|--------------|---------|
 | 2026-05-11 | human/kevin  | Initial draft from ARCHITECTURE.md decomposition. |
 | 2026-05-12 | agent/claude | Implemented: `speccy_core::workspace` (scan, find_root, stale_for, TaskCounts, count_open_questions), `lint::Workspace` refactored to borrow specs, `speccy status [--json]` with text + JSON renderers + dangling-supersedes synthesis (WS-001). |
+| 2026-05-18 | agent/claude | REQ-002 narrowed: removed MtimeDrift per SPEC-0028 (mtime drift is no longer reported as a staleness reason; HashDrift and BootstrapPending are the only surviving signals). Also dropped the now-obsolete `<assumptions>` bullet that claimed filesystem mtime was used for staleness detection. |
 </changelog>
 
 ## Notes

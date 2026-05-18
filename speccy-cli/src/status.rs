@@ -223,12 +223,7 @@ fn build_view<'a>(
         .tasks_md_ok()
         .map_or(TaskCounts::default(), TaskCounts::from_tasks);
     let staleness = parsed.spec_md_ok().map_or(Staleness::fresh(), |spec| {
-        stale_for(
-            spec,
-            parsed.tasks_md_ok(),
-            parsed.spec_md_mtime,
-            parsed.tasks_md_mtime,
-        )
+        stale_for(spec, parsed.tasks_md_ok())
     });
     let open_questions = parsed.spec_md_ok().map_or(0, count_open_questions);
     let superseded_by = parsed
@@ -612,8 +607,6 @@ mod tests {
             )),
             tasks_md: None,
             report_md: None,
-            spec_md_mtime: None,
-            tasks_md_mtime: None,
         }
     }
 
