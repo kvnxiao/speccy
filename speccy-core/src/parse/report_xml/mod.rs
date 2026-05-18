@@ -12,6 +12,7 @@
 //! and REQ-003 for the contract this module satisfies.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
 use crate::parse::xml_scanner::ElementSpan;
@@ -143,7 +144,7 @@ fn scan_report_tags(
     body: &str,
     body_offset: usize,
     path: &Utf8Path,
-) -> Result<Vec<RawTag>, ParseError> {
+) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
     let cfg = ScanConfig {
         whitelist: REPORT_ELEMENT_NAMES,
@@ -166,24 +167,24 @@ fn scan_report_tags(
 /// id-pattern violations, invalid coverage results, invalid `scenarios`
 /// formats, or coverage rows whose `result` requires a non-empty
 /// `scenarios` attribute but did not carry one.
-pub fn parse(source: &str, path: &Utf8Path) -> Result<ReportDoc, ParseError> {
+pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<ReportDoc> {
     let split = split_frontmatter(source, path)?;
     let (frontmatter_raw, body, body_offset) = match split {
         Split::Some { yaml, body } => {
             let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                ParseError::MalformedMarker {
+                Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: 0,
                     reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                }
+                })
             })?;
             (yaml.to_owned(), body, body_offset)
         }
         Split::None => {
-            return Err(ParseError::MissingField {
+            return Err(Box::new(ParseError::MissingField {
                 field: "frontmatter".to_owned(),
                 context: format!("REPORT.md at {path}"),
-            });
+            }));
         }
     };
 
@@ -210,27 +211,29 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<ReportDoc, ParseError> {
                 children,
             } => {
                 if root.is_some() {
-                    return Err(ParseError::MalformedMarker {
+                    return Err(Box::new(ParseError::MalformedMarker {
                         path: path.to_path_buf(),
                         offset: span.start,
                         reason: "more than one <report> root element".to_owned(),
-                    });
+                    }));
                 }
                 root = Some((spec_id, span, children));
             }
             Block::Coverage { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<coverage> element must be nested inside <report>".to_owned(),
-                });
+                }));
             }
         }
     }
 
-    let (spec_id, report_span, children) = root.ok_or_else(|| ParseError::MissingField {
-        field: "<report>".to_owned(),
-        context: format!("REPORT.md at {path}"),
+    let (spec_id, report_span, children) = root.ok_or_else(|| {
+        Box::new(ParseError::MissingField {
+            field: "<report>".to_owned(),
+            context: format!("REPORT.md at {path}"),
+        })
     })?;
 
     let mut coverage: Vec<RequirementCoverage> = Vec::new();
@@ -246,11 +249,11 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<ReportDoc, ParseError> {
                 coverage.push(row);
             }
             Block::Report { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<report> element must not be nested".to_owned(),
-                });
+                }));
             }
         }
     }
@@ -271,60 +274,64 @@ fn build_coverage(
     body: String,
     span: ElementSpan,
     path: &Utf8Path,
-) -> Result<RequirementCoverage, ParseError> {
+) -> ParseResult<RequirementCoverage> {
     // req
-    let req = find_attr(attrs, "req").ok_or_else(|| ParseError::MissingCoverageAttribute {
-        path: path.to_path_buf(),
-        attribute: "req".to_owned(),
-        offset: span.start,
+    let req = find_attr(attrs, "req").ok_or_else(|| {
+        Box::new(ParseError::MissingCoverageAttribute {
+            path: path.to_path_buf(),
+            attribute: "req".to_owned(),
+            offset: span.start,
+        })
     })?;
     if !req_id_regex().is_match(&req) {
-        return Err(ParseError::InvalidMarkerId {
+        return Err(Box::new(ParseError::InvalidMarkerId {
             path: path.to_path_buf(),
             marker_name: "coverage".to_owned(),
             id: req.clone(),
             expected_pattern: r"REQ-\d{3,}".to_owned(),
-        });
+        }));
     }
 
     // result
-    let result_raw =
-        find_attr(attrs, "result").ok_or_else(|| ParseError::MissingCoverageAttribute {
+    let result_raw = find_attr(attrs, "result").ok_or_else(|| {
+        Box::new(ParseError::MissingCoverageAttribute {
             path: path.to_path_buf(),
             attribute: "result".to_owned(),
             offset: span.start,
-        })?;
-    let result =
-        CoverageResult::from_str(&result_raw).ok_or_else(|| ParseError::InvalidCoverageResult {
+        })
+    })?;
+    let result = CoverageResult::from_str(&result_raw).ok_or_else(|| {
+        Box::new(ParseError::InvalidCoverageResult {
             path: path.to_path_buf(),
             req: req.clone(),
             value: result_raw.clone(),
             allowed: ALLOWED_COVERAGE_RESULTS.join(", "),
-        })?;
+        })
+    })?;
 
     // scenarios — must be *present*, but may be empty for deferred.
     if !attrs_present.iter().any(|k| k == "scenarios") {
-        return Err(ParseError::MissingCoverageAttribute {
+        return Err(Box::new(ParseError::MissingCoverageAttribute {
             path: path.to_path_buf(),
             attribute: "scenarios".to_owned(),
             offset: span.start,
-        });
+        }));
     }
     let scenarios_raw = find_attr(attrs, "scenarios").unwrap_or_default();
     let scenarios = parse_scenarios(&scenarios_raw, &req, path)?;
 
     match result {
         CoverageResult::Satisfied if scenarios.is_empty() => {
-            return Err(ParseError::SatisfiedRequiresScenarios {
+            return Err(Box::new(ParseError::SatisfiedRequiresScenarios {
                 path: path.to_path_buf(),
                 req: req.clone(),
-            });
+            }));
         }
         CoverageResult::Partial if scenarios.is_empty() => {
-            return Err(ParseError::PartialRequiresScenarios {
+            return Err(Box::new(ParseError::PartialRequiresScenarios {
                 path: path.to_path_buf(),
                 req: req.clone(),
-            });
+            }));
         }
         _ => {}
     }
@@ -351,27 +358,27 @@ fn find_attr(attrs: &[(String, String)], key: &str) -> Option<String> {
 /// tabs, and any non-`CHK-\d{3,}` token all fail with
 /// [`ParseError::InvalidScenariosFormat`], whose Display quotes the
 /// grammar verbatim.
-fn parse_scenarios(raw: &str, req: &str, path: &Utf8Path) -> Result<Vec<String>, ParseError> {
+fn parse_scenarios(raw: &str, req: &str, path: &Utf8Path) -> ParseResult<Vec<String>> {
     if raw.is_empty() {
         return Ok(Vec::new());
     }
     for ch in raw.chars() {
         if ch == '\t' || ch == '\r' || ch == '\n' {
-            return Err(ParseError::InvalidScenariosFormat {
+            return Err(Box::new(ParseError::InvalidScenariosFormat {
                 path: path.to_path_buf(),
                 req: req.to_owned(),
                 value: raw.to_owned(),
-            });
+            }));
         }
     }
     let mut scenarios: Vec<String> = Vec::new();
     for token in raw.split(' ') {
         if !chk_id_regex().is_match(token) {
-            return Err(ParseError::InvalidScenariosFormat {
+            return Err(Box::new(ParseError::InvalidScenariosFormat {
                 path: path.to_path_buf(),
                 req: req.to_owned(),
                 value: raw.to_owned(),
-            });
+            }));
         }
         scenarios.push(token.to_owned());
     }
@@ -512,7 +519,7 @@ fn trim_blank_boundary_lines(body: &str) -> &str {
     body.get(start..end).unwrap_or("")
 }
 
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseError> {
+fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
     for line in body.lines() {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("# ") {
@@ -522,10 +529,10 @@ fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseEr
             return Ok(String::new());
         }
     }
-    Err(ParseError::MissingField {
+    Err(Box::new(ParseError::MissingField {
         field: "level-1 heading".to_owned(),
         context: format!("REPORT.md at {path}"),
-    })
+    }))
 }
 
 #[derive(Debug)]
@@ -543,28 +550,28 @@ enum Block {
     },
 }
 
-fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block>, ParseError> {
+fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<Block>> {
     let mut stack: Vec<PendingBlock> = Vec::new();
     let mut top: Vec<Block> = Vec::new();
 
     for t in raw {
         if t.is_close {
             let Some(open) = stack.pop() else {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!("close tag `</{}>` without matching open", t.name),
-                });
+                }));
             };
             if open.name != t.name {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!(
                         "close tag `</{}>` does not match open tag `<{}>`",
                         t.name, open.name
                     ),
-                });
+                }));
             }
             let body = source
                 .get(open.body_start..t.body_end_after_tag)
@@ -590,23 +597,23 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block
     }
 
     if let Some(open) = stack.first() {
-        return Err(ParseError::MalformedMarker {
+        return Err(Box::new(ParseError::MalformedMarker {
             path: path.to_path_buf(),
             offset: open.span.start,
             reason: format!("open tag `<{}>` is never closed", open.name),
-        });
+        }));
     }
 
     Ok(top)
 }
 
-fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
+fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
     if !REPORT_ELEMENT_NAMES.contains(&t.name.as_str()) {
-        return Err(ParseError::UnknownMarkerName {
+        return Err(Box::new(ParseError::UnknownMarkerName {
             path: path.to_path_buf(),
             marker_name: t.name.clone(),
             offset: t.span.start,
-        });
+        }));
     }
     if t.is_close {
         return Ok(());
@@ -631,12 +638,12 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
         && let Some(value) = find_attr(&t.attrs, "spec")
         && !spec_id_regex().is_match(&value)
     {
-        return Err(ParseError::InvalidMarkerId {
+        return Err(Box::new(ParseError::InvalidMarkerId {
             path: path.to_path_buf(),
             marker_name: "report".to_owned(),
             id: value,
             expected_pattern: r"SPEC-\d{3,}".to_owned(),
-        });
+        }));
     }
     Ok(())
 }
@@ -652,7 +659,7 @@ struct PendingBlock {
 }
 
 impl PendingBlock {
-    fn finish(self, body: String, path: &Utf8Path) -> Result<Block, ParseError> {
+    fn finish(self, body: String, path: &Utf8Path) -> ParseResult<Block> {
         let PendingBlock {
             name,
             attrs,
@@ -663,11 +670,12 @@ impl PendingBlock {
         } = self;
         match name.as_str() {
             "report" => {
-                let spec_id =
-                    find_attr(&attrs, "spec").ok_or_else(|| ParseError::MissingField {
+                let spec_id = find_attr(&attrs, "spec").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
                         field: "spec".to_owned(),
                         context: format!("<report> element in {path}"),
-                    })?;
+                    })
+                })?;
                 Ok(Block::Report {
                     spec_id,
                     span,
@@ -680,11 +688,11 @@ impl PendingBlock {
                 body,
                 span,
             }),
-            other => Err(ParseError::UnknownMarkerName {
+            other => Err(Box::new(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
                 offset: span.start,
-            }),
+            })),
         }
     }
 }
@@ -769,7 +777,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidCoverageResult { req, value, allowed, .. }
                     if req == "REQ-001"
                         && value == "passed"
@@ -799,7 +807,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("dropped must be rejected");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidCoverageResult { req, value, .. }
                     if req == "REQ-001" && value == "dropped"
             ),
@@ -821,7 +829,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("missing scenarios must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::MissingCoverageAttribute { attribute, .. }
                     if attribute == "scenarios"
             ),
@@ -843,7 +851,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("satisfied + empty must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::SatisfiedRequiresScenarios { req, .. } if req == "REQ-001"
             ),
             "got: {err:?}",
@@ -864,7 +872,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("partial + empty must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::PartialRequiresScenarios { req, .. } if req == "REQ-001"
             ),
             "got: {err:?}",
@@ -903,7 +911,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidScenariosFormat { req, value, .. }
                     if req == "REQ-001" && value == "CHK-001  CHK-002"
             ),
@@ -925,7 +933,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidScenariosFormat { req, .. } if req == "REQ-001"
             ),
             "got: {err:?}",
@@ -951,7 +959,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::UnknownMarkerAttribute {
                     marker_name, attribute, allowed, ..
                 } if marker_name == "coverage"

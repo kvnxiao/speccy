@@ -125,7 +125,7 @@ pub fn run(args: TasksArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), T
     let parsed_spec = spec_md(&spec_md_path).map_err(|source| TasksError::Parse {
         artifact: "SPEC.md",
         id: canonical_id.clone(),
-        source: Box::new(source),
+        source,
     })?;
 
     if commit {
@@ -192,7 +192,7 @@ fn render_amendment(
     parse_task_xml(&tasks_raw, tasks_md_path).map_err(|source| TasksError::Parse {
         artifact: "TASKS.md",
         id: canonical_id.to_owned(),
-        source: Box::new(source),
+        source,
     })?;
 
     let template = load_template("tasks-amend.md")?;

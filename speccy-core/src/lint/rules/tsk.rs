@@ -26,7 +26,7 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     };
 
     match tasks_result {
-        Err(err) => emit_tasks_parse_error(spec, &tasks_path, err, out),
+        Err(err) => emit_tasks_parse_error(spec, &tasks_path, err.as_ref(), out),
         Ok(tasks_md) => {
             tsk_004_frontmatter_fields(spec, &tasks_path, tasks_md, out);
             tsk_001_covers(spec, &tasks_path, tasks_md, out);

@@ -1048,13 +1048,14 @@ fn architecture_doc_has_no_legacy_check_authoring_examples() {
 #[test]
 fn persona_and_prompt_sources_have_no_legacy_check_authoring_examples() {
     for sub in ["modules/personas", "modules/prompts"] {
-        let dir = RESOURCES.get_dir(sub).unwrap_or_else(|| {
+        let dir = {
+            let opt = RESOURCES.get_dir(sub);
             assert!(
-                false,
+                opt.is_some(),
                 "embedded RESOURCES bundle is missing `{sub}` subtree"
             );
-            unreachable!()
-        });
+            opt.expect("checked is_some above")
+        };
         for entry in dir.files() {
             let path = entry.path().display();
             let body = entry.contents_utf8().unwrap_or("");

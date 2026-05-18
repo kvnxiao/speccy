@@ -6,6 +6,7 @@
 //! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-002.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use camino::Utf8Path;
 
 /// Outcome of attempting to split a markdown source into frontmatter and
@@ -50,7 +51,7 @@ impl<'a> Split<'a> {
 ///
 /// Returns [`ParseError::UnterminatedFrontmatter`] if an opening fence is
 /// present without a matching closing fence.
-pub fn split<'a>(source: &'a str, path: &Utf8Path) -> Result<Split<'a>, ParseError> {
+pub fn split<'a>(source: &'a str, path: &Utf8Path) -> ParseResult<Split<'a>> {
     let source = strip_utf8_bom(source);
 
     let Some(after_open) = strip_opening_fence(source) else {
@@ -58,9 +59,9 @@ pub fn split<'a>(source: &'a str, path: &Utf8Path) -> Result<Split<'a>, ParseErr
     };
 
     let Some((yaml, body)) = find_closing_fence(after_open) else {
-        return Err(ParseError::UnterminatedFrontmatter {
+        return Err(Box::new(ParseError::UnterminatedFrontmatter {
             path: path.to_path_buf(),
-        });
+        }));
     };
 
     Ok(Split::Some { yaml, body })
@@ -154,7 +155,7 @@ mod tests {
         let src = "---\nkey: value\nno closing fence here\n";
         let err = split(src, fake_path()).expect_err("unterminated fence");
         assert!(matches!(
-            err,
+            *err,
             crate::error::ParseError::UnterminatedFrontmatter { .. }
         ));
     }

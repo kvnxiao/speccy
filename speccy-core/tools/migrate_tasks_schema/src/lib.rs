@@ -92,7 +92,7 @@ pub fn migrate_file(path: &Utf8Path) -> Result<Outcome, MigrateError> {
     speccy_core::parse::parse_task_xml(&migrated, path).map_err(|source| {
         MigrateError::PostParseFailed {
             path: path.to_path_buf(),
-            source: Box::new(source),
+            source,
         }
     })?;
     fs_err::write(path.as_std_path(), &migrated).map_err(|source| MigrateError::Io {
@@ -407,7 +407,7 @@ fn match_retry(content: &str) -> Option<String> {
 )]
 fn open_tag_re() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r#"^<([a-z][a-z-]*)(?:\s[^>]*)?>$"#).unwrap())
+    CELL.get_or_init(|| Regex::new(r"^<([a-z][a-z-]*)(?:\s[^>]*)?>$").unwrap())
 }
 
 #[expect(

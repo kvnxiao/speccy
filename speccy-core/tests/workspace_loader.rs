@@ -137,7 +137,7 @@ fn stray_spec_toml_surfaces_as_loader_parse_error() -> TestResult {
         .spec_doc
         .as_ref()
         .expect_err("spec_doc must be Err when spec.toml is stray");
-    match err {
+    match err.as_ref() {
         ParseError::StraySpecToml { path } => {
             assert_eq!(
                 path, &stray,
@@ -258,7 +258,7 @@ fn stray_legacy_marker_spec_md_surfaces_as_legacy_marker_error() -> TestResult {
         .as_ref()
         .expect_err("legacy marker form must be rejected as a parse error");
     assert!(
-        matches!(err, ParseError::LegacyMarker { .. }),
+        matches!(err.as_ref(), ParseError::LegacyMarker { .. }),
         "expected ParseError::LegacyMarker, got {err:?}",
     );
     let rendered = format!("{err}");
@@ -416,7 +416,7 @@ fn duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001() -> TestResult 
         .as_ref()
         .expect_err("duplicate CHK ids must reject the parse");
     assert!(
-        matches!(err, ParseError::DuplicateMarkerId { .. }),
+        matches!(err.as_ref(), ParseError::DuplicateMarkerId { .. }),
         "expected ParseError::DuplicateMarkerId, got {err:?}",
     );
 

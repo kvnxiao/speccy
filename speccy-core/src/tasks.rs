@@ -77,9 +77,9 @@ impl From<std::io::Error> for CommitError {
     }
 }
 
-impl From<ParseError> for CommitError {
-    fn from(err: ParseError) -> Self {
-        CommitError::Parse(Box::new(err))
+impl From<Box<ParseError>> for CommitError {
+    fn from(err: Box<ParseError>) -> Self {
+        CommitError::Parse(err)
     }
 }
 

@@ -594,6 +594,13 @@ pub enum ParseError {
     },
 }
 
+/// Convenience alias for parsers that return a boxed [`ParseError`].
+/// Boxing the error keeps `Result<T, _>` under the
+/// `clippy::result_large_err` threshold so the workspace-wide
+/// `pedantic = "deny"` pin stays satisfied. See
+/// `.speccy/specs/0030-box-parse-error-at-api-boundary/SPEC.md`.
+pub type ParseResult<T> = std::result::Result<T, Box<ParseError>>;
+
 fn location_suffix(label: Option<&str>) -> String {
     match label {
         Some(label) => format!(" in {label}"),

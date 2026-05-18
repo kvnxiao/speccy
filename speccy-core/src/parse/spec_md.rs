@@ -18,6 +18,7 @@
 //! cross-reference working without coupling `spec_md` to `spec_xml`.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
 use crate::parse::markdown::inline_text;
@@ -155,7 +156,7 @@ fn req_heading_line_regex() -> &'static Regex {
 /// Returns any [`ParseError`] variant relevant to SPEC.md parsing: I/O,
 /// non-UTF-8 file content, malformed or absent frontmatter, invalid
 /// `status` value, or YAML deserialisation failures.
-pub fn spec_md(path: &Utf8Path) -> Result<SpecMd, ParseError> {
+pub fn spec_md(path: &Utf8Path) -> ParseResult<SpecMd> {
     let raw = read_to_string(path)?;
     let frontmatter = parse_frontmatter(&raw, path)?;
     let (requirements, changelog) = parse_body(&raw);
@@ -180,14 +181,14 @@ fn canonical_content_sha256(
     raw: &str,
     fm: &SpecFrontmatter,
     path: &Utf8Path,
-) -> Result<[u8; 32], ParseError> {
+) -> ParseResult<[u8; 32]> {
     let body = match split_frontmatter(raw, path)? {
         Split::Some { body, .. } => body,
         Split::None => {
-            return Err(ParseError::MissingField {
+            return Err(Box::new(ParseError::MissingField {
                 field: "frontmatter".to_owned(),
                 context: format!("SPEC.md at {path}"),
-            });
+            }));
         }
     };
     let canonical_fm = canonical_frontmatter_for_hash(fm);
@@ -197,21 +198,23 @@ fn canonical_content_sha256(
     Ok(hasher.finalize().into())
 }
 
-fn parse_frontmatter(raw: &str, path: &Utf8Path) -> Result<SpecFrontmatter, ParseError> {
+fn parse_frontmatter(raw: &str, path: &Utf8Path) -> ParseResult<SpecFrontmatter> {
     let split_result = split_frontmatter(raw, path)?;
     let yaml = match split_result {
         Split::Some { yaml, .. } => yaml,
         Split::None => {
-            return Err(ParseError::MissingField {
+            return Err(Box::new(ParseError::MissingField {
                 field: "frontmatter".to_owned(),
                 context: format!("SPEC.md at {path}"),
-            });
+            }));
         }
     };
 
-    let raw_fm: RawFrontmatter = serde_saphyr::from_str(yaml).map_err(|e| ParseError::Yaml {
-        label: Some(path.to_string()),
-        message: e.to_string(),
+    let raw_fm: RawFrontmatter = serde_saphyr::from_str(yaml).map_err(|e| {
+        Box::new(ParseError::Yaml {
+            label: Some(path.to_string()),
+            message: e.to_string(),
+        })
     })?;
 
     let status = parse_status(&raw_fm.status, path)?;
@@ -226,18 +229,18 @@ fn parse_frontmatter(raw: &str, path: &Utf8Path) -> Result<SpecFrontmatter, Pars
     })
 }
 
-fn parse_status(value: &str, path: &Utf8Path) -> Result<SpecStatus, ParseError> {
+fn parse_status(value: &str, path: &Utf8Path) -> ParseResult<SpecStatus> {
     match value {
         "in-progress" => Ok(SpecStatus::InProgress),
         "implemented" => Ok(SpecStatus::Implemented),
         "dropped" => Ok(SpecStatus::Dropped),
         "superseded" => Ok(SpecStatus::Superseded),
-        other => Err(ParseError::InvalidEnumValue {
+        other => Err(Box::new(ParseError::InvalidEnumValue {
             path: path.to_path_buf(),
             field: "status".to_owned(),
             value: other.to_owned(),
             allowed: ALLOWED_STATUSES.join(", "),
-        }),
+        })),
     }
 }
 
@@ -551,7 +554,7 @@ mod tests {
         let fx = write_tmp(src);
         let err = spec_md(&fx.path).expect_err("missing frontmatter must fail");
         assert!(
-            matches!(err, ParseError::MissingField { .. }),
+            matches!(*err, ParseError::MissingField { .. }),
             "got: {err:?}"
         );
     }
@@ -573,7 +576,7 @@ mod tests {
         let err = spec_md(&fx.path).expect_err("invalid status must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidEnumValue { field, value, .. }
                     if field == "status" && value == "garbage"
             ),

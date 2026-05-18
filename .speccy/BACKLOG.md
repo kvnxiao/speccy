@@ -36,12 +36,9 @@ F-5: Per-skill model + effort pinning across the lifecycle
 
 Pre-existing tech debt (discovered during other work, blocks the hygiene gate)
 
-F-7: Box the large `ParseError` variants in `speccy-core`
+F-7: Box the large `ParseError` variants in `speccy-core` — **closed by SPEC-0030 (2026-05-18)**
 
-- `speccy-core::parse::error::ParseError` has variants ≥128 bytes (e.g. `MissingAttribute { allowed: String, ... }` and similar `String`-carrying variants). Workspace clippy denies `clippy::result_large_err`; the lint fires at 42+ sites across `speccy-core` (lib + lib tests) every time the parser returns a `Result<_, ParseError>`. Net effect: `cargo clippy --workspace --all-targets --all-features -- -D warnings` (the third leg of AGENTS.md "Standard hygiene") is red on `main`; `cargo test`, `cargo +nightly fmt --check`, and `cargo deny check` all stay green.
-- Why: blocks the hygiene gate. Confirmed pre-existing on the `6ed6e39 Ship SPEC-0025` baseline via `git stash` during SPEC-0026 T-003 implementation, so no recent SPEC has shipped with a clean clippy gate. The longer this sits, the more new sites get added on every parser tweak, and the more painful the fix becomes.
-- Where: `speccy-core/src/parse/error.rs` (definition) and every call site that propagates `?` through `Result<_, ParseError>` — those mostly Just Work after the box because `Box<E>` propagates the same as `E` through `?`. A workspace-level `#[expect(clippy::result_large_err, reason = "...")]` is the escape hatch if boxing turns out to hurt readability for diagnostic-rich variants, but the cleaner fix is to box.
-- Cost: small. Box the offending variants (or the whole enum) in `error.rs`, run `cargo clippy --workspace --all-targets --all-features -- -D warnings` until green, run `cargo test --workspace` to confirm no regressions. Likely under an hour. Worth doing before F-2 lands to PR (so SPEC-0026's commit is the one that finally unblocks the gate, not a separate cleanup-after).
+- Closure: SPEC-0030 boxed `ParseError` at every parser API boundary in `speccy-core` via a `ParseResult<T> = Result<T, Box<ParseError>>` alias. `cargo clippy --workspace --all-targets --all-features -- -D warnings` exits 0; the AGENTS.md hygiene gate is green for the first time since the F-7 pin was discovered during SPEC-0026 T-003.
 
 Tier 2 — consider, needs design pass
 

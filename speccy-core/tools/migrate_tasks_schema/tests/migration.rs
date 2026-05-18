@@ -167,45 +167,57 @@ fn migrated_output_parses_via_shipped_task_xml() {
     assert_eq!(task.body_items.len(), 3, "expected 3 body items");
 
     // Source-order: ImplementerNote, Review, Retry.
-    match task.body_items.first().expect("body_items[0]") {
-        BodyItem::ImplementerNote { session, body, .. } => {
-            assert_eq!(session, "s1");
-            assert!(
-                body.contains("Completed: foo"),
-                "body should include Completed: foo, got: {body}"
-            );
-            assert!(
-                body.contains("Procedural compliance: (none)"),
-                "body should include Procedural compliance, got: {body}"
-            );
-        }
-        other => panic!("expected ImplementerNote at [0], got {other:?}"),
-    }
-    match task.body_items.get(1).expect("body_items[1]") {
-        BodyItem::Review {
-            persona,
-            verdict,
-            body,
-            ..
-        } => {
-            assert_eq!(persona, "business");
-            assert_eq!(*verdict, ReviewVerdict::Blocking);
-            assert!(
-                body.contains("the slice lacks X"),
-                "review body lost content: {body}"
-            );
-        }
-        other => panic!("expected Review at [1], got {other:?}"),
-    }
-    match task.body_items.get(2).expect("body_items[2]") {
-        BodyItem::Retry { body, .. } => {
-            assert!(
-                body.contains("do X and Y"),
-                "retry body lost content: {body}"
-            );
-        }
-        other => panic!("expected Retry at [2], got {other:?}"),
-    }
+    let item0 = task.body_items.first().expect("body_items[0]");
+    assert!(
+        matches!(item0, BodyItem::ImplementerNote { .. }),
+        "expected ImplementerNote at [0], got {item0:?}"
+    );
+    let BodyItem::ImplementerNote { session, body, .. } = item0 else {
+        return;
+    };
+    assert_eq!(session, "s1");
+    assert!(
+        body.contains("Completed: foo"),
+        "body should include Completed: foo, got: {body}"
+    );
+    assert!(
+        body.contains("Procedural compliance: (none)"),
+        "body should include Procedural compliance, got: {body}"
+    );
+
+    let item1 = task.body_items.get(1).expect("body_items[1]");
+    assert!(
+        matches!(item1, BodyItem::Review { .. }),
+        "expected Review at [1], got {item1:?}"
+    );
+    let BodyItem::Review {
+        persona,
+        verdict,
+        body,
+        ..
+    } = item1
+    else {
+        return;
+    };
+    assert_eq!(persona, "business");
+    assert_eq!(*verdict, ReviewVerdict::Blocking);
+    assert!(
+        body.contains("the slice lacks X"),
+        "review body lost content: {body}"
+    );
+
+    let item2 = task.body_items.get(2).expect("body_items[2]");
+    assert!(
+        matches!(item2, BodyItem::Retry { .. }),
+        "expected Retry at [2], got {item2:?}"
+    );
+    let BodyItem::Retry { body, .. } = item2 else {
+        return;
+    };
+    assert!(
+        body.contains("do X and Y"),
+        "retry body lost content: {body}"
+    );
 }
 
 #[test]

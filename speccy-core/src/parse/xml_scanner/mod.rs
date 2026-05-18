@@ -25,6 +25,7 @@
 mod html5_names;
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::markdown::parse_markdown;
 use camino::Utf8Path;
 use comrak::Arena;
@@ -186,14 +187,14 @@ pub fn unknown_attribute_error(
     attribute: &str,
     offset: usize,
     allowed: &[&str],
-) -> ParseError {
-    ParseError::UnknownMarkerAttribute {
+) -> Box<ParseError> {
+    Box::new(ParseError::UnknownMarkerAttribute {
         path: path.to_path_buf(),
         marker_name: element_name.to_owned(),
         attribute: attribute.to_owned(),
         offset,
         allowed: allowed.join(", "),
-    }
+    })
 }
 
 /// Scan `body` (the post-frontmatter portion of `source`, beginning at
@@ -222,7 +223,7 @@ pub fn scan_tags(
     code_fence_ranges: &[(usize, usize)],
     path: &Utf8Path,
     cfg: &ScanConfig<'_>,
-) -> Result<Vec<RawTag>, ParseError> {
+) -> ParseResult<Vec<RawTag>> {
     let mut tags: Vec<RawTag> = Vec::new();
     let mut line_start_in_body: usize = 0;
 
@@ -258,7 +259,7 @@ fn next_line<'a>(
     body_offset: usize,
     line_start_in_body: usize,
     path: &Utf8Path,
-) -> Result<Option<LineInfo<'a>>, ParseError> {
+) -> ParseResult<Option<LineInfo<'a>>> {
     let remainder = body.get(line_start_in_body..).unwrap_or("");
     let (line, next_start_in_body) = if let Some(nl) = remainder.find('\n') {
         let line_end = line_start_in_body
@@ -305,7 +306,7 @@ fn classify_line(
     tags: &mut Vec<RawTag>,
     path: &Utf8Path,
     cfg: &ScanConfig<'_>,
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     let line = line_info.line;
     let abs_line_start = line_info.abs_line_start;
     let abs_line_end_excl = line_info.abs_line_end_excl;
@@ -330,11 +331,11 @@ fn classify_line(
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
         if cfg.retired_names.contains(&name.as_str()) {
-            return Err(ParseError::RetiredMarkerName {
+            return Err(Box::new(ParseError::RetiredMarkerName {
                 path: path.to_path_buf(),
                 marker_name: name,
                 offset: abs_tag_offset,
-            });
+            }));
         }
         if !cfg.whitelist.contains(&name.as_str()) {
             return Ok(());
@@ -357,11 +358,11 @@ fn classify_line(
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
         if cfg.retired_names.contains(&name.as_str()) {
-            return Err(ParseError::RetiredMarkerName {
+            return Err(Box::new(ParseError::RetiredMarkerName {
                 path: path.to_path_buf(),
                 marker_name: name,
                 offset: abs_tag_offset,
-            });
+            }));
         }
         if !cfg.whitelist.contains(&name.as_str()) {
             return Ok(());
@@ -415,7 +416,11 @@ fn build_open_tag(
     }
 }
 
-fn detect_legacy_marker(line: &str, abs_line_start: usize, path: &Utf8Path) -> Option<ParseError> {
+fn detect_legacy_marker(
+    line: &str,
+    abs_line_start: usize,
+    path: &Utf8Path,
+) -> Option<Box<ParseError>> {
     let caps = legacy_marker_regex().captures(line)?;
     let raw_match = caps.get(0).map_or("", |m| m.as_str()).trim();
     let leading_ws = line.len().saturating_sub(line.trim_start().len());
@@ -429,12 +434,12 @@ fn detect_legacy_marker(line: &str, abs_line_start: usize, path: &Utf8Path) -> O
     } else {
         format!("<{name} ...>")
     };
-    Some(ParseError::LegacyMarker {
+    Some(Box::new(ParseError::LegacyMarker {
         path: path.to_path_buf(),
         offset: abs_offset,
         legacy_form: raw_match.to_owned(),
         suggested_element: suggested,
-    })
+    }))
 }
 
 fn detect_malformed_tag(
@@ -443,18 +448,18 @@ fn detect_malformed_tag(
     abs_tag_offset: usize,
     path: &Utf8Path,
     structure_shaped_names: &[&str],
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     if let Some(shape_caps) = shape_open_regex().captures(trimmed) {
         let name = shape_caps
             .get(1)
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
         if structure_shaped_names.contains(&name.as_str()) {
-            return Err(ParseError::MalformedMarker {
+            return Err(Box::new(ParseError::MalformedMarker {
                 path: path.to_path_buf(),
                 offset: abs_tag_offset,
                 reason: diagnose_malformed_open(line, trimmed, &name),
-            });
+            }));
         }
     } else if let Some(shape_caps) = shape_close_regex().captures(trimmed) {
         let name = shape_caps
@@ -469,11 +474,11 @@ fn detect_malformed_tag(
             } else {
                 "speccy XML close tag is malformed".to_owned()
             };
-            return Err(ParseError::MalformedMarker {
+            return Err(Box::new(ParseError::MalformedMarker {
                 path: path.to_path_buf(),
                 offset: abs_tag_offset,
                 reason,
-            });
+            }));
         }
     }
     Ok(())
@@ -574,7 +579,7 @@ mod tests {
         Utf8Path::new("fixture/test.md")
     }
 
-    fn scan(source: &str, cfg: &ScanConfig<'_>) -> Result<Vec<RawTag>, ParseError> {
+    fn scan(source: &str, cfg: &ScanConfig<'_>) -> ParseResult<Vec<RawTag>> {
         let fences = collect_code_fence_byte_ranges(source);
         scan_tags(source, source, 0, &fences, path(), cfg)
     }
@@ -650,7 +655,7 @@ mod tests {
         );
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::UnknownMarkerAttribute {
                     marker_name,
                     attribute,

@@ -11,6 +11,7 @@
 //! raw XML element tags.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use camino::Utf8Path;
 use serde::Deserialize;
 
@@ -48,11 +49,13 @@ struct RawProject {
 /// Returns any [`ParseError`] variant relevant to TOML parsing: I/O,
 /// non-UTF-8 file content, unsupported `schema_version`, or missing
 /// required fields.
-pub fn speccy_toml(path: &Utf8Path) -> Result<SpeccyConfig, ParseError> {
+pub fn speccy_toml(path: &Utf8Path) -> ParseResult<SpeccyConfig> {
     let content = read_to_string(path)?;
-    let raw: RawSpeccyConfig = toml::from_str(&content).map_err(|e| ParseError::Toml {
-        path: path.to_path_buf(),
-        message: e.to_string(),
+    let raw: RawSpeccyConfig = toml::from_str(&content).map_err(|e| {
+        Box::new(ParseError::Toml {
+            path: path.to_path_buf(),
+            message: e.to_string(),
+        })
     })?;
 
     guard_schema_version(raw.schema_version, path)?;
@@ -64,21 +67,23 @@ pub fn speccy_toml(path: &Utf8Path) -> Result<SpeccyConfig, ParseError> {
     })
 }
 
-fn guard_schema_version(value: i64, path: &Utf8Path) -> Result<(), ParseError> {
+fn guard_schema_version(value: i64, path: &Utf8Path) -> ParseResult<()> {
     if value == SUPPORTED_SCHEMA_VERSION {
         Ok(())
     } else {
-        Err(ParseError::UnsupportedSchemaVersion {
+        Err(Box::new(ParseError::UnsupportedSchemaVersion {
             path: path.to_path_buf(),
             value,
-        })
+        }))
     }
 }
 
-pub(crate) fn read_to_string(path: &Utf8Path) -> Result<String, ParseError> {
-    fs_err::read_to_string(path.as_std_path()).map_err(|e| ParseError::Io {
-        path: path.to_path_buf(),
-        source: e,
+pub(crate) fn read_to_string(path: &Utf8Path) -> ParseResult<String> {
+    fs_err::read_to_string(path.as_std_path()).map_err(|e| {
+        Box::new(ParseError::Io {
+            path: path.to_path_buf(),
+            source: e,
+        })
     })
 }
 
@@ -128,7 +133,7 @@ mod tests {
         let fx = write_tmp("speccy.toml", src);
         let err = speccy_toml(&fx.path).expect_err("schema_version = 2 must fail");
         assert!(
-            matches!(err, ParseError::UnsupportedSchemaVersion { value: 2, .. }),
+            matches!(*err, ParseError::UnsupportedSchemaVersion { value: 2, .. }),
             "got: {err:?}",
         );
     }
@@ -139,7 +144,7 @@ mod tests {
         let err = speccy_toml(path).expect_err("missing file must error");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::Io { path: errpath, .. } if errpath == path
             ),
             "got: {err:?}",

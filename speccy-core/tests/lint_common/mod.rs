@@ -77,20 +77,26 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
     // SPC-001 fires on the lint side of the test harness too.
     let stray_path = fx.dir_path.join("spec.toml");
     let spec_doc_result = if fs_err::metadata(stray_path.as_std_path()).is_ok() {
-        Err(speccy_core::ParseError::StraySpecToml { path: stray_path })
+        Err(Box::new(speccy_core::ParseError::StraySpecToml {
+            path: stray_path,
+        }))
     } else {
         fs_err::read_to_string(fx.spec_md_path.as_std_path())
-            .map_err(|e| speccy_core::ParseError::Io {
-                path: fx.spec_md_path.clone(),
-                source: e,
+            .map_err(|e| {
+                Box::new(speccy_core::ParseError::Io {
+                    path: fx.spec_md_path.clone(),
+                    source: e,
+                })
             })
             .and_then(|src| parse_spec_xml(&src, &fx.spec_md_path))
     };
     let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| {
         fs_err::read_to_string(p.as_std_path())
-            .map_err(|e| speccy_core::ParseError::Io {
-                path: p.clone(),
-                source: e,
+            .map_err(|e| {
+                Box::new(speccy_core::ParseError::Io {
+                    path: p.clone(),
+                    source: e,
+                })
             })
             .and_then(|src| parse_task_xml(&src, p))
     });
@@ -99,9 +105,11 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
         if fs_err::metadata(report_md_path.as_std_path()).is_ok_and(|m| m.is_file()) {
             Some(
                 fs_err::read_to_string(report_md_path.as_std_path())
-                    .map_err(|e| speccy_core::ParseError::Io {
-                        path: report_md_path.clone(),
-                        source: e,
+                    .map_err(|e| {
+                        Box::new(speccy_core::ParseError::Io {
+                            path: report_md_path.clone(),
+                            source: e,
+                        })
                     })
                     .and_then(|src| parse_report_xml(&src, &report_md_path)),
             )

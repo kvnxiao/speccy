@@ -12,6 +12,7 @@
 //! and REQ-003 for the contract this module satisfies.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
 use crate::parse::xml_scanner::ElementSpan;
@@ -338,7 +339,7 @@ fn scan_task_tags(
     body: &str,
     body_offset: usize,
     path: &Utf8Path,
-) -> Result<Vec<RawTag>, ParseError> {
+) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
     let cfg = ScanConfig {
         whitelist: TASKS_ELEMENT_NAMES,
@@ -365,24 +366,24 @@ fn scan_task_tags(
     clippy::too_many_lines,
     reason = "single-pass TASKS.md validator; splitting body offset bookkeeping and root-element classification across helpers would obscure the linear flow"
 )]
-pub fn parse(source: &str, path: &Utf8Path) -> Result<TasksDoc, ParseError> {
+pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
     let split = split_frontmatter(source, path)?;
     let (frontmatter_raw, body, body_offset) = match split {
         Split::Some { yaml, body } => {
             let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                ParseError::MalformedMarker {
+                Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: 0,
                     reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                }
+                })
             })?;
             (yaml.to_owned(), body, body_offset)
         }
         Split::None => {
-            return Err(ParseError::MissingField {
+            return Err(Box::new(ParseError::MissingField {
                 field: "frontmatter".to_owned(),
                 context: format!("TASKS.md at {path}"),
-            });
+            }));
         }
     };
 
@@ -411,55 +412,57 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<TasksDoc, ParseError> {
                 children,
             } => {
                 if root.is_some() {
-                    return Err(ParseError::MalformedMarker {
+                    return Err(Box::new(ParseError::MalformedMarker {
                         path: path.to_path_buf(),
                         offset: span.start,
                         reason: "more than one <tasks> root element".to_owned(),
-                    });
+                    }));
                 }
                 root = Some((spec_id, span, children));
             }
             Block::Task { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<task> element must be nested inside <tasks>".to_owned(),
-                });
+                }));
             }
             Block::TaskScenarios { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::ImplementerNote { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<implementer-note> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::Review { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<review> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::Retry { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<retry> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
         }
     }
 
-    let (spec_id, tasks_span, children) = root.ok_or_else(|| ParseError::MissingField {
-        field: "<tasks>".to_owned(),
-        context: format!("TASKS.md at {path}"),
+    let (spec_id, tasks_span, children) = root.ok_or_else(|| {
+        Box::new(ParseError::MissingField {
+            field: "<tasks>".to_owned(),
+            context: format!("TASKS.md at {path}"),
+        })
     })?;
 
     let mut tasks: Vec<Task> = Vec::new();
@@ -474,49 +477,49 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<TasksDoc, ParseError> {
                 span,
             } => {
                 if !task_ids.insert(id.clone()) {
-                    return Err(ParseError::DuplicateMarkerId {
+                    return Err(Box::new(ParseError::DuplicateMarkerId {
                         path: path.to_path_buf(),
                         marker_name: "task".to_owned(),
                         id,
-                    });
+                    }));
                 }
                 let task = build_task(id, &attrs, body, task_children, span, path)?;
                 tasks.push(task);
             }
             Block::TaskScenarios { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::ImplementerNote { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<implementer-note> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::Review { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<review> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::Retry { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<retry> element must be nested inside <task>".to_owned(),
-                });
+                }));
             }
             Block::Tasks { span, .. } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<tasks> element must not be nested".to_owned(),
-                });
+                }));
             }
         }
     }
@@ -538,27 +541,32 @@ fn build_task(
     children: Vec<Block>,
     span: ElementSpan,
     path: &Utf8Path,
-) -> Result<Task, ParseError> {
+) -> ParseResult<Task> {
     // State.
-    let state_raw = find_attr(attrs, "state").ok_or_else(|| ParseError::MissingTaskAttribute {
-        path: path.to_path_buf(),
-        task_id: id.clone(),
-        attribute: "state".to_owned(),
+    let state_raw = find_attr(attrs, "state").ok_or_else(|| {
+        Box::new(ParseError::MissingTaskAttribute {
+            path: path.to_path_buf(),
+            task_id: id.clone(),
+            attribute: "state".to_owned(),
+        })
     })?;
-    let state = TaskState::from_str(&state_raw).ok_or_else(|| ParseError::InvalidTaskState {
-        path: path.to_path_buf(),
-        task_id: id.clone(),
-        value: state_raw.clone(),
-        allowed: ALLOWED_TASK_STATES.join(", "),
+    let state = TaskState::from_str(&state_raw).ok_or_else(|| {
+        Box::new(ParseError::InvalidTaskState {
+            path: path.to_path_buf(),
+            task_id: id.clone(),
+            value: state_raw.clone(),
+            allowed: ALLOWED_TASK_STATES.join(", "),
+        })
     })?;
 
     // Covers.
-    let covers_raw =
-        find_attr(attrs, "covers").ok_or_else(|| ParseError::MissingTaskAttribute {
+    let covers_raw = find_attr(attrs, "covers").ok_or_else(|| {
+        Box::new(ParseError::MissingTaskAttribute {
             path: path.to_path_buf(),
             task_id: id.clone(),
             attribute: "covers".to_owned(),
-        })?;
+        })
+    })?;
     let covers = parse_covers(&covers_raw, &id, path)?;
 
     let (scenarios_body, scenarios_span, body_items) = collect_task_children(&id, children, path)?;
@@ -583,7 +591,7 @@ fn collect_task_children(
     task_id: &str,
     children: Vec<Block>,
     path: &Utf8Path,
-) -> Result<(String, ElementSpan, Vec<BodyItem>), ParseError> {
+) -> ParseResult<(String, ElementSpan, Vec<BodyItem>)> {
     let mut scenarios: Option<(String, ElementSpan)> = None;
     let mut body_items: Vec<BodyItem> = Vec::new();
     for child in children {
@@ -593,20 +601,20 @@ fn collect_task_children(
                 span: child_span,
             } => {
                 if scenarios.is_some() {
-                    return Err(ParseError::DuplicateTaskSection {
+                    return Err(Box::new(ParseError::DuplicateTaskSection {
                         path: path.to_path_buf(),
                         task_id: task_id.to_owned(),
                         element_name: "task-scenarios".to_owned(),
                         offset: child_span.start,
-                    });
+                    }));
                 }
                 if child_body.trim().is_empty() {
-                    return Err(ParseError::EmptyMarkerBody {
+                    return Err(Box::new(ParseError::EmptyMarkerBody {
                         path: path.to_path_buf(),
                         marker_name: "task-scenarios".to_owned(),
                         id: Some(task_id.to_owned()),
                         offset: child_span.start,
-                    });
+                    }));
                 }
                 scenarios = Some((child_body, child_span));
             }
@@ -651,22 +659,23 @@ fn collect_task_children(
             | Block::Tasks {
                 span: child_span, ..
             } => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: child_span.start,
                     reason: format!(
                         "element nested inside `<task id=\"{task_id}\">` is not allowed here"
                     ),
-                });
+                }));
             }
         }
     }
-    let (scenarios_body, scenarios_span) =
-        scenarios.ok_or_else(|| ParseError::MissingTaskSection {
+    let (scenarios_body, scenarios_span) = scenarios.ok_or_else(|| {
+        Box::new(ParseError::MissingTaskSection {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             element_name: "task-scenarios".to_owned(),
-        })?;
+        })
+    })?;
     Ok((scenarios_body, scenarios_span, body_items))
 }
 
@@ -676,21 +685,21 @@ fn build_implementer_note(
     body: String,
     span: ElementSpan,
     path: &Utf8Path,
-) -> Result<BodyItem, ParseError> {
+) -> ParseResult<BodyItem> {
     let session = find_attr(attrs, "session").unwrap_or_default();
     if session.is_empty() {
-        return Err(ParseError::MissingImplementerNoteSession {
+        return Err(Box::new(ParseError::MissingImplementerNoteSession {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             offset: span.start,
-        });
+        }));
     }
     if body.trim().is_empty() {
-        return Err(ParseError::EmptyImplementerNoteBody {
+        return Err(Box::new(ParseError::EmptyImplementerNoteBody {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             offset: span.start,
-        });
+        }));
     }
     Ok(BodyItem::ImplementerNote {
         session,
@@ -705,24 +714,25 @@ fn build_review(
     body: String,
     span: ElementSpan,
     path: &Utf8Path,
-) -> Result<BodyItem, ParseError> {
+) -> ParseResult<BodyItem> {
     let persona = find_attr(attrs, "persona").unwrap_or_default();
     if !PERSONAS_ALL.contains(&persona.as_str()) {
-        return Err(ParseError::InvalidReviewPersona {
+        return Err(Box::new(ParseError::InvalidReviewPersona {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             value: persona,
             allowed: PERSONAS_ALL.join(", "),
-        });
+        }));
     }
     let verdict_raw = find_attr(attrs, "verdict").unwrap_or_default();
-    let verdict =
-        ReviewVerdict::from_str(&verdict_raw).ok_or_else(|| ParseError::InvalidReviewVerdict {
+    let verdict = ReviewVerdict::from_str(&verdict_raw).ok_or_else(|| {
+        Box::new(ParseError::InvalidReviewVerdict {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             value: verdict_raw,
             allowed: ALLOWED_REVIEW_VERDICTS.join(", "),
-        })?;
+        })
+    })?;
     Ok(BodyItem::Review {
         persona,
         verdict,
@@ -742,23 +752,23 @@ fn find_attr(attrs: &[(String, String)], key: &str) -> Option<String> {
 /// whitespace, double spaces, tabs, and any non-`REQ-\d{3,}` token all
 /// fail with [`ParseError::InvalidCoversFormat`], whose Display
 /// quotes the grammar verbatim.
-fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> Result<Vec<String>, ParseError> {
+fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<String>> {
     if raw.is_empty() {
-        return Err(ParseError::InvalidCoversFormat {
+        return Err(Box::new(ParseError::InvalidCoversFormat {
             path: path.to_path_buf(),
             task_id: task_id.to_owned(),
             value: raw.to_owned(),
-        });
+        }));
     }
     // Reject any non-` ` ASCII whitespace and any non-ASCII bytes up
     // front; the grammar requires single ASCII spaces only.
     for ch in raw.chars() {
         if ch == '\t' || ch == '\r' || ch == '\n' {
-            return Err(ParseError::InvalidCoversFormat {
+            return Err(Box::new(ParseError::InvalidCoversFormat {
                 path: path.to_path_buf(),
                 task_id: task_id.to_owned(),
                 value: raw.to_owned(),
-            });
+            }));
         }
     }
     // Split on single ASCII space. We use `split(' ')` rather than
@@ -767,11 +777,11 @@ fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> Result<Vec<String>
     let mut covers: Vec<String> = Vec::new();
     for token in raw.split(' ') {
         if !req_id_regex().is_match(token) {
-            return Err(ParseError::InvalidCoversFormat {
+            return Err(Box::new(ParseError::InvalidCoversFormat {
                 path: path.to_path_buf(),
                 task_id: task_id.to_owned(),
                 value: raw.to_owned(),
-            });
+            }));
         }
         covers.push(token.to_owned());
     }
@@ -1052,7 +1062,7 @@ fn trim_blank_boundary_lines(body: &str) -> &str {
     body.get(start..end).unwrap_or("")
 }
 
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseError> {
+fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
     for line in body.lines() {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("# ") {
@@ -1062,10 +1072,10 @@ fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseEr
             return Ok(String::new());
         }
     }
-    Err(ParseError::MissingField {
+    Err(Box::new(ParseError::MissingField {
         field: "level-1 heading".to_owned(),
         context: format!("TASKS.md at {path}"),
-    })
+    }))
 }
 
 #[derive(Debug)]
@@ -1102,28 +1112,28 @@ enum Block {
     },
 }
 
-fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block>, ParseError> {
+fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<Block>> {
     let mut stack: Vec<PendingBlock> = Vec::new();
     let mut top: Vec<Block> = Vec::new();
 
     for t in raw {
         if t.is_close {
             let Some(open) = stack.pop() else {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!("close tag `</{}>` without matching open", t.name),
-                });
+                }));
             };
             if open.name != t.name {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!(
                         "close tag `</{}>` does not match open tag `<{}>`",
                         t.name, open.name
                     ),
-                });
+                }));
             }
             let body = source
                 .get(open.body_start..t.body_end_after_tag)
@@ -1147,23 +1157,23 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block
     }
 
     if let Some(open) = stack.first() {
-        return Err(ParseError::MalformedMarker {
+        return Err(Box::new(ParseError::MalformedMarker {
             path: path.to_path_buf(),
             offset: open.span.start,
             reason: format!("open tag `<{}>` is never closed", open.name),
-        });
+        }));
     }
 
     Ok(top)
 }
 
-fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
+fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
     if !TASKS_ELEMENT_NAMES.contains(&t.name.as_str()) {
-        return Err(ParseError::UnknownMarkerName {
+        return Err(Box::new(ParseError::UnknownMarkerName {
             path: path.to_path_buf(),
             marker_name: t.name.clone(),
             offset: t.span.start,
-        });
+        }));
     }
     if t.is_close {
         return Ok(());
@@ -1197,20 +1207,24 @@ fn validate_attribute_value(
     value: &str,
     path: &Utf8Path,
     offset: usize,
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     match (element_name, attr) {
-        ("tasks", "spec") if !spec_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
-            path: path.to_path_buf(),
-            marker_name: element_name.to_owned(),
-            id: value.to_owned(),
-            expected_pattern: r"SPEC-\d{3,}".to_owned(),
-        }),
-        ("task", "id") if !task_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
-            path: path.to_path_buf(),
-            marker_name: element_name.to_owned(),
-            id: value.to_owned(),
-            expected_pattern: r"T-\d{3,}".to_owned(),
-        }),
+        ("tasks", "spec") if !spec_id_regex().is_match(value) => {
+            Err(Box::new(ParseError::InvalidMarkerId {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                id: value.to_owned(),
+                expected_pattern: r"SPEC-\d{3,}".to_owned(),
+            }))
+        }
+        ("task", "id") if !task_id_regex().is_match(value) => {
+            Err(Box::new(ParseError::InvalidMarkerId {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                id: value.to_owned(),
+                expected_pattern: r"T-\d{3,}".to_owned(),
+            }))
+        }
         // `state` and `covers` values are validated later, when the
         // task body assembles, because the diagnostics name the task
         // id rather than the raw attribute offset.
@@ -1231,7 +1245,7 @@ struct PendingBlock {
 }
 
 impl PendingBlock {
-    fn finish(self, body: String, path: &Utf8Path) -> Result<Block, ParseError> {
+    fn finish(self, body: String, path: &Utf8Path) -> ParseResult<Block> {
         let PendingBlock {
             name,
             attrs,
@@ -1241,11 +1255,12 @@ impl PendingBlock {
         } = self;
         match name.as_str() {
             "tasks" => {
-                let spec_id =
-                    find_attr(&attrs, "spec").ok_or_else(|| ParseError::MissingField {
+                let spec_id = find_attr(&attrs, "spec").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
                         field: "spec".to_owned(),
                         context: format!("<tasks> element in {path}"),
-                    })?;
+                    })
+                })?;
                 Ok(Block::Tasks {
                     spec_id,
                     span,
@@ -1253,9 +1268,11 @@ impl PendingBlock {
                 })
             }
             "task" => {
-                let id = find_attr(&attrs, "id").ok_or_else(|| ParseError::MissingField {
-                    field: "id".to_owned(),
-                    context: format!("<task> element in {path}"),
+                let id = find_attr(&attrs, "id").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
+                        field: "id".to_owned(),
+                        context: format!("<task> element in {path}"),
+                    })
                 })?;
                 Ok(Block::Task {
                     id,
@@ -1269,11 +1286,11 @@ impl PendingBlock {
             "implementer-note" => Ok(Block::ImplementerNote { attrs, body, span }),
             "review" => Ok(Block::Review { attrs, body, span }),
             "retry" => Ok(Block::Retry { body, span }),
-            other => Err(ParseError::UnknownMarkerName {
+            other => Err(Box::new(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
                 offset: span.start,
-            }),
+            })),
         }
     }
 }
@@ -1356,7 +1373,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidTaskState { task_id, value, allowed, .. }
                     if task_id == "T-001"
                         && value == "done"
@@ -1388,7 +1405,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("missing task-scenarios must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::MissingTaskSection { task_id, element_name, .. }
                     if task_id == "T-001" && element_name == "task-scenarios"
             ),
@@ -1416,7 +1433,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("duplicate task-scenarios must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::DuplicateTaskSection { task_id, element_name, .. }
                     if task_id == "T-001" && element_name == "task-scenarios"
             ),
@@ -1440,7 +1457,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("missing covers must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::MissingTaskAttribute { task_id, attribute, .. }
                     if task_id == "T-001" && attribute == "covers"
             ),
@@ -1465,7 +1482,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidCoversFormat { task_id, value, .. }
                     if task_id == "T-001" && value == "REQ-001  REQ-002"
             ),
@@ -1488,7 +1505,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidCoversFormat { task_id, .. } if task_id == "T-001"
             ),
             "got: {err:?}",
@@ -1521,7 +1538,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("duplicate task id must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::DuplicateMarkerId { marker_name, id, .. }
                     if marker_name == "task" && id == "T-001"
             ),
@@ -1546,7 +1563,7 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::UnknownMarkerAttribute {
                     marker_name, attribute, allowed, ..
                 } if marker_name == "task"

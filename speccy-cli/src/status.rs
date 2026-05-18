@@ -599,12 +599,12 @@ mod tests {
             dir: Utf8PathBuf::from("/tmp"),
             spec_md_path: Utf8PathBuf::from("/tmp/SPEC.md"),
             tasks_md_path: None,
-            spec_md: Err(speccy_core::ParseError::NonUtf8Path(
+            spec_md: Err(Box::new(speccy_core::ParseError::NonUtf8Path(
                 "test-fixture".to_owned(),
-            )),
-            spec_doc: Err(speccy_core::ParseError::NonUtf8Path(
+            ))),
+            spec_doc: Err(Box::new(speccy_core::ParseError::NonUtf8Path(
                 "test-fixture".to_owned(),
-            )),
+            ))),
             tasks_md: None,
             report_md: None,
         }

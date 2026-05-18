@@ -794,6 +794,7 @@ were considered and rejected).
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-17 | human/kevin | Initial draft from BACKLOG F-2 after a brainstorm pass. Every shipped speccy-* SKILL.md description gains a uniform tail (`Requires:` + optional routing cues + one `Do NOT trigger…` line) so the host's skill router can avoid firing skills when preconditions are missing. Source-of-truth in the two .tmpl files per skill; dogfood regenerates via `speccy init --force`. No CLI change, no renderer change, no new skill. Codex's undocumented 1024-char description cap is the binding length constraint. |
+| 2026-05-18 | human/kevin | Closed T-003 discovered-issue carry-forward (`clippy::result_large_err` against `speccy_core::error::ParseError`); fixed in SPEC-0030 by boxing `ParseError` at every parser API boundary inside `speccy-core`. The workspace-wide `pedantic = "deny"` pin now stands satisfied; the standard hygiene gate `cargo clippy --workspace --all-targets --all-features -- -D warnings` exits 0. |
 </changelog>
 
 ## Notes

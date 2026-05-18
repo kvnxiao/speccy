@@ -148,7 +148,7 @@ fn missing_session_attribute_surfaces_dedicated_variant() {
     let msg = format!("{err}");
     assert!(
         matches!(
-            &err,
+            err.as_ref(),
             ParseError::MissingImplementerNoteSession { task_id, .. } if task_id == "T-001",
         ),
         "got: {err:?}",
@@ -180,7 +180,7 @@ fn empty_session_attribute_is_rejected_like_missing() {
     let err = parse_task_xml(&src, path()).expect_err("empty session must fail");
     assert!(
         matches!(
-            &err,
+            err.as_ref(),
             ParseError::MissingImplementerNoteSession { task_id, .. } if task_id == "T-001",
         ),
         "got: {err:?}",
@@ -209,7 +209,7 @@ fn empty_implementer_note_body_surfaces_dedicated_variant() {
     let msg = format!("{err}");
     assert!(
         matches!(
-            &err,
+            err.as_ref(),
             ParseError::EmptyImplementerNoteBody { task_id, .. } if task_id == "T-001",
         ),
         "got: {err:?}",
@@ -244,7 +244,7 @@ fn invalid_verdict_surfaces_dedicated_variant_with_closed_set() {
     let msg = format!("{err}");
     assert!(
         matches!(
-            &err,
+            err.as_ref(),
             ParseError::InvalidReviewVerdict { task_id, value, allowed, .. }
                 if task_id == "T-001"
                     && value == "maybe"
@@ -280,7 +280,7 @@ fn invalid_persona_surfaces_dedicated_variant_with_personas_set() {
     let msg = format!("{err}");
     assert!(
         matches!(
-            &err,
+            err.as_ref(),
             ParseError::InvalidReviewPersona { task_id, value, .. }
                 if task_id == "T-001" && value == "kerrigan",
         ),
@@ -344,6 +344,11 @@ fn round_trip_preserves_body_items_order_and_attributes() {
         "body_items length drift across round-trip",
     );
     for (a, b) in t1.body_items.iter().zip(t2.body_items.iter()) {
+        assert_eq!(
+            std::mem::discriminant(a),
+            std::mem::discriminant(b),
+            "body_items variant drift across round-trip: {a:?} vs {b:?}"
+        );
         match (a, b) {
             (
                 BodyItem::ImplementerNote {
@@ -381,9 +386,7 @@ fn round_trip_preserves_body_items_order_and_attributes() {
             (BodyItem::Retry { body: ba, .. }, BodyItem::Retry { body: bb, .. }) => {
                 assert_eq!(ba.trim(), bb.trim(), "retry body drift");
             }
-            (other_a, other_b) => {
-                panic!("body_items variant drift across round-trip: {other_a:?} vs {other_b:?}");
-            }
+            _ => {}
         }
     }
 }

@@ -159,7 +159,7 @@ pub fn run(args: &ReportArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     let _spec_md_parsed_gate = parsed.spec_md.map_err(|source| ReportError::Parse {
         artifact: "SPEC.md",
         id: canonical_id.clone(),
-        source: Box::new(source),
+        source,
     })?;
 
     let parsed_tasks_md = match parsed.tasks_md {
@@ -168,7 +168,7 @@ pub fn run(args: &ReportArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
             return Err(ReportError::Parse {
                 artifact: "TASKS.md",
                 id: canonical_id,
-                source: Box::new(source),
+                source,
             });
         }
         None => return Err(ReportError::TasksMdRequired { id: canonical_id }),

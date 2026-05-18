@@ -1,6 +1,6 @@
 //! Public types for the lint engine.
 
-use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::ReportDoc;
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
@@ -145,20 +145,20 @@ pub struct ParsedSpec {
     /// Path to `TASKS.md`, if present.
     pub tasks_md_path: Option<Utf8PathBuf>,
     /// Parsed SPEC.md frontmatter / heading view (or the parse error).
-    pub spec_md: Result<SpecMd, ParseError>,
+    pub spec_md: ParseResult<SpecMd>,
     /// Parsed SPEC.md element tree (or the parse error). After
     /// SPEC-0020 this carries the canonical requirement-to-scenario
     /// graph derived from `<requirement>` / `<scenario>` elements;
     /// the stray `spec.toml` lint also surfaces here as a parse
     /// failure.
-    pub spec_doc: Result<SpecDoc, ParseError>,
+    pub spec_doc: ParseResult<SpecDoc>,
     /// Parsed TASKS.md typed XML model (or the parse error), if a
     /// TASKS.md exists. SPEC-0022 retired the heuristic checkbox-list
     /// parser; this is now the only TASKS.md representation.
-    pub tasks_md: Option<Result<TasksDoc, ParseError>>,
+    pub tasks_md: Option<ParseResult<TasksDoc>>,
     /// Parsed REPORT.md typed XML model (or the parse error), if a
     /// REPORT.md exists.
-    pub report_md: Option<Result<ReportDoc, ParseError>>,
+    pub report_md: Option<ParseResult<ReportDoc>>,
 }
 
 impl ParsedSpec {

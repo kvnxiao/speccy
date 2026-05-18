@@ -145,7 +145,7 @@ fn render_amendment(project_root: &Utf8Path, raw_id: &str) -> Result<String, Pla
     let spec_path = spec_dir.join("SPEC.md");
     let parsed = spec_md(&spec_path).map_err(|source| PlanError::Parse {
         id: canonical_id.clone(),
-        source: Box::new(source),
+        source,
     })?;
 
     // SPEC-0023 REQ-006: SPEC.md and MISSION.md are no longer inlined.

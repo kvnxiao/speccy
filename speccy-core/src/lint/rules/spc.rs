@@ -33,7 +33,7 @@ pub fn lint(spec: &ParsedSpec, workspace: &Workspace<'_>, out: &mut Vec<Diagnost
 
 fn spc_001_spec_doc_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     if let Err(err) = &spec.spec_doc {
-        let message = match err {
+        let message = match err.as_ref() {
             ParseError::StraySpecToml { path } => format!(
                 "stray per-spec spec.toml at {path}: SPEC-0019 removed spec.toml; remove the file and rely on SPEC.md elements"
             ),
@@ -58,7 +58,7 @@ fn spc_004_005_spec_md_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) -> (b
     let mut spc_004_fired = false;
     let mut spc_005_fired = false;
     if let Err(err) = &spec.spec_md {
-        match err {
+        match err.as_ref() {
             ParseError::MissingField { field, .. } if field == "frontmatter" => {
                 out.push(Diagnostic::with_file(
                     SPC_004,

@@ -927,6 +927,7 @@ expected to be rare; the change is small and well-tested.
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-17 | human/kevin | Initial draft. Persona body is currently inlined twice: once into host-native `.claude/agents/reviewer-*.md` and `.codex/agents/reviewer-*.toml` at init time via Jinja `{% include %}`, and once into the CLI-rendered reviewer prompt via `{{persona_content}}` filled by `personas::resolve_file`. Only the CLI-rendered path honors `.speccy/skills/personas/`, making the override half-effective and confusing. `.speccy/skills/prompts/` is dead weight (nothing reads from it). This SPEC consolidates persona delivery on the host-native file as the single source, classifies it as Skip-on-exists under `--force`, drops `{{persona_content}}` from the rendered prompt, deletes the resolver chain and its tests, and removes `.speccy/skills/` from the init plan and from this workspace. Mirrors SPEC-0023's direction (REQ-005 / REQ-006 stopped inlining AGENTS.md and SPEC.md). |
+| 2026-05-18 | human/kevin | Closed the inherited `clippy::result_large_err` carve-out (originally surfaced by SPEC-0026 T-003 and noted again in SPEC-0028 `## Assumptions`); fixed in SPEC-0030 by boxing `ParseError` at every parser API boundary inside `speccy-core`. The standard hygiene gate `cargo clippy --workspace --all-targets --all-features -- -D warnings` now exits 0 against this workspace. |
 </changelog>
 
 ## Notes

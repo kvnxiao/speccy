@@ -12,6 +12,7 @@
 //! See `.speccy/specs/0004-status-command/SPEC.md` REQ-001..REQ-004.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::lint::ParsedSpec;
 use crate::parse::ReportDoc;
 use crate::parse::SpecDoc;
@@ -395,9 +396,9 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     // marker parser.
     let stray_spec_toml = fs_err::metadata(spec_toml_path.as_std_path()).is_ok();
     let spec_doc_result = if stray_spec_toml {
-        Err(ParseError::StraySpecToml {
+        Err(Box::new(ParseError::StraySpecToml {
             path: spec_toml_path.clone(),
-        })
+        }))
     } else {
         parse_spec_doc(&spec_md_path)
     };
@@ -471,7 +472,7 @@ pub fn extract_frontmatter_field(yaml: &str, field: &str) -> Option<String> {
 /// HTML-comment marker form is rejected via
 /// [`crate::error::ParseError::LegacyMarker`] with a diagnostic that
 /// names the equivalent raw XML element form.
-fn parse_spec_doc(spec_md_path: &Utf8Path) -> Result<SpecDoc, ParseError> {
+fn parse_spec_doc(spec_md_path: &Utf8Path) -> ParseResult<SpecDoc> {
     let source = crate::parse::toml_files::read_to_string(spec_md_path)?;
     spec_xml::parse(&source, spec_md_path)
 }
@@ -528,14 +529,14 @@ pub fn validate_workspace_xml(input: &XmlValidationInput<'_>) -> Vec<ParseError>
 /// [`parse_one_spec_xml_artifacts`].
 ///
 /// Each field is `None` if the corresponding file is absent on disk,
-/// otherwise `Some(Result<_, ParseError>)` so call sites can decide
+/// otherwise `Some(Result<_, Box<ParseError>>)` so call sites can decide
 /// whether to surface the parse failure or skip the spec.
 #[derive(Debug)]
 pub struct SpecXmlArtifacts {
     /// Typed TASKS.md model parse result, or `None` if TASKS.md is absent.
-    pub tasks: Option<Result<TasksDoc, ParseError>>,
+    pub tasks: Option<ParseResult<TasksDoc>>,
     /// Typed REPORT.md model parse result, or `None` if REPORT.md is absent.
-    pub report: Option<Result<ReportDoc, ParseError>>,
+    pub report: Option<ParseResult<ReportDoc>>,
 }
 
 /// Parse the TASKS.md and REPORT.md typed XML models for one spec
@@ -558,12 +559,12 @@ pub fn parse_one_spec_xml_artifacts(spec_dir: &Utf8Path) -> SpecXmlArtifacts {
     SpecXmlArtifacts { tasks, report }
 }
 
-fn parse_one_tasks_xml(path: &Utf8Path) -> Result<TasksDoc, ParseError> {
+fn parse_one_tasks_xml(path: &Utf8Path) -> ParseResult<TasksDoc> {
     let source = crate::parse::toml_files::read_to_string(path)?;
     task_xml::parse(&source, path)
 }
 
-fn parse_one_report_xml(path: &Utf8Path) -> Result<ReportDoc, ParseError> {
+fn parse_one_report_xml(path: &Utf8Path) -> ParseResult<ReportDoc> {
     let source = crate::parse::toml_files::read_to_string(path)?;
     report_xml::parse(&source, path)
 }

@@ -12,3 +12,4 @@ pub mod tasks;
 pub mod workspace;
 
 pub use error::ParseError;
+pub use error::ParseResult;

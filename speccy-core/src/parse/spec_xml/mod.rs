@@ -33,6 +33,7 @@
 //! for the disjointness invariant and the line-aware scanner decision.
 
 use crate::error::ParseError;
+use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
 pub use crate::parse::xml_scanner::ElementSpan;
@@ -235,7 +236,7 @@ fn scan_spec_tags(
     body: &str,
     body_offset: usize,
     path: &Utf8Path,
-) -> Result<Vec<RawTag>, ParseError> {
+) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
     let structure_shaped_names = build_structure_shaped_names();
     let cfg = ScanConfig {
@@ -245,6 +246,13 @@ fn scan_spec_tags(
         detect_legacy_markers: true,
     };
     scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
+}
+
+fn missing_required_section(path: &Utf8Path, element_name: &str) -> ParseError {
+    ParseError::MissingRequiredSection {
+        path: path.to_path_buf(),
+        element_name: element_name.to_owned(),
+    }
 }
 
 #[expect(
@@ -286,24 +294,24 @@ fn dec_id_regex() -> &'static Regex {
 /// id-pattern violations, duplicate ids, orphan scenarios, empty
 /// required bodies, invalid attribute values, or surviving SPEC-0019
 /// HTML-comment markers outside fenced code blocks.
-pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
+pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<SpecDoc> {
     let split = split_frontmatter(source, path)?;
     let (frontmatter_raw, body, body_offset) = match split {
         Split::Some { yaml, body } => {
             let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                ParseError::MalformedMarker {
+                Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: 0,
                     reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                }
+                })
             })?;
             (yaml.to_owned(), body, body_offset)
         }
         Split::None => {
-            return Err(ParseError::MissingField {
+            return Err(Box::new(ParseError::MissingField {
                 field: "frontmatter".to_owned(),
                 context: format!("SPEC.md at {path}"),
-            });
+            }));
         }
     };
 
@@ -343,34 +351,27 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<SpecDoc, ParseError> {
         ..
     } = ctx;
 
-    let (changelog_body, changelog_span) = changelog.ok_or_else(|| ParseError::MissingField {
-        field: "<changelog>".to_owned(),
-        context: format!("SPEC.md at {path}"),
+    let (changelog_body, changelog_span) = changelog.ok_or_else(|| {
+        Box::new(ParseError::MissingField {
+            field: "<changelog>".to_owned(),
+            context: format!("SPEC.md at {path}"),
+        })
     })?;
 
     if changelog_body.trim().is_empty() {
-        return Err(ParseError::EmptyMarkerBody {
+        return Err(Box::new(ParseError::EmptyMarkerBody {
             path: path.to_path_buf(),
             marker_name: "changelog".to_owned(),
             id: None,
             offset: changelog_span.start,
-        });
+        }));
     }
 
-    let (goals_body, goals_span) = goals.ok_or_else(|| ParseError::MissingRequiredSection {
-        path: path.to_path_buf(),
-        element_name: "goals".to_owned(),
-    })?;
+    let (goals_body, goals_span) = goals.ok_or_else(|| missing_required_section(path, "goals"))?;
     let (non_goals_body, non_goals_span) =
-        non_goals.ok_or_else(|| ParseError::MissingRequiredSection {
-            path: path.to_path_buf(),
-            element_name: "non-goals".to_owned(),
-        })?;
+        non_goals.ok_or_else(|| missing_required_section(path, "non-goals"))?;
     let (user_stories_body, user_stories_span) =
-        user_stories.ok_or_else(|| ParseError::MissingRequiredSection {
-            path: path.to_path_buf(),
-            element_name: "user-stories".to_owned(),
-        })?;
+        user_stories.ok_or_else(|| missing_required_section(path, "user-stories"))?;
     let (assumptions_body, assumptions_span) = match assumptions {
         Some((b, s)) => (Some(b), Some(s)),
         None => (None, None),
@@ -695,7 +696,7 @@ struct ProcessCtx<'a> {
     dec_ids: HashSet<String>,
 }
 
-fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseError> {
+fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> ParseResult<()> {
     match block {
         Block::Requirement {
             id,
@@ -703,11 +704,11 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
             children,
             span,
         } => process_requirement(id, body, children, span, ctx),
-        Block::Scenario { id, span, .. } => Err(ParseError::ScenarioOutsideRequirement {
+        Block::Scenario { id, span, .. } => Err(Box::new(ParseError::ScenarioOutsideRequirement {
             path: ctx.path.to_path_buf(),
             scenario_id: Some(id),
             offset: span.start,
-        }),
+        })),
         Block::Decision {
             id,
             status,
@@ -715,11 +716,11 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
             span,
         } => {
             if !ctx.dec_ids.insert(id.clone()) {
-                return Err(ParseError::DuplicateMarkerId {
+                return Err(Box::new(ParseError::DuplicateMarkerId {
                     path: ctx.path.to_path_buf(),
                     marker_name: "decision".to_owned(),
                     id,
-                });
+                }));
             }
             ctx.decisions.push(Decision {
                 id,
@@ -753,23 +754,23 @@ fn process_block(block: Block, ctx: &mut ProcessCtx<'_>) -> Result<(), ParseErro
         Block::Assumptions { body, span } => {
             assign_top_section(&mut ctx.assumptions, "assumptions", body, span, ctx.path)
         }
-        Block::DoneWhen { span, .. } => Err(ParseError::MalformedMarker {
+        Block::DoneWhen { span, .. } => Err(Box::new(ParseError::MalformedMarker {
             path: ctx.path.to_path_buf(),
             offset: span.start,
             reason: "<done-when> element is only allowed inside a <requirement>".to_owned(),
-        }),
-        Block::Behavior { span, .. } => Err(ParseError::MalformedMarker {
+        })),
+        Block::Behavior { span, .. } => Err(Box::new(ParseError::MalformedMarker {
             path: ctx.path.to_path_buf(),
             offset: span.start,
             reason: "<behavior> element is only allowed inside a <requirement>".to_owned(),
-        }),
+        })),
         Block::Changelog { body, span } => {
             if ctx.changelog.is_some() {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: ctx.path.to_path_buf(),
                     offset: span.start,
                     reason: "more than one <changelog> element".to_owned(),
-                });
+                }));
             }
             ctx.changelog = Some((body, span));
             Ok(())
@@ -783,13 +784,13 @@ fn assign_top_section(
     body: String,
     span: ElementSpan,
     path: &Utf8Path,
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     if slot.is_some() {
-        return Err(ParseError::DuplicateSection {
+        return Err(Box::new(ParseError::DuplicateSection {
             path: path.to_path_buf(),
             element_name: element_name.to_owned(),
             offset: span.start,
-        });
+        }));
     }
     *slot = Some((body, span));
     Ok(())
@@ -805,13 +806,13 @@ fn process_requirement(
     children: Vec<Block>,
     span: ElementSpan,
     ctx: &mut ProcessCtx<'_>,
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     if !ctx.req_ids.insert(id.clone()) {
-        return Err(ParseError::DuplicateMarkerId {
+        return Err(Box::new(ParseError::DuplicateMarkerId {
             path: ctx.path.to_path_buf(),
             marker_name: "requirement".to_owned(),
             id,
-        });
+        }));
     }
     let mut scenarios: Vec<Scenario> = Vec::new();
     let mut done_when: Option<(String, ElementSpan)> = None;
@@ -824,28 +825,28 @@ fn process_requirement(
                 span: child_span,
             } => {
                 if done_when.is_some() {
-                    return Err(ParseError::DuplicateRequirementSection {
+                    return Err(Box::new(ParseError::DuplicateRequirementSection {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         element_name: "done-when".to_owned(),
                         offset: child_span.start,
-                    });
+                    }));
                 }
                 if behavior.is_some() {
-                    return Err(ParseError::RequirementSectionOrder {
+                    return Err(Box::new(ParseError::RequirementSectionOrder {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         offset: child_span.start,
                         reason: "<done-when> must appear before <behavior>".to_owned(),
-                    });
+                    }));
                 }
                 if !scenarios.is_empty() {
-                    return Err(ParseError::RequirementSectionOrder {
+                    return Err(Box::new(ParseError::RequirementSectionOrder {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         offset: child_span.start,
                         reason: "<done-when> must appear before any <scenario>".to_owned(),
-                    });
+                    }));
                 }
                 done_when = Some((child_body, child_span));
             }
@@ -854,20 +855,20 @@ fn process_requirement(
                 span: child_span,
             } => {
                 if behavior.is_some() {
-                    return Err(ParseError::DuplicateRequirementSection {
+                    return Err(Box::new(ParseError::DuplicateRequirementSection {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         element_name: "behavior".to_owned(),
                         offset: child_span.start,
-                    });
+                    }));
                 }
                 if !scenarios.is_empty() {
-                    return Err(ParseError::RequirementSectionOrder {
+                    return Err(Box::new(ParseError::RequirementSectionOrder {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         offset: child_span.start,
                         reason: "<behavior> must appear before any <scenario>".to_owned(),
-                    });
+                    }));
                 }
                 behavior = Some((child_body, child_span));
             }
@@ -877,36 +878,36 @@ fn process_requirement(
                 span: child_span,
             } => {
                 if done_when.is_none() {
-                    return Err(ParseError::RequirementSectionOrder {
+                    return Err(Box::new(ParseError::RequirementSectionOrder {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         offset: child_span.start,
                         reason: "<scenario> must appear after <done-when> and <behavior>"
                             .to_owned(),
-                    });
+                    }));
                 }
                 if behavior.is_none() {
-                    return Err(ParseError::RequirementSectionOrder {
+                    return Err(Box::new(ParseError::RequirementSectionOrder {
                         path: ctx.path.to_path_buf(),
                         requirement_id: id.clone(),
                         offset: child_span.start,
                         reason: "<scenario> must appear after <behavior>".to_owned(),
-                    });
+                    }));
                 }
                 if !ctx.chk_ids.insert(child_id.clone()) {
-                    return Err(ParseError::DuplicateMarkerId {
+                    return Err(Box::new(ParseError::DuplicateMarkerId {
                         path: ctx.path.to_path_buf(),
                         marker_name: "scenario".to_owned(),
                         id: child_id,
-                    });
+                    }));
                 }
                 if child_body.trim().is_empty() {
-                    return Err(ParseError::EmptyMarkerBody {
+                    return Err(Box::new(ParseError::EmptyMarkerBody {
                         path: ctx.path.to_path_buf(),
                         marker_name: "scenario".to_owned(),
                         id: Some(child_id),
                         offset: child_span.start,
-                    });
+                    }));
                 }
                 scenarios.push(Scenario {
                     id: child_id,
@@ -916,61 +917,63 @@ fn process_requirement(
                 });
             }
             other => {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: ctx.path.to_path_buf(),
                     offset: other.span().start,
                     reason: format!(
                         "element `{}` is not allowed inside `requirement`",
                         other.element_name()
                     ),
-                });
+                }));
             }
         }
     }
 
-    let (done_when_body, done_when_span) =
-        done_when.ok_or_else(|| ParseError::MissingRequirementSection {
+    let (done_when_body, done_when_span) = done_when.ok_or_else(|| {
+        Box::new(ParseError::MissingRequirementSection {
             path: ctx.path.to_path_buf(),
             requirement_id: id.clone(),
             element_name: "done-when".to_owned(),
-        })?;
-    let (behavior_body, behavior_span) =
-        behavior.ok_or_else(|| ParseError::MissingRequirementSection {
+        })
+    })?;
+    let (behavior_body, behavior_span) = behavior.ok_or_else(|| {
+        Box::new(ParseError::MissingRequirementSection {
             path: ctx.path.to_path_buf(),
             requirement_id: id.clone(),
             element_name: "behavior".to_owned(),
-        })?;
+        })
+    })?;
 
     if scenarios.is_empty() {
-        return Err(ParseError::MalformedMarker {
+        return Err(Box::new(ParseError::MalformedMarker {
             path: ctx.path.to_path_buf(),
             offset: span.start,
             reason: format!("requirement `{id}` has no nested scenario elements"),
-        });
+        }));
     }
     if done_when_body.trim().is_empty() {
-        return Err(ParseError::EmptyMarkerBody {
+        return Err(Box::new(ParseError::EmptyMarkerBody {
             path: ctx.path.to_path_buf(),
             marker_name: "done-when".to_owned(),
             id: Some(id.clone()),
             offset: done_when_span.start,
-        });
+        }));
     }
     if behavior_body.trim().is_empty() {
-        return Err(ParseError::EmptyMarkerBody {
+        return Err(Box::new(ParseError::EmptyMarkerBody {
             path: ctx.path.to_path_buf(),
             marker_name: "behavior".to_owned(),
             id: Some(id.clone()),
             offset: behavior_span.start,
-        });
+        }));
     }
     if body.trim().is_empty() {
-        return Err(ParseError::EmptyMarkerBody {
+        return Err(Box::new(ParseError::EmptyMarkerBody {
             path: ctx.path.to_path_buf(),
             marker_name: "requirement".to_owned(),
             id: Some(id.clone()),
             offset: span.start,
-        });
+        }));
     }
     ctx.requirements.push(Requirement {
         id,
@@ -1073,7 +1076,7 @@ impl Block {
     }
 }
 
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseError> {
+fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
     for line in body.lines() {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("# ") {
@@ -1083,13 +1086,13 @@ fn extract_level1_heading(body: &str, path: &Utf8Path) -> Result<String, ParseEr
             return Ok(String::new());
         }
     }
-    Err(ParseError::MissingField {
+    Err(Box::new(ParseError::MissingField {
         field: "level-1 heading".to_owned(),
         context: format!("SPEC.md at {path}"),
-    })
+    }))
 }
 
-fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block>, ParseError> {
+fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<Block>> {
     for t in &raw {
         validate_tag_shape(t, path)?;
     }
@@ -1100,21 +1103,21 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block
     for t in raw {
         if t.is_close {
             let Some(open) = stack.pop() else {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!("close tag `</{}>` without matching open", t.name),
-                });
+                }));
             };
             if open.name != t.name {
-                return Err(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: t.span.start,
                     reason: format!(
                         "close tag `</{}>` does not match open tag `<{}>`",
                         t.name, open.name
                     ),
-                });
+                }));
             }
             let body = source
                 .get(open.body_start..t.body_end_after_tag)
@@ -1138,23 +1141,23 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block
     }
 
     if let Some(open) = stack.first() {
-        return Err(ParseError::MalformedMarker {
+        return Err(Box::new(ParseError::MalformedMarker {
             path: path.to_path_buf(),
             offset: open.span.start,
             reason: format!("open tag `<{}>` is never closed", open.name),
-        });
+        }));
     }
 
     Ok(top)
 }
 
-fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
+fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
     if !SPECCY_ELEMENT_NAMES.contains(&t.name.as_str()) {
-        return Err(ParseError::UnknownMarkerName {
+        return Err(Box::new(ParseError::UnknownMarkerName {
             path: path.to_path_buf(),
             marker_name: t.name.clone(),
             offset: t.span.start,
-        });
+        }));
     }
 
     if t.is_close {
@@ -1188,45 +1191,49 @@ fn validate_attribute_value(
     attr: &str,
     value: &str,
     path: &Utf8Path,
-) -> Result<(), ParseError> {
+) -> ParseResult<()> {
     match (element_name, attr) {
         ("requirement", "id") if !req_id_regex().is_match(value) => {
-            Err(ParseError::InvalidMarkerId {
+            Err(Box::new(ParseError::InvalidMarkerId {
                 path: path.to_path_buf(),
                 marker_name: element_name.to_owned(),
                 id: value.to_owned(),
                 expected_pattern: r"REQ-\d{3,}".to_owned(),
-            })
+            }))
         }
-        ("scenario", "id") if !chk_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
-            path: path.to_path_buf(),
-            marker_name: element_name.to_owned(),
-            id: value.to_owned(),
-            expected_pattern: r"CHK-\d{3,}".to_owned(),
-        }),
-        ("decision", "id") if !dec_id_regex().is_match(value) => Err(ParseError::InvalidMarkerId {
-            path: path.to_path_buf(),
-            marker_name: element_name.to_owned(),
-            id: value.to_owned(),
-            expected_pattern: r"DEC-\d{3,}".to_owned(),
-        }),
+        ("scenario", "id") if !chk_id_regex().is_match(value) => {
+            Err(Box::new(ParseError::InvalidMarkerId {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                id: value.to_owned(),
+                expected_pattern: r"CHK-\d{3,}".to_owned(),
+            }))
+        }
+        ("decision", "id") if !dec_id_regex().is_match(value) => {
+            Err(Box::new(ParseError::InvalidMarkerId {
+                path: path.to_path_buf(),
+                marker_name: element_name.to_owned(),
+                id: value.to_owned(),
+                expected_pattern: r"DEC-\d{3,}".to_owned(),
+            }))
+        }
         ("decision", "status") if !ALLOWED_DECISION_STATUSES.contains(&value) => {
-            Err(ParseError::InvalidMarkerAttributeValue {
+            Err(Box::new(ParseError::InvalidMarkerAttributeValue {
                 path: path.to_path_buf(),
                 marker_name: element_name.to_owned(),
                 attribute: attr.to_owned(),
                 value: value.to_owned(),
                 allowed: ALLOWED_DECISION_STATUSES.join(", "),
-            })
+            }))
         }
         ("open-question", "resolved") if !ALLOWED_RESOLVED_VALUES.contains(&value) => {
-            Err(ParseError::InvalidMarkerAttributeValue {
+            Err(Box::new(ParseError::InvalidMarkerAttributeValue {
                 path: path.to_path_buf(),
                 marker_name: element_name.to_owned(),
                 attribute: attr.to_owned(),
                 value: value.to_owned(),
                 allowed: ALLOWED_RESOLVED_VALUES.join(", "),
-            })
+            }))
         }
         _ => Ok(()),
     }
@@ -1242,7 +1249,7 @@ struct PendingBlock {
 }
 
 impl PendingBlock {
-    fn finish(self, body: String, path: &Utf8Path) -> Result<Block, ParseError> {
+    fn finish(self, body: String, path: &Utf8Path) -> ParseResult<Block> {
         let PendingBlock {
             name,
             attrs,
@@ -1257,9 +1264,11 @@ impl PendingBlock {
 
         match name.as_str() {
             "requirement" => {
-                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
-                    field: "id".to_owned(),
-                    context: format!("<requirement> element in {path}"),
+                let id = get_attr("id").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
+                        field: "id".to_owned(),
+                        context: format!("<requirement> element in {path}"),
+                    })
                 })?;
                 Ok(Block::Requirement {
                     id,
@@ -1269,16 +1278,20 @@ impl PendingBlock {
                 })
             }
             "scenario" => {
-                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
-                    field: "id".to_owned(),
-                    context: format!("<scenario> element in {path}"),
+                let id = get_attr("id").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
+                        field: "id".to_owned(),
+                        context: format!("<scenario> element in {path}"),
+                    })
                 })?;
                 Ok(Block::Scenario { id, body, span })
             }
             "decision" => {
-                let id = get_attr("id").ok_or_else(|| ParseError::MissingField {
-                    field: "id".to_owned(),
-                    context: format!("<decision> element in {path}"),
+                let id = get_attr("id").ok_or_else(|| {
+                    Box::new(ParseError::MissingField {
+                        field: "id".to_owned(),
+                        context: format!("<decision> element in {path}"),
+                    })
                 })?;
                 let status = match get_attr("status").as_deref() {
                     Some("accepted") => Some(DecisionStatus::Accepted),
@@ -1313,11 +1326,11 @@ impl PendingBlock {
             "user-stories" => Ok(Block::UserStories { body, span }),
             "assumptions" => Ok(Block::Assumptions { body, span }),
             "changelog" => Ok(Block::Changelog { body, span }),
-            other => Err(ParseError::UnknownMarkerName {
+            other => Err(Box::new(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
                 offset: span.start,
-            }),
+            })),
         }
     }
 }
@@ -1408,7 +1421,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("orphan scenario must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::ScenarioOutsideRequirement { scenario_id, .. }
                     if scenario_id.as_deref() == Some("CHK-001")
             ),
@@ -1458,7 +1471,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("dup must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::DuplicateMarkerId { marker_name, id, .. }
                     if marker_name == "scenario" && id == "CHK-001"
             ),
@@ -1508,7 +1521,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("dup must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::DuplicateMarkerId { marker_name, id, .. }
                     if marker_name == "requirement" && id == "REQ-001"
             ),
@@ -1550,7 +1563,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("dup must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::DuplicateMarkerId { marker_name, id, .. }
                     if marker_name == "decision" && id == "DEC-001"
             ),
@@ -1571,7 +1584,7 @@ mod tests {
         "});
         let err = parse(&src, path()).expect_err("unquoted attr must fail");
         assert!(
-            matches!(&err, ParseError::MalformedMarker { .. }),
+            matches!(*err, ParseError::MalformedMarker { .. }),
             "got: {err:?}",
         );
     }
@@ -1600,7 +1613,7 @@ mod tests {
         // an emitted close tag would surface as a mismatch. To assert
         // the error precisely, also test a clean case with `</requirement> prose`:
         assert!(
-            matches!(&err, ParseError::MalformedMarker { .. }),
+            matches!(*err, ParseError::MalformedMarker { .. }),
             "got: {err:?}",
         );
     }
@@ -1632,7 +1645,7 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("non-isolated close must fail");
         assert!(
-            matches!(&err, ParseError::MalformedMarker { .. }),
+            matches!(*err, ParseError::MalformedMarker { .. }),
             "got: {err:?}",
         );
     }
@@ -1727,7 +1740,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("unknown attr must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::UnknownMarkerAttribute { marker_name, attribute, .. }
                     if marker_name == "requirement" && attribute == "priority"
             ),
@@ -1761,7 +1774,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("bad REQ id must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidMarkerId { marker_name, id, .. }
                     if marker_name == "requirement" && id == "REQ-1"
             ),
@@ -1795,7 +1808,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("bad CHK id must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidMarkerId { marker_name, .. } if marker_name == "scenario"
             ),
             "got: {err:?}",
@@ -1832,7 +1845,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("bad DEC id must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidMarkerId { marker_name, .. } if marker_name == "decision"
             ),
             "got: {err:?}",
@@ -1866,7 +1879,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("empty scenario must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::EmptyMarkerBody { marker_name, .. } if marker_name == "scenario"
             ),
             "got: {err:?}",
@@ -1933,7 +1946,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("empty changelog must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::EmptyMarkerBody { marker_name, .. } if marker_name == "changelog"
             ),
             "got: {err:?}",
@@ -2142,7 +2155,7 @@ mod tests {
         let err = parse(&src, path()).expect_err("invalid resolved must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::InvalidMarkerAttributeValue { marker_name, attribute, value, .. }
                     if marker_name == "open-question" && attribute == "resolved" && value == "maybe"
             ),
@@ -2219,7 +2232,7 @@ mod tests {
         let src = "# Heading only\n<changelog>\nrow\n</changelog>\n";
         let err = parse(src, path()).expect_err("missing frontmatter must fail");
         assert!(
-            matches!(&err, ParseError::MissingField { field, .. } if field == "frontmatter"),
+            matches!(*err, ParseError::MissingField { ref field, .. } if field == "frontmatter"),
             "got: {err:?}",
         );
     }
@@ -2230,7 +2243,7 @@ mod tests {
         let err = parse(src, path()).expect_err("missing heading must fail");
         assert!(
             matches!(
-                &err,
+                err.as_ref(),
                 ParseError::MissingField { field, .. } if field == "level-1 heading"
             ),
             "got: {err:?}",
@@ -2242,7 +2255,7 @@ mod tests {
         let src = "---\nid: SPEC-0001\nno closing fence\n";
         let err = parse(src, path()).expect_err("unterminated must fail");
         assert!(
-            matches!(&err, ParseError::UnterminatedFrontmatter { .. }),
+            matches!(*err, ParseError::UnterminatedFrontmatter { .. }),
             "got: {err:?}",
         );
     }
@@ -2264,14 +2277,14 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("legacy marker must fail");
         assert!(
-            matches!(err, ParseError::LegacyMarker { .. }),
+            matches!(*err, ParseError::LegacyMarker { .. }),
             "expected LegacyMarker variant, got {err:?}",
         );
         if let ParseError::LegacyMarker {
             ref legacy_form,
             ref suggested_element,
             ..
-        } = err
+        } = *err
         {
             assert!(
                 legacy_form.contains("speccy:requirement"),
@@ -2315,14 +2328,14 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("legacy close marker must fail");
         assert!(
-            matches!(err, ParseError::LegacyMarker { .. }),
+            matches!(*err, ParseError::LegacyMarker { .. }),
             "expected LegacyMarker variant, got {err:?}",
         );
         if let ParseError::LegacyMarker {
             ref legacy_form,
             ref suggested_element,
             ..
-        } = err
+        } = *err
         {
             assert!(legacy_form.contains("/speccy:requirement"));
             assert_eq!(suggested_element, "</requirement>");

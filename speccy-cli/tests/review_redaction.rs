@@ -164,27 +164,39 @@ fn task_entry_section(rendered: &str) -> &str {
     // by the required `state="..."` attribute on rendered TASKS.md tasks.
     let mut search_from = 0usize;
     let open_tag_start = loop {
-        let rel = rendered[search_from..]
+        let suffix = rendered
+            .get(search_from..)
+            .expect("search_from must be a valid byte offset into rendered");
+        let rel = suffix
             .find("<task id=")
             .expect("rendered prompt must contain a `<task id=` open tag with state attr");
         let abs = search_from + rel;
         // Peek at the rest of the line for a `state="..."` attribute. The
         // descriptive prose literal closes with `>` immediately; rendered
         // tasks have `state="..."` before `>`.
-        let line_end = rendered[abs..]
-            .find('>')
-            .map_or(rendered.len(), |i| abs + i);
-        if rendered[abs..line_end].contains("state=") {
+        let tail = rendered
+            .get(abs..)
+            .expect("abs must be a valid byte offset into rendered");
+        let line_end = tail.find('>').map_or(rendered.len(), |i| abs + i);
+        let head = rendered
+            .get(abs..line_end)
+            .expect("abs..line_end must be a valid range");
+        if head.contains("state=") {
             break abs;
         }
         search_from = line_end;
     };
     let close = "</task>";
-    let end = rendered[open_tag_start..]
+    let from_open = rendered
+        .get(open_tag_start..)
+        .expect("open_tag_start must be a valid byte offset");
+    let end = from_open
         .find(close)
         .map(|i| open_tag_start + i + close.len())
         .expect("rendered prompt must contain a matching `</task>` close tag");
-    &rendered[open_tag_start..end]
+    rendered
+        .get(open_tag_start..end)
+        .expect("open_tag_start..end must be a valid range")
 }
 
 fn seed_full_mixed_workspace(ws: &Workspace) -> TestResult {
