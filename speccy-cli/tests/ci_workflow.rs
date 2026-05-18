@@ -17,7 +17,7 @@ const CI_WORKFLOW: &str = include_str!("../../.github/workflows/ci.yml");
 
 const CLAUDE_INIT: &str = "speccy init --force --host claude-code";
 const CODEX_INIT: &str = "speccy init --force --host codex";
-const DIFF_COMMAND: &str = "git diff --exit-code .claude .codex .agents .speccy/skills";
+const DIFF_COMMAND: &str = "git diff --exit-code .claude .codex .agents";
 
 #[test]
 fn materialization_step_runs_both_hosts_then_diffs_committed_roots() {
