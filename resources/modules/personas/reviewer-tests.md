@@ -56,15 +56,20 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (tests, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="tests" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (tests, blocking): `signup.spec.ts:34` asserts
-      `mockHash.toHaveBeenCalled()` but never invokes the real
-      `hashPassword` function -- the test passes even if `hashPassword`
-      is `(_) => "plaintext"`. Replace the mock with the real
-      implementation and assert the persisted column is a hash.
+    <review persona="tests" verdict="blocking">
+    `signup.spec.ts:34` asserts `mockHash.toHaveBeenCalled()` but
+    never invokes the real `hashPassword` function -- the test passes
+    even if `hashPassword` is `(_) => "plaintext"`. Replace the mock
+    with the real implementation and assert the persisted column is a
+    hash.
+    </review>

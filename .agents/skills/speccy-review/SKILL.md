@@ -1,6 +1,6 @@
 ---
 name: speccy-review
-description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --kind review --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `Retry:` note. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
+description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --kind review --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `<retry>` element. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
 ---
 
 # speccy-review
@@ -71,14 +71,22 @@ flipped there by `speccy-work`).
    `.codex/agents/reviewer-<persona>.toml`, so the persona body is
    already loaded as the sub-agent's developer instructions.
 
-3. After all four sub-agents return, aggregate the four inline notes
-   they appended to the task subtree. Exit transition:
+3. After all four sub-agents return, aggregate the four `<review>`
+   element blocks they appended to the task subtree. Exit
+   transition:
 
-   - If every persona note is `pass`, flip the task's `state="..."`
-     attribute from `in-review` to `completed`.
-   - If any persona note is `blocking`, flip `state="..."` from
-     `in-review` to `pending` and append a `Retry: ...` bullet to
-     the task subtree summarising the blockers.
+   - If every `<review verdict="...">` is `verdict="pass"`, flip the
+     task's `state="..."` attribute from `in-review` to `completed`.
+   - If any `<review verdict="...">` is `verdict="blocking"`, flip
+     `state="..."` from `in-review` to `pending` and append a
+     `<retry>…</retry>` element block to the task subtree
+     summarising the blockers. The block has the form:
+
+         <retry>
+         <one-line summary of what to change before the next
+         implementer pass>.
+         <optional bullets enumerating each persona's blocker>.
+         </retry>
 
 4. Exit. Do not pick up another `in-review` task. If the caller
    wants another task reviewed, the caller invokes this skill again.

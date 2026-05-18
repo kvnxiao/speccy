@@ -24,6 +24,7 @@
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use speccy_core::parse::redact_implementer_notes;
 use speccy_core::personas::ALL as PERSONAS_ALL;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
@@ -125,11 +126,20 @@ pub fn run(args: &ReviewArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     // SPEC-0023 REQ-003: the rendered prompt no longer inlines the
     // branch diff. The reviewer agent fetches it via `git diff` itself,
     // scoped to the task's suggested files.
+    //
+    // SPEC-0029 REQ-003 / REQ-004: the `{{task_entry}}` substitution is
+    // a redacted projection that filters `<implementer-note>` element
+    // bodies. The redaction is uniform across personas (no `Persona`
+    // parameter on the helper, no per-persona branch here) and silent
+    // (no placeholder marker — DEC-002). When the task carries no
+    // `<implementer-note>` children, the projection is byte-identical
+    // to `task_entry_raw`.
+    let task_entry = redact_implementer_notes(&location.task_entry_raw, location.task);
     let mut vars: BTreeMap<&str, String> = BTreeMap::new();
     vars.insert("spec_id", location.spec_id.clone());
     vars.insert("spec_md_path", spec_md_path);
     vars.insert("task_id", location.task.id.clone());
-    vars.insert("task_entry", location.task_entry_raw.clone());
+    vars.insert("task_entry", task_entry);
     vars.insert("persona", args.persona.clone());
 
     let rendered = render(template, &vars);

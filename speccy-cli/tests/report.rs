@@ -68,9 +68,32 @@ fn convert_legacy_to_xml(spec_id: &str, body: &str) -> String {
             "<task id=\"{id}\" state=\"{state}\" covers=\"{covers}\">\n{title}\n"
         ));
         for note in &notes {
-            out.push_str("- ");
-            out.push_str(note);
-            out.push('\n');
+            // Translate legacy authoring conventions into the SPEC-0029 XML
+            // element form. Anything else stays as a `- ` bullet so the
+            // existing `Covers:` / `Suggested files:` fixtures keep working.
+            if let Some(session) = note
+                .strip_prefix("Implementer note (session-")
+                .and_then(|rest| rest.strip_suffix("):"))
+            {
+                out.push_str(&format!(
+                    "<implementer-note session=\"{session}\">\nbody.\n</implementer-note>\n"
+                ));
+            } else if let Some((persona_and_verdict, prose)) = note
+                .strip_prefix("Review (")
+                .and_then(|rest| rest.split_once("): "))
+                && let Some((persona, verdict)) = persona_and_verdict.split_once(", ")
+                && matches!(verdict, "pass" | "blocking")
+            {
+                out.push_str(&format!(
+                    "<review persona=\"{persona}\" verdict=\"{verdict}\">\n{prose}\n</review>\n"
+                ));
+            } else if let Some(prose) = note.strip_prefix("Retry: ") {
+                out.push_str(&format!("<retry>\n{prose}\n</retry>\n"));
+            } else {
+                out.push_str("- ");
+                out.push_str(note);
+                out.push('\n');
+            }
         }
         out.push_str("\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n");
     };

@@ -3,11 +3,11 @@
 //! Renders the Phase 5 report prompt for one spec. The CLI never invokes
 //! a model: it locates the spec via [`speccy_core::workspace::scan`],
 //! refuses unless every task is `state="completed"`, derives a per-task
-//! retry count from inline notes beginning with `Retry:`, and renders
-//! the report prompt with file-reference instructions for SPEC.md and
-//! TASKS.md plus the retry summary into the embedded `report.md`
-//! template; applies budget trimming, and writes the rendered prompt
-//! to stdout.
+//! retry count by counting [`BodyItem::Retry`] entries in each task's
+//! `body_items`, and renders the report prompt with file-reference
+//! instructions for SPEC.md and TASKS.md plus the retry summary into
+//! the embedded `report.md` template; applies budget trimming, and
+//! writes the rendered prompt to stdout.
 //!
 //! SPEC-0023 REQ-005 retired the inlined-`AGENTS.md` flow and REQ-006
 //! retired the inlined-`SPEC.md` / `TASKS.md` flows: modern AI coding
@@ -23,6 +23,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use regex::Regex;
 use speccy_core::ParseError;
+use speccy_core::parse::BodyItem;
 use speccy_core::parse::Task;
 use speccy_core::parse::TaskState;
 use speccy_core::prompt::DEFAULT_BUDGET;
@@ -39,8 +40,6 @@ use std::fmt::Write as _;
 use std::io::Write;
 use std::sync::OnceLock;
 use thiserror::Error;
-
-const RETRY_PREFIX: &str = "Retry:";
 
 /// One task that failed the completeness gate, surfaced inside
 /// [`ReportError::Incomplete`] so the dispatcher can list every
@@ -254,9 +253,9 @@ fn collect_offending(tasks: &[Task]) -> Vec<OffendingTask> {
 }
 
 fn count_retries(task: &Task) -> usize {
-    task.notes()
+    task.body_items
         .iter()
-        .filter(|n| n.starts_with(RETRY_PREFIX))
+        .filter(|item| matches!(item, BodyItem::Retry { .. }))
         .count()
 }
 
@@ -292,23 +291,18 @@ pub fn resolve_cwd() -> Result<Utf8PathBuf, ReportError> {
 #[cfg(test)]
 mod tests {
     use super::OffendingTask;
-    use super::RETRY_PREFIX;
     use super::collect_offending;
     use super::count_retries;
     use super::format_retry_summary;
     use super::spec_id_regex;
     use super::validate_spec_id;
+    use speccy_core::parse::BodyItem;
     use speccy_core::parse::ElementSpan;
+    use speccy_core::parse::ReviewVerdict;
     use speccy_core::parse::Task;
     use speccy_core::parse::TaskState;
 
-    fn task_with_notes(id: &str, state: TaskState, notes: &[String]) -> Task {
-        let mut body = String::from("x\n");
-        for note in notes {
-            body.push_str("- ");
-            body.push_str(note);
-            body.push('\n');
-        }
+    fn task_with_body_items(id: &str, state: TaskState, body_items: Vec<BodyItem>) -> Task {
         let zero_span = ElementSpan { start: 0, end: 0 };
         Task {
             id: id.to_owned(),
@@ -316,8 +310,33 @@ mod tests {
             covers: Vec::new(),
             scenarios_body: "placeholder\n".to_owned(),
             scenarios_span: zero_span,
-            body,
+            body_items,
+            body: String::from("x\n"),
             span: zero_span,
+        }
+    }
+
+    fn implementer_note(session: &str, body: &str) -> BodyItem {
+        BodyItem::ImplementerNote {
+            session: session.to_owned(),
+            body: body.to_owned(),
+            span: ElementSpan { start: 0, end: 0 },
+        }
+    }
+
+    fn review(persona: &str, verdict: ReviewVerdict, body: &str) -> BodyItem {
+        BodyItem::Review {
+            persona: persona.to_owned(),
+            verdict,
+            body: body.to_owned(),
+            span: ElementSpan { start: 0, end: 0 },
+        }
+    }
+
+    fn retry(body: &str) -> BodyItem {
+        BodyItem::Retry {
+            body: body.to_owned(),
+            span: ElementSpan { start: 0, end: 0 },
         }
     }
 
@@ -339,11 +358,11 @@ mod tests {
     #[test]
     fn collect_offending_lists_non_done_tasks_in_order() {
         let tasks = vec![
-            task_with_notes("T-001", TaskState::Completed, &[]),
-            task_with_notes("T-002", TaskState::Pending, &[]),
-            task_with_notes("T-003", TaskState::InProgress, &[]),
-            task_with_notes("T-004", TaskState::InReview, &[]),
-            task_with_notes("T-005", TaskState::Completed, &[]),
+            task_with_body_items("T-001", TaskState::Completed, Vec::new()),
+            task_with_body_items("T-002", TaskState::Pending, Vec::new()),
+            task_with_body_items("T-003", TaskState::InProgress, Vec::new()),
+            task_with_body_items("T-004", TaskState::InReview, Vec::new()),
+            task_with_body_items("T-005", TaskState::Completed, Vec::new()),
         ];
         let offending = collect_offending(&tasks);
         assert_eq!(
@@ -368,8 +387,8 @@ mod tests {
     #[test]
     fn collect_offending_empty_when_all_done() {
         let tasks = vec![
-            task_with_notes("T-001", TaskState::Completed, &[]),
-            task_with_notes("T-002", TaskState::Completed, &[]),
+            task_with_body_items("T-001", TaskState::Completed, Vec::new()),
+            task_with_body_items("T-002", TaskState::Completed, Vec::new()),
         ];
         assert!(collect_offending(&tasks).is_empty());
     }
@@ -380,40 +399,44 @@ mod tests {
     }
 
     #[test]
-    fn count_retries_matches_exact_prefix() {
-        let task = task_with_notes(
+    fn count_retries_counts_retry_body_items() {
+        let task = task_with_body_items(
             "T-001",
             TaskState::Completed,
-            &[
-                "Implementer note (session-abc): added bcrypt".to_owned(),
-                "Review (security, blocking): cost 10".to_owned(),
-                "Retry: address bcrypt cost.".to_owned(),
-                "Implementer note: bumped to 12".to_owned(),
-                "Retry: fix style.".to_owned(),
+            vec![
+                implementer_note("s1", "added bcrypt"),
+                review("security", ReviewVerdict::Blocking, "cost 10"),
+                retry("address bcrypt cost."),
+                implementer_note("s1-retry", "bumped to 12"),
+                review("style", ReviewVerdict::Blocking, "style nit"),
+                retry("fix style."),
+                implementer_note("s1-retry-2", "fixed style"),
             ],
         );
         assert_eq!(count_retries(&task), 2);
     }
 
     #[test]
-    fn count_retries_zero_when_none_match() {
-        let task = task_with_notes(
+    fn count_retries_zero_when_no_retry_variant() {
+        let task = task_with_body_items(
             "T-001",
             TaskState::Completed,
-            &["Review (business, pass): OK".to_owned()],
+            vec![
+                implementer_note("s1", "noop"),
+                review("business", ReviewVerdict::Pass, "OK"),
+            ],
         );
         assert_eq!(count_retries(&task), 0);
     }
 
     #[test]
-    fn count_retries_rejects_inexact_prefix() {
-        let task = task_with_notes(
+    fn count_retries_ignores_non_retry_variants_with_retry_in_body() {
+        let task = task_with_body_items(
             "T-001",
             TaskState::Completed,
-            &[
-                "Retry on bcrypt".to_owned(),
-                "retry: lowercase".to_owned(),
-                "Retried: past tense".to_owned(),
+            vec![
+                implementer_note("s1", "considered Retry: but skipped"),
+                review("security", ReviewVerdict::Blocking, "Retry: see above"),
             ],
         );
         assert_eq!(count_retries(&task), 0);
@@ -422,15 +445,12 @@ mod tests {
     #[test]
     fn format_retry_summary_lists_every_task() {
         let tasks = vec![
-            task_with_notes(
+            task_with_body_items(
                 "T-001",
                 TaskState::Completed,
-                &[
-                    format!("{RETRY_PREFIX} first"),
-                    format!("{RETRY_PREFIX} second"),
-                ],
+                vec![retry("first"), retry("second")],
             ),
-            task_with_notes("T-002", TaskState::Completed, &[]),
+            task_with_body_items("T-002", TaskState::Completed, Vec::new()),
         ];
         let summary = format_retry_summary(&tasks);
         assert!(summary.contains("- T-001: 2 retries"), "got: {summary}");
@@ -439,10 +459,10 @@ mod tests {
 
     #[test]
     fn format_retry_summary_uses_singular_for_one_retry() {
-        let tasks = vec![task_with_notes(
+        let tasks = vec![task_with_body_items(
             "T-001",
             TaskState::Completed,
-            &[format!("{RETRY_PREFIX} once")],
+            vec![retry("once")],
         )];
         let summary = format_retry_summary(&tasks);
         assert!(summary.contains("- T-001: 1 retry"), "got: {summary}");

@@ -4,12 +4,6 @@ Grouped by priority. Each item: what / why / where it lives / cost.
 
 Tier 1 — do first (prompt/skill markdown only, no CLI surface change)
 
-F-2: Skill description engineering
-
-- Tighten .claude/skills/speccy-_/SKILL.md and .agents/skills/speccy-_/SKILL.md descriptions. Add explicit anti-triggers ("do NOT trigger when X").
-- Why: speccy-work could currently fire with no TASKS.md; better triggering reduces wasted turns.
-- Where: skill frontmatter, all skills for all hosts.
-
 F-3: Red-green paper trail in task closure
 
 - Implementer prompt requires captured red-output then green-output before flipping [~] → [?]. reviewer-tests treats absence or fabricated-looking output as blocking.

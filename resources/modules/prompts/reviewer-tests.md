@@ -61,11 +61,15 @@ reviewing:
    validation when reporting findings.
 2. Apply the **{{persona}}** persona's review focus to the diff you
    fetched in the section above.
-3. Append one bullet to the task subtree of the form:
+3. Append one `<review persona="..." verdict="...">…</review>` element
+   block to the task subtree. Choose `verdict="pass"` if the diff is
+   acceptable from this persona's perspective, or `verdict="blocking"`
+   if a change is required before merge. The block has the form:
 
-       - Review ({{persona}}, pass | blocking): <one-line summary>.
-         <optional file:line refs and details>.
+       <review persona="{{persona}}" verdict="pass">
+       <one-line summary>.
+       <optional file:line refs and details>.
+       </review>
 
-Use `pass` if the diff is acceptable from this persona's perspective;
-use `blocking` if a change is required before merge. The orchestrating
-skill, not you, flips the task's `state="..."` attribute.
+The orchestrating skill, not you, flips the task's `state="..."`
+attribute.

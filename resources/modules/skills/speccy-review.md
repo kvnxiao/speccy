@@ -80,14 +80,22 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
    `.codex/agents/reviewer-<persona>.toml`, so the persona body is
    already loaded as the sub-agent's developer instructions.{% endif %}
 
-3. After all four sub-agents return, aggregate the four inline notes
-   they appended to the task subtree. Exit transition:
+3. After all four sub-agents return, aggregate the four `<review>`
+   element blocks they appended to the task subtree. Exit
+   transition:
 
-   - If every persona note is `pass`, flip the task's `state="..."`
-     attribute from `in-review` to `completed`.
-   - If any persona note is `blocking`, flip `state="..."` from
-     `in-review` to `pending` and append a `Retry: ...` bullet to
-     the task subtree summarising the blockers.
+   - If every `<review verdict="...">` is `verdict="pass"`, flip the
+     task's `state="..."` attribute from `in-review` to `completed`.
+   - If any `<review verdict="...">` is `verdict="blocking"`, flip
+     `state="..."` from `in-review` to `pending` and append a
+     `<retry>…</retry>` element block to the task subtree
+     summarising the blockers. The block has the form:
+
+         <retry>
+         <one-line summary of what to change before the next
+         implementer pass>.
+         <optional bullets enumerating each persona's blocker>.
+         </retry>
 
 4. Exit. Do not pick up another `in-review` task. If the caller
    wants another task reviewed, the caller invokes this skill again.

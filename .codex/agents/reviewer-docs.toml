@@ -38,17 +38,21 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (docs, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="docs" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (docs, blocking): SPEC-0009 DEC-002 says project-local
-      overrides live in `.speccy/skills/personas/`; the renamed
-      resolver in `personas.rs:120` now reads from
-      `.speccy/personas/`. Either update the decision (with a
-      Changelog row) or restore the path.
+    <review persona="docs" verdict="blocking">
+    SPEC-0009 DEC-002 says project-local overrides live in
+    `.speccy/skills/personas/`; the renamed resolver in
+    `personas.rs:120` now reads from `.speccy/personas/`. Either
+    update the decision (with a Changelog row) or restore the path.
+    </review>
 
 """

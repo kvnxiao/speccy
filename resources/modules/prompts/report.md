@@ -15,7 +15,7 @@ Read TASKS.md at `{{tasks_md_path}}`. The CLI no longer inlines the
 TASKS body into this prompt; load it via your Read primitive when
 walking task entries and inline notes.
 
-## Retry summary (derived from inline `Retry:` notes)
+## Retry summary (derived from inline `<retry>` elements)
 
 {{retry_summary}}
 

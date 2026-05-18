@@ -24,8 +24,8 @@ primitive before producing the surgical diff.
    `completed`:
    - Preserve `state="completed"` tasks unless the SPEC change
      invalidates them. Invalidated `state="completed"` tasks flip
-     back to `state="pending"` with a `Retry: spec amended; …`
-     note appended inside the `<task>` body.
+     back to `state="pending"` with a `<retry>spec amended; …</retry>`
+     element appended inside the `<task>` body.
    - Preserve `state="in-progress"` and `state="in-review"` tasks
      unless invalidated.
    - For newly added requirements, append a new `<task

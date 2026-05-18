@@ -36,9 +36,10 @@ reconciliation are not forgotten.
 
 4. Follow the prompt: preserve `state="completed"` tasks unless the
    SPEC change invalidated them (those flip their `state` back to
-   `pending` with a `Retry: spec amended; ...` note); add new
-   `<task>` elements for newly added requirements; remove `<task>`
-   elements for dropped requirements.
+   `pending` with a `<retry>spec amended; ...</retry>` element
+   appended inside the `<task>` body); add new `<task>` elements for
+   newly added requirements; remove `<task>` elements for dropped
+   requirements.
 5. Record the new spec hash:
 
    ```bash

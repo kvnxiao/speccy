@@ -43,13 +43,18 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (style, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="style" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (style, blocking): `signup.rs:78` uses `.unwrap()` while
-      every other call site in `src/auth/` uses `?` propagation through
-      `AuthError`. Match the surrounding style and propagate.
+    <review persona="style" verdict="blocking">
+    `signup.rs:78` uses `.unwrap()` while every other call site in
+    `src/auth/` uses `?` propagation through `AuthError`. Match the
+    surrounding style and propagate.
+    </review>

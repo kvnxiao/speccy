@@ -42,17 +42,21 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (architecture, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="architecture" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (architecture, blocking): SPEC-0001 DEC-002 fixed the
-      parser layer as the only consumer of `serde-saphyr`; this diff
-      introduces a direct `serde-saphyr` call in `speccy-cli` instead
-      of going through `speccy-core::parse`. Route through the parser
-      or amend DEC-002 explicitly.
+    <review persona="architecture" verdict="blocking">
+    SPEC-0001 DEC-002 fixed the parser layer as the only consumer of
+    `serde-saphyr`; this diff introduces a direct `serde-saphyr` call
+    in `speccy-cli` instead of going through `speccy-core::parse`.
+    Route through the parser or amend DEC-002 explicitly.
+    </review>
 
 """

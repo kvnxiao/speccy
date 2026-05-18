@@ -528,6 +528,70 @@ pub enum ParseError {
         /// Human-readable explanation of the ordering violation.
         reason: String,
     },
+
+    /// An `<implementer-note>` element was missing the required `session`
+    /// attribute (or `session` was empty). SPEC-0029 REQ-001 / DEC-004.
+    #[error(
+        "implementer-note in {path} (task `{task_id}`) is missing the required `session` attribute"
+    )]
+    MissingImplementerNoteSession {
+        /// Path of the offending TASKS.md.
+        path: Utf8PathBuf,
+        /// Id of the enclosing task.
+        task_id: String,
+        /// Byte offset of the offending `<implementer-note>` open tag.
+        offset: usize,
+    },
+
+    /// An `<implementer-note>` element carried an empty body (only
+    /// whitespace between open and close tags). SPEC-0029 REQ-001 /
+    /// DEC-004: the empty-body invariant is load-bearing — the most
+    /// likely interpretation is that the task has not been implemented
+    /// yet by any implementer.
+    #[error(
+        "implementer-note in {path} (task `{task_id}`) has an empty body: the task may not yet have been implemented"
+    )]
+    EmptyImplementerNoteBody {
+        /// Path of the offending TASKS.md.
+        path: Utf8PathBuf,
+        /// Id of the enclosing task.
+        task_id: String,
+        /// Byte offset of the offending `<implementer-note>` open tag.
+        offset: usize,
+    },
+
+    /// A `<review>` element carried a `verdict` value outside the closed
+    /// set `{pass, blocking}`. SPEC-0029 REQ-001 / DEC-007.
+    #[error(
+        "review in {path} (task `{task_id}`) has invalid verdict `{value}`: must be one of {allowed}"
+    )]
+    InvalidReviewVerdict {
+        /// Path of the offending TASKS.md.
+        path: Utf8PathBuf,
+        /// Id of the enclosing task.
+        task_id: String,
+        /// Offending raw verdict value.
+        value: String,
+        /// Comma-separated closed set of allowed verdicts (`pass, blocking`).
+        allowed: String,
+    },
+
+    /// A `<review>` element carried a `persona` value outside the closed
+    /// set drawn from [`crate::personas::ALL`]. SPEC-0029 REQ-001.
+    #[error(
+        "review in {path} (task `{task_id}`) has invalid persona `{value}`: must be one of {allowed}"
+    )]
+    InvalidReviewPersona {
+        /// Path of the offending TASKS.md.
+        path: Utf8PathBuf,
+        /// Id of the enclosing task.
+        task_id: String,
+        /// Offending raw persona value.
+        value: String,
+        /// Comma-separated closed set of allowed personas drawn from
+        /// [`crate::personas::ALL`].
+        allowed: String,
+    },
 }
 
 fn location_suffix(label: Option<&str>) -> String {

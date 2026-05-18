@@ -3,8 +3,8 @@
 You are implementing one task in one spec. Work surgically; do not
 touch unrelated files. When done, flip `{{task_id}}`'s `state="..."`
 attribute from `pending` / `in-progress` to `in-review` in TASKS.md
-and append your implementer note inline using the handoff template
-below.
+and append an `<implementer-note session="...">…</implementer-note>`
+element block inline using the handoff template below.
 
 ## SPEC (pointer)
 
@@ -78,29 +78,33 @@ prompt, then record:
    fail fast on red. Use `speccy check SPEC-NNNN/T-NNN` to re-read
    the `<scenario>` elements you are satisfying; it renders them, it
    does not run them.
-6. Add one implementer note to the task subtree using the six-field
-   handoff template shown below. Every field must appear; write
-   `(none)` for empty fields rather than omitting them. Out-of-scope
-   edits made for the test to compile belong under `Discovered issues`
-   (peripheral bug) or `Procedural compliance` (skill-layer friction
-   fix), with a one-line reason.
+6. Add one `<implementer-note session="...">…</implementer-note>`
+   element block to the task subtree using the six-field
+   handoff template shown below. The `session` attribute is required
+   and non-empty; the body is required and non-empty. Every field
+   must appear; write `(none)` for empty fields rather than omitting
+   them. Out-of-scope edits made for the test to compile belong
+   under `Discovered issues` (peripheral bug) or `Procedural
+   compliance` (skill-layer friction fix), with a one-line reason.
 7. Flip the task's `state="..."` attribute to `in-review` to signal
    "awaiting review".
 
 ### Handoff template
 
-Append exactly this shape, replacing each `<...>` with content. Keep
-the field labels verbatim so downstream tooling (review prompts,
-REPORT.md, any harness reading TASKS.md) can grep them.
+Append exactly this element shape, replacing each `<...>` with
+content. Keep the field labels inside the body verbatim so
+downstream tooling (review prompts, REPORT.md, any harness reading
+TASKS.md) can grep them.
 
 ```markdown
-- Implementer note (session-abc):
-  - Completed: <what shipped in this task>
-  - Undone: <what was planned but deferred, and why>
-  - Commands run: <one bullet per command run during the task>
-  - Exit codes: <pass/fail per command above, in the same order>
-  - Discovered issues: <bugs or surprises in adjacent code; (none) is fine>
-  - Procedural compliance: <skill files touched and why; (none) if no friction>
+<implementer-note session="session-abc">
+- Completed: <what shipped in this task>
+- Undone: <what was planned but deferred, and why>
+- Commands run: <one bullet per command run during the task>
+- Exit codes: <pass/fail per command above, in the same order>
+- Discovered issues: <bugs or surprises in adjacent code; (none) is fine>
+- Procedural compliance: <skill files touched and why; (none) if no friction>
+</implementer-note>
 ```
 
 Do not modify SPEC.md. Surgical changes only.

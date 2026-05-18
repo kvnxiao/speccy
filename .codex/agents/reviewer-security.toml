@@ -39,15 +39,20 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (security, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="security" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (security, blocking): bcrypt cost factor 10; project
-      policy in `AGENTS.md` requires >= 12. See
-      `src/auth/password.ts:14`. Bump and re-run the hash benchmarks.
+    <review persona="security" verdict="blocking">
+    bcrypt cost factor 10; project policy in `AGENTS.md` requires
+    >= 12. See `src/auth/password.ts:14`. Bump and re-run the hash
+    benchmarks.
+    </review>
 
 """

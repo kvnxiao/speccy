@@ -54,10 +54,11 @@ write the code that makes them pass.
   the `<task>` body).
 - Implement code + tests for the task.
 - Flip the task's `state` from `in-progress` to `in-review` when
-  finished, and append an implementer note using the six-field
-  handoff template the prompt embeds (Completed, Undone, Commands
-  run, Exit codes, Discovered issues, Procedural compliance).
-  Write `(none)` for empty fields; do not omit them.
+  finished, and append an `<implementer-note session="...">…</implementer-note>`
+  element block using the six-field handoff template the prompt
+  embeds (Completed, Undone, Commands run, Exit codes, Discovered
+  issues, Procedural compliance). Write `(none)` for empty fields;
+  do not omit them.
 - Do not modify SPEC.md -- it is the planner's domain.
 
 ## Example
@@ -71,16 +72,17 @@ test fixtures. Flips the task's `state` to `in-review` with the
 note:
 
 ```markdown
-- Implementer note (session-abc):
-  - Completed: added `password_hash` migration; renamed column from
-    `password`; updated `tests/migration_helpers.ts` fixtures to use
-    bcrypt hashes so the existing suite compiles.
-  - Undone: (none)
-  - Commands run: `cargo test -p auth --test migrations`,
-    `speccy check SPEC-NNNN/T-002`
-  - Exit codes: pass, pass
-  - Discovered issues: `tests/migration_helpers.ts` assumed plaintext
-    passwords; fixed inline since the migration test wouldn't compile
-    otherwise.
-  - Procedural compliance: (none)
+<implementer-note session="session-abc">
+- Completed: added `password_hash` migration; renamed column from
+  `password`; updated `tests/migration_helpers.ts` fixtures to use
+  bcrypt hashes so the existing suite compiles.
+- Undone: (none)
+- Commands run: `cargo test -p auth --test migrations`,
+  `speccy check SPEC-NNNN/T-002`
+- Exit codes: pass, pass
+- Discovered issues: `tests/migration_helpers.ts` assumed plaintext
+  passwords; fixed inline since the migration test wouldn't compile
+  otherwise.
+- Procedural compliance: (none)
+</implementer-note>
 ```

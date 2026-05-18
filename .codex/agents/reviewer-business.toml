@@ -43,16 +43,20 @@ is not inlined into the prompt.
 
 ## Inline note format
 
-Append exactly one bullet to the task:
+Append exactly one `<review persona="..." verdict="...">…</review>`
+element block to the task:
 
-    - Review (business, pass | blocking): <one-line verdict>.
-      <optional file:line refs and details>.
+    <review persona="business" verdict="pass">
+    <one-line verdict>.
+    <optional file:line refs and details>.
+    </review>
 
 ## Example
 
-    - Review (business, blocking): REQ-002 says duplicate-email returns
-      409 with "already exists" in the body; handler returns 400. See
-      `src/auth/signup.ts:42`. The error code is the contract; please
-      fix before merge.
+    <review persona="business" verdict="blocking">
+    REQ-002 says duplicate-email returns 409 with "already exists" in
+    the body; handler returns 400. See `src/auth/signup.ts:42`. The
+    error code is the contract; please fix before merge.
+    </review>
 
 """

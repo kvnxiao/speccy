@@ -20,6 +20,7 @@ use crate::parse::xml_scanner::ScanConfig;
 use crate::parse::xml_scanner::collect_code_fence_byte_ranges;
 use crate::parse::xml_scanner::scan_tags;
 use crate::parse::xml_scanner::unknown_attribute_error;
+use crate::personas::ALL as PERSONAS_ALL;
 use camino::Utf8Path;
 use regex::Regex;
 use std::collections::HashSet;
@@ -27,10 +28,28 @@ use std::sync::OnceLock;
 
 /// Closed whitelist of Speccy structure element names recognised inside
 /// TASKS.md.
-pub const TASKS_ELEMENT_NAMES: &[&str] = &["tasks", "task", "task-scenarios"];
+///
+/// SPEC-0029 grew the set from `["tasks", "task", "task-scenarios"]` to
+/// the six names below by adding `implementer-note`, `review`, and
+/// `retry` as nested children of `<task>` — promoting the legacy
+/// markdown-bullet conventions to first-class structural elements so
+/// the review-prompt renderer can redact `<implementer-note>` bodies
+/// without per-persona branching or text-level heuristics.
+pub const TASKS_ELEMENT_NAMES: &[&str] = &[
+    "tasks",
+    "task",
+    "task-scenarios",
+    "implementer-note",
+    "review",
+    "retry",
+];
 
 /// Closed set of valid `<task state="...">` values, in their on-disk form.
 pub const ALLOWED_TASK_STATES: &[&str] = &["pending", "in-progress", "in-review", "completed"];
+
+/// Closed set of valid `<review verdict="...">` values, in their on-disk
+/// form. SPEC-0029 REQ-001 / DEC-007.
+pub const ALLOWED_REVIEW_VERDICTS: &[&str] = &["pass", "blocking"];
 
 /// Parsed raw-XML-structured TASKS.md.
 ///
@@ -92,6 +111,106 @@ impl TaskState {
     }
 }
 
+/// Closed set of `<review verdict="...">` values.
+///
+/// SPEC-0029 REQ-001 / DEC-007 introduced this enum parallel to
+/// [`TaskState`]. Wire strings are `"pass"` and `"blocking"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewVerdict {
+    /// `pass` — the persona signed off on the task as-is.
+    Pass,
+    /// `blocking` — the persona flagged a concern that must be
+    /// addressed before the task can ship.
+    Blocking,
+}
+
+impl ReviewVerdict {
+    /// Render back to the on-disk string form.
+    #[must_use = "the rendered verdict is the on-disk form"]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ReviewVerdict::Pass => "pass",
+            ReviewVerdict::Blocking => "blocking",
+        }
+    }
+
+    /// Parse a wire string into a verdict. Returns `None` for any input
+    /// outside the closed set `{pass, blocking}`. Case-sensitive,
+    /// matching `TaskState::from_str`'s shape (which is `Option<Self>`
+    /// rather than `Result<Self, _>`, so the [`std::str::FromStr`]
+    /// trait does not fit).
+    #[expect(
+        clippy::should_implement_trait,
+        reason = "verdict parsing is fallible without an error type; Option<Self> mirrors TaskState::from_str rather than std::str::FromStr's Result shape"
+    )]
+    #[must_use = "callers must handle the `None` (out-of-set) case"]
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "pass" => Some(ReviewVerdict::Pass),
+            "blocking" => Some(ReviewVerdict::Blocking),
+            _ => None,
+        }
+    }
+}
+
+/// One typed body item nested inside a `<task>` element.
+///
+/// SPEC-0029 REQ-001 / REQ-002 promoted three legacy markdown-bullet
+/// conventions — `- Implementer note (session-...):`,
+/// `- Review (<persona>, <verdict>): ...`, and `- Retry: ...` — to
+/// first-class structural XML elements nested inside `<task>`. They are
+/// repeatable, source-ordered, and interleavable with each other and
+/// with `<task-scenarios>` (though `<task-scenarios>` itself continues
+/// to live on [`Task::scenarios_body`], not in
+/// [`Task::body_items`]).
+///
+/// The body of each variant carries the verbatim element content (the
+/// bytes between the open and close tag, post-whitespace-trim at parse
+/// time matches the existing `<task-scenarios>` convention). The
+/// `<implementer-note>` body MUST be non-empty after whitespace
+/// trimming (DEC-004); the parser surfaces an empty body as
+/// [`ParseError::EmptyImplementerNoteBody`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BodyItem {
+    /// An implementer self-assessment block. `session` is a required
+    /// non-empty string; format is writer-side discipline (no parser
+    /// regex). `body` carries the markdown payload (typically the six
+    /// sub-bullets: `Completed`, `Undone`, `Commands run`,
+    /// `Exit codes`, `Discovered issues`, `Procedural compliance`).
+    ImplementerNote {
+        /// `session` attribute value.
+        session: String,
+        /// Verbatim element body.
+        body: String,
+        /// Span of the `<implementer-note>` open tag.
+        span: ElementSpan,
+    },
+    /// A reviewer-persona note carrying a verdict and prose. `persona`
+    /// is one of [`crate::personas::ALL`]; `verdict` is one of
+    /// [`ReviewVerdict`]. Body MAY be empty (a terse `verdict="pass"`
+    /// review with no prose is a legitimate signal).
+    Review {
+        /// `persona` attribute value (constrained to
+        /// [`crate::personas::ALL`]).
+        persona: String,
+        /// Parsed `verdict` attribute value.
+        verdict: ReviewVerdict,
+        /// Verbatim element body.
+        body: String,
+        /// Span of the `<review>` open tag.
+        span: ElementSpan,
+    },
+    /// An actionable retry instruction following a blocking review.
+    /// Attribute-free; persona attribution is implied by source
+    /// position (DEC-008).
+    Retry {
+        /// Verbatim element body.
+        body: String,
+        /// Span of the `<retry>` open tag.
+        span: ElementSpan,
+    },
+}
+
 /// One task block (`<task>`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
@@ -106,6 +225,11 @@ pub struct Task {
     pub scenarios_body: String,
     /// Span of the `<task-scenarios>` open tag.
     pub scenarios_span: ElementSpan,
+    /// Typed body items (`<implementer-note>`, `<review>`, `<retry>`)
+    /// in document order. SPEC-0029 REQ-002. `<task-scenarios>` is
+    /// **not** part of this collection — it continues to live on
+    /// [`Task::scenarios_body`].
+    pub body_items: Vec<BodyItem>,
     /// Verbatim body between `<task>` and `</task>` open and close tags,
     /// including any `<task-scenarios>` tag lines as literal text. The
     /// renderer strips the nested block out before re-emitting from the
@@ -161,24 +285,6 @@ impl Task {
             }
         }
         Vec::new()
-    }
-
-    /// Collect every body bullet (top-level `- ` line) as a verbatim
-    /// note string, with the leading marker stripped. Used by `speccy
-    /// report` to count `Retry:` notes per task.
-    #[must_use = "task notes drive retry counting in report rendering"]
-    pub fn notes(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        for line in self.body.lines() {
-            let trimmed = line.trim_start();
-            if let Some(rest) = trimmed
-                .strip_prefix("- ")
-                .or_else(|| trimmed.strip_prefix("* "))
-            {
-                out.push(rest.trim().to_owned());
-            }
-        }
-        out
     }
 
     /// 1-indexed source line of the `<task>` open tag inside the parent
@@ -327,6 +433,27 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<TasksDoc, ParseError> {
                     reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
                 });
             }
+            Block::ImplementerNote { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<implementer-note> element must be nested inside <task>".to_owned(),
+                });
+            }
+            Block::Review { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<review> element must be nested inside <task>".to_owned(),
+                });
+            }
+            Block::Retry { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<retry> element must be nested inside <task>".to_owned(),
+                });
+            }
         }
     }
 
@@ -361,6 +488,27 @@ pub fn parse(source: &str, path: &Utf8Path) -> Result<TasksDoc, ParseError> {
                     path: path.to_path_buf(),
                     offset: span.start,
                     reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
+                });
+            }
+            Block::ImplementerNote { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<implementer-note> element must be nested inside <task>".to_owned(),
+                });
+            }
+            Block::Review { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<review> element must be nested inside <task>".to_owned(),
+                });
+            }
+            Block::Retry { span, .. } => {
+                return Err(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: span.start,
+                    reason: "<retry> element must be nested inside <task>".to_owned(),
                 });
             }
             Block::Tasks { span, .. } => {
@@ -413,8 +561,31 @@ fn build_task(
         })?;
     let covers = parse_covers(&covers_raw, &id, path)?;
 
-    // task-scenarios: exactly one.
+    let (scenarios_body, scenarios_span, body_items) = collect_task_children(&id, children, path)?;
+
+    Ok(Task {
+        id,
+        state,
+        covers,
+        scenarios_body,
+        scenarios_span,
+        body_items,
+        body,
+        span,
+    })
+}
+
+/// Walk a `<task>`'s children, picking out the single `<task-scenarios>`
+/// element and collecting body items (`<implementer-note>`, `<review>`,
+/// `<retry>`) in source order. Surfaces the structured `ParseError`
+/// variants for each malformed-child shape — SPEC-0029 REQ-001 / REQ-002.
+fn collect_task_children(
+    task_id: &str,
+    children: Vec<Block>,
+    path: &Utf8Path,
+) -> Result<(String, ElementSpan, Vec<BodyItem>), ParseError> {
     let mut scenarios: Option<(String, ElementSpan)> = None;
+    let mut body_items: Vec<BodyItem> = Vec::new();
     for child in children {
         match child {
             Block::TaskScenarios {
@@ -424,7 +595,7 @@ fn build_task(
                 if scenarios.is_some() {
                     return Err(ParseError::DuplicateTaskSection {
                         path: path.to_path_buf(),
-                        task_id: id.clone(),
+                        task_id: task_id.to_owned(),
                         element_name: "task-scenarios".to_owned(),
                         offset: child_span.start,
                     });
@@ -433,11 +604,46 @@ fn build_task(
                     return Err(ParseError::EmptyMarkerBody {
                         path: path.to_path_buf(),
                         marker_name: "task-scenarios".to_owned(),
-                        id: Some(id.clone()),
+                        id: Some(task_id.to_owned()),
                         offset: child_span.start,
                     });
                 }
                 scenarios = Some((child_body, child_span));
+            }
+            Block::ImplementerNote {
+                attrs: child_attrs,
+                body: child_body,
+                span: child_span,
+            } => {
+                body_items.push(build_implementer_note(
+                    task_id,
+                    &child_attrs,
+                    child_body,
+                    child_span,
+                    path,
+                )?);
+            }
+            Block::Review {
+                attrs: child_attrs,
+                body: child_body,
+                span: child_span,
+            } => {
+                body_items.push(build_review(
+                    task_id,
+                    &child_attrs,
+                    child_body,
+                    child_span,
+                    path,
+                )?);
+            }
+            Block::Retry {
+                body: child_body,
+                span: child_span,
+            } => {
+                body_items.push(BodyItem::Retry {
+                    body: child_body,
+                    span: child_span,
+                });
             }
             Block::Task {
                 span: child_span, ..
@@ -449,26 +655,77 @@ fn build_task(
                     path: path.to_path_buf(),
                     offset: child_span.start,
                     reason: format!(
-                        "element nested inside `<task id=\"{id}\">` is not allowed here"
+                        "element nested inside `<task id=\"{task_id}\">` is not allowed here"
                     ),
                 });
             }
         }
     }
-
     let (scenarios_body, scenarios_span) =
         scenarios.ok_or_else(|| ParseError::MissingTaskSection {
             path: path.to_path_buf(),
-            task_id: id.clone(),
+            task_id: task_id.to_owned(),
             element_name: "task-scenarios".to_owned(),
         })?;
+    Ok((scenarios_body, scenarios_span, body_items))
+}
 
-    Ok(Task {
-        id,
-        state,
-        covers,
-        scenarios_body,
-        scenarios_span,
+fn build_implementer_note(
+    task_id: &str,
+    attrs: &[(String, String)],
+    body: String,
+    span: ElementSpan,
+    path: &Utf8Path,
+) -> Result<BodyItem, ParseError> {
+    let session = find_attr(attrs, "session").unwrap_or_default();
+    if session.is_empty() {
+        return Err(ParseError::MissingImplementerNoteSession {
+            path: path.to_path_buf(),
+            task_id: task_id.to_owned(),
+            offset: span.start,
+        });
+    }
+    if body.trim().is_empty() {
+        return Err(ParseError::EmptyImplementerNoteBody {
+            path: path.to_path_buf(),
+            task_id: task_id.to_owned(),
+            offset: span.start,
+        });
+    }
+    Ok(BodyItem::ImplementerNote {
+        session,
+        body,
+        span,
+    })
+}
+
+fn build_review(
+    task_id: &str,
+    attrs: &[(String, String)],
+    body: String,
+    span: ElementSpan,
+    path: &Utf8Path,
+) -> Result<BodyItem, ParseError> {
+    let persona = find_attr(attrs, "persona").unwrap_or_default();
+    if !PERSONAS_ALL.contains(&persona.as_str()) {
+        return Err(ParseError::InvalidReviewPersona {
+            path: path.to_path_buf(),
+            task_id: task_id.to_owned(),
+            value: persona,
+            allowed: PERSONAS_ALL.join(", "),
+        });
+    }
+    let verdict_raw = find_attr(attrs, "verdict").unwrap_or_default();
+    let verdict =
+        ReviewVerdict::from_str(&verdict_raw).ok_or_else(|| ParseError::InvalidReviewVerdict {
+            path: path.to_path_buf(),
+            task_id: task_id.to_owned(),
+            value: verdict_raw,
+            allowed: ALLOWED_REVIEW_VERDICTS.join(", "),
+        })?;
+    Ok(BodyItem::Review {
+        persona,
+        verdict,
         body,
         span,
     })
@@ -567,9 +824,12 @@ pub fn render(doc: &TasksDoc) -> String {
             ("covers", covers_value.as_str()),
         ];
         push_element_open(&mut out, "task", &attrs);
-        let prose = strip_nested_task_scenarios(&task.body);
+        let prose = strip_nested_body_blocks(&task.body);
         push_body(&mut out, &prose);
         push_element_block(&mut out, "task-scenarios", &[], &task.scenarios_body);
+        for item in &task.body_items {
+            push_body_item(&mut out, item);
+        }
         push_element_close(&mut out, "task");
     }
     push_element_close(&mut out, "tasks");
@@ -577,19 +837,123 @@ pub fn render(doc: &TasksDoc) -> String {
     out
 }
 
-fn strip_nested_task_scenarios(body: &str) -> String {
+fn push_body_item(out: &mut String, item: &BodyItem) {
+    match item {
+        BodyItem::ImplementerNote { session, body, .. } => {
+            push_element_block(
+                out,
+                "implementer-note",
+                &[("session", session.as_str())],
+                body,
+            );
+        }
+        BodyItem::Review {
+            persona,
+            verdict,
+            body,
+            ..
+        } => {
+            push_element_block(
+                out,
+                "review",
+                &[("persona", persona.as_str()), ("verdict", verdict.as_str())],
+                body,
+            );
+        }
+        BodyItem::Retry { body, .. } => {
+            push_element_block(out, "retry", &[], body);
+        }
+    }
+}
+
+/// Strip line-isolated open/close pairs for every nested `<task>`-body
+/// element that the renderer re-emits from the typed model
+/// (`<task-scenarios>`, `<implementer-note>`, `<review>`, `<retry>`).
+/// Free Markdown prose between these blocks is preserved verbatim.
+fn strip_nested_body_blocks(body: &str) -> String {
+    const STRIPPED: &[&str] = &["task-scenarios", "implementer-note", "review", "retry"];
     let mut out = String::with_capacity(body.len());
-    let mut in_block = false;
+    let mut in_block: Option<&'static str> = None;
     for line in body.split_inclusive('\n') {
         let trimmed = line.trim_start();
-        if in_block {
-            if trimmed.starts_with("</task-scenarios>") {
-                in_block = false;
+        if let Some(name) = in_block {
+            let close = format!("</{name}>");
+            if trimmed.starts_with(close.as_str()) {
+                in_block = None;
             }
             continue;
         }
-        if trimmed.starts_with("<task-scenarios>") {
-            in_block = true;
+        let mut matched: Option<&'static str> = None;
+        for name in STRIPPED {
+            let open_prefix_attr = format!("<{name} ");
+            let open_prefix_close = format!("<{name}>");
+            if trimmed.starts_with(open_prefix_attr.as_str())
+                || trimmed.starts_with(open_prefix_close.as_str())
+            {
+                matched = Some(name);
+                break;
+            }
+        }
+        if let Some(name) = matched {
+            in_block = Some(name);
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
+/// Render a task entry with `<implementer-note>` element bodies
+/// redacted, in support of SPEC-0029 REQ-003 / REQ-004.
+///
+/// `task_entry` is the verbatim slice of TASKS.md from a `<task>` open
+/// tag through its matching `</task>` close tag — typically what
+/// [`crate::task_lookup::find`] returns as `TaskLocation::task_entry_raw`.
+/// `task` is the parsed [`Task`] whose typed body items name the
+/// redaction surface; the helper consults
+/// [`Task::body_items`] only to decide whether redaction has any work
+/// to do.
+///
+/// **Byte-identity contract.** When `task.body_items` carries no
+/// [`BodyItem::ImplementerNote`] variant, the returned string is
+/// byte-for-byte identical to `task_entry`. SPEC-0029 REQ-003 done-when
+/// bullet 5 anchors this property.
+///
+/// **Redaction shape.** When the task carries one or more
+/// `<implementer-note>` elements, every `<implementer-note ...>` line
+/// and every line up to and including the matching `</implementer-note>`
+/// line is removed from the output. All other lines — including
+/// `<task-scenarios>` bodies, `<review>` bodies, `<retry>` bodies, free
+/// prose, and the `Suggested files:` bullet — pass through verbatim
+/// and in document order. The redaction is silent: no placeholder line
+/// or marker comment is inserted (SPEC-0029 DEC-002).
+///
+/// The redaction operates on the raw `task_entry` bytes rather than
+/// the typed [`Task`] body so [`Task::body_items`] order, attribute
+/// values, and span metadata do not need to round-trip through the
+/// renderer. This preserves bit-level fidelity for the other body
+/// elements.
+#[must_use = "the rendered string is what speccy review substitutes into {{task_entry}}"]
+pub fn redact_implementer_notes(task_entry: &str, task: &Task) -> String {
+    let has_note = task
+        .body_items
+        .iter()
+        .any(|b| matches!(b, BodyItem::ImplementerNote { .. }));
+    if !has_note {
+        return task_entry.to_owned();
+    }
+    let mut out = String::with_capacity(task_entry.len());
+    let mut in_note = false;
+    for line in task_entry.split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        if in_note {
+            if trimmed.starts_with("</implementer-note>") {
+                in_note = false;
+            }
+            continue;
+        }
+        if trimmed.starts_with("<implementer-note ") || trimmed.starts_with("<implementer-note>") {
+            in_note = true;
             continue;
         }
         out.push_str(line);
@@ -722,6 +1086,20 @@ enum Block {
         body: String,
         span: ElementSpan,
     },
+    ImplementerNote {
+        attrs: Vec<(String, String)>,
+        body: String,
+        span: ElementSpan,
+    },
+    Review {
+        attrs: Vec<(String, String)>,
+        body: String,
+        span: ElementSpan,
+    },
+    Retry {
+        body: String,
+        span: ElementSpan,
+    },
 }
 
 fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> Result<Vec<Block>, ParseError> {
@@ -793,6 +1171,9 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> Result<(), ParseError> {
     let allowed_attrs: &[&str] = match t.name.as_str() {
         "tasks" => &["spec"],
         "task" => &["id", "state", "covers"],
+        "implementer-note" => &["session"],
+        "review" => &["persona", "verdict"],
+        // `task-scenarios` and `retry` are attribute-free.
         _ => &[],
     };
     for (k, v) in &t.attrs {
@@ -885,6 +1266,9 @@ impl PendingBlock {
                 })
             }
             "task-scenarios" => Ok(Block::TaskScenarios { body, span }),
+            "implementer-note" => Ok(Block::ImplementerNote { attrs, body, span }),
+            "review" => Ok(Block::Review { attrs, body, span }),
+            "retry" => Ok(Block::Retry { body, span }),
             other => Err(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
