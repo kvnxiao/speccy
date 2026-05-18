@@ -14,11 +14,8 @@ use crate::render::RenderError;
 use crate::render::render_host_pack;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use include_dir::Dir;
-use speccy_core::personas::PERSONAS;
-use speccy_core::prompt::PROMPTS;
+use speccy_core::personas::ALL as PERSONAS_ALL;
 use std::io::Write;
-use std::path::Component;
 use thiserror::Error;
 
 const SPECCY_TOML_TEMPLATE: &str = include_str!("templates/speccy.toml.tmpl");
@@ -97,11 +94,16 @@ enum Action {
     Overwrite,
     /// Destination exists and is user-tunable; the user's bytes win.
     ///
-    /// Used for `.speccy/skills/personas/` and `.speccy/skills/prompts/`
-    /// — README invites local customisation, so `--force` must not
-    /// stomp those edits. Re-running init refreshes shipped wrappers
-    /// (`.claude/skills/`, `.codex/agents/`, etc.) but leaves these
-    /// alone.
+    /// Used for host-native reviewer files
+    /// (`.claude/agents/reviewer-<persona>.md` and
+    /// `.codex/agents/reviewer-<persona>.toml`). SPEC-0027 made these
+    /// the sole canonical persona surface and classifies them as
+    /// Skip-on-exists so `init --force` preserves the user's edits
+    /// to the persona body (or its surrounding frontmatter).
+    ///
+    /// Re-running init still refreshes the shipped skill wrappers
+    /// (`.claude/skills/`, `.agents/skills/`, etc.) and the root
+    /// `.speccy/speccy.toml`.
     Skip,
 }
 
@@ -193,14 +195,13 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 
     append_host_pack_items(project_root, host, &mut plan)?;
 
-    // Personas and prompts under `.speccy/skills/` are user-tunable
-    // bodies: copy them once, but leave existing files alone on
-    // subsequent `--force` runs so local edits survive upgrades.
-    let personas_dest = project_root.join(".speccy").join("skills").join("personas");
-    append_user_tunable_dir_items(&PERSONAS, &personas_dest, &mut plan);
-
-    let prompts_dest = project_root.join(".speccy").join("skills").join("prompts");
-    append_user_tunable_dir_items(&PROMPTS, &prompts_dest, &mut plan);
+    // SPEC-0027 REQ-001: `.speccy/skills/` is no longer written by
+    // `init`. The host-native reviewer files under `.claude/agents/`
+    // / `.codex/agents/` are now the sole canonical persona surface
+    // (classified Skip-on-exists by `append_host_pack_items`); the
+    // CLI-rendered reviewer prompt no longer carries `{{persona_content}}`
+    // (SPEC-0027 REQ-003); the legacy `.speccy/skills/prompts/`
+    // override directory had no consumer in `speccy_core::prompt`.
 
     Ok(plan)
 }
@@ -224,7 +225,20 @@ fn append_host_pack_items(
     let rendered = render_host_pack(host)?;
     for file in rendered {
         let destination = project_root.join(&file.rel_path);
-        let action = classify(&destination);
+        let action = if is_host_native_reviewer_file(&file.rel_path) {
+            // SPEC-0027 REQ-002: host-native reviewer files
+            // (`.claude/agents/reviewer-<persona>.md` and
+            // `.codex/agents/reviewer-<persona>.toml`) are the sole
+            // canonical persona surface. Treat them as user-tunable:
+            // create on absent, leave alone on exists (even under
+            // `--force`) so local edits to persona focus survive.
+            match classify(&destination) {
+                Action::Create => Action::Create,
+                Action::Overwrite | Action::Skip => Action::Skip,
+            }
+        } else {
+            classify(&destination)
+        };
         plan.push(PlanItem {
             destination,
             content: file.contents.into_bytes(),
@@ -234,69 +248,27 @@ fn append_host_pack_items(
     Ok(())
 }
 
-/// Walk a self-rooted embedded directory (one whose own root *is* the
-/// content to copy, with no per-host subtree prefix) and append one
-/// [`PlanItem`] per shipped markdown file to `plan`. Used for the
-/// shared persona and prompt bundles re-exported from `speccy-core`
-/// after the SPEC-0016 T-002 layout move.
-/// Append shipped persona/prompt bodies that the user is expected to
-/// tune locally. Pre-existing destinations stay untouched even under
-/// `--force`; only missing files are created.
-fn append_user_tunable_dir_items(
-    dir: &'static Dir<'static>,
-    dest_root: &Utf8Path,
-    plan: &mut Vec<PlanItem>,
-) {
-    let prefix = dir.path().to_str().unwrap_or_default().to_owned();
-    let mut entries: Vec<(Utf8PathBuf, &'static [u8])> = Vec::new();
-    collect_bundle_files(dir, &prefix, &mut entries);
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    for (rel, content) in entries {
-        let dest = dest_root.join(&rel);
-        let action = match classify(&dest) {
-            Action::Create => Action::Create,
-            Action::Overwrite | Action::Skip => Action::Skip,
-        };
-        plan.push(PlanItem {
-            destination: dest,
-            content: content.to_vec(),
-            action,
-        });
-    }
-}
-
-fn collect_bundle_files(
-    dir: &Dir<'static>,
-    prefix: &str,
-    out: &mut Vec<(Utf8PathBuf, &'static [u8])>,
-) {
-    for file in dir.files() {
-        let path = file.path();
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !has_md_extension(file_name) {
-            continue;
+/// Return `true` iff `rel_path` is a host-native reviewer-persona
+/// definition file shipped by `render_host_pack`. SPEC-0027 REQ-002
+/// classifies these as Skip-on-exists so user edits to the persona
+/// body (or the surrounding `name`/`description` frontmatter) survive
+/// `speccy init --force`.
+///
+/// Matching is strict: only the six personas in
+/// [`speccy_core::personas::ALL`] count, only at the exact two
+/// per-host directories the renderer emits to, and only with the
+/// host-specific file extension.
+fn is_host_native_reviewer_file(rel_path: &Utf8Path) -> bool {
+    let s = rel_path.as_str().replace('\\', "/");
+    for persona in PERSONAS_ALL {
+        if s == format!(".claude/agents/reviewer-{persona}.md") {
+            return true;
         }
-        let Ok(rel) = path.strip_prefix(prefix) else {
-            continue;
-        };
-        let mut rel_buf = Utf8PathBuf::new();
-        for comp in rel.components() {
-            if let Component::Normal(seg) = comp
-                && let Some(s) = seg.to_str()
-            {
-                rel_buf.push(s);
-            }
+        if s == format!(".codex/agents/reviewer-{persona}.toml") {
+            return true;
         }
-        if rel_buf.as_str().is_empty() {
-            continue;
-        }
-        out.push((rel_buf, file.contents()));
     }
-    for sub in dir.dirs() {
-        collect_bundle_files(sub, prefix, out);
-    }
+    false
 }
 
 fn classify(dest: &Utf8Path) -> Action {
@@ -363,12 +335,6 @@ fn write_item(item: &PlanItem) -> Result<(), InitError> {
     }
     fs_err::write(item.destination.as_std_path(), &item.content)?;
     Ok(())
-}
-
-fn has_md_extension(name: &str) -> bool {
-    std::path::Path::new(name)
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
 #[cfg(test)]

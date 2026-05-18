@@ -351,7 +351,6 @@ fn run_review(task_ref: Option<String>, persona: Option<String>) -> u8 {
 
 fn invoke_review(cwd: &Utf8PathBuf, task_ref: String, persona: String) -> u8 {
     use speccy_cli::review::ReviewError;
-    use speccy_core::personas::PersonaError;
     use speccy_core::task_lookup::LookupError;
 
     let mut stdout = std::io::stdout().lock();
@@ -389,7 +388,7 @@ fn invoke_review(cwd: &Utf8PathBuf, task_ref: String, persona: String) -> u8 {
             }
             1
         }
-        Err(ReviewError::Persona(PersonaError::UnknownName { name, valid })) => {
+        Err(ReviewError::UnknownPersona { name, valid }) => {
             eprintln!("speccy review: unknown persona `{name}`");
             eprintln!("  valid personas: {}", valid.join(", "));
             1

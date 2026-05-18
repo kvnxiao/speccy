@@ -2,9 +2,8 @@
 //!
 //! Renders the Phase 4 reviewer prompt for one persona on one task. The
 //! CLI never invokes a model: it locates the task across the workspace
-//! via [`speccy_core::task_lookup::find`], resolves the persona content
-//! via [`speccy_core::personas::resolve_file`] (project-local override
-//! before embedded bundle), inlines that into the embedded
+//! via [`speccy_core::task_lookup::find`], validates the persona name
+//! against [`speccy_core::personas::ALL`], loads the embedded
 //! `reviewer-<persona>.md` template, applies budget trimming, and writes
 //! the rendered prompt to stdout. SPEC-0023 REQ-003 moved diff fetching
 //! out of the CLI: the rendered prompt instructs the reviewer agent to
@@ -14,16 +13,18 @@
 //! auto-load `AGENTS.md` themselves, and every harness ships a Read
 //! primitive the reviewer uses to fetch SPEC.md by path on demand. The
 //! rendered prompt names the SPEC.md repo-relative path; the body is
-//! no longer inlined.
+//! no longer inlined. SPEC-0027 retires the inlined persona body the
+//! same way: the host loads `.claude/agents/reviewer-<persona>.md` (or
+//! `.codex/agents/reviewer-<persona>.toml`) as the sub-agent's system
+//! context, so the rendered prompt no longer carries a redundant copy.
 //!
-//! See `.speccy/specs/0009-review-command/SPEC.md` and
-//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`.
+//! See `.speccy/specs/0009-review-command/SPEC.md`,
+//! `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md`, and
+//! `.speccy/specs/0027-host-native-personas/SPEC.md`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::personas::ALL as PERSONAS_ALL;
-use speccy_core::personas::PersonaError;
-use speccy_core::personas::resolve_file as resolve_persona_file;
 use speccy_core::prompt::DEFAULT_BUDGET;
 use speccy_core::prompt::PromptError;
 use speccy_core::prompt::TrimResult;
@@ -54,10 +55,15 @@ pub enum ReviewError {
     /// Argument parsing or workspace lookup failed.
     #[error(transparent)]
     Lookup(#[from] LookupError),
-    /// Persona registry rejected the `--persona` value or the bundle is
-    /// missing the persona file.
-    #[error(transparent)]
-    Persona(#[from] PersonaError),
+    /// `--persona` value is not in [`speccy_core::personas::ALL`].
+    #[error("unknown persona `{name}`; valid: {}", valid.join(", "))]
+    UnknownPersona {
+        /// The rejected persona name as supplied by the caller.
+        name: String,
+        /// The static registry of valid persona names, surfaced to the
+        /// caller for diagnostics.
+        valid: &'static [&'static str],
+    },
     /// Template lookup or substitution helper failed.
     #[error("prompt template error")]
     Prompt(#[from] PromptError),
@@ -99,17 +105,16 @@ pub fn run(args: &ReviewArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     };
 
     if !PERSONAS_ALL.contains(&args.persona.as_str()) {
-        return Err(ReviewError::Persona(PersonaError::UnknownName {
+        return Err(ReviewError::UnknownPersona {
             name: args.persona.clone(),
             valid: PERSONAS_ALL,
-        }));
+        });
     }
 
     let task_ref: TaskRef = parse_ref(&args.task_ref)?;
     let workspace = scan(&project_root);
     let location = find(&workspace, &task_ref)?;
 
-    let persona_content = resolve_persona_file(&args.persona, &project_root)?;
     let template_name = format!("reviewer-{}.md", args.persona);
     let template = load_template(&template_name)?;
 
@@ -126,7 +131,6 @@ pub fn run(args: &ReviewArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     vars.insert("task_id", location.task.id.clone());
     vars.insert("task_entry", location.task_entry_raw.clone());
     vars.insert("persona", args.persona.clone());
-    vars.insert("persona_content", persona_content);
 
     let rendered = render(template, &vars);
     let TrimResult { output, .. } = trim_to_budget(rendered, DEFAULT_BUDGET);

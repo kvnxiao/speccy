@@ -14,17 +14,13 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use predicates::str::contains;
 use serde::Deserialize;
+use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
 use speccy_cli::render::render_host_pack;
-use speccy_core::personas::PERSONAS;
-use speccy_core::prompt::PROMPTS;
 use std::path::Path;
 use tempfile::TempDir;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
-
-const SHIPPED_PERSONA_SECURITY: &str =
-    include_str!("../../resources/modules/personas/reviewer-security.md");
 
 /// Frontmatter shape shared by every rendered SKILL.md file. Mirrors
 /// the `RecipeFrontmatter` type in `tests/skill_packs.rs`; the YAML
@@ -337,11 +333,11 @@ fn copy_claude_code_pack_skill_md() -> TestResult {
         "rendered .claude/skills/speccy-plan/SKILL.md must contain `/speccy-tasks`",
     );
 
-    let persona = read_file(&fx.root, ".speccy/skills/personas/reviewer-security.md")?;
-    assert_eq!(
-        persona, SHIPPED_PERSONA_SECURITY,
-        "shared persona file must be copied byte-identical into .speccy/skills/personas/",
-    );
+    // SPEC-0027 REQ-001 retired the `.speccy/skills/personas/` write
+    // step from `speccy init`. The persona body now reaches the
+    // sub-agent solely via `.claude/agents/reviewer-<persona>.md`
+    // (asserted by
+    // `t009_claude_code_reviewer_subagents_land_at_dot_claude_agents`).
     Ok(())
 }
 
@@ -551,6 +547,236 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
     Ok(())
 }
 
+// SPEC-0027 REQ-001 — `.speccy/skills/` is no longer written by
+// `speccy init`. Pre-existing files inside that subtree (from a
+// pre-SPEC init or from manual user creation) are left alone — init
+// neither rewrites nor deletes them.
+
+#[test]
+fn t003_init_does_not_create_speccy_skills_dir() -> TestResult {
+    let fx = project_with_name("t003-no-speccy-skills")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let skills_dir = fx.root.join(".speccy").join("skills");
+    assert!(
+        !skills_dir.exists(),
+        "SPEC-0027 REQ-001: `speccy init` against an empty workspace must not create {skills_dir}",
+    );
+    Ok(())
+}
+
+#[test]
+fn t003_init_plan_summary_does_not_mention_speccy_skills() -> TestResult {
+    let fx = project_with_name("t003-no-speccy-skills-stdout")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    let output = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(output)?;
+    assert!(
+        !stdout.contains(".speccy/skills/"),
+        "SPEC-0027 REQ-001: init plan summary must contain no `.speccy/skills/` reference; got:\n{stdout}",
+    );
+    Ok(())
+}
+
+#[test]
+fn t003_init_force_preserves_pre_existing_speccy_skills_overrides() -> TestResult {
+    let fx = project_with_name("t003-preserve-orphan-skills")?;
+    let pre_existing = "pre-existing override\n";
+    write_file(
+        &fx.root,
+        ".speccy/skills/personas/reviewer-business.md",
+        pre_existing,
+    )?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let after = read_file(&fx.root, ".speccy/skills/personas/reviewer-business.md")?;
+    assert_eq!(
+        after, pre_existing,
+        "SPEC-0027 REQ-001 + DEC-003: `init --force` must leave pre-existing `.speccy/skills/` files byte-for-byte untouched; init writes nothing into the subtree and deletes nothing from it",
+    );
+    Ok(())
+}
+
+// SPEC-0027 REQ-002 — host-native reviewer files are Skip-on-exists
+// under `--force` so users who tune the persona body (or its
+// surrounding frontmatter) keep their edits across re-init. Skill
+// wrappers under `.claude/skills/` and `.agents/skills/` continue to
+// be Overwrite-on-exists.
+
+#[test]
+fn t002_claude_reviewer_agent_files_preserve_user_edits_under_force() -> TestResult {
+    let fx = project_with_name("t002-claude-skip-preserve")?;
+    mkdir(&fx.root, ".claude")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init").current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let rel = ".claude/agents/reviewer-business.md";
+    let initial = read_file(&fx.root, rel)?;
+    assert!(
+        initial.contains("# Reviewer Persona: Business"),
+        "first init must drop the shipped persona body at {rel}; got:\n{initial}",
+    );
+
+    let sentinel = "\n# sentinel-edit-12345\n";
+    let mut edited = initial.clone();
+    edited.push_str(sentinel);
+    write_file(&fx.root, rel, &edited)?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let after = read_file(&fx.root, rel)?;
+    assert!(
+        after.ends_with(sentinel),
+        "SPEC-0027 REQ-002: `speccy init --force` must preserve user edits to {rel}; expected tail `{sentinel}` but got tail:\n{}",
+        after
+            .chars()
+            .rev()
+            .take(80)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>(),
+    );
+    Ok(())
+}
+
+#[test]
+fn t002_claude_reviewer_agent_files_recreate_when_deleted_under_force() -> TestResult {
+    let fx = project_with_name("t002-claude-skip-recreate")?;
+    mkdir(&fx.root, ".claude")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init").current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let rel = ".claude/agents/reviewer-business.md";
+    fs_err::remove_file(fx.root.join(rel).as_std_path())?;
+    assert!(
+        !fx.root.join(rel).exists(),
+        "pre-condition: {rel} must be removed before the re-init",
+    );
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let restored = read_file(&fx.root, rel)?;
+    assert!(
+        restored.contains("# Reviewer Persona: Business"),
+        "SPEC-0027 REQ-002: `init --force` after deletion must recreate {rel} from the shipped bundle (Create on absent); got:\n{restored}",
+    );
+    Ok(())
+}
+
+#[test]
+fn t002_claude_init_force_plan_summary_marks_reviewer_agents_skip_and_skills_overwrite()
+-> TestResult {
+    let fx = project_with_name("t002-claude-plan-labels")?;
+    mkdir(&fx.root, ".claude")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init").current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    let output = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(output)?;
+
+    for persona in [
+        "business",
+        "tests",
+        "security",
+        "style",
+        "architecture",
+        "docs",
+    ] {
+        let needle = format!("skip      .claude/agents/reviewer-{persona}.md");
+        assert!(
+            stdout.contains(&needle),
+            "SPEC-0027 REQ-002: plan summary must list `.claude/agents/reviewer-{persona}.md` with action `skip` under `--force`; got:\n{stdout}",
+        );
+    }
+    for skill in SKILL_NAMES {
+        let needle = format!("overwrite .claude/skills/{skill}/SKILL.md");
+        assert!(
+            stdout.contains(&needle),
+            "plan summary must list `.claude/skills/{skill}/SKILL.md` with action `overwrite` under `--force` (classification flip is scoped to reviewer agent files only); got:\n{stdout}",
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResult {
+    let fx = project_with_name("t002-codex-skip-preserve")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("codex")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let rel = ".codex/agents/reviewer-business.toml";
+    let initial = read_file(&fx.root, rel)?;
+    let sentinel = "\n# sentinel-edit-67890\n";
+    let mut edited = initial.clone();
+    edited.push_str(sentinel);
+    write_file(&fx.root, rel, &edited)?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("codex")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let after = read_file(&fx.root, rel)?;
+    assert!(
+        after.ends_with(sentinel),
+        "SPEC-0027 REQ-002: `speccy init --force --host codex` must preserve user edits to {rel}",
+    );
+
+    fs_err::remove_file(fx.root.join(rel).as_std_path())?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("codex")
+        .arg("--force")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+    let restored = read_file(&fx.root, rel)?;
+    assert!(
+        restored.contains("name = \"reviewer-business\""),
+        "SPEC-0027 REQ-002: `init --force --host codex` after deletion must recreate {rel} with the shipped Codex frontmatter",
+    );
+    Ok(())
+}
+
 #[test]
 fn exit_codes() -> TestResult {
     // 0 on success.
@@ -654,42 +880,12 @@ fn dogfood_outputs_match_committed_tree() -> TestResult {
         }
     }
 
-    // Host-neutral persona / prompt bundles are copied verbatim by
-    // `init` into `.speccy/skills/personas/` and `.speccy/skills/prompts/`;
-    // walk each bundle and compare bytes against the committed
-    // workspace files.
-    for (bundle_name, dest_segment, bundle) in [
-        ("personas", "personas", &PERSONAS),
-        ("prompts", "prompts", &PROMPTS),
-    ] {
-        for file in bundle.files() {
-            let name = file
-                .path()
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or_else(|| format!("{bundle_name} bundle entry must have a UTF-8 name"))?;
-            if !has_md_ext(name) {
-                continue;
-            }
-            let committed_path = root
-                .join(".speccy")
-                .join("skills")
-                .join(dest_segment)
-                .join(name);
-            let committed = fs_err::read_to_string(&committed_path).map_err(|err| {
-                format!("committed `.speccy/skills/{dest_segment}/{name}` must be readable: {err}")
-            })?;
-            let bundle_bytes = file.contents();
-            let bundle_str = std::str::from_utf8(bundle_bytes).map_err(|err| {
-                format!("{bundle_name} bundle entry `{name}` must be UTF-8: {err}")
-            })?;
-            assert_eq!(
-                committed, bundle_str,
-                "committed `.speccy/skills/{dest_segment}/{name}` differs from the embedded bundle; \
-                 run `speccy init --force --host claude-code` (or codex) locally and commit",
-            );
-        }
-    }
+    // SPEC-0027 REQ-001 retired the `.speccy/skills/personas/` and
+    // `.speccy/skills/prompts/` write step from `speccy init`; this
+    // walker no longer has a contract to enforce. The persona body is
+    // delivered via `.claude/agents/reviewer-<persona>.md` (and the
+    // Codex equivalent), which `render_host_pack` already covers
+    // above. The shipped `PROMPTS` bundle stays embedded-only.
 
     Ok(())
 }
@@ -745,12 +941,6 @@ fn rendered_outputs_have_no_unsubstituted_tokens() -> TestResult {
         }
     }
     Ok(())
-}
-
-fn has_md_ext(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
 /// Assert that `needle` does not appear in `body` outside any fenced
@@ -846,30 +1036,34 @@ fn architecture_doc_has_no_legacy_check_authoring_examples() {
 
 /// Source-of-truth sweep over `resources/modules/personas/**` and
 /// `resources/modules/prompts/**`. The host-pack-rendered guard above
-/// catches what reaches `.claude/` / `.codex/` / `.speccy/skills/`,
-/// but only via the renderer; this test pins the upstream sources
-/// directly so a regression that adds a legacy example in a persona
-/// or prompt body fails before any `speccy init` runs.
+/// catches what reaches `.claude/` / `.codex/` via the renderer; this
+/// test pins the upstream sources directly so a regression that adds
+/// a legacy example in a persona or prompt body fails before any
+/// `speccy init` runs.
+///
+/// SPEC-0027 retargeted the per-directory walk from the deleted
+/// speccy-core-side `PERSONAS` / `PROMPTS` statics to
+/// `speccy_cli::embedded::RESOURCES`, which still snapshots the entire
+/// `resources/` tree.
 #[test]
 fn persona_and_prompt_sources_have_no_legacy_check_authoring_examples() {
-    for entry in PERSONAS.files() {
-        let path = entry.path().display();
-        let body = entry.contents_utf8().unwrap_or("");
-        for needle in SPEC_0018_LEGACY_NEEDLES {
+    for sub in ["modules/personas", "modules/prompts"] {
+        let dir = RESOURCES.get_dir(sub).unwrap_or_else(|| {
             assert!(
-                !body.contains(needle),
-                "resources/modules/personas/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
+                false,
+                "embedded RESOURCES bundle is missing `{sub}` subtree"
             );
-        }
-    }
-    for entry in PROMPTS.files() {
-        let path = entry.path().display();
-        let body = entry.contents_utf8().unwrap_or("");
-        for needle in SPEC_0018_LEGACY_NEEDLES {
-            assert!(
-                !body.contains(needle),
-                "resources/modules/prompts/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
-            );
+            unreachable!()
+        });
+        for entry in dir.files() {
+            let path = entry.path().display();
+            let body = entry.contents_utf8().unwrap_or("");
+            for needle in SPEC_0018_LEGACY_NEEDLES {
+                assert!(
+                    !body.contains(needle),
+                    "resources/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
+                );
+            }
         }
     }
 }

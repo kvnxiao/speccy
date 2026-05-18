@@ -4,6 +4,8 @@ outcome: delivered
 generated_at: 2026-05-17T23:30:00Z
 ---
 
+# Report: SPEC-0026 skill-router-anti-triggers
+
 <report spec="SPEC-0026">
 
 ## Outcome

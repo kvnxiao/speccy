@@ -203,13 +203,24 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
         out.contains("git diff"),
         "rendered prompt must instruct the agent to run `git diff`: {out}",
     );
-    // {{persona_content}} — embedded fallback stub content lands here.
+    // SPEC-0027 REQ-003: the rendered prompt no longer carries the
+    // persona body. The placeholder is retired (no `{{persona_content}}`
+    // token to leave un-substituted) and the persona body itself is
+    // not inlined; the host loads it as the sub-agent's system context.
     assert!(
         !out.contains("{{persona_content}}"),
-        "persona_content placeholder not substituted",
+        "retired `{{{{persona_content}}}}` placeholder must not appear in rendered prompt: {out}",
+    );
+    assert!(
+        !out.contains("# Reviewer Persona:"),
+        "persona body header `# Reviewer Persona:` must not be inlined into the rendered prompt (SPEC-0027 REQ-003): {out}",
+    );
+    assert!(
+        !out.contains("## Persona"),
+        "retired `## Persona` section heading must not appear in rendered prompt (SPEC-0027 REQ-003): {out}",
     );
     // No raw placeholders left unsubstituted (including the retired
-    // `{{agents}}` and `{{spec_md}}`).
+    // `{{agents}}`, `{{spec_md}}`, and `{{persona_content}}`).
     for raw in [
         "{{task_id}}",
         "{{spec_id}}",
@@ -218,27 +229,10 @@ fn prompt_renders_substitutes_every_placeholder() -> TestResult {
         "{{task_entry}}",
         "{{agents}}",
         "{{persona}}",
+        "{{persona_content}}",
     ] {
         assert!(!out.contains(raw), "placeholder `{raw}` not substituted");
     }
-    Ok(())
-}
-
-#[test]
-fn prompt_renders_picks_up_project_local_persona_override() -> TestResult {
-    let ws = Workspace::new()?;
-    seed_one_task(&ws)?;
-    // Write a project-local persona override.
-    let dir = ws.root.join(".speccy").join("skills").join("personas");
-    fs_err::create_dir_all(dir.as_std_path())?;
-    let body = "# Custom security persona\n\nFlag bcrypt cost < 12.\n";
-    fs_err::write(dir.join("reviewer-security.md").as_std_path(), body)?;
-
-    let out = capture_stdout(&ws, "T-001", "security")?;
-    assert!(
-        out.contains("Custom security persona"),
-        "project-local persona override should be inlined: {out}",
-    );
     Ok(())
 }
 

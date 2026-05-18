@@ -36,11 +36,10 @@
 //!   `copy_claude_code_pack_skill_md`, `copy_codex_pack_skill_md`.)
 
 use serde::Deserialize;
+use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
 use speccy_cli::render::render_host_pack;
 use speccy_core::personas;
-use speccy_core::personas::PERSONAS;
-use speccy_core::prompt::PROMPTS;
 use std::path::Path;
 
 // --------------------------------------------------------------------
@@ -88,34 +87,34 @@ fn find_rendered_skill<'a>(
     file.contents.as_str()
 }
 
-/// Read a persona body out of the `speccy-core` `PERSONAS` bundle by
-/// leaf file name (e.g. `"reviewer-security.md"`). SPEC-0016 T-002
-/// moved persona bodies from `skills/shared/personas/` (inside the
-/// per-host SKILLS bundle) to `resources/modules/personas/` (inside
-/// the host-neutral PERSONAS bundle exposed by `speccy-core`).
+/// Read a persona body out of the embedded `RESOURCES` bundle by
+/// leaf file name (e.g. `"reviewer-security.md"`). SPEC-0027 retired
+/// the speccy-core-side `PERSONAS` static; persona bodies are still
+/// shipped at `resources/modules/personas/<file>` and remain
+/// reachable through `speccy_cli::embedded::RESOURCES`.
 fn read_persona(name: &str) -> &'static str {
-    let entry = PERSONAS.get_file(name).unwrap_or_else(|| {
+    let path = format!("modules/personas/{name}");
+    let entry = RESOURCES.get_file(&path).unwrap_or_else(|| {
         panic_with_test_message(&format!(
-            "PERSONAS bundle should contain `{name}` (post-T-002 layout)"
+            "RESOURCES bundle should contain `{path}` (SPEC-0027 retargeting)"
         ))
     });
     entry
         .contents_utf8()
-        .expect("PERSONAS bundle entries should be valid UTF-8")
+        .expect("RESOURCES bundle entries should be valid UTF-8")
 }
 
-/// Read a prompt template body out of the `speccy-core` `PROMPTS`
-/// bundle by leaf file name (e.g. `"plan-greenfield.md"`). Same
-/// rationale as [`read_persona`].
+/// Read a prompt template body out of the embedded `RESOURCES` bundle
+/// by leaf file name (e.g. `"plan-greenfield.md"`). Same rationale as
+/// [`read_persona`].
 fn read_prompt(name: &str) -> &'static str {
-    let entry = PROMPTS.get_file(name).unwrap_or_else(|| {
-        panic_with_test_message(&format!(
-            "PROMPTS bundle should contain `{name}` (post-T-002 layout)"
-        ))
+    let path = format!("modules/prompts/{name}");
+    let entry = RESOURCES.get_file(&path).unwrap_or_else(|| {
+        panic_with_test_message(&format!("RESOURCES bundle should contain `{path}`"))
     });
     entry
         .contents_utf8()
-        .expect("PROMPTS bundle entries should be valid UTF-8")
+        .expect("RESOURCES bundle entries should be valid UTF-8")
 }
 
 /// Test-only failure path. Centralised so the `clippy::panic` expectation
@@ -232,15 +231,17 @@ fn persona_files_present() {
 fn persona_names_match_registry() {
     for persona in personas::ALL {
         let file_name = format!("reviewer-{persona}.md");
+        let path = format!("modules/personas/{file_name}");
         assert!(
-            PERSONAS.get_file(&file_name).is_some(),
-            "personas::ALL contains `{persona}` but `{file_name}` is missing from the PERSONAS bundle",
+            RESOURCES.get_file(&path).is_some(),
+            "personas::ALL contains `{persona}` but `{path}` is missing from the embedded RESOURCES bundle",
         );
     }
     for required in ["planner.md", "implementer.md"] {
+        let path = format!("modules/personas/{required}");
         assert!(
-            PERSONAS.get_file(required).is_some(),
-            "`{required}` must ship alongside the reviewer personas",
+            RESOURCES.get_file(&path).is_some(),
+            "`{required}` must ship under `resources/modules/personas/` alongside the reviewer personas",
         );
     }
 }
@@ -326,13 +327,16 @@ fn prompt_placeholders_match_commands() {
         "implementer.md",
     );
 
+    // SPEC-0027: `{{persona_content}}` is retired. The host loads the
+    // sub-agent's `.claude/agents/reviewer-<persona>.md` (or Codex
+    // equivalent) as its system context; the rendered prompt no longer
+    // carries a redundant copy of the persona body.
     let reviewer_required = &[
         "spec_id",
         "spec_md_path",
         "task_id",
         "task_entry",
         "persona",
-        "persona_content",
     ];
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
@@ -348,6 +352,19 @@ fn prompt_placeholders_match_commands() {
         assert!(
             body.contains("git diff"),
             "reviewer template `{file}` must instruct the agent to run `git diff`",
+        );
+        // SPEC-0027 REQ-003: the rendered prompt no longer carries the
+        // persona body. The host loads `.claude/agents/reviewer-*.md`
+        // (or the Codex equivalent) as the sub-agent's system context;
+        // re-inlining via `{{persona_content}}` would be a redundant
+        // shadow copy.
+        assert!(
+            !body.contains("{{persona_content}}"),
+            "reviewer template `{file}` must not contain the retired `{{{{persona_content}}}}` placeholder (SPEC-0027 REQ-003)",
+        );
+        assert!(
+            !body.contains("## Persona"),
+            "reviewer template `{file}` must not contain the retired `## Persona` section header (SPEC-0027 REQ-003)",
         );
     }
 

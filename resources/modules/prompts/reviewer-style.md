@@ -4,10 +4,6 @@ You are the **{{persona}}** reviewer for one task in one spec. Produce
 exactly one inline review note appended to the task in TASKS.md. Do
 not modify any other file.
 
-## Persona
-
-{{persona_content}}
-
 ## SPEC (pointer)
 
 Before reviewing, read SPEC.md at `{{spec_md_path}}`. The CLI no

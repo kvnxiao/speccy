@@ -2,14 +2,18 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! SPEC-0009 CHK-001 / CHK-002 / CHK-003 — persona registry and resolver.
+//! Persona registry tests (SPEC-0009 CHK-001/CHK-002).
+//!
+//! SPEC-0027 retired the project-local override resolver chain
+//! (`resolve_file`, `resolve_file_with_warn`, `persona_file_name`,
+//! `PersonaError`, the speccy-core-side `PERSONAS` static); host-native
+//! files (`.claude/agents/reviewer-<persona>.md` and the Codex
+//! equivalent) are now the sole canonical persona surface. The seven
+//! resolver-chain tests this file used to host have been deleted along
+//! with the resolver itself. What remains is the persona-name registry
+//! — the only public surface of `speccy_core::personas` that survives.
 
-use camino::Utf8PathBuf;
 use speccy_core::personas::ALL;
-use speccy_core::personas::PersonaError;
-use speccy_core::personas::resolve_file;
-use speccy_core::personas::resolve_file_with_warn;
-use std::fs;
 
 const EXPECTED: &[&str] = &[
     "business",
@@ -19,20 +23,6 @@ const EXPECTED: &[&str] = &[
     "architecture",
     "docs",
 ];
-
-fn make_tmp_root() -> (tempfile::TempDir, Utf8PathBuf) {
-    let tmp = tempfile::tempdir().expect("tempdir creation should succeed");
-    let root =
-        Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("tempdir path should be UTF-8");
-    (tmp, root)
-}
-
-fn write_override(root: &Utf8PathBuf, name: &str, content: &str) {
-    let dir = root.join(".speccy").join("skills").join("personas");
-    fs::create_dir_all(dir.as_std_path()).expect("override dir should create");
-    let file = dir.join(format!("reviewer-{name}.md"));
-    fs::write(file.as_std_path(), content).expect("override write should succeed");
-}
 
 #[test]
 fn registry_contains_six_personas_in_declared_order() {
@@ -62,122 +52,4 @@ fn registry_personas_are_unique() {
             "persona {name} appears more than once in ALL",
         );
     }
-}
-
-#[test]
-fn resolve_local_first_returns_override_content() {
-    let (_tmp, root) = make_tmp_root();
-    write_override(
-        &root,
-        "security",
-        "# Custom security persona\n\nProject override.\n",
-    );
-    let body = resolve_file("security", &root).expect("override should resolve");
-    assert!(
-        body.contains("Custom security persona"),
-        "override content must be returned verbatim, got {body:?}",
-    );
-}
-
-#[test]
-fn resolve_local_first_returns_embedded_when_override_missing() {
-    let (_tmp, root) = make_tmp_root();
-    let body =
-        resolve_file("security", &root).expect("embedded fallback should resolve when no override");
-    assert!(
-        !body.is_empty(),
-        "embedded reviewer-security.md must ship in the bundle",
-    );
-}
-
-#[test]
-fn resolve_empty_override_falls_through_with_warning() {
-    let (_tmp, root) = make_tmp_root();
-    write_override(&root, "security", "   \n\n");
-    let mut warns: Vec<u8> = Vec::new();
-    let body = resolve_file_with_warn("security", &root, &mut warns)
-        .expect("empty override must fall through, not error");
-    assert!(
-        !body.is_empty(),
-        "fallback must return the embedded content, got empty body",
-    );
-    let warn_text = String::from_utf8(warns).expect("warning output is UTF-8");
-    assert!(
-        warn_text.contains("empty"),
-        "warning should mention the override was empty, got: {warn_text}",
-    );
-    assert!(
-        warn_text.contains("reviewer-security.md"),
-        "warning should name the override file, got: {warn_text}",
-    );
-}
-
-#[test]
-fn resolve_empty_override_falls_through_silently_when_no_override_present() {
-    let (_tmp, root) = make_tmp_root();
-    let mut warns: Vec<u8> = Vec::new();
-    let _body = resolve_file_with_warn("security", &root, &mut warns)
-        .expect("missing override should fall through silently");
-    assert!(
-        warns.is_empty(),
-        "absent override emits no warning; only empty/unreadable does, got: {warns:?}",
-    );
-}
-
-#[test]
-fn resolve_unknown_name_returns_unknown_name_error() {
-    let (_tmp, root) = make_tmp_root();
-    let err = resolve_file("nope", &root).expect_err("unknown name must error");
-    assert!(
-        matches!(
-            &err,
-            PersonaError::UnknownName { name, valid } if name == "nope" && *valid == ALL,
-        ),
-        "expected UnknownName{{nope, ALL}}, got {err:?}",
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0016 T-002: embedded source path moved from
-// `skills/shared/personas/` to `resources/modules/personas/`.
-// --------------------------------------------------------------------
-
-#[test]
-fn t002_resolve_reviewer_security_returns_shipped_body_with_pre_move_first_line() {
-    // After T-002, the embedded path is `resources/modules/personas/`.
-    // The file content itself is byte-identical to the pre-move file
-    // under `skills/shared/personas/`. The first line of the shipped
-    // reviewer-security persona is the stable `# Reviewer Persona:
-    // Security` header; if that drifts, the registry / resolver wiring
-    // has regressed.
-    let (_tmp, root) = make_tmp_root();
-    let body = resolve_file("security", &root)
-        .expect("post-T-002 resolver must still return the embedded reviewer-security persona");
-    let first_line = body
-        .lines()
-        .next()
-        .expect("persona body must have at least one line");
-    assert_eq!(
-        first_line, "# Reviewer Persona: Security",
-        "post-move resolver must return the same body as pre-move (first line stable)",
-    );
-}
-
-#[test]
-fn resolve_does_not_check_host_native_locations() {
-    let (_tmp, root) = make_tmp_root();
-    let claude_dir = root.join(".claude").join("commands");
-    fs::create_dir_all(claude_dir.as_std_path()).expect(".claude/commands should create");
-    let host_file = claude_dir.join("reviewer-security.md");
-    fs::write(
-        host_file.as_std_path(),
-        "# Host-native persona\nShould NOT be returned.\n",
-    )
-    .expect("host-native write should succeed");
-
-    let body = resolve_file("security", &root).expect("embedded fallback should be used");
-    assert!(
-        !body.contains("Host-native persona"),
-        "host-native location must not be in the resolution chain, got: {body:?}",
-    );
 }
