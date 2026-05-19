@@ -59,9 +59,16 @@ reviewing:
    space-separated `REQ-NNN` ids) and the `<task-scenarios>` body on
    this task. Distinguish slice-level and user-facing-level
    validation when reporting findings.
-2. Apply the **{{persona}}** persona's review focus to the diff you
+2. For every `<implementer-note>` element on the task, extract the
+   `Evidence:` path from the note body and read that file via your
+   host Read primitive. Apply the **{{persona}}** persona definition's
+   fabrication-pattern guidance to the loaded evidence content
+   alongside the diff. When the `Evidence:` field is missing, or when
+   the referenced file does not exist, return a `verdict="blocking"`
+   review naming what is missing.
+3. Apply the **{{persona}}** persona's review focus to the diff you
    fetched in the section above.
-3. Append one `<review persona="..." verdict="...">…</review>` element
+4. Append one `<review persona="..." verdict="...">…</review>` element
    block to the task subtree. Choose `verdict="pass"` if the diff is
    acceptable from this persona's perspective, or `verdict="blocking"`
    if a change is required before merge. The block has the form:

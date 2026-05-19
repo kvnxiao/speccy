@@ -214,6 +214,80 @@ fn collect_tmpl_files(
     }
 }
 
+fn collect_all_files(
+    dir: &'static Dir<'static>,
+    out: &mut Vec<&'static include_dir::File<'static>>,
+) {
+    for file in dir.files() {
+        out.push(file);
+    }
+    for sub in dir.dirs() {
+        collect_all_files(sub, out);
+    }
+}
+
+/// Render the host-agnostic Speccy examples pack.
+///
+/// `speccy init` always emits the contents of
+/// `resources/modules/examples/*` to `.speccy/examples/*` in the
+/// user's project, regardless of the chosen [`HostChoice`]. Files are
+/// treated as static byte blobs — no `MiniJinja` templating, no
+/// `.tmpl` suffix stripping — because the example bodies are
+/// host-agnostic markdown intended to be referenced by the
+/// implementer / reviewer prompts via progressive disclosure (SPEC-0031
+/// REQ-004 + DEC-004).
+///
+/// Returns one [`RenderedFile`] per file under `modules/examples/`,
+/// with `rel_path` rooted at `.speccy/examples/<...>` and `contents`
+/// equal to the embedded source verbatim. Output order is sorted by
+/// bundle path so the result is deterministic across passes.
+///
+/// # Errors
+///
+/// Returns [`RenderError::BundleSubpathMissing`] if the
+/// `modules/examples/` subtree is absent from the embedded bundle
+/// (a build-time invariant — T-001 of SPEC-0031 guarantees it exists)
+/// or [`RenderError::NonUtf8Template`] when a bundle entry is not
+/// valid UTF-8.
+pub fn render_speccy_examples_pack() -> Result<Vec<RenderedFile>, RenderError> {
+    let subpath = "modules/examples";
+    let dir = RESOURCES
+        .get_dir(subpath)
+        .ok_or_else(|| RenderError::BundleSubpathMissing {
+            subpath: subpath.to_owned(),
+        })?;
+
+    let mut entries: Vec<&'static include_dir::File<'static>> = Vec::new();
+    collect_all_files(dir, &mut entries);
+    entries.sort_by_key(|f| f.path());
+
+    let mut out: Vec<RenderedFile> = Vec::with_capacity(entries.len());
+    for file in entries {
+        let bundle_path = file
+            .path()
+            .to_str()
+            .ok_or_else(|| RenderError::NonUtf8Template {
+                template_name: file.path().display().to_string(),
+            })?;
+        let body = file
+            .contents_utf8()
+            .ok_or_else(|| RenderError::NonUtf8Template {
+                template_name: bundle_path.to_owned(),
+            })?;
+        let suffix = bundle_path
+            .strip_prefix("modules/examples/")
+            .ok_or_else(|| RenderError::BundleSubpathMissing {
+                subpath: bundle_path.to_owned(),
+            })?;
+        let rel_path = Utf8PathBuf::from(format!(".speccy/examples/{suffix}"));
+        out.push(RenderedFile {
+            rel_path,
+            contents: body.to_owned(),
+        });
+    }
+    Ok(out)
+}
+
 fn render_template(
     env: &mut Environment<'static>,
     template_name: &str,
@@ -262,6 +336,8 @@ fn destination_rel_path(bundle_path: &str) -> Result<Utf8PathBuf, RenderError> {
 mod tests {
     use super::destination_rel_path;
     use super::render_host_pack;
+    use super::render_speccy_examples_pack;
+    use crate::embedded::RESOURCES;
     use crate::host::HostChoice;
 
     #[test]
@@ -358,6 +434,59 @@ mod tests {
             "rendered speccy-plan SKILL.md must contain `/speccy-tasks`; got contents:\n{}",
             plan.contents,
         );
+    }
+
+    #[test]
+    fn render_speccy_examples_pack_emits_evidence_md() {
+        let out =
+            render_speccy_examples_pack().expect("render_speccy_examples_pack should succeed");
+        let evidence = out
+            .iter()
+            .find(|f| f.rel_path.as_str() == ".speccy/examples/evidence.md")
+            .expect("examples pack must include .speccy/examples/evidence.md");
+        let embedded = RESOURCES
+            .get_file("modules/examples/evidence.md")
+            .expect("embedded bundle must carry modules/examples/evidence.md")
+            .contents_utf8()
+            .expect("evidence.md must be valid UTF-8");
+        assert_eq!(
+            evidence.contents, embedded,
+            "rendered evidence.md must be byte-identical to the embedded source",
+        );
+    }
+
+    #[test]
+    fn render_speccy_examples_pack_rel_paths_rooted_at_speccy_examples() {
+        let out =
+            render_speccy_examples_pack().expect("render_speccy_examples_pack should succeed");
+        assert!(
+            !out.is_empty(),
+            "render_speccy_examples_pack must emit at least one file",
+        );
+        for file in &out {
+            assert!(
+                file.rel_path.as_str().starts_with(".speccy/examples/"),
+                "every emitted file must be rooted at .speccy/examples/; got {}",
+                file.rel_path,
+            );
+        }
+    }
+
+    #[test]
+    fn render_speccy_examples_pack_is_deterministic() {
+        let first = render_speccy_examples_pack()
+            .expect("first render_speccy_examples_pack should succeed");
+        let second = render_speccy_examples_pack()
+            .expect("second render_speccy_examples_pack should succeed");
+        assert_eq!(
+            first.len(),
+            second.len(),
+            "render_speccy_examples_pack emitted a different number of files across passes",
+        );
+        for (a, b) in first.iter().zip(second.iter()) {
+            assert_eq!(a.rel_path, b.rel_path);
+            assert_eq!(a.contents, b.contents);
+        }
     }
 
     #[test]

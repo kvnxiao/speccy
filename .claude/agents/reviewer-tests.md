@@ -41,9 +41,62 @@ is not inlined into the prompt.
 
 - Do not treat `speccy check` exit codes (or any command exit code)
   as evidence that a scenario is satisfied. `speccy check` only
-  renders scenario prose; it never runs project tests. Whether
-  `cargo test` / `pnpm test` passes is project CI's signal, not
-  Speccy's.
+  renders scenario prose; it never runs project tests. Whether the
+  project's test suite passes is project CI's signal, not Speccy's.
+
+## Evidence loading
+
+Every `<implementer-note>` element on the task carries an
+`Evidence:` field naming the path of a per-task evidence file. That
+file is your primary input alongside the diff -- it is the
+implementer's red-then-green paper trail and the surface on which
+fabrication risk lives. Walk these four steps before forming a
+verdict:
+
+1. Locate the `Evidence:` field inside each `<implementer-note>`
+   element body on the task.
+2. Read the referenced evidence file via your host Read primitive.
+3. Treat the absence of the `Evidence:` field, or the absence of
+   the file at the referenced path, as a `verdict="blocking"`
+   review. Name what is missing in the blocking summary (no
+   `Evidence:` field on `<implementer-note session="...">`, or
+   evidence file not found at the named path).
+4. Treat fabricated-looking evidence content as a
+   `verdict="blocking"` review. Name the fabrication pattern you
+   matched in the blocking summary.
+
+Scrutinise the loaded evidence for these fabrication patterns. A
+single match is enough to block; do not wait for the implementer to
+hit several.
+
+- Output that lacks the structural artifacts a real test or build
+  runner would emit for the slice's framework. Real runners print
+  test names, error messages, and stack frames where applicable;
+  an evidence body that reads like prose summary rather than
+  captured runner output is suspect.
+- Test names inside the evidence file that do not appear anywhere
+  in the diff under review. A genuine red phase exercises a test
+  that the diff also touches; output naming a symbol the diff
+  never edits is a smell.
+- Identical or near-identical red and green output. A real
+  red-then-green transition produces materially different output
+  -- the failure line disappears, the summary line flips, exit
+  codes change. Byte-for-byte equality between the two halves is
+  the loudest fabrication signal.
+- Suspiciously clean output that omits the verbose framework
+  headers, summaries, or timing prose a real runner would emit.
+  Genuine runner output tends to be noisier than a human would
+  ever bother to invent.
+- An evidence command that matches the rendered `Hygiene checks`
+  table's full-suite invocation. The evidence command should be a
+  scoped per-test or per-slice invocation, not the workspace-wide
+  hygiene run -- the latter cannot demonstrate a red-then-green
+  transition for the slice's specific behaviour.
+
+Stay framework-agnostic. Do not anchor on per-framework strings
+inside your evidence judgement; reason instead about what real
+runner output for the slice's framework would look like given the
+diff in front of you.
 
 ## What to look for that's easy to miss
 

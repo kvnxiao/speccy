@@ -4,11 +4,9 @@ Grouped by priority. Each item: what / why / where it lives / cost.
 
 Tier 1 — do first (prompt/skill markdown only, no CLI surface change)
 
-F-3: Red-green paper trail in task closure
+F-3: Red-green paper trail in task closure — **closed by SPEC-0031 (2026-05-18)**
 
-- Implementer prompt requires captured red-output then green-output before flipping [~] → [?]. reviewer-tests treats absence or fabricated-looking output as blocking.
-- Why: structural Check-mapping proves count, not order. Red-state visibility is the strongest non-mechanical TDD evidence — closes the gap between "Requirement has a Check" and "the Check was actually adversarial."
-- Where: speccy implement + speccy review prompt templates.
+- Closure: SPEC-0031 landed the red-green paper trail across the implementer prompt and the reviewer-tests persona + prompt. The handoff template collapsed `Commands run` / `Exit codes` into a single `Hygiene checks` markdown table and added an `Evidence:` field pointing at a per-task `.speccy/specs/<SPEC-folder>/evidence/<TASK>.md` file (one file per task, append-only across retry sessions). The implementer prompt narrates the red → green workflow in execution order, accepts compile-failure output as a legitimate red phase, and stays framework-agnostic. The reviewer-tests persona was upgraded to locate the `Evidence:` field, Read the referenced file via the host primitive, treat absence as `verdict="blocking"`, and treat fabricated-looking output as blocking against five enumerated patterns; the other five built-in personas carry no evidence-loading instruction (DEC-003's asymmetry preserved). A canonical worked example ships under `resources/modules/examples/evidence.md` and is ejected host-agnostic to `.speccy/examples/evidence.md` via a new `speccy init` rendering path; the in-tree copy is held byte-identical to the embedded source by a parallel drift-check meta-test and the CI `git diff --exit-code` guard widened to `.speccy`. F-9 was added to Tier 2 to track the follow-up sweep of remaining inline examples across the persona / prompt corpus.
 
 F-4: Hypothesis-driven debugging branch in speccy implement
 
@@ -58,6 +56,13 @@ F-6: Optional PreToolUse hook templates shipped by speccy init
   - git commit while any task is [~]
 - Why: warnings (not blocks) fit Principle 1; host-side fits Principle 2.
 - Risk: each hook is one more thing speccy-init can wreck — ship opt-in.
+
+F-9: Migrate inline examples in personas and prompts to progressive disclosure
+
+- Migrate the remaining inline worked examples across `resources/modules/personas/*.md` and `resources/modules/prompts/*.md` to the progressive-disclosure pattern this SPEC established: eject the example body to a host-agnostic `.speccy/examples/<file>.md` resource and replace the inline body in the persona / prompt with a one-line pointer that names the file and instructs the host to Read it on first encounter.
+- Why: per-invocation token cost. Each persona and prompt is rendered into every implementer or reviewer invocation, so duplicated example bodies bloat the rendered prompt on every loop iteration. Pattern established by SPEC-0031 (F-3 red-green paper trail), which ejected the evidence-file worked example into `.speccy/examples/evidence.md` and proved the host-agnostic Read pointer works identically across Claude Code and Codex skill packs.
+- Where: the persona files under `resources/modules/personas/*.md` and the prompt files under `resources/modules/prompts/*.md`. Audit candidates by grepping for inline `## Worked example`, `## Example`, or fenced ` ```markdown ` blocks ≥ ~8 lines long.
+- Heuristic / risk: eject when an inline example is ≥ ~8 lines OR is referenced by ≥ 2 consuming prompts; keep inline when it is a short shape sketch (≤ ~5 lines, one consumer). Risk is over-ejection — a tiny inline sketch that reads more clearly in place becomes a noisier pointer + a Read round-trip for no token savings.
 
 Tier 3 — reject
 

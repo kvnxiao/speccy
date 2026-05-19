@@ -17,6 +17,7 @@ use serde::Deserialize;
 use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
 use speccy_cli::render::render_host_pack;
+use speccy_cli::render::render_speccy_examples_pack;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -777,6 +778,155 @@ fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResu
     Ok(())
 }
 
+// --------------------------------------------------------------------
+// SPEC-0031 T-002 / REQ-004: `speccy init` emits the host-agnostic
+// examples pack to `.speccy/examples/*` regardless of host choice.
+// --------------------------------------------------------------------
+
+#[test]
+fn t002_speccy_init_claude_emits_speccy_examples_evidence_md() -> TestResult {
+    let fx = project_with_name("t002-examples-claude")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let rel = ".speccy/examples/evidence.md";
+    let on_disk = fs_err::read(fx.root.join(rel).as_std_path())
+        .map_err(|err| format!("`{rel}` must exist after init: {err}"))?;
+    let embedded = RESOURCES
+        .get_file("modules/examples/evidence.md")
+        .ok_or("embedded bundle must carry modules/examples/evidence.md")?
+        .contents();
+    assert_eq!(
+        on_disk, embedded,
+        "SPEC-0031 REQ-004: `.speccy/examples/evidence.md` must be byte-identical to the embedded source after `speccy init --host claude-code`",
+    );
+    Ok(())
+}
+
+#[test]
+fn t002_speccy_init_codex_emits_evidence_md_and_no_host_native_examples() -> TestResult {
+    let fx = project_with_name("t002-examples-codex")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("codex")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let rel = ".speccy/examples/evidence.md";
+    let on_disk = fs_err::read(fx.root.join(rel).as_std_path())
+        .map_err(|err| format!("`{rel}` must exist after init: {err}"))?;
+    let embedded = RESOURCES
+        .get_file("modules/examples/evidence.md")
+        .ok_or("embedded bundle must carry modules/examples/evidence.md")?
+        .contents();
+    assert_eq!(
+        on_disk, embedded,
+        "SPEC-0031 REQ-004: `.speccy/examples/evidence.md` must be byte-identical to the embedded source after `speccy init --host codex`",
+    );
+
+    // Negative coverage: examples never land at any host-native path.
+    for forbidden in [
+        ".claude/skills/speccy-work/examples/evidence.md",
+        ".codex/agents/speccy-work/examples/evidence.md",
+        ".agents/skills/speccy-work/examples/evidence.md",
+        ".claude/examples/evidence.md",
+        ".codex/examples/evidence.md",
+        ".agents/examples/evidence.md",
+    ] {
+        assert!(
+            !fx.root.join(forbidden).exists(),
+            "SPEC-0031 DEC-004: examples must not land at host-native path `{forbidden}`",
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn t002_speccy_init_force_overwrites_examples_pack() -> TestResult {
+    // The second invocation with `--force` must report `overwrite`
+    // (not `skip`) for `.speccy/examples/evidence.md` in the plan
+    // summary, and the on-disk bytes must remain byte-identical to
+    // the embedded source after both runs. Examples are
+    // template-rendered files (DEC-004), not user-tunable persona
+    // definitions, so they don't get the Skip-on-exists override.
+    let fx = project_with_name("t002-examples-force")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    let stdout = String::from_utf8(cmd.assert().success().get_output().stdout.clone())?;
+    assert!(
+        stdout.contains("overwrite .speccy/examples/evidence.md"),
+        "SPEC-0031 DEC-004: re-init with --force must report `overwrite` for `.speccy/examples/evidence.md`; got plan:\n{stdout}",
+    );
+    assert!(
+        !stdout.contains("skip      .speccy/examples/evidence.md"),
+        "SPEC-0031 DEC-004: examples pack must not be Skip-on-exists; got plan:\n{stdout}",
+    );
+
+    let on_disk = fs_err::read(fx.root.join(".speccy/examples/evidence.md").as_std_path())?;
+    let embedded = RESOURCES
+        .get_file("modules/examples/evidence.md")
+        .ok_or("embedded bundle must carry modules/examples/evidence.md")?
+        .contents();
+    assert_eq!(
+        on_disk, embedded,
+        "after two init runs, `.speccy/examples/evidence.md` must still be byte-identical to the embedded source",
+    );
+    Ok(())
+}
+
+#[test]
+fn t002_render_speccy_examples_pack_matches_embedded_source() -> TestResult {
+    // Unit-style assertion at integration-test scope: the renderer's
+    // output for the examples pack must match the embedded source
+    // byte-for-byte for every file it emits.
+    let rendered = render_speccy_examples_pack()
+        .map_err(|err| format!("render_speccy_examples_pack should succeed: {err}"))?;
+    assert!(
+        !rendered.is_empty(),
+        "render_speccy_examples_pack must emit at least one file",
+    );
+    for file in &rendered {
+        assert!(
+            file.rel_path.as_str().starts_with(".speccy/examples/"),
+            "rendered file rel_path must be rooted at .speccy/examples/; got {}",
+            file.rel_path,
+        );
+        let suffix = file
+            .rel_path
+            .as_str()
+            .strip_prefix(".speccy/examples/")
+            .ok_or("rel_path must strip `.speccy/examples/`")?;
+        let bundle_path = format!("modules/examples/{suffix}");
+        let embedded = RESOURCES
+            .get_file(&bundle_path)
+            .ok_or_else(|| format!("embedded source `{bundle_path}` must exist"))?
+            .contents_utf8()
+            .ok_or_else(|| format!("embedded source `{bundle_path}` must be valid UTF-8"))?;
+        assert_eq!(
+            file.contents, embedded,
+            "rendered `{}` must match embedded `{bundle_path}` byte-for-byte",
+            file.rel_path,
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn exit_codes() -> TestResult {
     // 0 on success.
@@ -886,6 +1036,51 @@ fn dogfood_outputs_match_committed_tree() -> TestResult {
     // delivered via `.claude/agents/reviewer-<persona>.md` (and the
     // Codex equivalent), which `render_host_pack` already covers
     // above. The shipped `PROMPTS` bundle stays embedded-only.
+
+    Ok(())
+}
+
+#[test]
+fn dogfood_examples_pack_matches_committed_tree() -> TestResult {
+    // SPEC-0031 T-003 / REQ-004: the host-agnostic examples pack
+    // ejected by `speccy init` to `.speccy/examples/*` must match the
+    // committed in-tree copy byte-for-byte. Drift here is what the
+    // widened CI guard's `git diff --exit-code .speccy` catches in
+    // production; this test surfaces the same drift at `cargo test`
+    // time with a refresh-hint diagnostic so a contributor can fix it
+    // before pushing.
+    let root = workspace_root();
+
+    let rendered = render_speccy_examples_pack()
+        .map_err(|err| format!("render_speccy_examples_pack should succeed: {err}"))?;
+    assert!(
+        !rendered.is_empty(),
+        "render_speccy_examples_pack must emit at least one file",
+    );
+    for file in &rendered {
+        let committed_path = root.join(file.rel_path.as_str());
+        let suffix = file
+            .rel_path
+            .as_str()
+            .strip_prefix(".speccy/examples/")
+            .ok_or("rel_path must strip `.speccy/examples/`")?;
+        let bundle_path = format!("modules/examples/{suffix}");
+        let committed = fs_err::read_to_string(&committed_path).map_err(|err| {
+            format!(
+                "committed in-tree `{}` must be readable (run \
+                 `speccy init --force --host claude-code` against the \
+                 workspace and commit the resulting changes): {err}",
+                committed_path.display(),
+            )
+        })?;
+        assert_eq!(
+            committed, file.contents,
+            "committed in-tree `{}` differs from the embedded source \
+             `{bundle_path}`; run `speccy init --force --host claude-code` \
+             against the workspace and commit the resulting changes",
+            file.rel_path,
+        );
+    }
 
     Ok(())
 }

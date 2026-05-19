@@ -52,11 +52,11 @@ jobs:
       - name: speccy verify
         run: ./target/debug/speccy verify
 
-      - name: Materialized host packs are in sync with resources/ source
+      - name: Materialized host packs and examples are in sync with resources/ source
         run: |
           ./target/debug/speccy init --force --host claude-code
           ./target/debug/speccy init --force --host codex
-          if ! git diff --exit-code .claude .codex .agents; then
-            echo "::error::Materialized host packs drift from resources/ source. Run 'speccy init --force --host claude-code' and 'speccy init --force --host codex' locally and commit the resulting changes."
+          if ! git diff --exit-code .claude .codex .agents .speccy; then
+            echo "::error::Materialized host packs or .speccy/examples drift from resources/ source. Run 'speccy init --force --host claude-code' and 'speccy init --force --host codex' locally and commit the resulting changes."
             exit 1
           fi

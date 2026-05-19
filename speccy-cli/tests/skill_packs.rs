@@ -570,13 +570,16 @@ fn recipe_content_shape() {
 // SPEC-0014 helpers and fixtures
 // --------------------------------------------------------------------
 
-/// Six handoff-note field labels from SPEC-0014 DEC-001. Order matters
-/// for readability only; presence is what the check enforces.
+/// Six handoff-note field labels per SPEC-0031 REQ-001 (which retired
+/// the SPEC-0014 `Commands run` / `Exit codes` parallel-list pair in
+/// favour of a single `Hygiene checks` table and added an `Evidence`
+/// field). Order matters for readability only; presence is what the
+/// check enforces.
 const HANDOFF_LABELS: [&str; 6] = [
     "Completed",
     "Undone",
-    "Commands run",
-    "Exit codes",
+    "Hygiene checks",
+    "Evidence",
     "Discovered issues",
     "Procedural compliance",
 ];
@@ -2053,5 +2056,144 @@ fn brainstorm_rendered_outputs_use_host_specific_prefix() {
                 "rendered Codex `{install_root}/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed_amend}` — Codex skill invocations are bare (no leading slash)",
             );
         }
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0031 REQ-005 / CHK-005: reviewer-tests persona and prompt load
+// the evidence file and stay framework-agnostic; the other five
+// built-in reviewer personas carry no evidence-related instruction.
+// --------------------------------------------------------------------
+
+/// Reviewer personas other than `tests`. The SPEC-0031 REQ-005
+/// asymmetry: only the `tests` persona / prompt names evidence
+/// loading; the other five anchor on diff + SPEC + `<task-scenarios>`
+/// alone.
+const NON_TESTS_REVIEWER_PERSONAS: [&str; 5] =
+    ["business", "security", "style", "architecture", "docs"];
+
+/// Framework-specific anchor strings the reviewer-tests persona must
+/// not name inside normative guidance. SPEC-0031 REQ-005's
+/// framework-agnostic clause and CHK-005's literal grep.
+const FRAMEWORK_ANCHORS: [&str; 9] = [
+    "test result: FAILED",
+    " \u{2717} ",
+    "FAILED:",
+    "error[E",
+    "cargo test",
+    "pnpm test",
+    "pytest",
+    "jest",
+    "vitest",
+];
+
+/// SPEC-named fabrication patterns the reviewer-tests persona must
+/// enumerate. Each marker is a distinctive substring that uniquely
+/// identifies the corresponding bullet in the persona body. SPEC-0031
+/// REQ-005 done-when item 2 names the five patterns.
+const FABRICATION_PATTERN_MARKERS: [&str; 5] = [
+    "structural artifacts",
+    "test names",
+    "identical",
+    "suspiciously clean",
+    "hygiene",
+];
+
+/// Slice the persona body into its normative portion: everything
+/// before the `## Example` worked-example section, since the SPEC
+/// carves out worked-example asides and `<!-- ... -->` annotations
+/// from the framework-anchor check.
+fn normative_persona_body(body: &str) -> &str {
+    body.split("\n## Example").next().unwrap_or(body)
+}
+
+#[test]
+fn reviewer_tests_persona_loads_evidence() {
+    let body = read_persona("reviewer-tests.md");
+
+    // Four-step evidence-loading sequence: the field is named and the
+    // host Read primitive is invoked to load the referenced file.
+    assert!(
+        body.contains("Evidence:"),
+        "`reviewer-tests.md` must name the `Evidence:` field so the reviewer knows what to extract from `<implementer-note>` bodies (SPEC-0031 REQ-005 done-when item 1)",
+    );
+    assert!(
+        body.contains("Read primitive"),
+        "`reviewer-tests.md` must instruct the reviewer to read the evidence file via the host Read primitive (SPEC-0031 REQ-005 done-when item 1)",
+    );
+
+    // Blocking-verdict guidance: evidence absence and fabrication both
+    // map to `verdict=\"blocking\"`. SPEC-0031 REQ-005 done-when item 1.
+    let normative = normative_persona_body(body);
+    let lower = normative.to_lowercase();
+    assert!(
+        lower.contains("blocking"),
+        "`reviewer-tests.md` normative guidance must name `blocking` as the verdict for evidence absence or fabrication (SPEC-0031 REQ-005 done-when item 1)",
+    );
+
+    // Fabrication-pattern enumeration: at least the five SPEC-named
+    // patterns must appear in the persona body.
+    for marker in FABRICATION_PATTERN_MARKERS {
+        assert!(
+            lower.contains(&marker.to_lowercase()),
+            "`reviewer-tests.md` must enumerate the fabrication pattern marked by `{marker}` (SPEC-0031 REQ-005 done-when item 2)",
+        );
+    }
+
+    // Framework-agnostic clause: no per-framework anchor strings
+    // inside normative guidance. Worked-example asides under
+    // `## Example` are out of scope.
+    for anchor in FRAMEWORK_ANCHORS {
+        assert!(
+            !normative.contains(anchor),
+            "`reviewer-tests.md` normative guidance must not name the framework-specific anchor `{anchor}` (SPEC-0031 REQ-005 done-when item 3); move it under `## Example` or rephrase framework-agnostically",
+        );
+    }
+}
+
+#[test]
+fn reviewer_tests_prompt_loads_evidence() {
+    let body = read_prompt("reviewer-tests.md");
+
+    // The rendered prompt must walk the reviewer through extracting
+    // the `Evidence:` path and reading the file via the host Read
+    // primitive. SPEC-0031 REQ-005 done-when item 4.
+    assert!(
+        body.contains("Evidence:"),
+        "`prompts/reviewer-tests.md` must name the `Evidence:` field the reviewer extracts from `<implementer-note>` bodies (SPEC-0031 REQ-005 done-when item 4)",
+    );
+    assert!(
+        body.contains("Read primitive"),
+        "`prompts/reviewer-tests.md` must instruct the reviewer to read the evidence file via the host Read primitive (SPEC-0031 REQ-005 done-when item 4)",
+    );
+}
+
+#[test]
+fn non_tests_reviewer_files_carry_no_evidence_instruction() {
+    // The asymmetry is the design: only the `tests` persona /
+    // prompt names evidence loading. The other five must continue
+    // to anchor on diff + SPEC + `<task-scenarios>` alone.
+    // SPEC-0031 REQ-005 done-when items 5 and 6.
+    for persona in NON_TESTS_REVIEWER_PERSONAS {
+        let file = format!("reviewer-{persona}.md");
+        let body = read_persona(&file);
+        assert!(
+            !body.contains("Evidence:"),
+            "`personas/{file}` must not mention `Evidence:` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
+        );
+        assert!(
+            !body.contains("evidence file"),
+            "`personas/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
+        );
+
+        let prompt_body = read_prompt(&file);
+        assert!(
+            !prompt_body.contains("Evidence:"),
+            "`prompts/{file}` must not mention `Evidence:` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona's rendered prompt",
+        );
+        assert!(
+            !prompt_body.contains("evidence file"),
+            "`prompts/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona's rendered prompt",
+        );
     }
 }

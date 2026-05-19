@@ -12,6 +12,7 @@ use crate::host::HostChoice;
 use crate::host::detect_host;
 use crate::render::RenderError;
 use crate::render::render_host_pack;
+use crate::render::render_speccy_examples_pack;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::personas::ALL as PERSONAS_ALL;
@@ -194,6 +195,7 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
     });
 
     append_host_pack_items(project_root, host, &mut plan)?;
+    append_speccy_examples_items(project_root, &mut plan)?;
 
     // SPEC-0027 REQ-001: `.speccy/skills/` is no longer written by
     // `init`. The host-native reviewer files under `.claude/agents/`
@@ -239,6 +241,33 @@ fn append_host_pack_items(
         } else {
             classify(&destination)
         };
+        plan.push(PlanItem {
+            destination,
+            content: file.contents.into_bytes(),
+            action,
+        });
+    }
+    Ok(())
+}
+
+/// Materialise the host-agnostic Speccy examples pack via
+/// [`render_speccy_examples_pack`] and append one [`PlanItem`] per
+/// rendered file to `plan`.
+///
+/// SPEC-0031 REQ-004 + DEC-004: example bodies under
+/// `resources/modules/examples/*` are emitted to `.speccy/examples/*`
+/// regardless of the chosen [`HostChoice`]. They are template-rendered
+/// files, not user-tunable persona definitions, so they get the
+/// standard `classify(&destination)` result (Create on absent,
+/// Overwrite under `--force`) — no Skip-on-exists override.
+fn append_speccy_examples_items(
+    project_root: &Utf8Path,
+    plan: &mut Vec<PlanItem>,
+) -> Result<(), InitError> {
+    let rendered = render_speccy_examples_pack()?;
+    for file in rendered {
+        let destination = project_root.join(&file.rel_path);
+        let action = classify(&destination);
         plan.push(PlanItem {
             destination,
             content: file.contents.into_bytes(),
