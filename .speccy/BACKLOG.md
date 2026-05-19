@@ -4,10 +4,6 @@ Grouped by priority. Each item: what / why / where it lives / cost.
 
 Tier 1 — do first (prompt/skill markdown only, no CLI surface change)
 
-F-3: Red-green paper trail in task closure — **closed by SPEC-0031 (2026-05-18)**
-
-- Closure: SPEC-0031 landed the red-green paper trail across the implementer prompt and the reviewer-tests persona + prompt. The handoff template collapsed `Commands run` / `Exit codes` into a single `Hygiene checks` markdown table and added an `Evidence:` field pointing at a per-task `.speccy/specs/<SPEC-folder>/evidence/<TASK>.md` file (one file per task, append-only across retry sessions). The implementer prompt narrates the red → green workflow in execution order, accepts compile-failure output as a legitimate red phase, and stays framework-agnostic. The reviewer-tests persona was upgraded to locate the `Evidence:` field, Read the referenced file via the host primitive, treat absence as `verdict="blocking"`, and treat fabricated-looking output as blocking against five enumerated patterns; the other five built-in personas carry no evidence-loading instruction (DEC-003's asymmetry preserved). A canonical worked example ships under `resources/modules/examples/evidence.md` and is ejected host-agnostic to `.speccy/examples/evidence.md` via a new `speccy init` rendering path; the in-tree copy is held byte-identical to the embedded source by a parallel drift-check meta-test and the CI `git diff --exit-code` guard widened to `.speccy`. F-9 was added to Tier 2 to track the follow-up sweep of remaining inline examples across the persona / prompt corpus.
-
 F-4: Hypothesis-driven debugging branch in speccy implement
 
 - When a Check has previously failed in this task, the rendered prompt loads a "form hypothesis → write failing test that proves it → narrow" sub-template.
@@ -33,10 +29,6 @@ F-5: Per-skill model + effort pinning across the lifecycle
 - Cost: low for Claude Code (frontmatter edits across 8 skills × 2 trees + 6 agents × 2 trees = ~28 files, no code change). Unknown for Codex pending upstream.
 
 Pre-existing tech debt (discovered during other work, blocks the hygiene gate)
-
-F-7: Box the large `ParseError` variants in `speccy-core` — **closed by SPEC-0030 (2026-05-18)**
-
-- Closure: SPEC-0030 boxed `ParseError` at every parser API boundary in `speccy-core` via a `ParseResult<T> = Result<T, Box<ParseError>>` alias. `cargo clippy --workspace --all-targets --all-features -- -D warnings` exits 0; the AGENTS.md hygiene gate is green for the first time since the F-7 pin was discovered during SPEC-0026 T-003.
 
 Tier 2 — consider, needs design pass
 
