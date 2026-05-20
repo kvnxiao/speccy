@@ -6,6 +6,8 @@
 //! owns the planning, summary, and mutation steps.
 //!
 //! See `.speccy/specs/0002-init-command/SPEC.md`.
+//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` (T-008: three-way
+//! classification replacing Skip-on-exists).
 
 use crate::host::Detected;
 use crate::host::HostChoice;
@@ -25,11 +27,16 @@ const SPECCY_TOML_TEMPLATE: &str = include_str!("templates/speccy.toml.tmpl");
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum InitError {
-    /// `.speccy/` already exists and `--force` was not passed.
-    #[error(".speccy/ already exists at {path}; pass --force to refresh shipped files in place")]
-    WorkspaceExists {
-        /// Path to the existing `.speccy/` directory.
-        path: Utf8PathBuf,
+    /// One or more planned files exist on disk with content that differs
+    /// from what `speccy init` would write, and `--force` was not passed.
+    /// Carries the list of conflicting relative paths for stderr output.
+    #[error(
+        "speccy init: the following files exist and differ from the planned content:\n{}\nPass --force to overwrite them.",
+        paths.join("\n")
+    )]
+    FilesConflict {
+        /// Repo-relative paths of the conflicting files.
+        paths: Vec<String>,
     },
     /// User supplied a `--host` value that isn't in
     /// [`crate::host::SUPPORTED_HOSTS`].
@@ -86,34 +93,47 @@ pub fn resolve_cwd() -> Result<Utf8PathBuf, InitError> {
     })
 }
 
-/// Action a planned file write will take when executed.
+/// Three-way per-file classification used by the T-008 init redesign.
+///
+/// SPEC-0033 T-008 replaced the old binary Create/Overwrite/Skip scheme
+/// with this three-way model:
+///
+/// 1. [`Action::Create`] — destination absent; file will be written.
+/// 2. [`Action::Unchanged`] — destination exists and is byte-identical to the
+///    planned content; no write occurs.
+/// 3. [`Action::Conflict`] — destination exists and differs from planned
+///    content. Without `--force`, the entire batch is refused atomically. Under
+///    `--force`, the file is overwritten.
+///
+/// Host-native reviewer files (`.claude/agents/reviewer-<persona>.md`
+/// and `.codex/agents/reviewer-<persona>.toml`) retain their
+/// Skip-on-exists semantic from SPEC-0027 REQ-002: they are classified
+/// [`Action::Unchanged`] when they already exist (regardless of
+/// byte equality), so user edits to the persona body survive a re-init
+/// or `--force` run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     /// Destination does not exist; file will be written fresh.
     Create,
-    /// Destination exists and is a shipped file; will be replaced.
-    Overwrite,
-    /// Destination exists and is user-tunable; the user's bytes win.
-    ///
-    /// Used for host-native reviewer files
-    /// (`.claude/agents/reviewer-<persona>.md` and
-    /// `.codex/agents/reviewer-<persona>.toml`). SPEC-0027 made these
-    /// the sole canonical persona surface and classifies them as
-    /// Skip-on-exists so `init --force` preserves the user's edits
-    /// to the persona body (or its surrounding frontmatter).
-    ///
-    /// Re-running init still refreshes the shipped skill wrappers
-    /// (`.claude/skills/`, `.agents/skills/`, etc.) and the root
-    /// `.speccy/speccy.toml`.
-    Skip,
+    /// Destination exists and is byte-identical to the planned content
+    /// (or is a user-tunable reviewer file that is Skip-on-exists).
+    /// No write occurs; the file is logged as `unchanged`.
+    Unchanged,
+    /// Destination exists and differs from the planned content.
+    /// Without `--force`: the entire batch is refused atomically.
+    /// Under `--force`: the file is overwritten and logged as
+    /// `(!) overwritten`.
+    Conflict,
 }
 
 impl Action {
-    const fn label(self) -> &'static str {
+    /// Human-readable plan label used in the `speccy init plan:` summary.
+    fn label(self, force: bool) -> &'static str {
         match self {
-            Action::Create => "create",
-            Action::Overwrite => "overwrite",
-            Action::Skip => "skip",
+            Action::Create => "created",
+            Action::Unchanged => "unchanged",
+            Action::Conflict if force => "(!) overwritten",
+            Action::Conflict => "conflict",
         }
     }
 }
@@ -154,21 +174,29 @@ pub fn run(
         writeln!(err, "speccy init: warning: {w}")?;
     }
 
-    let speccy_dir = project_root.join(".speccy");
-    let speccy_exists = fs_err::metadata(speccy_dir.as_std_path()).is_ok_and(|m| m.is_dir());
-    if speccy_exists && !force {
-        return Err(InitError::WorkspaceExists { path: speccy_dir });
+    let plan = build_plan(project_root, host)?;
+
+    // SPEC-0033 T-008: three-way classification.
+    // Without --force, if any item is `Conflict`, refuse the entire batch.
+    if !force {
+        let conflicts: Vec<String> = plan
+            .iter()
+            .filter(|item| item.action == Action::Conflict)
+            .map(|item| display_relative(&item.destination, project_root))
+            .collect();
+        if !conflicts.is_empty() {
+            return Err(InitError::FilesConflict { paths: conflicts });
+        }
     }
 
-    let plan = build_plan(project_root, host)?;
-    print_plan(&plan, project_root, out)?;
-    let outcome = execute_plan(&plan)?;
+    print_plan(&plan, project_root, force, out)?;
+    let outcome = execute_plan(&plan, force)?;
     writeln!(
         out,
-        "Init complete: {created} created, {overwritten} overwritten, {skipped} skipped.",
+        "Init complete: {created} created, {overwritten} overwritten, {unchanged} unchanged.",
         created = outcome.created,
         overwritten = outcome.overwritten,
-        skipped = outcome.skipped,
+        unchanged = outcome.unchanged,
     )?;
 
     Ok(())
@@ -178,7 +206,7 @@ pub fn run(
 struct Outcome {
     created: u32,
     overwritten: u32,
-    skipped: u32,
+    unchanged: u32,
 }
 
 fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>, InitError> {
@@ -187,10 +215,11 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
     let speccy_toml_path = project_root.join(".speccy").join("speccy.toml");
     let project_name = project_name_from(project_root);
     let speccy_toml_body = render_speccy_toml(&project_name);
-    let speccy_toml_action = classify(&speccy_toml_path);
+    let content = speccy_toml_body.into_bytes();
+    let speccy_toml_action = classify_content(&speccy_toml_path, &content);
     plan.push(PlanItem {
         destination: speccy_toml_path,
-        content: speccy_toml_body.into_bytes(),
+        content,
         action: speccy_toml_action,
     });
 
@@ -216,9 +245,9 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 /// rendered through `MiniJinja` with the host's template context (see
 /// [`HostChoice::template_context`]), `.tmpl` suffixes are stripped,
 /// and the resulting `rel_path` is joined onto `project_root` to give
-/// the absolute destination. Create/Overwrite classification and the
-/// `--force` plan-print behaviour stay unchanged because every entry
-/// still flows through [`classify`] at plan-build time.
+/// the absolute destination. The three-way classification from
+/// SPEC-0033 T-008 applies: absent → Create, byte-identical → Unchanged,
+/// differs → Conflict.
 fn append_host_pack_items(
     project_root: &Utf8Path,
     host: HostChoice,
@@ -227,6 +256,7 @@ fn append_host_pack_items(
     let rendered = render_host_pack(host)?;
     for file in rendered {
         let destination = project_root.join(&file.rel_path);
+        let content = file.contents.into_bytes();
         let action = if is_host_native_reviewer_file(&file.rel_path) {
             // SPEC-0027 REQ-002: host-native reviewer files
             // (`.claude/agents/reviewer-<persona>.md` and
@@ -234,16 +264,19 @@ fn append_host_pack_items(
             // canonical persona surface. Treat them as user-tunable:
             // create on absent, leave alone on exists (even under
             // `--force`) so local edits to persona focus survive.
-            match classify(&destination) {
-                Action::Create => Action::Create,
-                Action::Overwrite | Action::Skip => Action::Skip,
+            // In the three-way scheme this maps to: absent → Create,
+            // exists (regardless of content) → Unchanged.
+            if destination.exists() {
+                Action::Unchanged
+            } else {
+                Action::Create
             }
         } else {
-            classify(&destination)
+            classify_content(&destination, &content)
         };
         plan.push(PlanItem {
             destination,
-            content: file.contents.into_bytes(),
+            content,
             action,
         });
     }
@@ -257,9 +290,11 @@ fn append_host_pack_items(
 /// SPEC-0031 REQ-004 + DEC-004: example bodies under
 /// `resources/modules/examples/*` are emitted to `.speccy/examples/*`
 /// regardless of the chosen [`HostChoice`]. They are template-rendered
-/// files, not user-tunable persona definitions, so they get the
-/// standard `classify(&destination)` result (Create on absent,
-/// Overwrite under `--force`) — no Skip-on-exists override.
+/// files, not user-tunable persona definitions, so they follow the
+/// three-way classification via [`classify_content`]: Create on absent,
+/// Unchanged when byte-identical, Conflict when differs (atomic batch
+/// refuse without `--force`, overwrite with `(!) overwritten` log
+/// under `--force`) — no Skip-on-exists override.
 fn append_speccy_examples_items(
     project_root: &Utf8Path,
     plan: &mut Vec<PlanItem>,
@@ -267,10 +302,11 @@ fn append_speccy_examples_items(
     let rendered = render_speccy_examples_pack()?;
     for file in rendered {
         let destination = project_root.join(&file.rel_path);
-        let action = classify(&destination);
+        let content = file.contents.into_bytes();
+        let action = classify_content(&destination, &content);
         plan.push(PlanItem {
             destination,
-            content: file.contents.into_bytes(),
+            content,
             action,
         });
     }
@@ -300,11 +336,21 @@ fn is_host_native_reviewer_file(rel_path: &Utf8Path) -> bool {
     false
 }
 
-fn classify(dest: &Utf8Path) -> Action {
-    if fs_err::metadata(dest.as_std_path()).is_ok() {
-        Action::Overwrite
-    } else {
-        Action::Create
+/// Three-way file classification for SPEC-0033 T-008.
+///
+/// - Destination absent → [`Action::Create`].
+/// - Destination exists, bytes match `planned` → [`Action::Unchanged`].
+/// - Destination exists, bytes differ → [`Action::Conflict`].
+fn classify_content(dest: &Utf8Path, planned: &[u8]) -> Action {
+    match fs_err::read(dest.as_std_path()) {
+        Ok(existing) => {
+            if existing == planned {
+                Action::Unchanged
+            } else {
+                Action::Conflict
+            }
+        }
+        Err(_) => Action::Create,
     }
 }
 
@@ -323,12 +369,14 @@ fn render_speccy_toml(project_name: &str) -> String {
 fn print_plan(
     plan: &[PlanItem],
     project_root: &Utf8Path,
+    force: bool,
     out: &mut dyn Write,
 ) -> Result<(), InitError> {
     writeln!(out, "speccy init plan:")?;
     for item in plan {
         let rel = display_relative(&item.destination, project_root);
-        writeln!(out, "  {label:<9} {rel}", label = item.action.label())?;
+        let label = item.action.label(force);
+        writeln!(out, "  {label:<16} {rel}")?;
     }
     Ok(())
 }
@@ -338,7 +386,7 @@ fn display_relative(dest: &Utf8Path, project_root: &Utf8Path) -> String {
         .map_or_else(|_e| dest.to_string(), ToString::to_string)
 }
 
-fn execute_plan(plan: &[PlanItem]) -> Result<Outcome, InitError> {
+fn execute_plan(plan: &[PlanItem], force: bool) -> Result<Outcome, InitError> {
     let mut outcome = Outcome::default();
     for item in plan {
         match item.action {
@@ -346,12 +394,17 @@ fn execute_plan(plan: &[PlanItem]) -> Result<Outcome, InitError> {
                 write_item(item)?;
                 outcome.created = outcome.created.saturating_add(1);
             }
-            Action::Overwrite => {
-                write_item(item)?;
-                outcome.overwritten = outcome.overwritten.saturating_add(1);
+            Action::Unchanged => {
+                // No write — byte-identical or reviewer Skip-on-exists.
+                outcome.unchanged = outcome.unchanged.saturating_add(1);
             }
-            Action::Skip => {
-                outcome.skipped = outcome.skipped.saturating_add(1);
+            Action::Conflict => {
+                // Only reached when force == true (non-force conflicts
+                // are caught before execute_plan is called).
+                if force {
+                    write_item(item)?;
+                    outcome.overwritten = outcome.overwritten.saturating_add(1);
+                }
             }
         }
     }

@@ -1,37 +1,18 @@
-//! Prompt-rendering primitives shared by every phase command.
+//! Prompt-adjacent helpers retained for the surviving CLI surface.
 //!
-//! Five helpers, each isolated in its own submodule:
+//! After SPEC-0033 T-001 the natural-text prompt-rendering pipeline
+//! (template loader, single-pass `{{NAME}}` renderer, budget trimmer,
+//! task-scoped spec slicer) was removed: the CLI no longer carries
+//! phase prompt bodies. The one helper that outlives that deletion is
+//! [`allocate_next_spec_id`], which the workspace ID allocator and the
+//! forthcoming `speccy vacancy` verb (SPEC-0033 T-003) both build on.
 //!
-//! - [`template`] -- load embedded markdown templates by name.
-//! - [`render`] -- single-pass `{{NAME}}` placeholder substitution.
-//! - [`budget`] -- drop low-priority sections when the rendered prompt exceeds
-//!   the character budget.
-//! - [`id_alloc`] -- allocate the next `SPEC-NNNN` ID (`max + 1`); walks
-//!   `specs/**` recursively so flat and mission-grouped specs share one ID
-//!   space.
-//! - [`spec_slice`] -- emit a task-scoped Markdown slice of a `SpecDoc` driven
-//!   by the task's `Covers:` list (frontmatter + heading + overview + covered
-//!   requirements with nested scenarios + decisions).
-//!
-//! See `.speccy/specs/0005-plan-command/SPEC.md` REQ-003..REQ-007.
-//! See `.speccy/specs/0023-single-phase-skill-primitives/SPEC.md` REQ-005
-//! for the retirement of the `AGENTS.md` loader and REQ-006 for the
-//! retirement of the SPEC.md / TASKS.md / MISSION.md loaders: rendered
-//! prompts now name the file's repo-relative path and the agent reads it
-//! via the host's Read primitive on demand.
+//! SPEC-0033 leaves an open question about whether `id_alloc` should
+//! relocate out of `prompt::` into a more general
+//! `speccy_core::specs::` module now that nothing else lives here. That
+//! decision is deferred to T-003 (which adds the `vacancy` command);
+//! until then the existing import path is preserved.
 
-pub mod budget;
 pub mod id_alloc;
-pub mod render;
-pub mod spec_slice;
-pub mod template;
 
-pub use budget::DEFAULT_BUDGET;
-pub use budget::TrimResult;
-pub use budget::trim_to_budget;
 pub use id_alloc::allocate_next_spec_id;
-pub use render::render;
-pub use spec_slice::slice_for_task;
-pub use template::PROMPTS;
-pub use template::PromptError;
-pub use template::load_template;

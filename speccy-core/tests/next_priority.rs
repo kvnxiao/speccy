@@ -6,16 +6,17 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Priority logic tests for `speccy_core::next::compute`. Covers
-//! SPEC-0007 CHK-001 through CHK-006.
+//! Priority logic tests for `speccy_core::next::compute_for_spec` and
+//! `speccy_core::next::compute_workspace`. Covers SPEC-0007 CHK-001,
+//! CHK-002, CHK-005, and CHK-006 (the CHK-003/CHK-004 `--kind` filter
+//! tests were removed in SPEC-0033 T-010 when `KindFilter` was deleted).
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use indoc::indoc;
-use speccy_core::next::BlockedReason;
-use speccy_core::next::KindFilter;
-use speccy_core::next::NextResult;
-use speccy_core::next::compute;
+use speccy_core::next::NextAction;
+use speccy_core::next::compute_for_spec;
+use speccy_core::next::compute_workspace;
 use speccy_core::workspace::scan;
 use std::fmt::Write as _;
 use tempfile::TempDir;
@@ -103,9 +104,10 @@ fn write_spec(
 }
 
 // -- CHK-001 ----------------------------------------------------------------
+// Within a single spec, in-review beats pending (priority rule 2 > 3).
 
 #[test]
-fn default_within_spec_preference() -> TestResult {
+fn chk001_in_review_beats_pending_within_spec() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
     write_spec(
@@ -119,17 +121,18 @@ fn default_within_spec_preference() -> TestResult {
         ]),
     )?;
     let ws = scan(&root);
-    let result = compute(&ws, None);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("spec with in-review task must have an action");
     assert!(
         matches!(
-            &result,
-            NextResult::Review { spec, task, .. }
-                if spec == "SPEC-0001" && task == "T-002",
+            &action,
+            NextAction::Review { task_id, .. }
+                if task_id == "T-002",
         ),
-        "expected review T-002 to beat opens, got {result:?}",
+        "in-review T-002 must beat pending T-001/T-003, got {action:?}",
     );
 
-    // [~] tasks should never win over an [ ] task even within the same spec.
+    // in-progress (claimed) must not win over pending within the same spec.
     let tmp2 = tempfile::tempdir()?;
     let root2 = utf8(&tmp2)?;
     write_spec(
@@ -139,18 +142,20 @@ fn default_within_spec_preference() -> TestResult {
         Some(&[('~', "T-001", "claimed"), (' ', "T-002", "open")]),
     )?;
     let ws2 = scan(&root2);
-    let r2 = compute(&ws2, None);
+    let spec2 = ws2.specs.first().expect("workspace must contain SPEC-0001");
+    let action2 = compute_for_spec(spec2).expect("spec with pending task must have an action");
     assert!(
-        matches!(&r2, NextResult::Implement { task, .. } if task == "T-002"),
-        "[~] task must be skipped, got {r2:?}",
+        matches!(&action2, NextAction::Implement { task_id } if task_id == "T-002"),
+        "in-progress T-001 must be skipped; pending T-002 wins, got {action2:?}",
     );
     Ok(())
 }
 
 // -- CHK-002 ----------------------------------------------------------------
+// Workspace ordering: the lowest spec-ID entry is first in compute_workspace.
 
 #[test]
-fn lowest_spec_id_wins() -> TestResult {
+fn chk002_workspace_entries_ordered_by_spec_id() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
     write_spec(
@@ -166,18 +171,27 @@ fn lowest_spec_id_wins() -> TestResult {
         Some(&[('?', "T-002", "review in SPEC-0002")]),
     )?;
     let ws = scan(&root);
-    let result = compute(&ws, None);
+    let entries = compute_workspace(&ws);
+    assert_eq!(entries.len(), 2, "both specs must appear");
+    let e0 = entries.first().expect("first entry must exist");
+    let e1 = entries.get(1).expect("second entry must exist");
+    assert_eq!(e0.spec_id, "SPEC-0001", "SPEC-0001 must be first");
+    assert_eq!(e1.spec_id, "SPEC-0002", "SPEC-0002 must be second");
+    // SPEC-0001 has a pending task, so its action is Implement.
     assert!(
-        matches!(
-            &result,
-            NextResult::Implement { spec, task, .. }
-                if spec == "SPEC-0001" && task == "T-001",
-        ),
-        "lowest spec ID must win across specs, got {result:?}",
+        matches!(&e0.action, NextAction::Implement { task_id } if task_id == "T-001"),
+        "SPEC-0001 must return Implement T-001, got {:?}",
+        e0.action,
+    );
+    // SPEC-0002 has an in-review task.
+    assert!(
+        matches!(&e1.action, NextAction::Review { task_id, .. } if task_id == "T-002"),
+        "SPEC-0002 must return Review T-002, got {:?}",
+        e1.action,
     );
 
-    // SPEC-0001 has only [~]; SPEC-0002 has an [ ] task; the implement
-    // should come from SPEC-0002.
+    // When SPEC-0001 only has in-progress tasks, it still appears (Decompose
+    // fallback), and SPEC-0002's action is unchanged.
     let tmp2 = tempfile::tempdir()?;
     let root2 = utf8(&tmp2)?;
     write_spec(
@@ -193,122 +207,26 @@ fn lowest_spec_id_wins() -> TestResult {
         Some(&[(' ', "T-002", "open")]),
     )?;
     let ws2 = scan(&root2);
-    let r2 = compute(&ws2, None);
+    let entries2 = compute_workspace(&ws2);
+    // SPEC-0001 with only in-progress falls through to Decompose defensive default.
+    // SPEC-0002 has a pending task → Implement.
+    let spec2_entry = entries2
+        .iter()
+        .find(|e| e.spec_id == "SPEC-0002")
+        .expect("SPEC-0002 must appear in workspace listing");
     assert!(
-        matches!(
-            &r2,
-            NextResult::Implement { spec, task, .. }
-                if spec == "SPEC-0002" && task == "T-002",
-        ),
-        "should fall through to SPEC-0002 when SPEC-0001 has no actionable work, got {r2:?}",
-    );
-    Ok(())
-}
-
-// -- CHK-003 ----------------------------------------------------------------
-
-#[test]
-fn kind_implement_filter() -> TestResult {
-    let tmp = tempfile::tempdir()?;
-    let root = utf8(&tmp)?;
-    write_spec(
-        &root,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[('?', "T-001", "review-ready")]),
-    )?;
-    let ws = scan(&root);
-    let result = compute(&ws, Some(KindFilter::Implement));
-    assert!(
-        matches!(&result, NextResult::Blocked { reason } if reason == BlockedReason::NO_OPEN_TASKS),
-        "--kind implement with only [?] must return Blocked(NO_OPEN_TASKS), got {result:?}",
-    );
-
-    // Mixed: [ ] in SPEC-0002 wins despite SPEC-0001 having [?].
-    let tmp2 = tempfile::tempdir()?;
-    let root2 = utf8(&tmp2)?;
-    write_spec(
-        &root2,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[('?', "T-001", "review")]),
-    )?;
-    write_spec(
-        &root2,
-        "0002-bar",
-        "SPEC-0002",
-        Some(&[(' ', "T-002", "open")]),
-    )?;
-    let ws2 = scan(&root2);
-    let r2 = compute(&ws2, Some(KindFilter::Implement));
-    assert!(
-        matches!(
-            &r2,
-            NextResult::Implement { spec, task, .. }
-                if spec == "SPEC-0002" && task == "T-002",
-        ),
-        "--kind implement must skip [?] and find the next [ ], got {r2:?}",
-    );
-    Ok(())
-}
-
-// -- CHK-004 ----------------------------------------------------------------
-
-#[test]
-fn kind_review_filter() -> TestResult {
-    let tmp = tempfile::tempdir()?;
-    let root = utf8(&tmp)?;
-    write_spec(
-        &root,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[(' ', "T-001", "open")]),
-    )?;
-    write_spec(
-        &root,
-        "0002-bar",
-        "SPEC-0002",
-        Some(&[('?', "T-002", "review-ready")]),
-    )?;
-    let ws = scan(&root);
-    let result = compute(&ws, Some(KindFilter::Review));
-    assert!(
-        matches!(
-            &result,
-            NextResult::Review { spec, task, personas, .. }
-                if spec == "SPEC-0002"
-                && task == "T-002"
-                && *personas == ["business", "tests", "security", "style"],
-        ),
-        "--kind review must return [?] task with the default fan-out, got {result:?}",
-    );
-
-    // No [?] anywhere -> Blocked(NO_REVIEWS_PENDING).
-    let tmp2 = tempfile::tempdir()?;
-    let root2 = utf8(&tmp2)?;
-    write_spec(
-        &root2,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[(' ', "T-001", "open")]),
-    )?;
-    let ws2 = scan(&root2);
-    let r2 = compute(&ws2, Some(KindFilter::Review));
-    assert!(
-        matches!(
-            &r2,
-            NextResult::Blocked { reason }
-                if reason == BlockedReason::NO_REVIEWS_PENDING,
-        ),
-        "--kind review with no [?] must return Blocked(NO_REVIEWS_PENDING), got {r2:?}",
+        matches!(&spec2_entry.action, NextAction::Implement { task_id } if task_id == "T-002"),
+        "SPEC-0002 must return Implement T-002, got {:?}",
+        spec2_entry.action,
     );
     Ok(())
 }
 
 // -- CHK-005 ----------------------------------------------------------------
+// All tasks completed + no REPORT.md → Ship; + REPORT.md → omit from listing.
 
 #[test]
-fn report_kind() -> TestResult {
+fn chk005_ship_when_all_done_no_report() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
     write_spec(
@@ -318,13 +236,15 @@ fn report_kind() -> TestResult {
         Some(&[('x', "T-001", "done")]),
     )?;
     let ws = scan(&root);
-    let result = compute(&ws, None);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("all-done spec without REPORT.md must have Ship");
     assert!(
-        matches!(&result, NextResult::Report { spec } if spec == "SPEC-0001"),
-        "all-[x] spec without REPORT.md must return Report, got {result:?}",
+        matches!(action, NextAction::Ship),
+        "all-[x] spec without REPORT.md must return Ship, got {action:?}",
     );
 
-    // Two all-[x] specs; SPEC-0001 has REPORT.md, SPEC-0002 does not.
+    // Two all-done specs; SPEC-0001 has REPORT.md, SPEC-0002 does not.
+    // compute_workspace must include SPEC-0002 (Ship) and omit SPEC-0001.
     let tmp2 = tempfile::tempdir()?;
     let root2 = utf8(&tmp2)?;
     let dir1 = write_spec(
@@ -344,43 +264,52 @@ fn report_kind() -> TestResult {
         Some(&[('x', "T-002", "done")]),
     )?;
     let ws2 = scan(&root2);
-    let r2 = compute(&ws2, None);
+    let entries = compute_workspace(&ws2);
+    assert_eq!(
+        entries.len(),
+        1,
+        "SPEC-0001 (with REPORT.md) must be omitted; only SPEC-0002 active",
+    );
+    let e = entries.first().expect("one entry must exist");
+    assert_eq!(e.spec_id, "SPEC-0002");
     assert!(
-        matches!(&r2, NextResult::Report { spec } if spec == "SPEC-0002"),
-        "second-lowest unreported spec must be returned, got {r2:?}",
+        matches!(e.action, NextAction::Ship),
+        "SPEC-0002 must return Ship, got {:?}",
+        e.action,
     );
 
-    // All done + all REPORT.md present -> falls through to blocked.
+    // All specs done + REPORT.md present → empty workspace listing.
     let dir2 = root2.join(".speccy").join("specs").join("0002-bar");
     fs_err::write(
         dir2.join("REPORT.md").as_std_path(),
         "---\nspec: SPEC-0002\n---\n",
     )?;
     let ws3 = scan(&root2);
-    let r3 = compute(&ws3, None);
+    let entries3 = compute_workspace(&ws3);
     assert!(
-        matches!(&r3, NextResult::Blocked { reason } if reason == BlockedReason::ALL_DONE),
-        "all reported should fall through to Blocked(ALL_DONE), got {r3:?}",
+        entries3.is_empty(),
+        "all specs reported: workspace listing must be empty, got {entries3:?}",
     );
     Ok(())
 }
 
 // -- CHK-006 ----------------------------------------------------------------
+// Edge cases: empty workspace, all claimed.
 
 #[test]
-fn blocked_kind_reasons() -> TestResult {
-    // Empty workspace.
+fn chk006_workspace_edge_cases() -> TestResult {
+    // Empty workspace → empty listing.
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
     fs_err::create_dir_all(root.join(".speccy").as_std_path())?;
     let ws = scan(&root);
-    let r = compute(&ws, None);
+    let entries = compute_workspace(&ws);
     assert!(
-        matches!(&r, NextResult::Blocked { reason } if reason == BlockedReason::NO_SPECS),
-        "empty workspace must yield NO_SPECS, got {r:?}",
+        entries.is_empty(),
+        "empty workspace must yield an empty listing, got {entries:?}",
     );
 
-    // All [~] (claimed).
+    // All in-progress (claimed) → Decompose defensive default, not empty.
     let tmp2 = tempfile::tempdir()?;
     let root2 = utf8(&tmp2)?;
     write_spec(
@@ -390,61 +319,12 @@ fn blocked_kind_reasons() -> TestResult {
         Some(&[('~', "T-001", "claimed")]),
     )?;
     let ws2 = scan(&root2);
-    let r2 = compute(&ws2, None);
+    let spec2 = ws2.specs.first().expect("workspace must contain SPEC-0001");
+    // compute_for_spec returns Decompose when only in-progress tasks exist.
+    let action2 = compute_for_spec(spec2).expect("in-progress spec must still have an action");
     assert!(
-        matches!(&r2, NextResult::Blocked { reason } if reason == BlockedReason::ALL_CLAIMED),
-        "all-claimed default-kind must yield ALL_CLAIMED, got {r2:?}",
-    );
-
-    // --kind implement with only [?] tasks.
-    let tmp3 = tempfile::tempdir()?;
-    let root3 = utf8(&tmp3)?;
-    write_spec(
-        &root3,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[('?', "T-001", "review")]),
-    )?;
-    let ws3 = scan(&root3);
-    let r3 = compute(&ws3, Some(KindFilter::Implement));
-    assert!(
-        matches!(&r3, NextResult::Blocked { reason } if reason == BlockedReason::NO_OPEN_TASKS),
-        "--kind implement with only [?] must yield NO_OPEN_TASKS, got {r3:?}",
-    );
-
-    // --kind review with only [ ] tasks.
-    let tmp4 = tempfile::tempdir()?;
-    let root4 = utf8(&tmp4)?;
-    write_spec(
-        &root4,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[(' ', "T-001", "open")]),
-    )?;
-    let ws4 = scan(&root4);
-    let r4 = compute(&ws4, Some(KindFilter::Review));
-    assert!(
-        matches!(
-            &r4,
-            NextResult::Blocked { reason } if reason == BlockedReason::NO_REVIEWS_PENDING,
-        ),
-        "--kind review with only [ ] must yield NO_REVIEWS_PENDING, got {r4:?}",
-    );
-
-    // --kind implement with all [~]: ALL_CLAIMED, not NO_OPEN_TASKS.
-    let tmp5 = tempfile::tempdir()?;
-    let root5 = utf8(&tmp5)?;
-    write_spec(
-        &root5,
-        "0001-foo",
-        "SPEC-0001",
-        Some(&[('~', "T-001", "claimed")]),
-    )?;
-    let ws5 = scan(&root5);
-    let r5 = compute(&ws5, Some(KindFilter::Implement));
-    assert!(
-        matches!(&r5, NextResult::Blocked { reason } if reason == BlockedReason::ALL_CLAIMED),
-        "--kind implement with only [~] must yield ALL_CLAIMED, got {r5:?}",
+        matches!(action2, NextAction::Decompose),
+        "all-in-progress spec must fall back to Decompose, got {action2:?}",
     );
     Ok(())
 }

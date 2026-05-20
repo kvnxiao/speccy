@@ -13,9 +13,9 @@
 //!   `agents/.codex/` (subagents, per `OpenAI`'s Codex subagents docs).
 //! - `modules/...` -- host-neutral content, single-source for every wrapper to
 //!   `{% include %}`. Personas live at
-//!   `modules/personas/reviewer-<persona>.md`, prompts at
-//!   `modules/prompts/<name>.md`, skill bodies at
-//!   `modules/skills/speccy-<verb>.md`.
+//!   `modules/personas/reviewer-<persona>.md`; skill bodies live at
+//!   `modules/skills/speccy-<verb>.md`; phase bodies live at
+//!   `modules/phases/speccy-<phase>.md`.
 //!
 //! [`crate::render`] consumes both subtrees at init time: it walks
 //! `agents/.<install_root>/` for each install root the chosen host

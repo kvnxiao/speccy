@@ -6,6 +6,7 @@
 //! strictly read-only.
 
 use crate::git::repo_sha;
+use crate::paths::to_repo_relative;
 use crate::status_output::JsonDiagnostic;
 use crate::status_output::JsonLintBlock;
 use crate::status_output::JsonOutput;
@@ -506,22 +507,37 @@ pub fn build_json(
     report: &StatusReport<'_>,
     specs_to_render: &[&SpecView<'_>],
 ) -> Result<JsonOutput, StatusError> {
-    let specs: Vec<JsonSpec> = specs_to_render.iter().map(|v| json_spec(v)).collect();
+    let project_root = &report.workspace.project_root;
+    let specs: Vec<JsonSpec> = specs_to_render
+        .iter()
+        .map(|v| json_spec(v, project_root))
+        .collect();
     let workspace_lint = JsonLintBlock::from_diagnostics(&report.workspace_diagnostics);
     Ok(JsonOutput {
-        schema_version: 1,
+        schema_version: 2,
         repo_sha: report.repo_sha.clone(),
         specs,
         lint: workspace_lint,
     })
 }
 
-fn json_spec(view: &SpecView<'_>) -> JsonSpec {
+fn json_spec(view: &SpecView<'_>, project_root: &Utf8Path) -> JsonSpec {
     let frontmatter_supersedes = view
         .parsed
         .spec_md_ok()
         .map(|s| s.frontmatter.supersedes.clone())
         .unwrap_or_default();
+    let spec_md_path = to_repo_relative(&view.parsed.spec_md_path, project_root);
+    let tasks_md_path = view
+        .parsed
+        .tasks_md_path
+        .as_ref()
+        .map(|p| to_repo_relative(p, project_root));
+    let mission_md_path = view
+        .parsed
+        .mission_md_path
+        .as_ref()
+        .map(|p| to_repo_relative(p, project_root));
     JsonSpec {
         id: view.display_id.clone(),
         slug: view
@@ -549,6 +565,9 @@ fn json_spec(view: &SpecView<'_>) -> JsonSpec {
         open_questions: view.open_questions,
         lint: JsonLintBlock::from_diagnostics(&view.diagnostics),
         parse_error: view.parse_error.clone(),
+        spec_md_path,
+        tasks_md_path,
+        mission_md_path,
     }
 }
 
@@ -599,6 +618,7 @@ mod tests {
             dir: Utf8PathBuf::from("/tmp"),
             spec_md_path: Utf8PathBuf::from("/tmp/SPEC.md"),
             tasks_md_path: None,
+            mission_md_path: None,
             spec_md: Err(Box::new(speccy_core::ParseError::NonUtf8Path(
                 "test-fixture".to_owned(),
             ))),

@@ -4,10 +4,9 @@
 Runs one round of adversarial review on one task per invocation and
 exits. With an optional `[SPEC-NNNN/T-NNN]` selector argument, the
 session reviews that specific task. Without an argument, the session
-resolves the next reviewable task via
-`speccy next --kind review --json` and reviews that one. Task state
-lives in the `state` attribute on each `<task>` XML element in
-TASKS.md.
+resolves the next reviewable task via `speccy next --json` and reviews
+that one. Task state lives in the `state` attribute on each `<task>`
+XML element in TASKS.md.
 
 This is a single-task primitive. It does not iterate over the
 remaining `in-review` tasks; composition across tasks belongs to a
@@ -38,14 +37,14 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
    - Otherwise, query the CLI:
 
      ```bash
-     speccy next --kind review --json
+     speccy next --json
      ```
 
-     If the result is `kind: blocked` or empty, exit and report that
-     no reviewable tasks remain. Otherwise, construct the
-     disambiguated `<spec>/<task>` form from the JSON's `spec` and
-     `task` fields (the bare `prompt_command` field is ambiguous
-     across specs — every spec has its own `T-001`).
+     If the result has no entry with `next_action.kind == "review"`,
+     exit and report that no reviewable tasks remain. Otherwise,
+     construct the disambiguated `<spec>/<task>` form from the JSON's
+     `spec_id` and `next_action.task_id` fields (the bare task ID is
+     ambiguous across specs — every spec has its own `T-001`).
 
 2. Fan out four reviewer sub-agents in parallel via the host-native
    sub-agent primitive, one per persona in the **default fan-out:
@@ -71,25 +70,29 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
    `subagent_type: "reviewer-security"`, and
    `subagent_type: "reviewer-style"`. The prompt for each spawn is:
 
-   > Run `speccy review SPEC-NNNN/T-NNN --persona <persona>` and
-   > follow its output. Return your verdict as your final message
-   > as a `<review persona="<persona>" verdict="...">…</review>`
-   > element block. Do not edit TASKS.md.
+   > Review task `SPEC-NNNN/T-NNN`. Run `speccy check SPEC-NNNN/T-NNN`
+   > to load the task scenarios, read the implementation in TASKS.md,
+   > and apply your persona's review criteria. Return your verdict as
+   > your final message as a
+   > `<review persona="<persona>" verdict="...">…</review>` element
+   > block. Do not edit TASKS.md.
 
-   Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name
-   into the command. Each subagent resolves to its markdown file at
+   Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name.
+   Each subagent resolves to its markdown file at
    `.claude/agents/reviewer-<persona>.md`, so the persona body is
    already loaded for the sub-agent.{% else %}Prose-spawn the four reviewer subagents by name in parallel:
    `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
    `reviewer-style`. The prompt for each spawn is:
 
-   > Run `speccy review SPEC-NNNN/T-NNN --persona <persona>` and
-   > follow its output. Return your verdict as your final message
-   > as a `<review persona="<persona>" verdict="...">…</review>`
-   > element block. Do not edit TASKS.md.
+   > Review task `SPEC-NNNN/T-NNN`. Run `speccy check SPEC-NNNN/T-NNN`
+   > to load the task scenarios, read the implementation in TASKS.md,
+   > and apply your persona's review criteria. Return your verdict as
+   > your final message as a
+   > `<review persona="<persona>" verdict="...">…</review>` element
+   > block. Do not edit TASKS.md.
 
-   Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name
-   into the command. Codex resolves each name to its TOML file at
+   Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name.
+   Codex resolves each name to its TOML file at
    `.codex/agents/reviewer-<persona>.toml`, so the persona body is
    already loaded as the sub-agent's developer instructions.{% endif %}
 

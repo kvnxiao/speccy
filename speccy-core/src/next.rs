@@ -1,266 +1,132 @@
 //! `speccy next` priority logic.
 //!
-//! Pure function over [`Workspace`] that decides the next actionable
-//! task across the workspace. The CLI binary wraps this with text and
-//! JSON renderers; the core module is renderer-free so tests can pin
-//! priority without touching stdout.
+//! Provides two compute functions:
 //!
-//! Priority rules (see `.speccy/specs/0007-next-command/SPEC.md`
-//! REQ-001..REQ-003):
+//! - [`compute_for_spec`]: derives the [`NextAction`] for a single spec from
+//!   its on-disk artifact state, without any user-supplied filter. Used by
+//!   `speccy next SPEC-NNNN`.
+//! - [`compute_workspace`]: walks every spec in the workspace and returns a
+//!   list of [`SpecNextEntry`] values for the active ones (omitting specs that
+//!   are fully completed and have REPORT.md). Used by `speccy next` (workspace
+//!   form).
 //!
-//! - Walk specs in ascending spec-ID order (`workspace::scan` already sorts).
-//! - With no [`KindFilter`], prefer `[?]` review-ready tasks over `[ ]` open
-//!   tasks **within a spec**; `[~]` claimed tasks are skipped.
-//! - `KindFilter::Implement` returns only `[ ]` tasks across all specs; no
-//!   fallback.
-//! - `KindFilter::Review` returns only `[?]` tasks across all specs; no
-//!   fallback.
-//! - When no task matches and every task is `[x]`, fall through to
-//!   [`NextResult::Report`] for the lowest-ID spec missing `REPORT.md`.
-//! - When still no match, return [`NextResult::Blocked`] with a canonical
-//!   reason string.
+//! Priority rule (see SPEC-0033 REQ-004):
+//! > if TASKS.md is absent → kind = `"decompose"`
+//! > else if any task is `state="in-review"` → kind = `"review"` (first one)
+//! > else if any task is `state="pending"` → kind = `"implement"` (first one)
+//! > else if all tasks `state="completed"` and REPORT.md absent → kind =
+//! > `"ship"`
+//! > else → spec is omitted (all done + REPORT.md present)
 
 use crate::lint::ParsedSpec;
 use crate::parse::TaskState;
 use crate::personas;
 use crate::workspace::Workspace;
 
-/// `--kind` argument variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KindFilter {
-    /// Filter to `[ ]` open tasks only.
-    Implement,
-    /// Filter to `[?]` awaiting-review tasks only.
-    Review,
-}
-
-/// The four `kind` variants returned by [`compute`].
-///
-/// Field shapes mirror the JSON contract documented in
-/// `.speccy/specs/0007-next-command/SPEC.md` REQ-004.
+/// The derived action kind for a single spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NextResult {
-    /// One open task is ready to implement.
-    Implement {
-        /// Spec containing the task (`SPEC-NNNN`).
-        spec: String,
-        /// Task identifier (`T-NNN`).
-        task: String,
-        /// Task title as parsed from TASKS.md (no leading checkbox or ID).
-        task_line: String,
-        /// `Covers:` references attached to the task entry.
-        covers: Vec<String>,
-        /// `Suggested files:` references attached to the task entry.
-        suggested_files: Vec<String>,
-    },
-    /// One task is awaiting review; the four-persona fan-out applies.
+pub enum NextAction {
+    /// TASKS.md is absent; the next action is to decompose the spec.
+    Decompose,
+    /// A task is awaiting review.
     Review {
-        /// Spec containing the task (`SPEC-NNNN`).
-        spec: String,
-        /// Task identifier (`T-NNN`).
-        task: String,
-        /// Task title as parsed from TASKS.md.
-        task_line: String,
-        /// Default reviewer fan-out (hardcoded `&personas::ALL[..4]`).
+        /// Task identifier (`T-NNN`) of the first in-review task.
+        task_id: String,
+        /// Default reviewer fan-out.
         personas: &'static [&'static str],
     },
-    /// Every task is done; this spec has no REPORT.md yet.
-    Report {
-        /// Spec needing a REPORT.md (`SPEC-NNNN`).
-        spec: String,
+    /// A task is ready to implement.
+    Implement {
+        /// Task identifier (`T-NNN`) of the first pending task.
+        task_id: String,
     },
-    /// No actionable work for the requested filter.
-    Blocked {
-        /// Canonical reason string. See [`BlockedReason`] for the closed
-        /// set tests pin against.
-        reason: String,
-    },
+    /// All tasks are completed and REPORT.md is absent.
+    Ship,
 }
 
-/// Canonical phrases used in [`NextResult::Blocked::reason`].
+/// A per-spec entry returned by [`compute_workspace`].
+#[derive(Debug, Clone)]
+pub struct SpecNextEntry {
+    /// Spec identifier (`SPEC-NNNN`).
+    pub spec_id: String,
+    /// Derived next action.
+    pub action: NextAction,
+}
+
+/// Derive the next action for a single spec.
 ///
-/// Defined as `&'static str` constants (not an enum exposed publicly)
-/// so [`NextResult`] stays a stable, easy-to-serialise shape. Tests
-/// reference these so future renames stay localised.
-pub struct BlockedReason;
-
-impl BlockedReason {
-    /// `.speccy/specs/` is empty or unreadable.
-    pub const NO_SPECS: &'static str = "no specs in workspace";
-    /// Every open task is held by another session.
-    pub const ALL_CLAIMED: &'static str = "all open tasks are claimed by other sessions";
-    /// `--kind implement` ran against a workspace with no `[ ]` tasks.
-    pub const NO_OPEN_TASKS: &'static str = "no open tasks; reviews pending";
-    /// `--kind review` ran against a workspace with no `[?]` tasks.
-    pub const NO_REVIEWS_PENDING: &'static str = "no reviews pending";
-    /// Catch-all: no tasks exist at all (e.g. specs exist but TASKS.md
-    /// is absent or empty across the board).
-    pub const NO_TASKS: &'static str = "no tasks in workspace";
-    /// Every task is done AND every REPORT.md is present.
-    pub const ALL_DONE: &'static str = "all specs reported";
-}
-
-/// Compute the next actionable task.
+/// Returns `None` when the spec is fully done (all tasks completed and
+/// REPORT.md present), meaning it should be omitted from workspace listings.
 ///
-/// The function is read-only: it does not mutate `workspace`, does not
-/// touch the filesystem, and does not log. Output ordering is fully
-/// determined by `workspace.specs` order, which `workspace::scan`
-/// already sorts.
-#[must_use = "the result names the next action for the harness or user"]
-pub fn compute(workspace: &Workspace, kind_filter: Option<KindFilter>) -> NextResult {
-    if workspace.specs.is_empty() {
-        return blocked(BlockedReason::NO_SPECS);
+/// # Priority
+///
+/// 1. TASKS.md absent → `Decompose`
+/// 2. Any task `state="in-review"` → `Review` (first matching task)
+/// 3. Any task `state="pending"` → `Implement` (first matching task)
+/// 4. All tasks `state="completed"` and REPORT.md absent → `Ship`
+/// 5. All done + REPORT.md present → `None` (omit)
+#[must_use = "the derived action names the next step for the spec"]
+pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
+    let Some(tasks) = spec.tasks_md_ok() else {
+        // TASKS.md absent or unparseable → decompose.
+        return Some(NextAction::Decompose);
+    };
+
+    if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::InReview) {
+        return Some(NextAction::Review {
+            task_id: task.id.clone(),
+            personas: default_personas(),
+        });
     }
 
-    if let Some(result) = pick_actionable(workspace, kind_filter) {
-        return result;
+    if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
+        return Some(NextAction::Implement {
+            task_id: task.id.clone(),
+        });
     }
 
-    if let Some(result) = detect_report(workspace) {
-        return result;
-    }
-
-    blocked(blocked_reason_for(workspace, kind_filter))
-}
-
-fn pick_actionable(workspace: &Workspace, kind_filter: Option<KindFilter>) -> Option<NextResult> {
-    for spec in &workspace.specs {
-        let Some(spec_id) = spec.spec_id.as_deref() else {
-            continue;
-        };
-        let Some(tasks) = spec.tasks_md_ok() else {
-            continue;
-        };
-        match kind_filter {
-            None => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::InReview) {
-                    return Some(make_review(spec_id, task));
-                }
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
-                    return Some(make_implement(spec_id, task));
-                }
-            }
-            Some(KindFilter::Implement) => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
-                    return Some(make_implement(spec_id, task));
-                }
-            }
-            Some(KindFilter::Review) => {
-                if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::InReview) {
-                    return Some(make_review(spec_id, task));
-                }
-            }
-        }
-    }
-    None
-}
-
-fn detect_report(workspace: &Workspace) -> Option<NextResult> {
-    let mut saw_task = false;
-    for spec in &workspace.specs {
-        let Some(tasks) = spec.tasks_md_ok() else {
-            continue;
-        };
-        if tasks.tasks.is_empty() {
-            continue;
-        }
-        saw_task = true;
-        if tasks.tasks.iter().any(|t| t.state != TaskState::Completed) {
+    // All tasks are completed (or empty). Check REPORT.md.
+    if tasks.tasks.iter().all(|t| t.state == TaskState::Completed) {
+        if report_md_exists(spec) {
+            // Fully done — omit from workspace listing.
             return None;
         }
-    }
-    if !saw_task {
-        return None;
+        return Some(NextAction::Ship);
     }
 
+    // Only in-progress tasks remain (all "claimed"). Treat as decompose to
+    // avoid producing a confusing null for a spec with tasks.
+    Some(NextAction::Decompose)
+}
+
+/// Walk every spec in the workspace and return entries for active specs.
+///
+/// A spec is active when [`compute_for_spec`] returns `Some(_)`. Specs
+/// where all tasks are completed and REPORT.md is present return `None`
+/// and are omitted from the result.
+///
+/// The returned slice is ordered by ascending spec ID (matching
+/// [`workspace::scan`] sort order).
+#[must_use = "the entries describe the workspace state for all active specs"]
+pub fn compute_workspace(workspace: &Workspace) -> Vec<SpecNextEntry> {
+    let mut entries = Vec::new();
     for spec in &workspace.specs {
         let Some(spec_id) = spec.spec_id.as_deref() else {
             continue;
         };
-        let Some(tasks) = spec.tasks_md_ok() else {
-            continue;
-        };
-        if tasks.tasks.is_empty() {
-            continue;
-        }
-        if !report_md_exists(spec) {
-            return Some(NextResult::Report {
-                spec: spec_id.to_owned(),
+        if let Some(action) = compute_for_spec(spec) {
+            entries.push(SpecNextEntry {
+                spec_id: spec_id.to_owned(),
+                action,
             });
         }
     }
-    None
+    entries
 }
 
 fn report_md_exists(spec: &ParsedSpec) -> bool {
     let path = spec.dir.join("REPORT.md");
     fs_err::metadata(path.as_std_path()).is_ok_and(|m| m.is_file())
-}
-
-fn blocked_reason_for(workspace: &Workspace, kind_filter: Option<KindFilter>) -> &'static str {
-    let mut any_open = false;
-    let mut any_review = false;
-    let mut any_in_progress = false;
-    let mut any_task = false;
-    let mut any_unreported_done = false;
-
-    for spec in &workspace.specs {
-        let Some(tasks) = spec.tasks_md_ok() else {
-            continue;
-        };
-        for task in &tasks.tasks {
-            any_task = true;
-            match task.state {
-                TaskState::Pending => any_open = true,
-                TaskState::InReview => any_review = true,
-                TaskState::InProgress => any_in_progress = true,
-                TaskState::Completed => {
-                    if !report_md_exists(spec) {
-                        any_unreported_done = true;
-                    }
-                }
-            }
-        }
-    }
-
-    match kind_filter {
-        Some(KindFilter::Implement) => {
-            if any_in_progress && !any_open {
-                BlockedReason::ALL_CLAIMED
-            } else if any_review && !any_open {
-                BlockedReason::NO_OPEN_TASKS
-            } else if !any_task {
-                BlockedReason::NO_TASKS
-            } else {
-                BlockedReason::NO_OPEN_TASKS
-            }
-        }
-        Some(KindFilter::Review) => {
-            if any_task {
-                BlockedReason::NO_REVIEWS_PENDING
-            } else {
-                BlockedReason::NO_TASKS
-            }
-        }
-        None => {
-            if any_in_progress && !any_open && !any_review {
-                BlockedReason::ALL_CLAIMED
-            } else if any_unreported_done {
-                // Should have been caught by detect_report; defensive.
-                BlockedReason::NO_TASKS
-            } else if !any_task {
-                BlockedReason::NO_TASKS
-            } else {
-                BlockedReason::ALL_DONE
-            }
-        }
-    }
-}
-
-fn blocked(reason: &str) -> NextResult {
-    NextResult::Blocked {
-        reason: reason.to_owned(),
-    }
 }
 
 fn first_task_with_state(
@@ -270,26 +136,7 @@ fn first_task_with_state(
     tasks.iter().find(|t| t.state == state)
 }
 
-fn make_implement(spec_id: &str, task: &crate::parse::Task) -> NextResult {
-    NextResult::Implement {
-        spec: spec_id.to_owned(),
-        task: task.id.clone(),
-        task_line: task.title(),
-        covers: task.covers.clone(),
-        suggested_files: task.suggested_files(),
-    }
-}
-
-fn make_review(spec_id: &str, task: &crate::parse::Task) -> NextResult {
-    NextResult::Review {
-        spec: spec_id.to_owned(),
-        task: task.id.clone(),
-        task_line: task.title(),
-        personas: default_personas(),
-    }
-}
-
-/// The hardcoded review fan-out for `--kind review` results.
+/// The hardcoded review fan-out.
 ///
 /// Sourced from [`crate::personas::ALL`]; the four-persona prefix is
 /// the SPEC-0007 DEC-002 default. Exposed as a function (not a `const`)
@@ -303,7 +150,6 @@ pub fn default_personas() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
-    use super::BlockedReason;
     use super::default_personas;
 
     #[test]
@@ -311,26 +157,6 @@ mod tests {
         assert_eq!(
             default_personas(),
             &["business", "tests", "security", "style"],
-        );
-    }
-
-    #[test]
-    fn blocked_reason_constants_are_unique() {
-        let phrases = [
-            BlockedReason::NO_SPECS,
-            BlockedReason::ALL_CLAIMED,
-            BlockedReason::NO_OPEN_TASKS,
-            BlockedReason::NO_REVIEWS_PENDING,
-            BlockedReason::NO_TASKS,
-            BlockedReason::ALL_DONE,
-        ];
-        let mut copy: Vec<&str> = phrases.to_vec();
-        copy.sort_unstable();
-        copy.dedup();
-        assert_eq!(
-            copy.len(),
-            phrases.len(),
-            "BlockedReason constants must be unique strings",
         );
     }
 }

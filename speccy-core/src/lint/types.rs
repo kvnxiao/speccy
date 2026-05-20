@@ -144,6 +144,10 @@ pub struct ParsedSpec {
     pub spec_md_path: Utf8PathBuf,
     /// Path to `TASKS.md`, if present.
     pub tasks_md_path: Option<Utf8PathBuf>,
+    /// Path to the mission folder's `MISSION.md`, when this spec lives
+    /// under a mission (focus) folder and `MISSION.md` exists there.
+    /// `None` for flat specs directly under `.speccy/specs/`.
+    pub mission_md_path: Option<Utf8PathBuf>,
     /// Parsed SPEC.md frontmatter / heading view (or the parse error).
     pub spec_md: ParseResult<SpecMd>,
     /// Parsed SPEC.md element tree (or the parse error). After

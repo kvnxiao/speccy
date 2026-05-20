@@ -165,7 +165,7 @@ fn positional_renders_one_spec_json() -> TestResult {
             json: true,
         },
     )?;
-    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(1)));
+    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(2)));
     let specs = parsed
         .get("specs")
         .and_then(|v| v.as_array())

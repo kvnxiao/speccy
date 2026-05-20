@@ -122,6 +122,8 @@ pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
         dir: fx.dir_path.clone(),
         spec_md_path: fx.spec_md_path.clone(),
         tasks_md_path: fx.tasks_md_path.clone(),
+        // Test fixtures are isolated tempdirs; no mission folder context.
+        mission_md_path: None,
         spec_md: spec_md_result,
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,

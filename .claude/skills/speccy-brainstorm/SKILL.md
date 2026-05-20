@@ -45,8 +45,14 @@ own judgment.
 ## Steps
 
 1. **Explore project context.** Read `AGENTS.md` (the host harness
-   auto-loads it; re-read on demand via your Read primitive). Scan
-   `.speccy/specs/` if the ask might overlap with an existing slice.
+   auto-loads it; re-read on demand via your Read primitive). If the
+   ask might overlap with an existing slice, query the workspace index
+   to see what specs exist:
+
+   ```bash
+   speccy status --json
+   ```
+
    Don't dump the context back at the user — use it to ground your
    clarifying questions.
 
@@ -104,11 +110,8 @@ own judgment.
    the right skill for the path:
 
    - For a **new SPEC**, invoke `/speccy-plan`, which
-     renders the new-spec prompt:
-
-     ```bash
-     speccy plan
-     ```
+     queries `speccy vacancy --json` to allocate the next SPEC ID and
+     writes a new SPEC.md following the PRD template.
 
    - For an **amendment** to an existing SPEC, invoke
      `/speccy-amend` (not `/speccy-plan`

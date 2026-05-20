@@ -2,7 +2,7 @@
 id: SPEC-0033
 slug: eject-prompt-bodies
 title: Eject phase prompt bodies into skill files; CLI does state only, no natural-text rendering
-status: in-progress
+status: implemented
 created: 2026-05-19
 supersedes: []
 ---
@@ -59,29 +59,44 @@ bump to `schema_version: 2` and carry resolved paths plus the
 derived `next_action`, so skills no longer need filesystem-globbing
 logic of their own.
 
-The final surface is seven flat commands, each with one job. All
-phase prompts live in `.claude/skills/speccy-<verb>/SKILL.md` (and
-Codex equivalents) as Skip-on-exists files; users edit them freely
-after init and the trade-off — re-eject + manual merge to pick up
-upstream changes — is acknowledged out of scope per the
-`AGENTS.md` quality bar ("useful for my next greenfield").
+The final surface is seven flat commands, each with one job.
+Phase prompt bodies live in the host skill pack — pinned phase
+workers as agent files at `.claude/agents/speccy-<phase>.md`
+(Codex: `.codex/agents/speccy-<phase>.toml`) with thin SKILL.md
+stubs as host-router entry points; interactive skills as
+full-body SKILL.md under `.claude/skills/speccy-<skill>/`. Users
+edit these files freely after init; the trade-off — `init
+--force` overwrites differing files with a `(!) overwritten`
+warning, and recovery is via git — is acknowledged out of scope
+per the `AGENTS.md` quality bar ("useful for my next greenfield").
 
-SPEC-0032 is a hard sequencing predecessor. It introduces per-phase
-model and effort pinning across the lifecycle, which lands as new
-frontmatter on five Claude Code skills (`context: fork` plus an
-`agent:` target on `speccy-tasks` / `speccy-work` / `speccy-ship` /
-`speccy-init`; direct `model: haiku` on `speccy-review`), four new
-Claude Code subagent files under `.claude/agents/speccy-<phase>.md`,
-five new Codex agent TOML files under `.codex/agents/speccy-<phase>.toml`,
-and one-line Codex SKILL.md pointer additions naming the `/agent
-<name>` invocation path. This SPEC inherits that frontmatter and
-file set wholesale: the MiniJinja templates that produce the ejected
-SKILL.md files carry SPEC-0032's frontmatter unchanged, the new
-subagent files join REQ-006's Skip-on-exists ejection set, and the
-shared body source at `resources/modules/skills/<phase>.md` is
-included by both the SKILL.md template and the subagent body
-template so a single source of phase-body content feeds both
-consumers.
+SPEC-0032 is a hard sequencing predecessor. As shipped, it
+introduced three Claude Code phase-worker subagent files
+(`.claude/agents/speccy-<phase>.md` for `tasks` / `work` /
+`ship`, pinned to `model: sonnet[1m]` and `effort: medium`),
+three matching Codex agent TOML files for the same three phases
+(`gpt-5.5`, medium effort), asymmetric pins on the six existing
+reviewer subagent files (Opus[1m] xhigh on business / tests /
+architecture; Sonnet[1m] high on security; Sonnet[1m] medium on
+style / docs), and a move of the shared phase-body source from
+`resources/modules/skills/<phase>.md` to
+`resources/modules/phases/<phase>.md` (SPEC-0032 DEC-009). No
+`speccy-init` agent file ships (SPEC-0032 DEC-009 — init is
+interactive bootstrap, not a recurring phase) and
+`/speccy-review` is unpinned on both hosts (SPEC-0032
+REQ-002 / REQ-009 — the orchestrator stays in the parent
+session for Task-tool access and verdict-consolidation
+capacity). The three pinned-phase SKILL.md files are thin stubs
+(≤10 non-blank lines per SPEC-0032 REQ-010) naming the matching
+agent file and the `/agent speccy-<phase>` invocation path; the
+agent file is the source of phase-body content for each pinned
+phase. This SPEC inherits SPEC-0032's frontmatter and file set
+wholesale and does not re-litigate DEC-009 or the auto-fork
+retreat — `context: fork` was dropped after SPEC-0032 T-002
+surfaced its multi-minute UX cost; the opt-in heavy-model path
+is `/agent speccy-<phase>`. See DEC-008 below for the rule that
+governs which skills eject as SKILL.md stub + agent body and
+which eject as full-body SKILL.md only.
 
 ## Goals
 
@@ -101,13 +116,27 @@ consumers.
   through caller sites, and all associated tests are removed. The
   hidden contract that prompts must name sections `## Notes` /
   `## Other specs` to opt into being droppable goes away with it.
-- Phase prompt bodies eject into the host skill pack as
-  Skip-on-exists files. After `speccy init`, every shipped skill
-  (`speccy-plan`, `speccy-tasks`, `speccy-work`, `speccy-review`,
-  `speccy-ship`, `speccy-amend`, `speccy-brainstorm`, `speccy-init`)
-  carries its full prompt body inline in its SKILL.md. `speccy init
-  --force` does not overwrite these files; users who customize
-  them keep their edits across re-init.
+- Phase prompt bodies eject into the host skill pack at
+  `speccy init` time. The eject shape follows the skill's
+  invocation pattern (see DEC-008): interactive skills
+  (`speccy-init`, `speccy-brainstorm`, `speccy-plan`,
+  `speccy-amend`, `speccy-review` orchestrator) eject as
+  full-body SKILL.md only; pinned phase workers (`speccy-tasks`,
+  `speccy-work`, `speccy-ship`) eject as a thin SKILL.md stub
+  plus an agent file at `.claude/agents/speccy-<phase>.md`
+  (Claude Code) or `.codex/agents/speccy-<phase>.toml` (Codex).
+- `speccy init` handles existing files via a per-file three-way
+  classification, with no Skip-on-exists semantic surviving: a
+  planned target that is absent is created; a planned target
+  whose on-disk bytes match the planned content is logged
+  `unchanged` and not written; a planned target whose on-disk
+  bytes differ from the planned content refuses the whole batch
+  (no partial writes) with an error naming the differing file(s)
+  and the `--force` override. `speccy init --force` overwrites
+  the differing files (logged `(!) overwritten`) and otherwise
+  follows the same classification. Recovery from an unwanted
+  overwrite is via git; no in-CLI merge or backup mechanism
+  ships.
 - The CLI surface is exactly seven verbs: `init`, `status`,
   `next`, `check`, `verify`, plus two new flat verbs `lock` and
   `vacancy`. No mode flags select between content types; each verb
@@ -149,22 +178,28 @@ consumers.
 <non-goals>
 - No in-CLI merge tool for upstream skill-pack updates. When
   speccy ships an improvement to a phase prompt body upstream,
-  users who want it run `speccy init --force` (overwriting only
-  unedited files) and manually re-apply any local edits. The
-  one-time-eject trade-off is explicit per the brainstorm
-  framing; speccy is not in the merge business.
+  users who want it run `speccy init --force` (which overwrites
+  every shipped file that differs from the planned content,
+  logging each as `(!) overwritten`) and reapply any local
+  edits afterward via git. The trade-off is explicit; speccy is
+  not in the merge business.
 - No `--strict` mode that enforces the piecewise workflow
   (implement → review → implement → review). The `next_action.kind`
   priority `review > implement > ship` is a recommendation
   surfaced in the JSON envelope, not a block. Users who want to
   implement multiple tasks before reviewing can call `speccy next
   SPEC-NNNN/T-NNN` directly to override the surfaced priority.
-- No per-persona reviewer prompt ejection. Today, five of the six
-  reviewer prompt templates are byte-identical; only
-  `reviewer-tests` adds a single extra step (the evidence-read
-  block). One shared reviewer template with a `{% if persona ==
-  "tests" %}` block is the ejected shape. Per-persona prompt
-  ejection is deferred until structural divergence appears.
+- No master reviewer template with conditional persona
+  branches. Per-persona divergence in the six reviewer subagent
+  bodies is legitimate (e.g., `reviewer-style` carries
+  diff-format guidance that `reviewer-business` does not need;
+  `reviewer-tests` carries an Evidence-read step that others do
+  not). Six independent persona body files stay; shared blocks
+  (verdict return contract, TASKS.md write prohibition, inline
+  note format, diff-fetch command) factor out as topic-named
+  snippets co-located inside `resources/modules/personas/`, not
+  into a master template. No `_partials/` subdirectory exists.
+  See REQ-007.
 - No new context-endpoint commands per phase (e.g.
   `speccy plan-context`, `speccy task-context`). The existing
   `speccy status --json` and `speccy next --json` envelopes carry
@@ -176,11 +211,16 @@ consumers.
   Speccy v1 is not released; there are no downstream users to
   preserve. The dogfooded `.speccy/` workspace migration is done
   by hand as part of this SPEC's implementation.
-- No filesystem globbing inside skill bodies. The slug-pattern
-  rule (`NNNN-slug` under `.speccy/specs/`, optionally inside one
-  level of mission folder) is documented in `ARCHITECTURE.md` as
-  the filesystem contract, but skills do not implement it
-  themselves; they read resolved paths from JSON envelopes.
+- No filesystem globbing inside skill stubs or agent bodies to
+  discover **speccy resources** (`.speccy/specs/*`, SPEC.md,
+  TASKS.md, MISSION.md, REPORT.md, the slug-pattern directory
+  layout). The CLI's JSON envelopes are the sole authority for
+  speccy-resource discovery. General-purpose Read / Glob / grep
+  against project files unrelated to speccy resources (source
+  code, test fixtures, project-level `AGENTS.md`,
+  `.editorconfig`, etc.) remains fine; the constraint is a
+  resource-discovery boundary, not a blanket filesystem-access
+  ban. See REQ-008.
 - No expansion of the `speccy lock` precondition surface beyond
   what `tasks --commit` validates today (SPEC.md exists and
   parses, TASKS.md exists and parses, then rewrite frontmatter).
@@ -211,10 +251,14 @@ consumers.
 - As a solo developer who customized my project's
   `/speccy-plan` skill body to add a domain-specific instruction
   ("always include a `## Data migration` section when the SPEC
-  touches the database schema"), I want my edit to persist across
-  `speccy init --force`. The shipped SKILL.md is Skip-on-exists;
-  my edit survives. To pick up upstream improvements I re-eject
-  manually and re-apply, which is the documented update path.
+  touches the database schema"), I want `speccy init` (no force)
+  to refuse with a clear error when I re-run it after a CLI
+  bump, so I know my customization would be at risk if I had
+  passed `--force`. When I want to pick up upstream improvements
+  I run `speccy init --force`, read the `(!) overwritten` log
+  lines naming my edited files, and reapply my customizations
+  from git history. No silent overwrites; no hand-holding to
+  preserve them.
 - As an AI agent invoking `/speccy-plan` in greenfield mode, I
   want to fetch the next free SPEC ID with the smallest possible
   payload. `speccy vacancy --json` returns
@@ -617,68 +661,104 @@ path).
 </requirement>
 
 <requirement id="REQ-006">
-### REQ-006: Phase prompt bodies eject as Skip-on-exists SKILL.md and subagent files at `speccy init`
+### REQ-006: Phase prompt bodies eject at `speccy init`; init handles existing files via three-way classification
 
 `speccy init` writes one SKILL.md per shipped skill into the host
-skill pack location, plus the per-phase subagent files SPEC-0032
-introduced. Each SKILL.md carries the full prompt body inline (the
-substance that today lives in `resources/modules/prompts/<phase>.md`
-ends up as ejected text the skill agent reads directly, with no CLI
-call to render it). The four Claude Code phase-worker subagent files
-(`.claude/agents/speccy-<phase>.md` for `tasks` / `work` / `ship` /
-`init`) and the five Codex phase-worker agent TOML files
-(`.codex/agents/speccy-<phase>.toml` for `tasks` / `work` / `ship` /
-`init` / `review`) eject from the same shared body source as the
-matching SKILL.md, ensuring one source of phase-body content. `init`
-classifies every one of these files as Skip-on-exists; `speccy init
---force` does not overwrite them when they already exist on disk —
-the same protection applies to user edits of model pins or agent
-bodies as to user edits of skill bodies. The shipped skills are:
-`speccy-init`, `speccy-brainstorm`, `speccy-plan`, `speccy-tasks`,
-`speccy-work`, `speccy-review`, `speccy-ship`, `speccy-amend`. The
-ejected SKILL.md files carry the frontmatter SPEC-0032 specifies
-(`context: fork` + `agent:` target on the four phase-worker skills;
-direct `model: haiku` on `speccy-review`); the conversational
-skills (`speccy-brainstorm`, `speccy-plan`, `speccy-amend`) eject
-without model frontmatter per SPEC-0032's non-goal. The Codex
-phase-worker SKILL.md bodies carry a one-line pointer naming the
-`.codex/agents/<phase>.toml` invocation path; the MiniJinja
-decomposition preserves this pointer through eject.
+skill pack location, plus the three pinned phase-worker subagent
+files SPEC-0032 introduced. The eject shape per skill follows the
+rule in DEC-008: interactive skills (`speccy-init`,
+`speccy-brainstorm`, `speccy-plan`, `speccy-amend`, the
+`speccy-review` orchestrator) eject as full-body SKILL.md only;
+pinned phase workers (`speccy-tasks`, `speccy-work`,
+`speccy-ship`) eject as a thin SKILL.md stub (≤10 non-blank lines
+per SPEC-0032 REQ-010, naming the matching agent file and the
+`/agent speccy-<phase>` invocation path) plus a full-body agent
+file at `.claude/agents/speccy-<phase>.md` (Claude Code) or
+`.codex/agents/speccy-<phase>.toml` (Codex). The agent body is
+included from `resources/modules/phases/speccy-<phase>.md` via
+MiniJinja `{% include %}` at build time. Pins on the pinned
+phase workers carry `model: sonnet[1m]` and `effort: medium` on
+Claude Code; `model = "gpt-5.5"` and
+`model_reasoning_effort = "medium"` on Codex. No
+`speccy-init` agent file ships (SPEC-0032 DEC-009) and no
+`speccy-review` agent file ships (SPEC-0032 REQ-002 / REQ-009 —
+the orchestrator stays in the parent session). The six reviewer
+subagent body files at `.claude/agents/reviewer-<persona>.md`
+and `.codex/agents/reviewer-<persona>.toml` are ejected per
+SPEC-0027's contract with the per-persona pins SPEC-0032
+REQ-003 specifies; this SPEC does not re-eject them but does
+subject them to the new init-write semantics below.
+
+The Skip-on-exists semantic SPEC-0027 introduced is removed in
+full. `speccy init` (no flag) performs a per-file three-way
+classification across every planned write: if the target file
+is absent on disk, write it (logged `created`); if the target
+file exists and is byte-identical to the planned content,
+no-op and log `unchanged`; if the target file exists and
+differs from the planned content, refuse the entire batch atomically
+with a non-zero exit and a stderr message naming the differing
+file(s) and the `--force` override. No partial writes occur on
+the refuse path. `speccy init --force` follows the same
+classification but overwrites differing files (logged
+`(!) overwritten` with the warning marker) instead of refusing.
+Files that are already byte-identical are logged `unchanged`
+under `--force` too (not `(!) overwritten`) — the comparison
+runs regardless of the flag. Recovery from an unwanted
+overwrite is via git; no in-CLI merge or backup mechanism ships.
 
 <done-when>
-- The directory `resources/modules/skills/` (or its successor
-  location chosen during implementation) holds one MiniJinja
-  template per shipped skill plus a `_partials/` subdirectory
-  containing shared snippets.
-- The init plan classifies every ejected SKILL.md under
-  `.claude/skills/speccy-<verb>/` and `.agents/skills/speccy-<verb>/`,
-  every Claude Code phase-worker subagent file under
-  `.claude/agents/speccy-<phase>.md`, and every Codex
-  phase-worker agent TOML under `.codex/agents/speccy-<phase>.toml`
-  as Skip-on-exists (per the existing `Action::Skip` semantics
-  used for reviewer files in SPEC-0027).
-- Running `speccy init` against an empty directory creates the
-  full skill pack on disk with prompt bodies inlined in
-  SKILL.md, the four `.claude/agents/speccy-<phase>.md` subagent
-  files, and the five `.codex/agents/speccy-<phase>.toml` agent
-  files.
-- Running `speccy init --force` against a workspace where a
-  user has edited `.claude/skills/speccy-plan/SKILL.md`,
-  `.claude/agents/speccy-work.md`, or
-  `.codex/agents/speccy-tasks.toml` leaves each of those files
-  byte-identical to its pre-invocation state.
-- Each ejected SKILL.md and subagent body file is a self-contained
-  markdown file containing no MiniJinja markup (no `{% %}`, no
-  `{{ }}`).
-- The ejected `.claude/skills/speccy-work/SKILL.md` frontmatter
-  carries `context: fork` and `agent: speccy-work`; the ejected
-  `.claude/skills/speccy-review/SKILL.md` frontmatter carries
-  `model: haiku` directly (no fork, per SPEC-0032's
-  Task-tool-access constraint).
-- Each ejected Codex phase-worker SKILL.md at
-  `.agents/skills/speccy-<phase>/SKILL.md` contains one prose line
-  naming the corresponding `.codex/agents/speccy-<phase>.toml`
-  path as the `/agent <name>` invocation route.
+- `resources/modules/phases/` holds one body source per pinned
+  phase worker (`speccy-tasks.md`, `speccy-work.md`,
+  `speccy-ship.md`); `resources/modules/skills/` holds one body
+  source per interactive skill (`speccy-init.md`,
+  `speccy-brainstorm.md`, `speccy-plan.md`, `speccy-amend.md`,
+  `speccy-review.md`). The SPEC-0032 T-009 rename is preserved.
+- The init plan emits, for every planned target, one of three
+  classifications: `created` (target absent), `unchanged`
+  (target byte-identical to planned content), or
+  `(!) overwritten` (target differed; `--force` was supplied).
+  No `skipped` classification survives.
+- Running `speccy init` (no flag) against an empty directory
+  creates the full skill pack on disk: full-body SKILL.md under
+  `.claude/skills/speccy-<skill>/` for every interactive skill;
+  thin SKILL.md stub under `.claude/skills/speccy-<phase>/` for
+  the three pinned phase workers; three full-body agent files
+  at `.claude/agents/speccy-<phase>.md`; and the matching Codex
+  pack under `.agents/skills/` and `.codex/agents/`.
+- Each ejected file is a self-contained markdown or TOML
+  document with no MiniJinja markup (no `{% %}`, no `{{ }}`).
+  MiniJinja expansion is build-time-only.
+- The three pinned phase-worker SKILL.md files at
+  `.claude/skills/speccy-<phase>/SKILL.md` for
+  `tasks` / `work` / `ship` carry no `context:`, `agent:`,
+  `model:`, or `effort:` frontmatter fields (only `name:` and
+  `description:`). Their bodies are ≤10 non-blank lines naming
+  the matching agent file path and the `/agent speccy-<phase>`
+  invocation pattern.
+- The three pinned phase-worker agent files at
+  `.claude/agents/speccy-<phase>.md` for `tasks` / `work` /
+  `ship` carry `model: sonnet[1m]` and `effort: medium`
+  frontmatter; the matching Codex TOMLs at
+  `.codex/agents/speccy-<phase>.toml` carry
+  `model = "gpt-5.5"` and `model_reasoning_effort = "medium"`.
+- No `.claude/agents/speccy-init.md`, no
+  `.codex/agents/speccy-init.toml`, no
+  `.claude/agents/speccy-review.md`, and no
+  `.codex/agents/speccy-review.toml` exist — both
+  `speccy-init` and `speccy-review` are interactive skills per
+  DEC-008 and eject as full-body SKILL.md only.
+- Running `speccy init` against a workspace whose shipped files
+  exactly match the planned writes (byte-identical) succeeds
+  with exit 0, logs each file as `unchanged`, and writes
+  nothing.
+- Running `speccy init` against a workspace where one or more
+  shipped files differ from the planned writes exits non-zero
+  with a stderr error naming the differing path(s) and the
+  `--force` override. No file writes occur on the refuse path.
+- Running `speccy init --force` against the same workspace
+  overwrites every differing file, logs each as
+  `(!) overwritten`, logs already-identical files as
+  `unchanged`, and exits 0.
 </done-when>
 
 <behavior>
@@ -687,26 +767,39 @@ decomposition preserves this pointer through eject.
   contains the full Phase 1 prompt body inline (greenfield form
   detection logic, allocation reference, scenarios template,
   etc.).
-- Given the same tempdir after init, when a user appends
-  `\nCustom domain note: always include a Data migration
-  section.\n` to `.claude/skills/speccy-plan/SKILL.md` and then
-  runs `speccy init --force --host claude-code`, then the file
-  retains the user's appended line byte-for-byte.
-- Given any ejected SKILL.md or subagent body file produced by
-  `speccy init`, when scanned for the substrings `{{`, `{%`,
-  `{#`, then zero matches are found.
 - Given an empty tempdir, when `speccy init --host claude-code`
-  runs, then `.claude/agents/speccy-work.md` exists, its
-  frontmatter carries `model: sonnet` plus `effort: medium`, and
-  its body is byte-identical to the body of
-  `.claude/skills/speccy-work/SKILL.md` modulo frontmatter (one
-  shared body source feeds both).
+  runs, then `.claude/skills/speccy-work/SKILL.md` exists as a
+  thin stub (≤10 non-blank lines) naming
+  `.claude/agents/speccy-work.md` and the `/agent speccy-work`
+  invocation path, and `.claude/agents/speccy-work.md` exists
+  with `model: sonnet[1m]` and `effort: medium` plus the full
+  phase body included from
+  `resources/modules/phases/speccy-work.md`.
 - Given an empty tempdir, when `speccy init --host codex` runs,
-  then `.agents/skills/speccy-work/SKILL.md` contains a line
-  naming `.codex/agents/speccy-work.toml` as the pinned
-  invocation path, and `.codex/agents/speccy-work.toml` exists
-  with `model = "sonnet"` and `model_reasoning_effort = "medium"`
-  set in its top-level table.
+  then `.agents/skills/speccy-work/SKILL.md` contains a thin
+  stub naming `.codex/agents/speccy-work.toml` and the
+  `/agent speccy-work` invocation path, and
+  `.codex/agents/speccy-work.toml` exists with
+  `model = "gpt-5.5"` and `model_reasoning_effort = "medium"`.
+- Given a workspace where every shipped file matches the
+  planned write byte-for-byte (a re-run after a no-op CLI bump),
+  when `speccy init` runs, then every file is logged
+  `unchanged`, no writes occur, and the process exits 0.
+- Given a workspace where one user has edited
+  `.claude/skills/speccy-plan/SKILL.md` (appending a custom
+  domain instruction line), when `speccy init` runs without
+  `--force`, then the process exits non-zero, stderr names the
+  edited file as differing from the planned write and the
+  `--force` override, and no writes occur (the file remains
+  byte-identical to its user-edited state).
+- Given the same workspace, when `speccy init --force` runs,
+  then `.claude/skills/speccy-plan/SKILL.md` is overwritten with
+  the planned content (the user's custom line is lost), stdout
+  logs it as `(!) overwritten`, and the process exits 0.
+  Recovery is via `git checkout` of the prior file content.
+- Given any ejected SKILL.md, agent.md, or agent.toml file
+  produced by `speccy init`, when scanned for the substrings
+  `{{`, `{%`, `{#`, then zero matches are found.
 </behavior>
 
 <scenario id="CHK-011">
@@ -718,125 +811,174 @@ the trigger-only metadata that existed pre-SPEC) and contains
 no MiniJinja template syntax.
 </scenario>
 
-<scenario id="CHK-012">
-Given a tempdir workspace where `.claude/skills/speccy-work/SKILL.md`
-has been user-edited (one line appended at end-of-file),
-when `speccy init --force --host claude-code` runs,
-then the file remains byte-identical to its user-edited state
-(the appended line survives).
-</scenario>
-
-<scenario id="CHK-016">
-Given a freshly initialized tempdir workspace
-(`speccy init --host claude-code` run once),
-when the file `.claude/agents/speccy-work.md` is read,
-then it exists, its YAML frontmatter parses with `model: sonnet`
-and `effort: medium`, and its post-frontmatter body is
-byte-identical to the post-frontmatter body of
-`.claude/skills/speccy-work/SKILL.md` (one shared body source
-feeds both consumers).
-</scenario>
-
 <scenario id="CHK-017">
 Given a freshly initialized tempdir workspace
 (`speccy init --host codex` run once),
 when the file `.agents/skills/speccy-work/SKILL.md` is read,
-then it contains exactly one prose line that names
-`.codex/agents/speccy-work.toml` as the `/agent`-invocation path,
-and `.codex/agents/speccy-work.toml` exists with
-`model = "sonnet"` and `model_reasoning_effort = "medium"` at the
-top level of the TOML document.
+then it is a thin stub of ≤10 non-blank lines naming
+`.codex/agents/speccy-work.toml` and the `/agent speccy-work`
+invocation path, and `.codex/agents/speccy-work.toml` exists
+with `model = "gpt-5.5"` and `model_reasoning_effort = "medium"`
+at the top level of the TOML document.
+</scenario>
+
+<scenario id="CHK-019">
+Given a tempdir workspace where every file
+`speccy init --host claude-code` would write already exists on
+disk byte-identical to the planned content,
+when `speccy init --host claude-code` runs (no `--force`),
+then the process exits 0, stdout logs every file as
+`unchanged`, and no writes occur (verified by file mtime
+unchanged on every planned target).
+</scenario>
+
+<scenario id="CHK-020">
+Given a tempdir workspace where one shipped file
+(`.claude/skills/speccy-plan/SKILL.md`) has a user-appended
+line of custom prose, making it differ from the planned write,
+when `speccy init --host claude-code` runs without `--force`,
+then the process exits non-zero, stderr names the differing
+file path and the `--force` override, the offending file
+remains byte-identical to its pre-invocation state, and no
+other planned target was written (atomic batch refuse).
+</scenario>
+
+<scenario id="CHK-021">
+Given the same tempdir workspace from CHK-020,
+when `speccy init --force --host claude-code` runs,
+then the process exits 0, the differing file is overwritten
+with the planned content, stdout logs it as `(!) overwritten`
+with the warning marker, and every other already-identical
+file is logged `unchanged` (not `(!) overwritten`).
+</scenario>
+
+<scenario id="CHK-022">
+Given a freshly initialized tempdir workspace
+(`speccy init --host claude-code` and
+`speccy init --host codex` run in turn),
+when the workspace is scanned for files at
+`.claude/agents/speccy-init.md`,
+`.claude/agents/speccy-review.md`,
+`.codex/agents/speccy-init.toml`, and
+`.codex/agents/speccy-review.toml`,
+then zero matches are returned per DEC-008 (interactive skills
+have no agent counterpart; both `speccy-init` and the
+`speccy-review` orchestrator fall in that category).
 </scenario>
 
 </requirement>
 
 <requirement id="REQ-007">
-### REQ-007: Shared snippets live in MiniJinja partials; reviewer subagent body is a single template with conditional tests block
+### REQ-007: Reviewer persona shared blocks factor into co-located snippets; six persona bodies stay independent
 
-Upstream authoring deduplicates shared boilerplate via MiniJinja
-`{% include %}` over partial files in
-`resources/modules/skills/_partials/` (or the equivalent path).
-The reviewer concern after this SPEC + SPEC-0032 is **subagent
-bodies**, not skill bodies: `/speccy-review` is a single
-orchestrator skill that dispatches via the Task tool to six
-reviewer subagents (`reviewer-business`, `reviewer-tests`,
-`reviewer-architecture`, `reviewer-security`, `reviewer-style`,
-`reviewer-docs`), each already ejected per SPEC-0027 to
+The six reviewer subagent body files at
+`resources/modules/personas/reviewer-<persona>.md` stay
+independent. Each persona retains its own role narrative, focus
+list, "what to look for" guidance, and any persona-specific
+content (e.g., `reviewer-style`'s "Diff-format pitfalls"
+section, `reviewer-tests`'s Evidence-read step). The shared
+blocks that recur verbatim across multiple personas — the
+verdict-return contract, the "do not edit TASKS.md"
+prohibition, the inline note format template, and the
+diff-fetch command boilerplate — factor out into topic-named
+snippet files that live INSIDE
+`resources/modules/personas/` itself, distinguished from
+persona body files by not matching the
+`reviewer-<persona>.md` filename pattern. Each persona body
+`{% include %}`s the snippets it needs at MiniJinja build time;
+the renderer logic that walks "six persona bodies" filters on
+the `reviewer-<persona>.md` pattern and naturally excludes the
+snippet files as eject-targets.
+
+The same co-location convention applies to any phase-worker
+shared snippets: snippet files live IN `resources/modules/phases/`
+alongside the phase body sources, with topic names that do not
+collide with the `speccy-<phase>.md` pattern. No `_partials/`
+subdirectory exists at any level; the snippet-vs-body
+distinction is filename-based, not directory-based.
+`/speccy-review` is a single orchestrator skill that dispatches
+via the Task tool to the six reviewer subagents at
 `.claude/agents/reviewer-<persona>.md` (Claude Code) and
-`.codex/agents/reviewer-<persona>.toml` (Codex). There is no
-per-persona ejected skill — the orchestrator is the only skill
-on the review side. The five reviewer subagent bodies that are
-byte-identical today (business, architecture, docs, security,
-style) plus the reviewer-tests variant collapse to one shared
-template; the tests-specific extra step (the Evidence-read
-block) appears inside a `{% if persona == "tests" %}`
-conditional.
+`.codex/agents/reviewer-<persona>.toml` (Codex), each ejected
+per SPEC-0027's contract with the per-persona pins SPEC-0032
+REQ-003 specifies. There is no per-persona ejected skill; the
+per-persona content lives in the six subagent body files.
 
 <done-when>
-- The pre-SPEC files
-  `resources/modules/prompts/reviewer-{business,architecture,docs,security,style,tests}.md`
-  are deleted (per REQ-001) and the reviewer subagent body
-  source consolidates to a single template at
-  `resources/modules/personas/reviewer.md.j2` (or equivalent
-  path under the existing `resources/modules/personas/` tree
-  that SPEC-0027 established).
-- Shared boilerplate snippets are extracted into the
-  `_partials/` subdirectory and `{% include %}`d by each
-  consuming template (skills and subagent bodies alike).
-- At `speccy init` time, the MiniJinja renderer expands
-  `{% include %}` and conditional `{% if %}` blocks into the
-  final ejected subagent body files, producing six reviewer
-  subagent bodies (one per persona) from one source template.
-- The ejected reviewer subagent bodies under
-  `.claude/agents/reviewer-<persona>.md` have identical post-
-  frontmatter prose except for: the persona-name substitution
-  (already a build-time substitution today via
-  `{{ persona }}`) and the Evidence-read step that appears
-  only in `.claude/agents/reviewer-tests.md`. Each carries the
-  per-persona frontmatter pin SPEC-0032 specifies
+- `resources/modules/personas/` contains exactly the six
+  reviewer persona body files (`reviewer-business.md`,
+  `reviewer-tests.md`, `reviewer-architecture.md`,
+  `reviewer-security.md`, `reviewer-style.md`,
+  `reviewer-docs.md`) plus N topic-named snippet files. The
+  brainstorm-named snippet candidates are
+  `verdict_return_contract.md`, `no_tasks_md_writes.md`,
+  `inline_note_format.md`, and `diff_fetch_command.md`; the
+  exact filename convention is decompose-time, with the
+  category constraint that none collide with the
+  `reviewer-<persona>.md` pattern.
+- No `_partials/` (or analogous `_includes/` / `shared/`)
+  subdirectory exists under `resources/modules/personas/`,
+  `resources/modules/phases/`, or anywhere else in the source
+  tree.
+- Each of the six persona body files `{% include %}`s the
+  snippet files it needs at MiniJinja build time; the ejected
+  `.claude/agents/reviewer-<persona>.md` and
+  `.codex/agents/reviewer-<persona>.toml` files contain the
+  fully-expanded content with no MiniJinja markup.
+- The `reviewer-style` persona body retains its
+  "Diff-format pitfalls" section; the `reviewer-tests` persona
+  body retains its Evidence-read step; other persona bodies
+  do NOT carry these sections — divergence is legitimate and
+  preserved.
+- No master template file (e.g., `reviewer.md.j2`) exists; the
+  six persona body files are the source of truth for
+  per-persona content.
+- This SPEC does not re-eject reviewer subagent files —
+  SPEC-0027's contract still owns the ejection. SPEC-0032
+  REQ-003 owns the per-persona pin assignments
   (`reviewer-business` / `reviewer-tests` /
-  `reviewer-architecture` at Opus xhigh; `reviewer-security`
-  at Sonnet high; `reviewer-style` / `reviewer-docs` at
-  Sonnet medium).
-- A test in `speccy-cli/tests/init.rs` (or its successor)
-  asserts the per-persona reviewer subagent bodies are
-  byte-identical modulo the persona name and the
-  tests-conditional block.
+  `reviewer-architecture` at `opus[1m]` / `xhigh`;
+  `reviewer-security` at `sonnet[1m]` / `high`;
+  `reviewer-style` / `reviewer-docs` at `sonnet[1m]` /
+  `medium`).
 </done-when>
 
 <behavior>
 - Given the post-SPEC source tree, when a contributor inspects
-  the reviewer body source, then there is exactly one reviewer
-  template file (`reviewer.md.j2` or equivalent), not six.
+  `resources/modules/personas/`, then they find six body files
+  matching `reviewer-<persona>.md` plus topic-named snippet
+  files (e.g., `verdict_return_contract.md`); no `_partials/`
+  directory exists.
 - Given a freshly initialized workspace, when the six ejected
   reviewer subagent bodies under `.claude/agents/` are
-  compared pairwise, then the diff between any non-tests pair
-  is empty modulo persona-name string substitution; the diff
-  between any non-tests file and the tests file contains
-  exactly the Evidence-read block as an additional step.
+  compared pairwise, then each shares the snippet-included
+  text byte-identically AND carries persona-specific narrative
+  content that legitimately varies (focus list, look-for
+  guidance, persona-specific sections like
+  `reviewer-style`'s diff-format pitfalls).
 - Given the post-SPEC source tree, when a contributor opens
-  `resources/modules/skills/_partials/spec-pointer.md` (or
-  equivalent name), then it contains the shared
-  "Before X, read SPEC.md at `{{ spec_md_path }}`..."
-  boilerplate text used across multiple consumers (skills and
-  reviewer subagent bodies).
-- Given the post-SPEC ejection, when a contributor looks for a
-  `.claude/skills/speccy-review-<persona>/SKILL.md` file under
-  any persona name, then no such file exists — `/speccy-review`
-  is one orchestrator skill, and per-persona content lives in
-  the six `.claude/agents/reviewer-<persona>.md` subagent
-  files.
+  `resources/modules/personas/verdict_return_contract.md`
+  (decompose-time filename), then it contains the shared
+  "Your final message to the orchestrator must be a single
+  `<review persona=...>` element block..." paragraph reused
+  across all six persona bodies.
+- Given the post-SPEC source tree, when a contributor
+  searches for `reviewer.md.j2` or any equivalent
+  master-template file, then zero matches are found.
 </behavior>
 
 <scenario id="CHK-013">
 Given the post-SPEC source tree,
-when the file `resources/modules/personas/reviewer.md.j2` (or
-equivalent path) is rendered by the MiniJinja engine with
-`persona = "tests"` and again with `persona = "business"`,
-then the two rendered outputs differ exactly in: the
-`{{ persona }}` substitution (one occurrence per rendering)
-and the presence of the Evidence-read paragraph in the tests
-rendering only.
+when the file
+`resources/modules/personas/verdict_return_contract.md` (or
+equivalent decompose-time filename) is read,
+then it exists and contains the shared
+verdict-return-contract paragraph; and when each of the six
+reviewer body files at
+`resources/modules/personas/reviewer-<persona>.md` is parsed
+for an `{% include %}` directive referencing that snippet
+file, then each persona body contains the include directive
+exactly once.
 </scenario>
 
 <scenario id="CHK-018">
@@ -853,60 +995,98 @@ covering the per-persona content.
 </requirement>
 
 <requirement id="REQ-008">
-### REQ-008: Skills consume CLI state via JSON envelopes; no skill globs the filesystem
+### REQ-008: Skill stubs and agent bodies discover speccy resources via CLI JSON envelopes only; general filesystem access is unconstrained
 
-After this SPEC lands, the shipped skill bodies (`speccy-plan`,
-`speccy-tasks`, `speccy-work`, `speccy-review`, `speccy-ship`,
-`speccy-amend`) read all spec/task/path state from
-`speccy status --json` and `speccy next --json` (plus
-`speccy vacancy --json` for greenfield-plan). No skill body
-contains filesystem-globbing logic, glob patterns matching
-`.speccy/specs/*`, or path computation from SPEC IDs to file
-paths.
+After this SPEC lands, the shipped skill bodies AND agent
+bodies (the interactive skill SKILL.md files; the pinned
+phase-worker SKILL.md stubs plus their agent files at
+`.claude/agents/speccy-<phase>.md` and
+`.codex/agents/speccy-<phase>.toml`; the six reviewer subagent
+bodies under `.claude/agents/reviewer-<persona>.md`) discover
+all **speccy resources** via the CLI's JSON envelopes
+(`speccy status --json`, `speccy next --json`,
+`speccy vacancy --json`). Speccy resources are: anything
+under `.speccy/specs/` (SPEC.md, TASKS.md, MISSION.md,
+REPORT.md, evidence files), the slug-pattern directory layout
+(`NNNN-slug` flat or one level inside a mission folder), and
+any path computation from a SPEC-NNNN id to a filesystem path.
+
+This is a resource-discovery boundary, not a blanket
+filesystem-access ban. Skills and agents may use Read / Glob /
+grep freely for general project files (source code, test
+fixtures, helper modules, project-level configuration such as
+`AGENTS.md`, `.editorconfig`, `Cargo.toml`, `.claude/rules/...`)
+— those are the implementer's domain and not the CLI's. The
+boundary is specifically: any file under `.speccy/specs/` or
+named SPEC.md / TASKS.md / MISSION.md / REPORT.md or any path
+computation from a SPEC-NNNN id to a filesystem path must come
+from a CLI JSON envelope or from a user-supplied argument to
+the skill.
 
 <done-when>
-- A grep over `resources/modules/skills/` for the patterns
-  `.speccy/specs/*`, `glob`, `Glob`, `walk`, `read_dir`,
-  `os.listdir`, or `fs.readdir` returns zero hits in
-  skill-body content (matches inside `_partials/` that are
-  part of host pointer instructions like
-  "read SPEC.md at `{{ spec_md_path }}`" do not count — the
-  prohibition is on filesystem *discovery*, not on consuming
-  paths the CLI emitted).
-- Every shipped skill body that needs a SPEC path or TASKS
-  path obtains it from either: (a) the user-supplied argument
-  if the skill takes a SPEC-ID, or (b) a JSON envelope from
-  `speccy status` / `speccy next` / `speccy vacancy`.
+- A grep over `resources/modules/skills/`,
+  `resources/modules/phases/`, and `resources/modules/personas/`
+  for speccy-resource discovery patterns — glob expressions
+  like `.speccy/specs/*`, raw filesystem paths ending in
+  `SPEC.md` / `TASKS.md` / `MISSION.md` / `REPORT.md` not
+  bound to a `{{ ... }}` template placeholder, or
+  directory-enumeration instructions targeting `.speccy/specs/`
+  — returns zero hits in skill or agent body content.
+  Helper-pointer text that names fully-resolved paths supplied
+  via `{{ ... }}` placeholders does not count as a match;
+  those paths originate from the CLI's JSON envelopes.
+- General-purpose Read / Glob / grep references in skill and
+  agent bodies against non-speccy paths (e.g., "read
+  `AGENTS.md` for project conventions", "grep for an existing
+  helper before introducing a new one", "read
+  `.editorconfig`") are NOT flagged by the lint; the boundary
+  is speccy-resource-scoped.
+- Every shipped skill or agent body that needs a SPEC path,
+  TASKS path, MISSION path, or REPORT path obtains it from
+  either: (a) the user-supplied argument if the skill takes a
+  SPEC-NNNN, (b) a JSON envelope from `speccy status` /
+  `speccy next` / `speccy vacancy`, or (c) a `{{ ... }}`
+  template placeholder that the build-time MiniJinja
+  substitution wires to one of the above sources.
 - The `speccy-plan` greenfield-form skill body invokes
   `speccy vacancy --json` (not `speccy status --json`) to
-  fetch the next SPEC ID, demonstrating the payload-minimization
-  pattern.
+  fetch the next SPEC ID, demonstrating the
+  payload-minimization pattern.
 </done-when>
 
 <behavior>
-- Given the post-SPEC `resources/modules/skills/` source tree,
-  when a contributor greps for `.speccy/specs/*` (glob
-  pattern), then zero hits appear in skill-body content.
+- Given the post-SPEC source tree, when a contributor greps
+  for a literal `.speccy/specs/*` glob expression in skill or
+  agent body content, then zero hits appear.
+- Given the post-SPEC source tree, when a contributor greps
+  for references to project-level files unrelated to speccy
+  resources (e.g., "read AGENTS.md", "grep for an existing
+  helper"), then matches DO appear in skill and agent body
+  content and are NOT considered violations — the boundary is
+  speccy-resource-scoped.
 - Given the ejected `.claude/skills/speccy-plan/SKILL.md` in
   greenfield mode, when its contents are inspected, then the
   body invokes `speccy vacancy --json` (and not
   `speccy status --json`) for ID allocation.
-- Given the ejected `.claude/skills/speccy-work/SKILL.md`,
-  when its body is followed by an agent, then every path the
-  agent needs comes from a `speccy next` or `speccy status`
-  JSON envelope; the skill body itself names no fixed
-  filesystem paths beyond `.speccy/` as the root.
+- Given the ejected `.claude/agents/speccy-work.md`, when its
+  body is followed by an agent, then every speccy-resource
+  path the agent needs comes from a `speccy next` or
+  `speccy status` JSON envelope, or from the SPEC-NNNN/T-NNN
+  argument supplied to the skill — never from a glob against
+  `.speccy/specs/`.
 </behavior>
 
 <scenario id="CHK-014">
-Given the post-SPEC `resources/modules/skills/` source tree,
-when a recursive search runs for filesystem-discovery
-patterns (`glob`, `Glob`, `walk`, `read_dir`, raw
-`.speccy/specs/*` glob expressions),
-then zero matches appear inside skill-body content (helper
-partials that name fully-resolved paths supplied via
-`{{ ... }}` placeholders do not count, as those paths
-originate from the CLI's JSON envelopes).
+Given the post-SPEC source tree,
+when a recursive search runs across
+`resources/modules/skills/`, `resources/modules/phases/`, and
+`resources/modules/personas/` for speccy-resource discovery
+patterns — `.speccy/specs/*` glob expressions; raw filesystem
+paths ending in `SPEC.md` / `TASKS.md` / `MISSION.md` /
+`REPORT.md` that are not bound to a `{{ ... }}` template
+placeholder; directory-enumeration instructions targeting
+`.speccy/specs/` — then zero matches appear in skill or agent
+body content.
 </scenario>
 
 <scenario id="CHK-015">
@@ -1024,6 +1204,49 @@ surface for marginal payload savings. The one exception is
 path (greenfield plan) is performance-sensitive.
 </decision>
 
+<decision id="DEC-008">
+**Eject shape follows skill invocation pattern, not name or phase number.**
+
+A Speccy skill's eject shape is determined by its invocation
+pattern. Skills whose body runs in a recurring multi-agent
+orchestration loop — one invocation per task implemented, one
+invocation per spec decomposed, where each invocation is
+independent grunt work that benefits from a heavy-model fork —
+eject as a thin SKILL.md host-router stub at
+`.claude/skills/<skill>/SKILL.md` plus a full-body agent file
+at `.claude/agents/<skill>.md` (and the Codex equivalent at
+`.codex/agents/<skill>.toml`). The SKILL.md is the
+slash-command entry point in the parent session; the agent
+file is invoked via `/agent <skill>` for the pinned
+heavy-model fork. Skills whose body runs as interactive
+conversation requiring per-turn user input — Socratic Q&A,
+SPEC drafting, amendment orchestration, multi-persona review
+verdict consolidation — eject as full-body SKILL.md only,
+with no agent counterpart. The pinned phase workers
+(`speccy-tasks`, `speccy-work`, `speccy-ship`) are the first
+category. The interactive skills (`speccy-init`,
+`speccy-brainstorm`, `speccy-plan`, `speccy-amend`,
+`speccy-review` orchestrator) are the second.
+
+This rule earned its place through SPEC-0032's auto-fork
+retreat: T-002 of SPEC-0032 surfaced that auto-forking every
+slash-command invocation imposed a multi-minute UX cost that
+made the pinned-model benefit not worth the latency. The
+opt-in `/agent speccy-<phase>` path retreated to the
+recurring-loop phases, and the interactive skills stayed in
+the parent session. This SPEC names the rule explicitly so
+future skill additions apply it as a principle rather than
+re-debating each new skill.
+
+Trade-off acknowledged: a future hybrid skill that wants both
+an interactive front-end and a forkable heavy phase would
+fall between categories. The rule's binary shape is not
+load-bearing forever; it's load-bearing for the current set
+of shipped skills and any skill that fits cleanly into one of
+the two categories. A hybrid would warrant its own DEC at
+that time.
+</decision>
+
 ## Assumptions
 
 <assumptions>
@@ -1048,34 +1271,48 @@ path (greenfield plan) is performance-sensitive.
   v1 is not released; there are no external integrations. The
   dogfooded `.speccy/` workspace migration is done by hand as
   part of this SPEC's implementation tasks.
-- The `_partials/` directory naming and exact MiniJinja
-  include-resolution paths are implementation details, not
-  contract surface. The SPEC names the layering goal (shared
-  snippets factor out, reviewer template collapses to one
-  source); the decomposition phase chooses concrete paths.
-- The `speccy_core::prompt::allocate_next_spec_id` function (or
-  its successor) remains the single authority on ID allocation
-  even after `prompt::template.rs` and `prompt::budget.rs` are
-  removed. The function is filesystem-only; it has no dependency
-  on the template loader.
-- Reviewer skill ejection produces six distinct SKILL.md files
-  (one per persona) so that the host's skill discovery
-  mechanism can address each independently. The shared upstream
-  template is a build-time deduplication, not a runtime
-  deduplication.
+- Shared snippets live in the same folder as their primary
+  consumer (`resources/modules/personas/` for reviewer
+  snippets; `resources/modules/phases/` for any phase-worker
+  snippets), distinguished from body files by filename
+  pattern rather than directory. Topic-named filenames are the
+  preferred convention (e.g., `verdict_return_contract.md`).
+  Cross-folder includes are explicit and rare. No `_partials/`
+  subdirectory exists at any level. Decomposition phase picks
+  exact filenames.
+- The `speccy_core::prompt::allocate_next_spec_id` function
+  (or its successor) remains the single authority on ID
+  allocation even after `prompt::template.rs` and
+  `prompt::budget.rs` are removed. The function is
+  filesystem-only; it has no dependency on the template
+  loader.
+- Reviewer subagent body ejection produces six distinct
+  `.claude/agents/reviewer-<persona>.md` files (one per
+  persona) per SPEC-0027's contract; that contract is
+  unchanged. SPEC-0032 REQ-003 owns the per-persona pin
+  assignments. This SPEC's REQ-007 affects only how those
+  bodies are SOURCED in the resources tree (six independent
+  files plus shared snippets, not one master template), not
+  how they EJECT.
 - The shared body source at
-  `resources/modules/skills/speccy-<phase>.md` is included by
-  both the SKILL.md template (which renders to
-  `.claude/skills/speccy-<phase>/SKILL.md` plus the Codex
-  equivalent) and the subagent body template (which renders to
-  `.claude/agents/speccy-<phase>.md` plus the Codex agent
-  TOML's body field) per the SPEC-0032 dependency. Single
-  source of truth for phase-body content; the MiniJinja
-  decomposition must keep both consumers green at every
-  refactor step. The reviewer side mirrors this pattern: one
-  `resources/modules/personas/reviewer.md.j2` source feeds the
-  six `.claude/agents/reviewer-<persona>.md` subagent bodies
-  via `{% if persona == "tests" %}` conditional rendering.
+  `resources/modules/phases/speccy-<phase>.md` (moved from
+  `resources/modules/skills/` per SPEC-0032 DEC-009 / T-009)
+  is included by the pinned phase-worker agent body template
+  (which renders to `.claude/agents/speccy-<phase>.md` plus
+  the Codex agent TOML's body field). The pinned-phase
+  SKILL.md stub for each pinned phase worker is hardcoded
+  thin prose and does NOT include the phase body — the agent
+  file is the single on-disk source of truth for phase-body
+  content per SPEC-0032 REQ-010.
+- The Skip-on-exists semantic SPEC-0027 introduced is a
+  user-edit-protection mechanism. Removing it under the new
+  three-way classification (create-if-absent /
+  no-op-if-byte-identical / refuse-or-overwrite) trusts git
+  as the recovery path. Speccy v1 is unreleased; no
+  downstream users depend on the protection. Within the
+  dogfooded `.speccy/` workspace, recovery from accidental
+  `--force` overwrites uses `git checkout` of the prior
+  file content.
 </assumptions>
 
 ## Changelog
@@ -1085,6 +1322,7 @@ path (greenfield plan) is performance-sensitive.
 |------------|-------------|---------|
 | 2026-05-19 | human/kevin | Initial draft. The CLI's two architectural jobs (mechanical state queries vs. authored prompt rendering) are decoupled: five prompt-rendering verbs (`plan`, `tasks` render-form, `implement`, `review`, `report`) and the `trim_to_budget` mechanism are deleted, phase prompt bodies eject as Skip-on-exists SKILL.md files at `init` time, and two new flat verbs (`speccy lock`, `speccy vacancy`) take the real-CLI-work that hid inside the deleted rendering paths. `status` and `next` JSON envelopes bump to schema_version 2 with resolved paths plus derived `next_action`; `next` drops `--kind` because spec state fully determines action kind via the priority rule `review > implement > ship` (drift-visibility favors short feedback loops). CLI resolves all filesystem paths; skills consume via JSON only. Upstream skill authoring uses MiniJinja partials for shared snippets; the six reviewer prompts collapse to one shared template with a tests-only conditional block. Direct extension of SPEC-0023 (REQ-005, REQ-006) and SPEC-0027: when host machinery already delivers content to the agent through some other channel (Read primitive, sub-agent system context, ejected skill body), the CLI prompt-rendering surface stops carrying redundant copies. Final CLI shape: seven flat verbs (`init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`), each doing one job, no mode flags, `--json` for representation only. |
 | 2026-05-19 | human/kevin | Amendment for SPEC-0032 sequencing dependency. SPEC-0032 (per-phase model and effort pinning across the lifecycle) is now a hard sequencing predecessor: it adds skill frontmatter (`context: fork` + `agent:` target on `speccy-tasks` / `speccy-work` / `speccy-ship` / `speccy-init`; direct `model: haiku` on `speccy-review`), four `.claude/agents/speccy-<phase>.md` subagent files, and five `.codex/agents/speccy-<phase>.toml` agent files that this SPEC's ejection must preserve. REQ-006 extends the Skip-on-exists ejection set to include those new files and asserts that ejected SKILL.md frontmatter carries the SPEC-0032 pins through MiniJinja round-trip; the Codex SKILL.md pointer line naming `.codex/agents/<phase>.toml` is required content. REQ-007 reframes the shared reviewer template as the **subagent body** template (six `.claude/agents/reviewer-<persona>.md` bodies from one source under `resources/modules/personas/`), not a phantom set of per-persona skills — SPEC-0032 establishes that `/speccy-review` is a single orchestrator skill that dispatches to six existing subagents. New scenarios CHK-012a (subagent body matches SKILL.md body), CHK-012b (Codex pointer line and agent TOML pinned correctly), CHK-013a (no per-persona review skill exists). New Assumption: `resources/modules/skills/<phase>.md` is dual-consumer (SKILL.md template + subagent body template), and the reviewer side mirrors this with one persona source feeding six subagent bodies. The "per-persona ejected reviewer skill naming" open question is resolved (struck) by the SPEC-0032 dispatch model. |
+| 2026-05-19 | claude/opus-4.7 + human/kevin | Reconciliation amendment against SPEC-0032's actual ship shape; the prior 2026-05-19 row anticipated SPEC-0032's brainstorm framing, not its ship shape. Mechanical corrections: THREE Claude Code phase-worker agents (`tasks` / `work` / `ship`), not four; THREE Codex agent TOMLs for the same phases, not five; no `speccy-init` agent file (SPEC-0032 DEC-009); no `speccy-review` agent file (SPEC-0032 REQ-002 / REQ-009 keeps the orchestrator in the parent session for Task-tool access and verdict-consolidation capacity); shared phase-body source path is `resources/modules/phases/<phase>.md` (moved from `resources/modules/skills/` per SPEC-0032 T-009); model aliases require the `[1m]` 1M-context-window suffix on Claude Code (`sonnet[1m]`) and `gpt-5.5` on Codex; no Haiku pin anywhere; `context: fork` was dropped after SPEC-0032 T-002 surfaced its multi-minute UX cost; pinned-phase SKILL.md files are thin stubs ≤10 non-blank lines per SPEC-0032 REQ-010 (not byte-identical to the agent body modulo frontmatter); reviewer pins asymmetric per SPEC-0032 REQ-003 (Opus[1m] xhigh for business / tests / architecture; Sonnet[1m] high for security; Sonnet[1m] medium for style / docs). Three substantive scope shifts confirmed during the 2026-05-19 brainstorm: (1) Skip-on-exists removed entirely; per-file three-way classification (create-if-absent / no-op-if-byte-identical / refuse-or-overwrite) applies uniformly to every file `init` writes including SPEC-0027 reviewer files; git is the recovery path. (2) REQ-007 reframes from "one master MiniJinja template with `{% if persona == 'tests' %}`" to "partial consolidation": six persona body files stay independent under `resources/modules/personas/`; shared blocks factor into topic-named snippets co-located in the same folder; no `_partials/` subdirectory exists at any level. (3) REQ-008 reframes from blanket no-globbing to a speccy-resource-discovery boundary: skill and agent bodies may use Read / Glob / grep for general project files but not to discover `.speccy/specs/*`, SPEC.md, TASKS.md, MISSION.md, REPORT.md, or the slug-pattern layout. New DEC-008 ("eject shape follows skill invocation pattern") promotes the SPEC-0032 auto-fork retreat lesson to a durable rule. Scenarios reconciled: CHK-012 and CHK-016 deleted (Skip-on-exists user-edit survival; byte-identical agent-vs-SKILL body); CHK-013 rewritten around topic-named snippet includes; CHK-017 loosened to ≤10-line stub with `gpt-5.5`; new CHK-019 / CHK-020 / CHK-021 cover the three-way classification; new CHK-022 asserts no-init-agent and no-review-agent existence per DEC-008. |
 </changelog>
 
 ## Open Questions
@@ -1093,20 +1331,49 @@ path (greenfield plan) is performance-sensitive.
   skill `speccy-review` that accepts `--persona` and ejects
   one SKILL.md, or six `speccy-review-<persona>` skills?~~
   Resolved by the SPEC-0032 dependency: `/speccy-review` is a
-  single orchestrator skill at Haiku that dispatches via the
-  Task tool to the six existing reviewer subagents at
+  single orchestrator skill that dispatches via the Task tool
+  to the six existing reviewer subagents at
   `.claude/agents/reviewer-<persona>.md` (and Codex
   equivalents). There is no per-persona ejected skill; the
-  per-persona body content lives in the subagent files SPEC-0027
-  already established, and the model pins live on those
-  subagent files per SPEC-0032. REQ-007 now targets the shared
-  reviewer subagent body template, not a skill template.
+  per-persona body content lives in the subagent files
+  SPEC-0027 already established, and the model pins live on
+  those subagent files per SPEC-0032 REQ-003. (Note: the
+  pre-amendment resolution text named Haiku as the
+  orchestrator pin; SPEC-0032 actually shipped
+  `/speccy-review` unpinned in the parent session per
+  REQ-002 / REQ-009. The orchestrator-dispatch shape is
+  unchanged.)
 - [ ] Whether `speccy vacancy`'s implementation reuses
-  `allocate_next_spec_id` directly from speccy-core, or whether
-  the function relocates (e.g. out of `prompt::id_alloc` into
-  a more general `speccy_core::specs::next_id`) as part of the
-  speccy-core cleanup that REQ-001 implies. Decompose-time
+  `allocate_next_spec_id` directly from speccy-core, or
+  whether the function relocates (e.g. out of
+  `prompt::id_alloc` into a more general
+  `speccy_core::specs::next_id`) as part of the speccy-core
+  cleanup that REQ-001 implies. Decompose-time decision.
+- [x] ~~Exact path under `resources/modules/skills/` for shared
+  partials. Candidates: `_partials/`, `_includes/`, `shared/`.~~
+  Resolved by 2026-05-19 brainstorm: no `_partials/`-style
+  subdirectory exists at any level. Topic-named snippet files
+  live INSIDE the consuming folder
+  (`resources/modules/personas/`,
+  `resources/modules/phases/`), distinguished from body files
+  by filename pattern. See REQ-007.
+- [ ] Exact filename convention for shared snippets inside
+  `modules/personas/` and `modules/phases/`. Brainstorm
+  proposed topic-named (e.g., `verdict_return_contract.md`); a
+  prefix-marked alternative (e.g., `_shared_verdict.md`) was
+  considered and rejected because the existing folders use no
+  prefix convention. Decompose-time picks exact names; SPEC
+  names the category constraint only (must not collide with
+  the `reviewer-<persona>.md` or `speccy-<phase>.md`
+  patterns).
+- [ ] Whether `--force` stdout summary lists each overwritten
+  file individually or just gives a tally. UX detail;
+  SPEC-level position is "log per-file with `(!) overwritten`
+  marker plus a final summary tally," but the exact line
+  format is decompose-time.
+- [ ] Whether the `speccy-review` orchestrator's body source
+  belongs in `resources/modules/skills/` (current location,
+  consistent with other interactive skills under DEC-008) or
+  elsewhere given its dispatch-to-personas role. Brainstorm
+  leaned toward staying in `modules/skills/`; decompose-time
   decision.
-- [ ] Exact path under `resources/modules/skills/` for shared
-  partials. Candidates: `_partials/`, `_includes/`, `shared/`.
-  Mechanical naming choice; no SPEC-level position.

@@ -1,208 +1,294 @@
-//! Text and JSON renderers for `speccy next`.
+//! Text and JSON renderers for `speccy next` (SPEC-0033 REQ-004).
 //!
-//! The text renderer prints one line per kind variant; the JSON
-//! renderer emits a tagged union by `kind` following the
-//! `schema_version: 1` envelope conventions established by SPEC-0004.
-//! See `.speccy/specs/0007-next-command/SPEC.md` REQ-004 / REQ-005.
+//! The text renderers emit human-readable output:
+//! - Workspace form: one line per active spec.
+//! - Per-spec form: one line for the spec, or `SPEC-NNNN: completed`.
+//!
+//! The JSON renderers emit structured envelopes:
+//! - Workspace form: `{"schema_version":2,"specs":[{…},…]}`.
+//! - Per-spec form:
+//!   `{"schema_version":2,"spec_id":"…","next_action":{…}|null}`.
+//!
+//! `schema_version` is `2` following the bump introduced in SPEC-0033.
+//! (`spec_md_path`, `tasks_md_path`, `mission_md_path` are added in T-005.)
 
 use serde::Serialize;
-use speccy_core::next::NextResult;
+use speccy_core::next::NextAction;
+use speccy_core::next::SpecNextEntry;
 
-/// Tagged-union JSON envelope. `schema_version` is the first field so
-/// downstream consumers can sniff it cheaply.
+/// JSON envelope for the per-spec form (`speccy next SPEC-NNNN --json`).
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub enum JsonOutput {
-    /// `kind: implement` variant.
-    Implement(JsonImplement),
-    /// `kind: review` variant.
-    Review(JsonReview),
-    /// `kind: report` variant.
-    Report(JsonReport),
-    /// `kind: blocked` variant.
-    Blocked(JsonBlocked),
-}
-
-/// `kind: implement` payload.
-#[derive(Debug, Clone, Serialize)]
-pub struct JsonImplement {
-    /// Stable schema version. Always 1 for now.
+pub struct JsonPerSpec {
+    /// Schema version. `2` for this release.
     pub schema_version: u32,
-    /// `SPEC-NNNN` containing the task.
-    pub spec: String,
-    /// `T-NNN` identifier.
-    pub task: String,
-    /// Task title (no checkbox or bold ID prefix).
-    pub task_line: String,
-    /// Requirement IDs the task covers.
-    pub covers: Vec<String>,
-    /// Suggested file references.
-    pub suggested_files: Vec<String>,
-    /// Verbatim command harnesses should invoke next.
-    pub prompt_command: String,
+    /// The spec identifier.
+    pub spec_id: String,
+    /// Derived next action, or `null` when the spec is completed.
+    pub next_action: Option<JsonNextAction>,
+    /// Present when `next_action` is `null`; `"completed"` or `"superseded"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Repo-relative forward-slash path to `SPEC.md`.
+    pub spec_md_path: String,
+    /// Repo-relative forward-slash path to `TASKS.md`, or `null` when absent.
+    pub tasks_md_path: Option<String>,
+    /// Repo-relative forward-slash path to the mission folder's `MISSION.md`,
+    /// or `null` for flat specs.
+    pub mission_md_path: Option<String>,
 }
 
-/// `kind: review` payload.
+/// JSON envelope for the workspace form (`speccy next --json`).
 #[derive(Debug, Clone, Serialize)]
-pub struct JsonReview {
-    /// Stable schema version. Always 1 for now.
+pub struct JsonWorkspace {
+    /// Schema version. `2` for this release.
     pub schema_version: u32,
-    /// `SPEC-NNNN` containing the task.
-    pub spec: String,
-    /// `T-NNN` identifier.
-    pub task: String,
-    /// Task title.
-    pub task_line: String,
-    /// Hardcoded persona fan-out list.
-    pub personas: Vec<String>,
-    /// Template harnesses iterate over `personas` to materialise.
-    pub prompt_command_template: String,
+    /// Active specs with their derived next actions.
+    pub specs: Vec<JsonWorkspaceEntry>,
 }
 
-/// `kind: report` payload.
+/// A single per-spec entry inside the workspace JSON envelope.
 #[derive(Debug, Clone, Serialize)]
-pub struct JsonReport {
-    /// Stable schema version.
-    pub schema_version: u32,
-    /// `SPEC-NNNN` needing a REPORT.md.
-    pub spec: String,
-    /// Verbatim command harnesses should invoke next.
-    pub prompt_command: String,
+pub struct JsonWorkspaceEntry {
+    /// The spec identifier.
+    pub spec_id: String,
+    /// Derived next action.
+    pub next_action: JsonNextAction,
+    /// Repo-relative forward-slash path to `SPEC.md`.
+    pub spec_md_path: String,
+    /// Repo-relative forward-slash path to `TASKS.md`, or `null` when absent.
+    pub tasks_md_path: Option<String>,
+    /// Repo-relative forward-slash path to the mission folder's `MISSION.md`,
+    /// or `null` for flat specs.
+    pub mission_md_path: Option<String>,
 }
 
-/// `kind: blocked` payload.
+/// The `next_action` object inside JSON envelopes.
 #[derive(Debug, Clone, Serialize)]
-pub struct JsonBlocked {
-    /// Stable schema version.
-    pub schema_version: u32,
-    /// Canonical reason string.
-    pub reason: String,
+pub struct JsonNextAction {
+    /// Kind string: `"decompose"`, `"review"`, `"implement"`, or `"ship"`.
+    pub kind: &'static str,
+    /// Task identifier; present for `review` and `implement`, absent for
+    /// `decompose` and `ship`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
 }
 
-/// Render `result` as one line of human text, terminated with `\n`.
+// ---------------------------------------------------------------------------
+// JSON renderers
+// ---------------------------------------------------------------------------
+
+/// Resolved per-spec filesystem paths for JSON output.
+///
+/// All fields are repo-relative forward-slash strings (or `None`).
+#[derive(Debug, Clone)]
+pub struct SpecPaths {
+    /// Repo-relative path to `SPEC.md`.
+    pub spec_md_path: String,
+    /// Repo-relative path to `TASKS.md`, or `None` when absent.
+    pub tasks_md_path: Option<String>,
+    /// Repo-relative path to the mission folder's `MISSION.md`, or `None`
+    /// for flat specs.
+    pub mission_md_path: Option<String>,
+}
+
+/// Build the JSON payload for the per-spec form.
+#[must_use = "the JSON payload is the output of `speccy next SPEC-NNNN --json`"]
+pub fn render_json_per_spec(
+    spec_id: &str,
+    action: Option<&NextAction>,
+    paths: SpecPaths,
+) -> JsonPerSpec {
+    match action {
+        Some(a) => JsonPerSpec {
+            schema_version: 2,
+            spec_id: spec_id.to_owned(),
+            next_action: Some(to_json_action(a)),
+            reason: None,
+            spec_md_path: paths.spec_md_path,
+            tasks_md_path: paths.tasks_md_path,
+            mission_md_path: paths.mission_md_path,
+        },
+        None => JsonPerSpec {
+            schema_version: 2,
+            spec_id: spec_id.to_owned(),
+            next_action: None,
+            reason: Some("completed".to_owned()),
+            spec_md_path: paths.spec_md_path,
+            tasks_md_path: paths.tasks_md_path,
+            mission_md_path: paths.mission_md_path,
+        },
+    }
+}
+
+/// Build the JSON payload for the workspace form.
+#[must_use = "the JSON payload is the output of `speccy next --json`"]
+pub fn render_json_workspace(entries: &[(SpecNextEntry, SpecPaths)]) -> JsonWorkspace {
+    JsonWorkspace {
+        schema_version: 2,
+        specs: entries
+            .iter()
+            .map(|(e, paths)| JsonWorkspaceEntry {
+                spec_id: e.spec_id.clone(),
+                next_action: to_json_action(&e.action),
+                spec_md_path: paths.spec_md_path.clone(),
+                tasks_md_path: paths.tasks_md_path.clone(),
+                mission_md_path: paths.mission_md_path.clone(),
+            })
+            .collect(),
+    }
+}
+
+fn to_json_action(action: &NextAction) -> JsonNextAction {
+    match action {
+        NextAction::Decompose => JsonNextAction {
+            kind: "decompose",
+            task_id: None,
+        },
+        NextAction::Review { task_id, .. } => JsonNextAction {
+            kind: "review",
+            task_id: Some(task_id.clone()),
+        },
+        NextAction::Implement { task_id } => JsonNextAction {
+            kind: "implement",
+            task_id: Some(task_id.clone()),
+        },
+        NextAction::Ship => JsonNextAction {
+            kind: "ship",
+            task_id: None,
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Text renderers
+// ---------------------------------------------------------------------------
+
+/// Render the per-spec text output.
+///
+/// Format: `SPEC-NNNN: <kind> [T-NNN]\n` or `SPEC-NNNN: completed\n`.
 #[must_use = "the rendered line goes to stdout"]
-pub fn render_text(result: &NextResult) -> String {
-    match result {
-        NextResult::Implement {
-            spec,
-            task,
-            task_line,
-            ..
-        } => {
-            format!("next: implement {task} ({spec}) -- {task_line}\n")
+pub fn render_text_per_spec(spec_id: &str, action: Option<&NextAction>) -> String {
+    match action {
+        None => format!("{spec_id}: completed\n"),
+        Some(NextAction::Decompose) => format!("{spec_id}: decompose\n"),
+        Some(NextAction::Review { task_id, .. }) => {
+            format!("{spec_id}: review {task_id}\n")
         }
-        NextResult::Review {
-            spec,
-            task,
-            personas,
-            ..
-        } => {
-            format!(
-                "next: review {task} ({spec}) -- personas: {personas}\n",
-                personas = personas.join(", "),
-            )
+        Some(NextAction::Implement { task_id }) => {
+            format!("{spec_id}: implement {task_id}\n")
         }
-        NextResult::Report { spec } => {
-            format!("next: report {spec} -- all tasks complete\n")
-        }
-        NextResult::Blocked { reason } => format!("next: blocked -- {reason}\n"),
+        Some(NextAction::Ship) => format!("{spec_id}: ship\n"),
     }
 }
 
-/// Build the JSON payload for `result`.
-#[must_use = "the JSON payload is the output of speccy next --json"]
-pub fn render_json(result: &NextResult) -> JsonOutput {
-    match result {
-        NextResult::Implement {
-            spec,
-            task,
-            task_line,
-            covers,
-            suggested_files,
-        } => JsonOutput::Implement(JsonImplement {
-            schema_version: 1,
-            spec: spec.clone(),
-            task: task.clone(),
-            task_line: task_line.clone(),
-            covers: covers.clone(),
-            suggested_files: suggested_files.clone(),
-            prompt_command: format!("speccy implement {spec}/{task}"),
-        }),
-        NextResult::Review {
-            spec,
-            task,
-            task_line,
-            personas,
-        } => JsonOutput::Review(JsonReview {
-            schema_version: 1,
-            spec: spec.clone(),
-            task: task.clone(),
-            task_line: task_line.clone(),
-            personas: personas.iter().map(|p| (*p).to_owned()).collect(),
-            prompt_command_template: format!("speccy review {spec}/{task} --persona {{persona}}"),
-        }),
-        NextResult::Report { spec } => JsonOutput::Report(JsonReport {
-            schema_version: 1,
-            spec: spec.clone(),
-            prompt_command: format!("speccy report {spec}"),
-        }),
-        NextResult::Blocked { reason } => JsonOutput::Blocked(JsonBlocked {
-            schema_version: 1,
-            reason: reason.clone(),
-        }),
+/// Render the workspace text output.
+///
+/// One line per active spec. Completed specs (where [`compute_workspace`]
+/// returns no entry) are already filtered out by the caller.
+/// The `paths` component is ignored for text rendering (paths are JSON-only).
+#[must_use = "the rendered lines go to stdout"]
+pub fn render_text_workspace(entries: &[(SpecNextEntry, SpecPaths)]) -> String {
+    let mut out = String::new();
+    for (e, _paths) in entries {
+        let line = render_text_per_spec(&e.spec_id, Some(&e.action));
+        out.push_str(&line);
     }
+    out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::render_text;
-    use speccy_core::next::NextResult;
+    use super::render_text_per_spec;
+    use super::render_text_workspace;
+    use speccy_core::next::NextAction;
+    use speccy_core::next::SpecNextEntry;
+    use speccy_core::next::default_personas;
 
     #[test]
-    fn text_implement_line_shape() {
-        let r = NextResult::Implement {
-            spec: "SPEC-0001".to_owned(),
-            task: "T-001".to_owned(),
-            task_line: "Implement signup".to_owned(),
-            covers: vec!["REQ-001".to_owned()],
-            suggested_files: vec![],
-        };
+    fn text_per_spec_decompose() {
         assert_eq!(
-            render_text(&r),
-            "next: implement T-001 (SPEC-0001) -- Implement signup\n",
+            render_text_per_spec("SPEC-0001", Some(&NextAction::Decompose)),
+            "SPEC-0001: decompose\n",
         );
     }
 
     #[test]
-    fn text_review_line_lists_personas_csv() {
-        let r = NextResult::Review {
-            spec: "SPEC-0002".to_owned(),
-            task: "T-004".to_owned(),
-            task_line: "Review me".to_owned(),
-            personas: &["business", "tests", "security", "style"],
+    fn text_per_spec_review() {
+        let action = NextAction::Review {
+            task_id: "T-002".to_owned(),
+            personas: default_personas(),
         };
         assert_eq!(
-            render_text(&r),
-            "next: review T-004 (SPEC-0002) -- personas: business, tests, security, style\n",
+            render_text_per_spec("SPEC-0001", Some(&action)),
+            "SPEC-0001: review T-002\n",
         );
     }
 
     #[test]
-    fn text_report_line_shape() {
-        let r = NextResult::Report {
-            spec: "SPEC-0003".to_owned(),
+    fn text_per_spec_implement() {
+        let action = NextAction::Implement {
+            task_id: "T-003".to_owned(),
         };
         assert_eq!(
-            render_text(&r),
-            "next: report SPEC-0003 -- all tasks complete\n"
+            render_text_per_spec("SPEC-0001", Some(&action)),
+            "SPEC-0001: implement T-003\n",
         );
     }
 
     #[test]
-    fn text_blocked_line_shape() {
-        let r = NextResult::Blocked {
-            reason: "no specs in workspace".to_owned(),
+    fn text_per_spec_ship() {
+        assert_eq!(
+            render_text_per_spec("SPEC-0001", Some(&NextAction::Ship)),
+            "SPEC-0001: ship\n",
+        );
+    }
+
+    #[test]
+    fn text_per_spec_completed() {
+        assert_eq!(
+            render_text_per_spec("SPEC-0001", None),
+            "SPEC-0001: completed\n",
+        );
+    }
+
+    #[test]
+    fn text_workspace_one_line_per_active_spec() {
+        let stub_paths = super::SpecPaths {
+            spec_md_path: ".speccy/specs/0001-x/SPEC.md".to_owned(),
+            tasks_md_path: None,
+            mission_md_path: None,
         };
-        assert_eq!(render_text(&r), "next: blocked -- no specs in workspace\n");
+        let entries = vec![
+            (
+                SpecNextEntry {
+                    spec_id: "SPEC-0001".to_owned(),
+                    action: NextAction::Decompose,
+                },
+                stub_paths.clone(),
+            ),
+            (
+                SpecNextEntry {
+                    spec_id: "SPEC-0002".to_owned(),
+                    action: NextAction::Implement {
+                        task_id: "T-001".to_owned(),
+                    },
+                },
+                super::SpecPaths {
+                    spec_md_path: ".speccy/specs/0002-y/SPEC.md".to_owned(),
+                    tasks_md_path: None,
+                    mission_md_path: None,
+                },
+            ),
+        ];
+        let text = render_text_workspace(&entries);
+        let output_lines: Vec<&str> = text.lines().collect();
+        assert_eq!(output_lines.len(), 2);
+        let first = output_lines.first().copied().unwrap_or_default();
+        let second = output_lines.get(1).copied().unwrap_or_default();
+        assert!(first.contains("SPEC-0001"));
+        assert!(first.contains("decompose"));
+        assert!(second.contains("SPEC-0002"));
+        assert!(second.contains("implement"));
+        assert!(second.contains("T-001"));
     }
 }

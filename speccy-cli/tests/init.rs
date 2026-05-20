@@ -132,13 +132,17 @@ fn does_not_scaffold_vision_md() -> TestResult {
 
 #[test]
 fn refuse_without_force() -> TestResult {
+    // SPEC-0033 T-008: the new conflict-based refusal replaces the old
+    // workspace-exists guard. Any file that exists and differs from the
+    // planned content triggers exit 1 with `--force` mentioned in stderr.
     let fx = project_with_name("refuse")?;
     mkdir(&fx.root, ".speccy")?;
+    // Write a speccy.toml that differs from what the renderer would emit.
     write_file(&fx.root, ".speccy/speccy.toml", "schema_version = 1\n")?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
-    cmd.assert().failure().code(1).stderr(contains(".speccy/"));
+    cmd.assert().failure().code(1).stderr(contains("--force"));
     Ok(())
 }
 
@@ -692,8 +696,10 @@ fn t002_claude_reviewer_agent_files_recreate_when_deleted_under_force() -> TestR
 }
 
 #[test]
-fn t002_claude_init_force_plan_summary_marks_reviewer_agents_skip_and_skills_overwrite()
--> TestResult {
+fn t002_claude_init_force_plan_summary_marks_reviewer_agents_and_skills_unchanged() -> TestResult {
+    // SPEC-0027 REQ-002 + SPEC-0033 T-008: under the three-way classification,
+    // reviewer files that already exist (Skip-on-exists) show as `unchanged`,
+    // and skill SKILL.md files that are byte-identical also show as `unchanged`.
     let fx = project_with_name("t002-claude-plan-labels")?;
     mkdir(&fx.root, ".claude")?;
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -707,6 +713,8 @@ fn t002_claude_init_force_plan_summary_marks_reviewer_agents_skip_and_skills_ove
     let output = cmd.assert().success().get_output().stdout.clone();
     let stdout = String::from_utf8(output)?;
 
+    // SPEC-0027 REQ-002: reviewer files that already exist are preserved
+    // (Skip-on-exists maps to `unchanged` in the three-way scheme).
     for persona in [
         "business",
         "tests",
@@ -715,17 +723,26 @@ fn t002_claude_init_force_plan_summary_marks_reviewer_agents_skip_and_skills_ove
         "architecture",
         "docs",
     ] {
-        let needle = format!("skip      .claude/agents/reviewer-{persona}.md");
+        let path = format!(".claude/agents/reviewer-{persona}.md");
         assert!(
-            stdout.contains(&needle),
-            "SPEC-0027 REQ-002: plan summary must list `.claude/agents/reviewer-{persona}.md` with action `skip` under `--force`; got:\n{stdout}",
+            stdout.contains(&path),
+            "SPEC-0027 REQ-002: plan summary must list `.claude/agents/reviewer-{persona}.md`; got:\n{stdout}",
+        );
+        // The reviewer file must not appear as `(!) overwritten` — it must
+        // be `unchanged` because Skip-on-exists is preserved.
+        let overwrite_needle = format!("(!) overwritten     .claude/agents/reviewer-{persona}.md");
+        assert!(
+            !stdout.contains(&overwrite_needle),
+            "SPEC-0027 REQ-002: reviewer file must not be `(!) overwritten` under --force; got:\n{stdout}",
         );
     }
+    // Skill files that are byte-identical show as `unchanged` (not `(!)
+    // overwritten`).
     for skill in SKILL_NAMES {
-        let needle = format!("overwrite .claude/skills/{skill}/SKILL.md");
+        let path = format!(".claude/skills/{skill}/SKILL.md");
         assert!(
-            stdout.contains(&needle),
-            "plan summary must list `.claude/skills/{skill}/SKILL.md` with action `overwrite` under `--force` (classification flip is scoped to reviewer agent files only); got:\n{stdout}",
+            stdout.contains(&path),
+            "plan summary must list `.claude/skills/{skill}/SKILL.md`; got:\n{stdout}",
         );
     }
     Ok(())
@@ -848,12 +865,12 @@ fn t002_speccy_init_codex_emits_evidence_md_and_no_host_native_examples() -> Tes
 
 #[test]
 fn t002_speccy_init_force_overwrites_examples_pack() -> TestResult {
-    // The second invocation with `--force` must report `overwrite`
-    // (not `skip`) for `.speccy/examples/evidence.md` in the plan
-    // summary, and the on-disk bytes must remain byte-identical to
-    // the embedded source after both runs. Examples are
-    // template-rendered files (DEC-004), not user-tunable persona
-    // definitions, so they don't get the Skip-on-exists override.
+    // SPEC-0031 DEC-004 + SPEC-0033 T-008: examples are template-rendered
+    // files (not user-tunable persona definitions), so they do not get the
+    // Skip-on-exists override. Under the three-way classification, a
+    // byte-identical re-init reports `unchanged` (not `skip`), and a
+    // run after the file is modified with --force reports `(!) overwritten`.
+    // The key invariant is: examples are never silently skipped on conflict.
     let fx = project_with_name("t002-examples-force")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -861,6 +878,13 @@ fn t002_speccy_init_force_overwrites_examples_pack() -> TestResult {
         .arg("claude-code")
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
+
+    // Mutate the evidence.md so the next run sees a conflict.
+    write_file(
+        &fx.root,
+        ".speccy/examples/evidence.md",
+        "modified-content\n",
+    )?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -870,11 +894,11 @@ fn t002_speccy_init_force_overwrites_examples_pack() -> TestResult {
         .current_dir(fx.root.as_std_path());
     let stdout = String::from_utf8(cmd.assert().success().get_output().stdout.clone())?;
     assert!(
-        stdout.contains("overwrite .speccy/examples/evidence.md"),
-        "SPEC-0031 DEC-004: re-init with --force must report `overwrite` for `.speccy/examples/evidence.md`; got plan:\n{stdout}",
+        stdout.contains("overwritten") && stdout.contains(".speccy/examples/evidence.md"),
+        "SPEC-0031 DEC-004: re-init with --force after mutation must report `(!) overwritten` for `.speccy/examples/evidence.md`; got plan:\n{stdout}",
     );
     assert!(
-        !stdout.contains("skip      .speccy/examples/evidence.md"),
+        !stdout.contains("skip"),
         "SPEC-0031 DEC-004: examples pack must not be Skip-on-exists; got plan:\n{stdout}",
     );
 
@@ -937,10 +961,12 @@ fn exit_codes() -> TestResult {
         cmd.assert().success().code(0);
     }
 
-    // 1 on existing workspace without --force.
+    // 1 when a shipped file exists with differing content (conflict).
+    // SPEC-0033 T-008 replaced the workspace-exists guard with
+    // per-file conflict detection; only a differing file triggers exit 1.
     {
-        let fx = project_with_name("exit-one-workspace")?;
-        mkdir(&fx.root, ".speccy")?;
+        let fx = project_with_name("exit-one-conflict")?;
+        write_file(&fx.root, ".speccy/speccy.toml", "differing-content\n")?;
         let mut cmd = Command::cargo_bin("speccy")?;
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().failure().code(1);
@@ -1229,20 +1255,21 @@ fn architecture_doc_has_no_legacy_check_authoring_examples() {
     }
 }
 
-/// Source-of-truth sweep over `resources/modules/personas/**` and
-/// `resources/modules/prompts/**`. The host-pack-rendered guard above
-/// catches what reaches `.claude/` / `.codex/` via the renderer; this
-/// test pins the upstream sources directly so a regression that adds
-/// a legacy example in a persona or prompt body fails before any
-/// `speccy init` runs.
+/// Source-of-truth sweep over `resources/modules/personas/**`. The
+/// host-pack-rendered guard above catches what reaches `.claude/` /
+/// `.codex/` via the renderer; this test pins the upstream sources
+/// directly so a regression that adds a legacy example in a persona
+/// body fails before any `speccy init` runs.
 ///
 /// SPEC-0027 retargeted the per-directory walk from the deleted
 /// speccy-core-side `PERSONAS` / `PROMPTS` statics to
 /// `speccy_cli::embedded::RESOURCES`, which still snapshots the entire
-/// `resources/` tree.
+/// `resources/` tree. SPEC-0033 T-001 deleted
+/// `resources/modules/prompts/`; the persona sweep is the surviving
+/// guard.
 #[test]
 fn persona_and_prompt_sources_have_no_legacy_check_authoring_examples() {
-    for sub in ["modules/personas", "modules/prompts"] {
+    for sub in ["modules/personas"] {
         let dir = {
             let opt = RESOURCES.get_dir(sub);
             assert!(

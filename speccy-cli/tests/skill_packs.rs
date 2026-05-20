@@ -8,22 +8,22 @@
 //!
 //! - CHK-001: [`persona_files_present`]
 //! - CHK-002: [`persona_names_match_registry`]
-//! - CHK-003: [`prompt_templates_present`]
-//! - CHK-004: [`prompt_placeholders_match_commands`]
 //! - CHK-005: [`claude_code_recipes`]
 //! - CHK-006: [`codex_recipes`]
 //! - CHK-007: [`persona_content_shape`]
 //! - CHK-008: [`recipe_content_shape`]
 //!
+//! SPEC-0033 T-001 retired the CLI prompt-rendering surface; the prior
+//! SPEC-0013 CHK-003 / CHK-004 (prompt-template presence / placeholder
+//! shape) and the SPEC-0014 CHK-001 / CHK-002 / CHK-003 / CHK-006
+//! (implementer + report prompt body shape) no longer have a body to
+//! test and were dropped here.
+//!
 //! SPEC-0014 checks
 //! (`.speccy/specs/0014-handoff-and-friction-conventions/spec.toml`):
 //!
-//! - CHK-001: [`implementer_prompt_handoff_template`]
-//! - CHK-002: [`implementer_prompt_handoff_referenced_in_task_steps`]
-//! - CHK-003: [`implementer_prompt_friction_section`]
 //! - CHK-004: [`implementer_persona_friction_reference`]
 //! - CHK-005: [`agents_md_friction_paragraph`]
-//! - CHK-006: [`report_prompt_skill_updates_section`]
 //!
 //! SPEC-0015 checks
 //! (`.speccy/specs/0015-host-skill-layout/spec.toml`):
@@ -104,19 +104,6 @@ fn read_persona(name: &str) -> &'static str {
         .expect("RESOURCES bundle entries should be valid UTF-8")
 }
 
-/// Read a prompt template body out of the embedded `RESOURCES` bundle
-/// by leaf file name (e.g. `"plan-greenfield.md"`). Same rationale as
-/// [`read_persona`].
-fn read_prompt(name: &str) -> &'static str {
-    let path = format!("modules/prompts/{name}");
-    let entry = RESOURCES.get_file(&path).unwrap_or_else(|| {
-        panic_with_test_message(&format!("RESOURCES bundle should contain `{path}`"))
-    });
-    entry
-        .contents_utf8()
-        .expect("RESOURCES bundle entries should be valid UTF-8")
-}
-
 /// Test-only failure path. Centralised so the `clippy::panic` expectation
 /// is scoped to one function instead of every helper.
 #[expect(
@@ -156,21 +143,6 @@ const PERSONA_FILES: &[&str] = &[
     "reviewer-docs.md",
 ];
 
-const PROMPT_FILES: &[&str] = &[
-    "plan-greenfield.md",
-    "plan-amend.md",
-    "tasks-generate.md",
-    "tasks-amend.md",
-    "implementer.md",
-    "reviewer-business.md",
-    "reviewer-tests.md",
-    "reviewer-security.md",
-    "reviewer-style.md",
-    "reviewer-architecture.md",
-    "reviewer-docs.md",
-    "report.md",
-];
-
 // After SPEC-0023 REQ-001 / REQ-002, `speccy-work` and `speccy-review`
 // are single-task primitives — one invocation, one task, exit — and
 // no longer declare loop exit criteria. `speccy-amend` is the only
@@ -204,17 +176,19 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 /// explicitly excludes it from the stub transformation).
 const PINNED_STUB_PHASES: &[&str] = &["speccy-tasks", "speccy-work", "speccy-ship"];
 
+// The current seven-verb CLI surface (SPEC-0033 T-001 deleted `plan`,
+// `tasks`, `implement`, `review`, `report`; T-002 added `lock`; T-003
+// added `vacancy`). This list is used as a substring matcher inside
+// SKILL.md code fences to determine whether a rendered skill carries a
+// speccy command. T-007 tightened the list from the pre-eject set.
 const SPECCY_COMMANDS: &[&str] = &[
     "speccy init",
-    "speccy plan",
-    "speccy tasks",
-    "speccy implement",
-    "speccy review",
-    "speccy report",
     "speccy status",
     "speccy next",
     "speccy check",
     "speccy verify",
+    "speccy lock",
+    "speccy vacancy",
 ];
 
 // --------------------------------------------------------------------
@@ -251,172 +225,6 @@ fn persona_names_match_registry() {
         assert!(
             RESOURCES.get_file(&path).is_some(),
             "`{required}` must ship under `resources/modules/personas/` alongside the reviewer personas",
-        );
-    }
-}
-
-// --------------------------------------------------------------------
-// CHK-003
-// --------------------------------------------------------------------
-
-#[test]
-fn prompt_templates_present() {
-    for name in PROMPT_FILES {
-        let body = read_prompt(name);
-        assert!(
-            !body.trim().is_empty(),
-            "prompt template `{name}` must be non-empty",
-        );
-    }
-}
-
-// --------------------------------------------------------------------
-// CHK-004
-// --------------------------------------------------------------------
-
-fn assert_placeholders(template: &str, expected: &[&str], file_name: &str) {
-    for placeholder in expected {
-        let needle = format!("{{{{{placeholder}}}}}");
-        assert!(
-            template.contains(&needle),
-            "template `{file_name}` must contain placeholder `{needle}`",
-        );
-        for ch in placeholder.chars() {
-            assert!(
-                ch.is_ascii_alphanumeric() || ch == '_',
-                "placeholder `{placeholder}` in `{file_name}` is not a valid identifier",
-            );
-        }
-    }
-}
-
-#[test]
-fn prompt_placeholders_match_commands() {
-    let plan_greenfield = read_prompt("plan-greenfield.md");
-    assert_placeholders(plan_greenfield, &["next_spec_id"], "plan-greenfield.md");
-    // Negative: the retired `{{vision}}` placeholder must not appear
-    // anywhere in plan-greenfield.md (Vision was swapped for Mission
-    // and the product north star now lives in AGENTS.md).
-    assert!(
-        !plan_greenfield.contains("{{vision}}"),
-        "plan-greenfield.md must not contain the retired `{{{{vision}}}}` placeholder",
-    );
-
-    let plan_amend = read_prompt("plan-amend.md");
-    assert_placeholders(
-        plan_amend,
-        &["spec_id", "spec_md_path", "mission_section"],
-        "plan-amend.md",
-    );
-
-    let tasks_generate = read_prompt("tasks-generate.md");
-    assert_placeholders(
-        tasks_generate,
-        &["spec_id", "spec_md_path"],
-        "tasks-generate.md",
-    );
-
-    let tasks_amend = read_prompt("tasks-amend.md");
-    assert_placeholders(
-        tasks_amend,
-        &["spec_id", "spec_md_path", "tasks_md_path"],
-        "tasks-amend.md",
-    );
-
-    let implementer = read_prompt("implementer.md");
-    assert_placeholders(
-        implementer,
-        &[
-            "spec_id",
-            "spec_md_path",
-            "task_id",
-            "task_entry",
-            "suggested_files",
-        ],
-        "implementer.md",
-    );
-
-    // SPEC-0027: `{{persona_content}}` is retired. The host loads the
-    // sub-agent's `.claude/agents/reviewer-<persona>.md` (or Codex
-    // equivalent) as its system context; the rendered prompt no longer
-    // carries a redundant copy of the persona body.
-    let reviewer_required = &[
-        "spec_id",
-        "spec_md_path",
-        "task_id",
-        "task_entry",
-        "persona",
-    ];
-    for persona in personas::ALL {
-        let file = format!("reviewer-{persona}.md");
-        let body = read_prompt(&file);
-        assert_placeholders(body, reviewer_required, &file);
-        // SPEC-0023 REQ-003: the rendered prompt no longer inlines the
-        // branch diff; the template instructs the reviewer agent to run
-        // `git diff` itself instead.
-        assert!(
-            !body.contains("{{diff}}"),
-            "reviewer template `{file}` must not contain the retired `{{{{diff}}}}` placeholder",
-        );
-        assert!(
-            body.contains("git diff"),
-            "reviewer template `{file}` must instruct the agent to run `git diff`",
-        );
-        // SPEC-0027 REQ-003: the rendered prompt no longer carries the
-        // persona body. The host loads `.claude/agents/reviewer-*.md`
-        // (or the Codex equivalent) as the sub-agent's system context;
-        // re-inlining via `{{persona_content}}` would be a redundant
-        // shadow copy.
-        assert!(
-            !body.contains("{{persona_content}}"),
-            "reviewer template `{file}` must not contain the retired `{{{{persona_content}}}}` placeholder (SPEC-0027 REQ-003)",
-        );
-        assert!(
-            !body.contains("## Persona"),
-            "reviewer template `{file}` must not contain the retired `## Persona` section header (SPEC-0027 REQ-003)",
-        );
-    }
-
-    let report = read_prompt("report.md");
-    assert_placeholders(
-        report,
-        &["spec_id", "spec_md_path", "tasks_md_path", "retry_summary"],
-        "report.md",
-    );
-
-    // SPEC-0023 REQ-005: the `{{agents}}` placeholder is retired
-    // workspace-wide. Modern AI coding harnesses auto-load `AGENTS.md`
-    // themselves; the CLI no longer inlines it. Assert across every
-    // prompt template.
-    for name in PROMPT_FILES {
-        let body = read_prompt(name);
-        assert!(
-            !body.contains("{{agents}}"),
-            "template `{name}` must not contain the retired `{{{{agents}}}}` placeholder (SPEC-0023 REQ-005)",
-        );
-    }
-
-    // SPEC-0023 REQ-006: the `{{spec_md}}`, `{{tasks_md}}`, and
-    // `{{mission}}` interpolations are retired workspace-wide. Rendered
-    // prompts now name the file's repo-relative path and the agent
-    // reads it via the host's Read primitive on demand.
-    for name in PROMPT_FILES {
-        let body = read_prompt(name);
-        for retired in ["{{spec_md}}", "{{tasks_md}}", "{{mission}}"] {
-            assert!(
-                !body.contains(retired),
-                "template `{name}` must not contain the retired `{retired}` placeholder (SPEC-0023 REQ-006)",
-            );
-        }
-    }
-
-    // Negative: an obvious typo must not appear in any template.
-    let typo = "{{spec_idd}}";
-    for name in PROMPT_FILES {
-        let body = read_prompt(name);
-        assert!(
-            !body.contains(typo),
-            "template `{name}` must not contain placeholder typo `{typo}`",
         );
     }
 }
@@ -603,54 +411,11 @@ fn recipe_content_shape() {
 // SPEC-0014 helpers and fixtures
 // --------------------------------------------------------------------
 
-/// Six handoff-note field labels per SPEC-0031 REQ-001 (which retired
-/// the SPEC-0014 `Commands run` / `Exit codes` parallel-list pair in
-/// favour of a single `Hygiene checks` table and added an `Evidence`
-/// field). Order matters for readability only; presence is what the
-/// check enforces.
-const HANDOFF_LABELS: [&str; 6] = [
-    "Completed",
-    "Undone",
-    "Hygiene checks",
-    "Evidence",
-    "Discovered issues",
-    "Procedural compliance",
-];
-
 /// Stable phrase the friction-to-skill-update pattern reuses across
-/// the implementer prompt, the implementer persona, and AGENTS.md.
-/// Changing it is a coordinated edit across all three files.
+/// the implementer persona and AGENTS.md. Changing it is a
+/// coordinated edit across both files. SPEC-0033 T-001 retired the
+/// implementer prompt; the persona is the surviving anchor.
 const FRICTION_PHRASE: &str = "update the relevant skill file under `skills/`";
-
-/// Pulls fenced code blocks out of a markdown body. When `lang_filter`
-/// is `Some`, only blocks opened with that language tag are returned;
-/// `None` returns every fenced block. Bodies are concatenated lines
-/// (newline-terminated) so substring checks behave naturally.
-fn fenced_blocks(body: &str, lang_filter: Option<&str>) -> Vec<String> {
-    let mut blocks: Vec<String> = Vec::new();
-    let mut current: Option<String> = None;
-    let mut current_matches = false;
-    for line in body.lines() {
-        if let Some(rest) = line.trim_start().strip_prefix("```") {
-            if let Some(open) = current.take() {
-                if current_matches {
-                    blocks.push(open);
-                }
-                current_matches = false;
-            } else {
-                let lang = rest.trim();
-                current_matches = lang_filter.is_none_or(|want| lang == want);
-                current = Some(String::new());
-            }
-            continue;
-        }
-        if let Some(buf) = current.as_mut() {
-            buf.push_str(line);
-            buf.push('\n');
-        }
-    }
-    blocks
-}
 
 /// Returns the slice of `body` belonging to the H2 section opened by
 /// `heading` (exclusive of the heading line itself), terminated by
@@ -660,93 +425,6 @@ fn section_body<'a>(body: &'a str, heading: &str) -> Option<&'a str> {
     let after_heading = body.get(start.checked_add(heading.len())?..)?;
     let end = after_heading.find("\n## ").unwrap_or(after_heading.len());
     after_heading.get(..end)
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-001
-// --------------------------------------------------------------------
-
-#[test]
-fn implementer_prompt_handoff_template() {
-    let body = read_prompt("implementer.md");
-    let blocks = fenced_blocks(body, Some("markdown"));
-    assert!(
-        !blocks.is_empty(),
-        "implementer prompt must contain at least one ```markdown fenced block",
-    );
-
-    let found = blocks
-        .iter()
-        .any(|b| HANDOFF_LABELS.iter().all(|label| b.contains(label)));
-    assert!(
-        found,
-        "implementer prompt must contain a ```markdown fenced block with all six handoff labels verbatim: {HANDOFF_LABELS:?}",
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-002
-// --------------------------------------------------------------------
-
-#[test]
-fn implementer_prompt_handoff_referenced_in_task_steps() {
-    let body = read_prompt("implementer.md");
-    let task_section = section_body(body, "## Your task")
-        .expect("implementer prompt must contain a `## Your task` section");
-
-    assert!(
-        task_section.contains("handoff template"),
-        "`## Your task` must reference the handoff template by name",
-    );
-    assert!(
-        task_section.contains("(none)"),
-        "`## Your task` must instruct writing `(none)` for empty fields",
-    );
-
-    // The old freeform sentence must be gone everywhere in the prompt.
-    let old_phrase =
-        "summarizing what you did, including any out-of-scope edits made for the test to compile";
-    assert!(
-        !body.contains(old_phrase),
-        "the pre-edit freeform implementer-note instruction must be removed from the prompt",
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-003
-// --------------------------------------------------------------------
-
-#[test]
-fn implementer_prompt_friction_section() {
-    let body = read_prompt("implementer.md");
-    let heading = "## When you hit friction";
-    let section = section_body(body, heading).unwrap_or_else(|| {
-        panic_with_test_message(&format!(
-            "implementer prompt must contain the `{heading}` heading"
-        ))
-    });
-
-    let blocks = fenced_blocks(section, None);
-    assert!(
-        blocks.iter().any(|b| b.contains("skills/")),
-        "`{heading}` section must contain at least one fenced block referencing a `skills/` path",
-    );
-
-    // Ordering invariant: friction section sits between Suggested files
-    // and Your task so the implementer reads it before producing work.
-    let suggested = body
-        .find("## Suggested files")
-        .expect("implementer prompt must contain `## Suggested files`");
-    let friction = body
-        .find(heading)
-        .expect("implementer prompt must contain the friction heading");
-    let your_task = body
-        .find("## Your task")
-        .expect("implementer prompt must contain `## Your task`");
-    assert!(
-        suggested < friction && friction < your_task,
-        "`{heading}` must sit between `## Suggested files` and `## Your task`",
-    );
 }
 
 // --------------------------------------------------------------------
@@ -794,39 +472,6 @@ fn agents_md_friction_paragraph() {
     assert!(
         section.contains("Procedural compliance"),
         "AGENTS.md conventions section must reference the `Procedural compliance` handoff field",
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-006
-// --------------------------------------------------------------------
-
-#[test]
-fn report_prompt_skill_updates_section() {
-    let body = read_prompt("report.md");
-
-    let out_of_scope = body
-        .find("## Out-of-scope items absorbed")
-        .expect("report prompt must contain `## Out-of-scope items absorbed`");
-    let skill_updates = body
-        .find("## Skill updates")
-        .expect("report prompt must contain `## Skill updates`");
-    let deferred = body
-        .find("## Deferred / known limitations")
-        .expect("report prompt must contain `## Deferred / known limitations`");
-
-    assert!(
-        out_of_scope < skill_updates,
-        "`## Skill updates` must appear after `## Out-of-scope items absorbed`",
-    );
-    assert!(
-        skill_updates < deferred,
-        "`## Skill updates` must appear before `## Deferred / known limitations`",
-    );
-
-    assert!(
-        body.contains("git diff --name-only -- skills/"),
-        "report prompt must reference `git diff --name-only -- skills/` as the derivation path for the skill-updates list",
     );
 }
 
@@ -1002,10 +647,12 @@ fn t002_workspace_has_no_skills_shared_personas_or_prompts() {
 }
 
 #[test]
-fn t002_resources_modules_personas_and_prompts_are_non_empty() {
+fn t002_resources_modules_personas_is_non_empty() {
+    // SPEC-0033 T-001 deleted `resources/modules/prompts/`; the
+    // surviving SPEC-0016 T-002 surface contract is the personas
+    // directory.
     let root = workspace_root();
     let personas_dir = root.join("resources").join("modules").join("personas");
-    let prompts_dir = root.join("resources").join("modules").join("prompts");
     let persona_count = fs_err::read_dir(&personas_dir)
         .map(|it| {
             it.filter_map(Result::ok)
@@ -1017,24 +664,9 @@ fn t002_resources_modules_personas_and_prompts_are_non_empty() {
                 .count()
         })
         .expect("resources/modules/personas/ must exist after T-002");
-    let prompt_count = fs_err::read_dir(&prompts_dir)
-        .map(|it| {
-            it.filter_map(Result::ok)
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
-                })
-                .count()
-        })
-        .expect("resources/modules/prompts/ must exist after T-002");
     assert!(
         persona_count >= 1,
         "resources/modules/personas/ must contain at least one .md file; got {persona_count}",
-    );
-    assert!(
-        prompt_count >= 1,
-        "resources/modules/prompts/ must contain at least one .md file; got {prompt_count}",
     );
 }
 
@@ -1133,16 +765,11 @@ fn speccy_review_skill_prefers_native_subagents() {
         );
     }
 
-    // Both rendered outputs must carry the bash command form
-    // `speccy review <SPEC-NNNN/T-NNN> --persona <persona>` as the
-    // payload the spawned sub-agent runs. SPEC-0023 REQ-002 retired the
-    // per-persona "explicit fallback example" requirement — the spawn
-    // prompt now uses placeholders that the orchestrator fills in
-    // when invoking the sub-agent — but `speccy review` and
-    // `--persona` must still appear so the CLI path is one search
-    // away. Persona-by-name presence is enforced above via
-    // `subagent_type:` (Claude) and `reviewer-<persona>` prose
-    // (Codex).
+    // Both rendered outputs must carry a spawn-prompt that references
+    // the task selector (`SPEC-NNNN/T-NNN`) so the sub-agent knows
+    // which task to review. `speccy review` was deleted in SPEC-0033
+    // T-001; the spawn prompt now asks the sub-agent to review the
+    // task directly without invoking a CLI command.
     for (label, body) in [
         (
             "claude-code .claude/skills/speccy-review/SKILL.md",
@@ -1151,12 +778,14 @@ fn speccy_review_skill_prefers_native_subagents() {
         ("codex .agents/skills/speccy-review/SKILL.md", codex_body),
     ] {
         assert!(
-            body.contains("speccy review"),
-            "rendered `{label}` must contain the literal `speccy review` CLI command; got:\n{body}",
+            body.contains("SPEC-NNNN/T-NNN"),
+            "rendered `{label}` must contain the `SPEC-NNNN/T-NNN` task selector \
+             placeholder in the spawn prompt; got:\n{body}",
         );
         assert!(
-            body.contains("--persona "),
-            "rendered `{label}` must show a `--persona <persona>` example in the spawn prompt; got:\n{body}",
+            body.contains("<review persona="),
+            "rendered `{label}` must reference the `<review persona=` element in \
+             the spawn prompt so subagents know the expected output format; got:\n{body}",
         );
     }
 }
@@ -2258,28 +1887,12 @@ fn reviewer_tests_persona_loads_evidence() {
 }
 
 #[test]
-fn reviewer_tests_prompt_loads_evidence() {
-    let body = read_prompt("reviewer-tests.md");
-
-    // The rendered prompt must walk the reviewer through extracting
-    // the `Evidence:` path and reading the file via the host Read
-    // primitive. SPEC-0031 REQ-005 done-when item 4.
-    assert!(
-        body.contains("Evidence:"),
-        "`prompts/reviewer-tests.md` must name the `Evidence:` field the reviewer extracts from `<implementer-note>` bodies (SPEC-0031 REQ-005 done-when item 4)",
-    );
-    assert!(
-        body.contains("Read primitive"),
-        "`prompts/reviewer-tests.md` must instruct the reviewer to read the evidence file via the host Read primitive (SPEC-0031 REQ-005 done-when item 4)",
-    );
-}
-
-#[test]
 fn non_tests_reviewer_files_carry_no_evidence_instruction() {
-    // The asymmetry is the design: only the `tests` persona /
-    // prompt names evidence loading. The other five must continue
-    // to anchor on diff + SPEC + `<task-scenarios>` alone.
-    // SPEC-0031 REQ-005 done-when items 5 and 6.
+    // The asymmetry is the design: only the `tests` persona names
+    // evidence loading. The other five must continue to anchor on
+    // diff + SPEC + `<task-scenarios>` alone. SPEC-0031 REQ-005
+    // done-when items 5 and 6, scoped to the surviving persona
+    // surface after SPEC-0033 T-001 retired the rendered prompts.
     for persona in NON_TESTS_REVIEWER_PERSONAS {
         let file = format!("reviewer-{persona}.md");
         let body = read_persona(&file);
@@ -2290,16 +1903,6 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
         assert!(
             !body.contains("evidence file"),
             "`personas/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
-        );
-
-        let prompt_body = read_prompt(&file);
-        assert!(
-            !prompt_body.contains("Evidence:"),
-            "`prompts/{file}` must not mention `Evidence:` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona's rendered prompt",
-        );
-        assert!(
-            !prompt_body.contains("evidence file"),
-            "`prompts/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona's rendered prompt",
         );
     }
 }

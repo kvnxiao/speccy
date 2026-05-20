@@ -383,6 +383,31 @@ fn enumerate_focus_folder(focus_dir: &Utf8Path, pattern: &Regex, out: &mut Vec<U
     }
 }
 
+/// Resolve the `MISSION.md` path for a spec directory, if the spec lives
+/// inside a mission (focus) folder.
+///
+/// A spec is considered mission-grouped when its parent directory is not
+/// the `specs/` directory itself but one level above it (the focus folder).
+/// The test is structural: if the parent folder's name does not match the
+/// `^\d{4}-[a-z0-9-]+$` spec-directory pattern, it is treated as a focus
+/// folder and we look for `MISSION.md` inside it.
+///
+/// Returns `Some(path)` when `<parent>/MISSION.md` exists as a regular
+/// file, or `None` when the spec is flat or the file is absent.
+fn resolve_mission_md_path(dir: &Utf8Path) -> Option<Utf8PathBuf> {
+    let parent = dir.parent()?;
+    let parent_name = parent.file_name()?;
+    // If the parent name matches the spec-dir pattern it is the `specs/`
+    // directory itself (or another spec dir — shouldn't happen), not a
+    // focus folder.
+    if dir_name_regex().is_match(parent_name) {
+        return None;
+    }
+    let mission_path = parent.join("MISSION.md");
+    let is_file = fs_err::metadata(mission_path.as_std_path()).is_ok_and(|m| m.is_file());
+    is_file.then_some(mission_path)
+}
+
 fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     let spec_md_path = dir.join("SPEC.md");
     let spec_toml_path = dir.join("spec.toml");
@@ -422,11 +447,14 @@ fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
         .map(|s| s.frontmatter.id.clone())
         .or_else(|| derive_spec_id_from_dir(dir));
 
+    let mission_md_path = resolve_mission_md_path(dir);
+
     ParsedSpec {
         spec_id,
         dir: dir.to_path_buf(),
         spec_md_path,
         tasks_md_path: has_tasks.then_some(tasks_md_path),
+        mission_md_path,
         spec_md: spec_md_result,
         spec_doc: spec_doc_result,
         tasks_md: tasks_md_result,

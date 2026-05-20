@@ -12,10 +12,11 @@
 //! spec's own summary/decisions."
 //!
 //! Scope: this test scans every Markdown / TOML file under
-//! `resources/modules/prompts/`, `resources/modules/personas/`,
-//! `resources/modules/skills/`, the rendered host mirrors
-//! (`.claude/skills/`, `.agents/skills/`, `.codex/agents/`,
-//! `.speccy/skills/`), and `.speccy/ARCHITECTURE.md`. It fails loudly
+//! `resources/modules/personas/`, `resources/modules/skills/`, the
+//! rendered host mirrors (`.claude/skills/`, `.agents/skills/`,
+//! `.codex/agents/`, `.speccy/skills/`), and
+//! `.speccy/ARCHITECTURE.md`. (SPEC-0033 T-001 retired the
+//! `resources/modules/prompts/` tree.) It fails loudly
 //! if any of those files contains the literal substring `<!-- speccy:`
 //! outside the small allow-list below:
 //!
@@ -84,7 +85,6 @@ fn active_guidance_does_not_teach_legacy_html_comment_markers() {
     let mut files: Vec<Utf8PathBuf> = Vec::new();
     for rel in [
         "resources/modules/personas",
-        "resources/modules/prompts",
         "resources/modules/skills",
         ".claude/skills",
         ".agents/skills",

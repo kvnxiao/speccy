@@ -7,7 +7,11 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! JSON output contract tests for `speccy next --json`.
-//! Covers SPEC-0007 CHK-007 and CHK-008.
+//!
+//! Tests the new derived-kind JSON envelopes (SPEC-0033 REQ-004).
+//! Per-spec `--json` form is covered by `next_derived.rs`. This file
+//! covers additional workspace-form and per-spec-form JSON contract
+//! checks not duplicated there.
 
 mod common;
 
@@ -18,210 +22,198 @@ use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
-use speccy_core::next::KindFilter;
 
-fn tasks_md(spec_id: &str, body: &str) -> String {
-    let body = convert_legacy_to_xml(spec_id, body);
+fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
     format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n{body}",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n{tasks_xml}\n</tasks>\n",
     )
 }
 
-#[expect(
-    clippy::format_push_string,
-    reason = "narrow test-only legacy-to-XML transform; flattening hurts readability"
-)]
-fn convert_legacy_to_xml(spec_id: &str, body: &str) -> String {
-    let mut out = format!("<tasks spec=\"{spec_id}\">\n\n");
-    let mut current: Option<(String, String, String, Vec<String>)> = None;
-    let push = |out: &mut String, cur: (String, String, String, Vec<String>)| {
-        let (id, state, title, notes) = cur;
-        let covers = notes
-            .iter()
-            .find_map(|n| n.strip_prefix("Covers:").map(|c| c.trim().to_owned()))
-            .unwrap_or_else(|| "REQ-001".to_owned());
-        out.push_str(&format!(
-            "<task id=\"{id}\" state=\"{state}\" covers=\"{covers}\">\n{title}\n"
-        ));
-        for note in &notes {
-            out.push_str("- ");
-            out.push_str(note);
-            out.push('\n');
-        }
-        out.push_str("\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n");
-    };
-    for line in body.lines() {
-        let trimmed_start = line.trim_start();
-        if let Some(rest) = trimmed_start.strip_prefix("- [")
-            && let Some((glyph, after)) = rest.split_once("] ")
-            && let Some(after) = after.strip_prefix("**")
-            && let Some((id, title)) = after.split_once("**")
-        {
-            let title = title.trim_start_matches(':').trim().to_owned();
-            let state = match glyph {
-                "~" => "in-progress",
-                "?" => "in-review",
-                "x" => "completed",
-                _ => "pending",
-            }
-            .to_owned();
-            if let Some(cur) = current.take() {
-                push(&mut out, cur);
-            }
-            current = Some((id.to_owned(), state, title, Vec::new()));
-            continue;
-        }
-        if let Some(rest) = trimmed_start.strip_prefix("- ")
-            && let Some(ref mut cur) = current
-        {
-            cur.3.push(rest.to_owned());
-            continue;
-        }
-        if current.is_none() && !line.is_empty() {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    if let Some(cur) = current.take() {
-        push(&mut out, cur);
-    }
-    out.push_str("</tasks>\n");
-    out
+fn task_xml(id: &str, state: &str) -> String {
+    format!(
+        "<task id=\"{id}\" state=\"{state}\" covers=\"REQ-001\">\ndo the thing\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+    )
 }
 
-fn render(ws: &Workspace, kind: Option<KindFilter>) -> Result<String, Box<dyn std::error::Error>> {
+fn render_workspace(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
-    run(NextArgs { kind, json: true }, &ws.root, &mut buf)?;
+    run(
+        &NextArgs {
+            spec_id: None,
+            json: true,
+        },
+        &ws.root,
+        &mut buf,
+    )?;
     Ok(String::from_utf8(buf)?)
 }
 
-// -- CHK-007 ----------------------------------------------------------------
+fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut buf: Vec<u8> = Vec::new();
+    run(
+        &NextArgs {
+            spec_id: Some(spec_id.to_owned()),
+            json: true,
+        },
+        &ws.root,
+        &mut buf,
+    )?;
+    Ok(String::from_utf8(buf)?)
+}
+
+// -- CHK-007: per-spec JSON envelope shape -----------------------------------
 
 #[test]
-fn envelope_and_variants() -> TestResult {
-    // implement
+fn per_spec_json_envelope_shape_review() -> TestResult {
     let ws = Workspace::new()?;
-    let body = "- [ ] **T-001**: implement signup\n  - Covers: REQ-001\n  - Suggested files: `src/auth.rs`\n";
+    let tasks_xml = format!(
+        "{}{}",
+        task_xml("T-001", "completed"),
+        task_xml("T-002", "in-review"),
+    );
     write_spec(
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
         &valid_spec_toml(),
-        Some(&tasks_md("SPEC-0001", body)),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
-    let text = render(&ws, None)?;
+    let text = render_per_spec(&ws, "SPEC-0001")?;
     let parsed: serde_json::Value = serde_json::from_str(&text)?;
-    assert_eq!(parsed.get("kind"), Some(&serde_json::json!("implement")));
-    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(1)));
-    assert_eq!(parsed.get("spec"), Some(&serde_json::json!("SPEC-0001")));
-    assert_eq!(parsed.get("task"), Some(&serde_json::json!("T-001")));
     assert_eq!(
-        parsed.get("task_line"),
-        Some(&serde_json::json!("implement signup")),
-    );
-    assert_eq!(parsed.get("covers"), Some(&serde_json::json!(["REQ-001"])),);
-    assert_eq!(
-        parsed.get("suggested_files"),
-        Some(&serde_json::json!(["src/auth.rs"])),
+        parsed.get("schema_version"),
+        Some(&serde_json::json!(2)),
+        "schema_version must be 2: {parsed}",
     );
     assert_eq!(
-        parsed.get("prompt_command"),
-        Some(&serde_json::json!("speccy implement SPEC-0001/T-001")),
+        parsed.get("spec_id"),
+        Some(&serde_json::json!("SPEC-0001")),
+        "spec_id must be SPEC-0001: {parsed}",
     );
-
-    // review
-    let ws2 = Workspace::new()?;
-    let review_body = "- [?] **T-002**: review me\n  - Covers: REQ-001\n";
-    write_spec(
-        &ws2.root,
-        "0001-foo",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
-        Some(&tasks_md("SPEC-0001", review_body)),
-    )?;
-    let text2 = render(&ws2, None)?;
-    let parsed2: serde_json::Value = serde_json::from_str(&text2)?;
-    assert_eq!(parsed2.get("kind"), Some(&serde_json::json!("review")));
-    assert_eq!(parsed2.get("schema_version"), Some(&serde_json::json!(1)));
-    assert_eq!(parsed2.get("spec"), Some(&serde_json::json!("SPEC-0001")));
-    assert_eq!(parsed2.get("task"), Some(&serde_json::json!("T-002")));
+    let next_action = parsed
+        .get("next_action")
+        .expect("next_action must be present");
     assert_eq!(
-        parsed2.get("personas"),
-        Some(&serde_json::json!([
-            "business", "tests", "security", "style"
-        ])),
+        next_action.get("kind"),
+        Some(&serde_json::json!("review")),
+        "kind must be review: {parsed}",
     );
     assert_eq!(
-        parsed2.get("prompt_command_template"),
-        Some(&serde_json::json!(
-            "speccy review SPEC-0001/T-002 --persona {persona}"
-        )),
+        next_action.get("task_id"),
+        Some(&serde_json::json!("T-002")),
+        "task_id must be T-002: {parsed}",
     );
-
-    // report
-    let ws3 = Workspace::new()?;
-    let done_body = "- [x] **T-001**: done\n  - Covers: REQ-001\n";
-    write_spec(
-        &ws3.root,
-        "0001-foo",
-        &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
-        Some(&tasks_md("SPEC-0001", done_body)),
-    )?;
-    let text3 = render(&ws3, None)?;
-    let parsed3: serde_json::Value = serde_json::from_str(&text3)?;
-    assert_eq!(parsed3.get("kind"), Some(&serde_json::json!("report")));
-    assert_eq!(parsed3.get("spec"), Some(&serde_json::json!("SPEC-0001")));
-    assert_eq!(
-        parsed3.get("prompt_command"),
-        Some(&serde_json::json!("speccy report SPEC-0001")),
+    // No reason field on a non-null next_action.
+    assert!(
+        parsed.get("reason").is_none(),
+        "reason must be absent when next_action is present: {parsed}",
     );
-
-    // blocked: empty workspace.
-    let ws4 = Workspace::new()?;
-    let text4 = render(&ws4, None)?;
-    let parsed4: serde_json::Value = serde_json::from_str(&text4)?;
-    assert_eq!(parsed4.get("kind"), Some(&serde_json::json!("blocked")));
-    assert_eq!(
-        parsed4.get("reason"),
-        Some(&serde_json::json!("no specs in workspace")),
-    );
-
     Ok(())
 }
 
-// -- CHK-008 ----------------------------------------------------------------
+// -- CHK-007: per-spec JSON envelope shape (implement) -----------------------
+
+#[test]
+fn per_spec_json_envelope_shape_implement() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-003", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &valid_spec_toml(),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    let text = render_per_spec(&ws, "SPEC-0001")?;
+    let parsed: serde_json::Value = serde_json::from_str(&text)?;
+    let next_action = parsed
+        .get("next_action")
+        .expect("next_action must be present");
+    assert_eq!(
+        next_action.get("kind"),
+        Some(&serde_json::json!("implement")),
+        "kind must be implement: {parsed}",
+    );
+    assert_eq!(
+        next_action.get("task_id"),
+        Some(&serde_json::json!("T-003")),
+        "task_id must be T-003: {parsed}",
+    );
+    Ok(())
+}
+
+// -- workspace form JSON envelope shape --------------------------------------
+
+#[test]
+fn workspace_json_envelope_shape() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        &valid_spec_toml(),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    let text = render_workspace(&ws)?;
+    let parsed: serde_json::Value = serde_json::from_str(&text)?;
+    assert_eq!(
+        parsed.get("schema_version"),
+        Some(&serde_json::json!(2)),
+        "schema_version must be 2: {parsed}",
+    );
+    let specs = parsed.get("specs").expect("specs must be present");
+    assert!(specs.is_array(), "specs must be an array: {parsed}");
+    let arr = specs.as_array().expect("already checked");
+    assert_eq!(arr.len(), 1, "expected 1 spec: {parsed}");
+    let entry = arr.first().expect("first entry");
+    assert_eq!(
+        entry.get("spec_id"),
+        Some(&serde_json::json!("SPEC-0001")),
+        "spec_id in entry: {entry}",
+    );
+    let next_action = entry.get("next_action").expect("next_action in entry");
+    assert_eq!(
+        next_action.get("kind"),
+        Some(&serde_json::json!("implement")),
+        "kind in entry: {entry}",
+    );
+    Ok(())
+}
+
+// -- determinism -------------------------------------------------------------
 
 #[test]
 fn determinism() -> TestResult {
     let ws = Workspace::new()?;
-    let body = "- [ ] **T-001**: a\n  - Covers: REQ-001\n- [?] **T-002**: b\n  - Covers: REQ-001\n";
+    let tasks_xml = format!(
+        "{}{}",
+        task_xml("T-001", "pending"),
+        task_xml("T-002", "in-review"),
+    );
     write_spec(
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
         &valid_spec_toml(),
-        Some(&tasks_md("SPEC-0001", body)),
-    )?;
-    write_spec(
-        &ws.root,
-        "0002-bar",
-        &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
-        Some(&tasks_md("SPEC-0002", body)),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
 
-    let a = render(&ws, None)?;
-    let b = render(&ws, None)?;
-    assert_eq!(a, b, "two consecutive JSON renders must be byte-identical");
+    // Workspace form.
+    let a = render_workspace(&ws)?;
+    let b = render_workspace(&ws)?;
+    assert_eq!(
+        a, b,
+        "two consecutive workspace JSON renders must be byte-identical"
+    );
 
-    // Also test the kind-filtered variants for determinism.
-    let a_imp = render(&ws, Some(KindFilter::Implement))?;
-    let b_imp = render(&ws, Some(KindFilter::Implement))?;
-    assert_eq!(a_imp, b_imp);
+    // Per-spec form.
+    let a_ps = render_per_spec(&ws, "SPEC-0001")?;
+    let b_ps = render_per_spec(&ws, "SPEC-0001")?;
+    assert_eq!(
+        a_ps, b_ps,
+        "two consecutive per-spec JSON renders must be byte-identical"
+    );
 
-    let a_rev = render(&ws, Some(KindFilter::Review))?;
-    let b_rev = render(&ws, Some(KindFilter::Review))?;
-    assert_eq!(a_rev, b_rev);
     Ok(())
 }

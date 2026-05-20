@@ -10,7 +10,7 @@ use serde::Serialize;
 /// downstream consumers can sniff it cheaply.
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonOutput {
-    /// Schema version. Bumped on breaking changes.
+    /// Schema version. `2` since SPEC-0033 T-005 (added resolved paths).
     pub schema_version: u32,
     /// HEAD commit SHA, or `""` if unavailable.
     pub repo_sha: String,
@@ -49,6 +49,16 @@ pub struct JsonSpec {
     /// First parse error encountered, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parse_error: Option<String>,
+    /// Repo-relative forward-slash path to `SPEC.md`
+    /// (e.g. `.speccy/specs/0031-foo/SPEC.md`).
+    pub spec_md_path: String,
+    /// Repo-relative forward-slash path to `TASKS.md`, or `null` when
+    /// TASKS.md is absent.
+    pub tasks_md_path: Option<String>,
+    /// Repo-relative forward-slash path to the mission folder's
+    /// `MISSION.md`, or `null` for flat specs not grouped under a mission
+    /// folder.
+    pub mission_md_path: Option<String>,
 }
 
 /// JSON-shaped task counts. Mirrors [`speccy_core::workspace::TaskCounts`].

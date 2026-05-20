@@ -14,35 +14,29 @@ reconciliation are not forgotten.
 
 ## Steps
 
-1. Render the SPEC.md amendment prompt:
+1. Read the existing SPEC's current location and state:
 
    ```bash
-   speccy plan SPEC-0007
+   speccy status SPEC-0007 --json
    ```
 
-2. Follow the prompt: edit SPEC.md surgically (including its
-   `<requirement>` / `<scenario>` element blocks if requirements
-   changed); append a `## Changelog` row explaining *why* the
-   amendment was needed.
-3. Render the TASKS.md amendment prompt:
-
-   ```bash
-   speccy tasks SPEC-0007
-   ```
-
-4. Follow the prompt: preserve `state="completed"` tasks unless the
+   The JSON's `spec_md_path` field names the SPEC.md file to edit.
+2. Edit SPEC.md surgically (including its `<requirement>` /
+   `<scenario>` element blocks if requirements changed); append a
+   `## Changelog` row explaining *why* the amendment was needed.
+3. Reconcile TASKS.md: preserve `state="completed"` tasks unless the
    SPEC change invalidated them (those flip their `state` back to
    `pending` with a `<retry>spec amended; ...</retry>` element
    appended inside the `<task>` body); add new `<task>` elements for
    newly added requirements; remove `<task>` elements for dropped
    requirements.
-5. Record the new spec hash:
+4. Record the new spec hash:
 
    ```bash
-   speccy tasks SPEC-0007 --commit
+   speccy lock SPEC-0007
    ```
 
-6. Re-run `speccy status` to confirm `TSK-003` cleared.
+5. Re-run `speccy status` to confirm `TSK-003` cleared.
 
 ### Loop exit criteria
 

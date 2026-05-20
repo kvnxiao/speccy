@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0027
-spec_hash_at_generation: acdb32cbaea84b3be978bc1be61366ae2fec5fe21405753d357d0022cd467657
-generated_at: 2026-05-18T00:01:22Z
+spec_hash_at_generation: 013358c629917e7fd0a9ab45043491f0fa9502441206d17ea8497f993f34c4d4
+generated_at: 2026-05-20T18:49:25Z
 ---
 
 # Tasks: SPEC-0027 Host-native files are the sole canonical persona surface; drop .speccy/skills/ override directory

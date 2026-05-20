@@ -807,7 +807,8 @@
       "DEC-004",
       "DEC-005",
       "DEC-006",
-      "DEC-007"
+      "DEC-007",
+      "DEC-008"
     ],
     "requirements": [
       "REQ-001",
@@ -831,13 +832,15 @@
       "CHK-009",
       "CHK-010",
       "CHK-011",
-      "CHK-012",
       "CHK-013",
       "CHK-014",
       "CHK-015",
-      "CHK-016",
       "CHK-017",
-      "CHK-018"
+      "CHK-018",
+      "CHK-019",
+      "CHK-020",
+      "CHK-021",
+      "CHK-022"
     ]
   },
   "0034-authoring-self-review": {

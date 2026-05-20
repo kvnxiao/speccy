@@ -9,9 +9,9 @@ developer_instructions = """
 Implements one task per invocation and exits. With an optional
 `[SPEC-NNNN/T-NNN]` selector argument, the session implements that
 specific task. Without an argument, the session resolves the next
-implementable task via `speccy next --kind implement --json` and
-implements that one. Task state lives in the `state` attribute on
-each `<task>` XML element in TASKS.md.
+implementable task via `speccy next --json` and implements that one.
+Task state lives in the `state` attribute on each `<task>` XML element
+in TASKS.md.
 
 This is a single-task primitive. It does not iterate over the task
 list; composition across tasks belongs to a caller (a human at the
@@ -37,25 +37,25 @@ spec hash must have been committed before this skill runs.
    - Otherwise, query the CLI:
 
      ```bash
-     speccy next --kind implement --json
+     speccy next --json
      ```
 
-     If the result is `kind: blocked` or empty, exit and report that
-     no implementable tasks remain. Otherwise, construct the
-     disambiguated `<spec>/<task>` form from the JSON's `spec` and
-     `task` fields (the bare `prompt_command` field is ambiguous
-     across specs — every spec has its own `T-001`).
+     If the result has no entry with `next_action.kind == "implement"`,
+     exit and report that no implementable tasks remain. Otherwise,
+     construct the disambiguated `<spec>/<task>` form from the JSON's
+     `spec_id` and `next_action.task_id` fields (the bare task ID is
+     ambiguous across specs — every spec has its own `T-001`).
 
 2. Flip the target task's `state` from `pending` to `in-progress`
    by editing TASKS.md.
 
-3. Render the implementer prompt:
+3. Read the task scenarios to understand what must be implemented:
 
    ```bash
-   speccy implement SPEC-0007/T-003
+   speccy check SPEC-0007/T-003
    ```
 
-4. Follow the rendered prompt. Write tests first, then code. Run the
+4. Implement the task. Write tests first, then code. Run the
    project's own test command (`cargo test`, `pnpm test`, etc.)
    locally. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
    scenarios being satisfied (it renders them, it does not run
