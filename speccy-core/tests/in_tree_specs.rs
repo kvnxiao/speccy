@@ -3,32 +3,30 @@
     reason = "test code may .expect() with descriptive messages"
 )]
 
-//! SPEC-0020 T-004 corpus integration tests.
+//! In-tree corpus integration tests.
 //!
-//! After the SPEC-0019 → SPEC-0020 migration runs across every in-tree
-//! `.speccy/specs/NNNN-*/SPEC.md`, two invariants must hold:
+//! Originally added during the SPEC-0019 → SPEC-0020 migration to prove
+//! the bulk rewrite was mechanical (id sets preserved byte-for-byte
+//! against a frozen JSON snapshot). The snapshot half was removed once
+//! the migration shipped: it forced every newly drafted spec to be
+//! hand-added to a fixture, with no ongoing signal about anything other
+//! than "this fixture is out of date".
 //!
-//! 1. Every spec file parses cleanly with the SPEC-0020 raw XML element parser
+//! What's left are invariants that should hold for every spec that
+//! lives under `.speccy/specs/NNNN-*/`:
+//!
+//! 1. Every `SPEC.md` parses cleanly with the SPEC-0020 raw XML element parser
 //!    ([`speccy_core::parse::parse_spec_xml`]).
-//! 2. The per-spec requirement / scenario / decision id sets equal the
-//!    pre-migration id sets captured in
-//!    `tests/fixtures/in_tree_id_snapshot.json`. That fixture was generated
-//!    before the bulk migration by running the SPEC-0019 marker parser over
-//!    every in-tree SPEC.md (and the SPEC-0020 XML parser over SPEC-0020 /
-//!    SPEC-0022, which were already authored in raw XML before T-004 started).
-//!    Equality between the pre-migration and post-migration id sets is the
-//!    structural guarantee that the migration was mechanical: tags swapped,
-//!    identifiers preserved.
-//!
-//! `no_spec_toml_files_remain_under_speccy_specs` survives from the
-//! SPEC-0019 T-004 invariant and continues to assert no stray
-//! `spec.toml` files leak back in.
+//! 2. No stray `spec.toml` files (SPEC-0019 T-004 invariant).
+//! 3. Renderer convention: every whitelisted closing element tag is followed by
+//!    a blank line (SPEC-0020 T-002 convention).
+//! 4. SPEC-0019 / SPEC-0020 fenced documentation examples survive byte-for-byte
+//!    — those specs document Speccy's own grammar, so silent rewrites of their
+//!    fenced bodies would corrupt the canonical reference.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use serde_json::Value;
 use speccy_core::parse::parse_spec_xml;
-use std::collections::BTreeMap;
 
 fn workspace_root() -> Utf8PathBuf {
     // CARGO_MANIFEST_DIR is `speccy-core`; parent is the workspace root.
@@ -57,115 +55,21 @@ fn spec_dirs(root: &Utf8Path) -> Vec<Utf8PathBuf> {
     out
 }
 
-fn load_snapshot() -> BTreeMap<String, IdSet> {
-    let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
-    let path = Utf8PathBuf::from(manifest_dir)
-        .join("tests")
-        .join("fixtures")
-        .join("in_tree_id_snapshot.json");
-    let source = fs_err::read_to_string(path.as_std_path()).expect("snapshot fixture is readable");
-    let value: Value = serde_json::from_str(&source).expect("snapshot is valid JSON");
-    let mut out: BTreeMap<String, IdSet> = BTreeMap::new();
-    let map = value
-        .as_object()
-        .expect("snapshot root is a JSON object keyed by spec dir name");
-    for (k, v) in map {
-        out.insert(k.clone(), IdSet::from_json(v));
-    }
-    out
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct IdSet {
-    requirements: Vec<String>,
-    scenarios: Vec<String>,
-    decisions: Vec<String>,
-}
-
-impl IdSet {
-    fn from_json(v: &Value) -> Self {
-        let obj = v.as_object().expect("id-set entry is a JSON object");
-        let extract = |k: &str| -> Vec<String> {
-            obj.get(k)
-                .and_then(Value::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|s| s.as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        let mut me = Self {
-            requirements: extract("requirements"),
-            scenarios: extract("scenarios"),
-            decisions: extract("decisions"),
-        };
-        me.requirements.sort();
-        me.scenarios.sort();
-        me.decisions.sort();
-        me
-    }
-}
-
 #[test]
-fn every_in_tree_spec_md_parses_with_xml_parser_and_matches_snapshot() {
+fn every_in_tree_spec_md_parses_with_xml_parser() {
     let root = workspace_root();
     let dirs = spec_dirs(&root);
     assert!(
         !dirs.is_empty(),
         "expected at least one spec under .speccy/specs/",
     );
-    let snapshot = load_snapshot();
     let mut parse_failures: Vec<String> = Vec::new();
-    let mut mismatches: Vec<String> = Vec::new();
-    let mut covered: Vec<String> = Vec::new();
     for d in &dirs {
         let spec_md_path = d.join("SPEC.md");
         let source = fs_err::read_to_string(spec_md_path.as_std_path())
             .expect("reading SPEC.md should succeed");
-        let doc = match parse_spec_xml(&source, &spec_md_path) {
-            Ok(doc) => doc,
-            Err(e) => {
-                parse_failures.push(format!("{spec_md_path}: {e}"));
-                continue;
-            }
-        };
-        let name = d.file_name().expect("spec dir has a name").to_owned();
-        covered.push(name.clone());
-        let actual = IdSet {
-            requirements: {
-                let mut v: Vec<String> = doc.requirements.iter().map(|r| r.id.clone()).collect();
-                v.sort();
-                v
-            },
-            scenarios: {
-                let mut v: Vec<String> = doc
-                    .requirements
-                    .iter()
-                    .flat_map(|r| r.scenarios.iter().map(|s| s.id.clone()))
-                    .collect();
-                v.sort();
-                v
-            },
-            decisions: {
-                let mut v: Vec<String> = doc.decisions.iter().map(|d| d.id.clone()).collect();
-                v.sort();
-                v
-            },
-        };
-        match snapshot.get(&name) {
-            Some(expected) if expected == &actual => {}
-            Some(expected) => {
-                mismatches.push(format!(
-                    "{name}: id-set drift from pre-migration snapshot\n  expected: {expected:?}\n  actual:   {actual:?}",
-                ));
-            }
-            None => {
-                mismatches.push(format!(
-                    "{name}: missing from pre-migration snapshot fixture",
-                ));
-            }
+        if let Err(e) = parse_spec_xml(&source, &spec_md_path) {
+            parse_failures.push(format!("{spec_md_path}: {e}"));
         }
     }
     assert!(
@@ -173,20 +77,6 @@ fn every_in_tree_spec_md_parses_with_xml_parser_and_matches_snapshot() {
         "SPEC.md files failed to parse with parse_spec_xml:\n{}",
         parse_failures.join("\n"),
     );
-    assert!(
-        mismatches.is_empty(),
-        "id-set drift between pre-migration snapshot and post-migration XML parse:\n{}",
-        mismatches.join("\n"),
-    );
-    // Sanity: every spec listed in the snapshot must have been touched
-    // by the loop above, otherwise a spec dir was deleted out from
-    // under the fixture.
-    for k in snapshot.keys() {
-        assert!(
-            covered.contains(k),
-            "snapshot lists `{k}` but no matching spec dir was scanned",
-        );
-    }
 }
 
 #[test]

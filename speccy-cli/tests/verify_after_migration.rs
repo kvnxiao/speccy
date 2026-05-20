@@ -12,9 +12,9 @@
 //! lint engine, and `speccy verify` now consume the post-SPEC-0020
 //! element tree directly. The structural guarantee that every spec
 //! parses cleanly lives in `speccy-core/tests/in_tree_specs.rs`
-//! (`every_in_tree_spec_md_parses_with_xml_parser_and_matches_snapshot`);
-//! this test exercises the live `speccy verify` binary against the
-//! same workspace and asserts the gate reports `0 errors`.
+//! (`every_in_tree_spec_md_parses_with_xml_parser`); this test
+//! exercises the live `speccy verify` binary against the same
+//! workspace and asserts the gate reports `0 errors`.
 
 use assert_cmd::Command;
 use camino::Utf8PathBuf;
