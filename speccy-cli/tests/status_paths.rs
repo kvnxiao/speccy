@@ -27,7 +27,7 @@ fn tasks_md_xml_with_pending(spec_id: &str) -> String {
 
 /// CHK-009: `speccy status SPEC-0031 --json` includes `spec_md_path`,
 /// `tasks_md_path`, and `mission_md_path: null` for a flat spec.
-/// The `schema_version` field must equal 2.
+/// The `schema_version` field must equal 1.
 #[test]
 fn chk009_status_json_carries_resolved_paths_flat_spec() -> TestResult {
     let ws = Workspace::new()?;
@@ -49,11 +49,11 @@ fn chk009_status_json_carries_resolved_paths_flat_spec() -> TestResult {
     let json_text = String::from_utf8(output)?;
     let parsed: serde_json::Value = serde_json::from_str(&json_text)?;
 
-    // schema_version must be 2.
+    // schema_version must be 1.
     assert_eq!(
         parsed.get("schema_version"),
-        Some(&serde_json::json!(2)),
-        "schema_version must be 2"
+        Some(&serde_json::json!(1)),
+        "schema_version must be 1"
     );
 
     let specs = parsed
@@ -166,8 +166,8 @@ fn chk010_next_json_carries_mission_md_path_for_mission_spec() -> TestResult {
 
     assert_eq!(
         parsed.get("schema_version"),
-        Some(&serde_json::json!(2)),
-        "schema_version must be 2"
+        Some(&serde_json::json!(1)),
+        "schema_version must be 1"
     );
 
     let mission_md_path = parsed

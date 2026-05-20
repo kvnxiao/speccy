@@ -1,9 +1,9 @@
 //! Text + JSON renderers for `speccy verify`.
 //!
-//! SPEC-0018 REQ-003: verify is shape-only. The text summary reports
-//! counts and an error tally; the JSON envelope bumps `schema_version`
-//! to `2` and exposes structural counts. The legacy execution-shaped
-//! fields (`outcome`, `exit_code`, `duration_ms`) are gone.
+//! Verify is shape-only. The text summary reports counts and an error
+//! tally; the JSON envelope exposes structural counts. There are no
+//! execution-shaped fields (`outcome`, `exit_code`, `duration_ms`)
+//! because the CLI never runs scenarios.
 
 use crate::status_output::JsonLintBlock;
 use crate::verify::VerifyError;
@@ -12,9 +12,9 @@ use serde::Serialize;
 use speccy_core::lint::Diagnostic;
 use std::io::Write;
 
-/// JSON schema version emitted by `speccy verify --json`. Bumped from
-/// `1` to `2` when SPEC-0018 removed the execution-shaped fields.
-pub const JSON_SCHEMA_VERSION: u32 = 2;
+/// JSON schema version emitted by `speccy verify --json`. Pinned at
+/// `1` pre-v1.
+pub const JSON_SCHEMA_VERSION: u32 = 1;
 
 /// Render the text summary to `out`.
 ///
@@ -52,9 +52,9 @@ pub fn write_text(report: &VerifyReport, out: &mut dyn Write) -> std::io::Result
 
 /// Render the JSON envelope (pretty-printed, trailing newline) to `out`.
 ///
-/// `schema_version = 2`. The envelope intentionally omits per-check
-/// execution fields (`outcome`, `exit_code`, `duration_ms`) — speccy
-/// no longer runs scenarios.
+/// `schema_version = 1` (pinned pre-v1). The envelope intentionally
+/// omits per-check execution fields (`outcome`, `exit_code`,
+/// `duration_ms`) because speccy never runs scenarios.
 ///
 /// # Errors
 ///
@@ -99,8 +99,8 @@ fn lint_block(report: &VerifyReport) -> JsonLintBlock {
 /// Top-level JSON envelope.
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonOutput {
-    /// Schema version. Bumped on breaking changes. SPEC-0018 set this
-    /// to `2`.
+    /// Schema version. Pinned at `1` pre-v1; bump only when an external
+    /// consumer of `1` exists and the shape must break.
     pub schema_version: u32,
     /// HEAD commit SHA, or `""` if unavailable.
     pub repo_sha: String,

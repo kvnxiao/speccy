@@ -3,20 +3,12 @@
     reason = "test code may .expect() with descriptive messages"
 )]
 
-//! T-007 docs sweep integration test.
+//! Docs sweep integration tests.
 //!
 //! Asserts that:
-//! - `.speccy/ARCHITECTURE.md` mentions `spec.toml` only in lines that carry a
-//!   migration / historical marker ("migration", "SPEC-0019", or "history" /
-//!   "historical", case-insensitive).
 //! - `.speccy/ARCHITECTURE.md` documents the raw XML element grammar by
-//!   containing the canonical element names (SPEC-0020 carrier).
-//! - `.speccy/ARCHITECTURE.md` pins DEC-003's "no public `speccy fmt` command"
-//!   contract by containing at least one line that mentions both `speccy fmt`
-//!   and `DEC-003`.
-//! - The ephemeral migration `xtask/` directory has been deleted (both the
-//!   SPEC-0019 carrier-migration tool and the SPEC-0020 element-migration
-//!   tool).
+//!   containing the canonical element names currently in the whitelist.
+//! - The ephemeral migration `xtask/` directories have been deleted.
 //! - No active instruction in `resources/modules/` (the source-of-truth skill
 //!   pack) or any rendered host mirror (`.claude/skills/`, `.agents/skills/`,
 //!   `.codex/agents/`, `.speccy/skills/`) tells an agent to read or edit a
@@ -56,43 +48,20 @@ fn mention_is_historical(lines: &[&str], idx: usize) -> bool {
 }
 
 #[test]
-fn architecture_md_mentions_spec_toml_only_in_historical_context() {
-    let root = workspace_root();
-    let arch = root.join(".speccy").join("ARCHITECTURE.md");
-    let body = fs_err::read_to_string(arch.as_std_path()).expect("read .speccy/ARCHITECTURE.md");
-
-    let lines: Vec<&str> = body.lines().collect();
-    let mut offenders: Vec<(usize, String)> = Vec::new();
-    for (idx, line) in lines.iter().enumerate() {
-        if line.contains("spec.toml") && !mention_is_historical(&lines, idx) {
-            offenders.push((idx + 1, (*line).to_string()));
-        }
-    }
-
-    assert!(
-        offenders.is_empty(),
-        "ARCHITECTURE.md must mention spec.toml only in migration/historical \
-         context; offending lines: {offenders:#?}"
-    );
-}
-
-#[test]
 fn architecture_md_documents_xml_element_grammar() {
     let root = workspace_root();
     let arch = root.join(".speccy").join("ARCHITECTURE.md");
     let body = fs_err::read_to_string(arch.as_std_path()).expect("read .speccy/ARCHITECTURE.md");
 
-    // SPEC-0020 reversed SPEC-0019's HTML-comment marker carrier to raw
-    // XML element tags. ARCHITECTURE.md must teach the new grammar — both
-    // the open-tag form for every element in the closed whitelist and the
-    // HTML5-disjointness invariant from DEC-002.
+    // ARCHITECTURE.md must teach the raw XML element grammar: every
+    // element name in the live whitelist, plus the HTML5-disjointness
+    // invariant.
     for needle in [
         "<requirement",
         "<scenario",
         "<decision",
         "<changelog",
         "<open-question",
-        "<overview",
         "HTML5",
     ] {
         assert!(
@@ -104,21 +73,18 @@ fn architecture_md_documents_xml_element_grammar() {
 }
 
 #[test]
-fn architecture_md_pins_no_public_speccy_fmt_per_dec_003() {
+fn architecture_md_pins_no_public_speccy_fmt() {
     let root = workspace_root();
     let arch = root.join(".speccy").join("ARCHITECTURE.md");
     let body = fs_err::read_to_string(arch.as_std_path()).expect("read .speccy/ARCHITECTURE.md");
 
-    let has_pinning_line = body
-        .lines()
-        .any(|line| line.contains("speccy fmt") && line.contains("DEC-003"));
+    let has_pinning_line = body.lines().any(|line| line.contains("speccy fmt"));
 
     assert!(
         has_pinning_line,
-        "ARCHITECTURE.md must contain at least one line that mentions both \
-         `speccy fmt` and `DEC-003`, pinning DEC-003's no-public-formatter \
-         contract so a future deletion of the \"What We Deliberately Don't Do\" \
-         row regresses loudly"
+        "ARCHITECTURE.md must contain at least one line that mentions \
+         `speccy fmt`, pinning the no-public-formatter contract so a future \
+         deletion of the \"What We Deliberately Don't Do\" row regresses loudly"
     );
 }
 

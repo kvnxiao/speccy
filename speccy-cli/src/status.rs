@@ -514,7 +514,7 @@ pub fn build_json(
         .collect();
     let workspace_lint = JsonLintBlock::from_diagnostics(&report.workspace_diagnostics);
     Ok(JsonOutput {
-        schema_version: 2,
+        schema_version: 1,
         repo_sha: report.repo_sha.clone(),
         specs,
         lint: workspace_lint,

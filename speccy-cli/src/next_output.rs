@@ -1,16 +1,17 @@
-//! Text and JSON renderers for `speccy next` (SPEC-0033 REQ-004).
+//! Text and JSON renderers for `speccy next`.
 //!
 //! The text renderers emit human-readable output:
 //! - Workspace form: one line per active spec.
 //! - Per-spec form: one line for the spec, or `SPEC-NNNN: completed`.
 //!
 //! The JSON renderers emit structured envelopes:
-//! - Workspace form: `{"schema_version":2,"specs":[{…},…]}`.
+//! - Workspace form: `{"schema_version":1,"specs":[{…},…]}`.
 //! - Per-spec form:
-//!   `{"schema_version":2,"spec_id":"…","next_action":{…}|null}`.
+//!   `{"schema_version":1,"spec_id":"…","next_action":{…}|null}`.
 //!
-//! `schema_version` is `2` following the bump introduced in SPEC-0033.
-//! (`spec_md_path`, `tasks_md_path`, `mission_md_path` are added in T-005.)
+//! `schema_version` is pinned at `1` pre-v1. The envelope carries
+//! `next_action`, `spec_md_path`, `tasks_md_path`, and
+//! `mission_md_path` so skills do not need to glob `.speccy/specs/`.
 
 use serde::Serialize;
 use speccy_core::next::NextAction;
@@ -19,7 +20,7 @@ use speccy_core::next::SpecNextEntry;
 /// JSON envelope for the per-spec form (`speccy next SPEC-NNNN --json`).
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonPerSpec {
-    /// Schema version. `2` for this release.
+    /// Schema version. Pinned at `1` pre-v1.
     pub schema_version: u32,
     /// The spec identifier.
     pub spec_id: String,
@@ -40,7 +41,7 @@ pub struct JsonPerSpec {
 /// JSON envelope for the workspace form (`speccy next --json`).
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonWorkspace {
-    /// Schema version. `2` for this release.
+    /// Schema version. Pinned at `1` pre-v1.
     pub schema_version: u32,
     /// Active specs with their derived next actions.
     pub specs: Vec<JsonWorkspaceEntry>,
@@ -100,7 +101,7 @@ pub fn render_json_per_spec(
 ) -> JsonPerSpec {
     match action {
         Some(a) => JsonPerSpec {
-            schema_version: 2,
+            schema_version: 1,
             spec_id: spec_id.to_owned(),
             next_action: Some(to_json_action(a)),
             reason: None,
@@ -109,7 +110,7 @@ pub fn render_json_per_spec(
             mission_md_path: paths.mission_md_path,
         },
         None => JsonPerSpec {
-            schema_version: 2,
+            schema_version: 1,
             spec_id: spec_id.to_owned(),
             next_action: None,
             reason: Some("completed".to_owned()),
@@ -124,7 +125,7 @@ pub fn render_json_per_spec(
 #[must_use = "the JSON payload is the output of `speccy next --json`"]
 pub fn render_json_workspace(entries: &[(SpecNextEntry, SpecPaths)]) -> JsonWorkspace {
     JsonWorkspace {
-        schema_version: 2,
+        schema_version: 1,
         specs: entries
             .iter()
             .map(|(e, paths)| JsonWorkspaceEntry {

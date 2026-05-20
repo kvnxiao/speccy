@@ -53,22 +53,22 @@ enum Command {
         /// Optional `SPEC-NNNN` selector; omit for workspace-wide listing.
         #[arg(value_name = "SPEC-ID")]
         spec_id: Option<String>,
-        /// Emit JSON envelope (`schema_version = 2`).
+        /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]
         json: bool,
     },
-    /// Run command-form proofs from spec.toml.
+    /// Render `<scenario>` Given/When/Then prose from SPEC.md (no execution).
     Check {
-        /// Polymorphic selector; omit to run every check across every spec.
-        /// Accepted shapes: `SPEC-NNNN` (all checks in spec),
-        /// `SPEC-NNNN/CHK-NNN` (one spec-qualified check),
-        /// `SPEC-NNNN/T-NNN` (checks proving the task's covered
-        /// requirements), `CHK-NNN` (every spec's `CHK-NNN`), or
+        /// Polymorphic selector; omit to render every scenario across every
+        /// spec. Accepted shapes: `SPEC-NNNN` (all scenarios in spec),
+        /// `SPEC-NNNN/CHK-NNN` (one spec-qualified scenario),
+        /// `SPEC-NNNN/T-NNN` (scenarios covering the task's requirements),
+        /// `CHK-NNN` (every spec's `CHK-NNN`), or
         /// `T-NNN` (unqualified task).
         #[arg(value_name = "SELECTOR")]
         selector: Option<String>,
     },
-    /// CI gate: lint + check execution with a binary exit code.
+    /// CI gate: proof-shape validation with a binary exit code.
     Verify {
         /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]

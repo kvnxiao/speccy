@@ -113,68 +113,88 @@ in TASKS.md. Composing those invocations into a batch is a caller
 concern, not the skill's.
 
 ```
-1. plan       agent writes SPEC.md (PRD-shaped, marker-structured)
-2. tasks      agent writes TASKS.md (one task sized for one agent session)
-3. implement  agent implements one task; exits with state transition
-4. review     agent fans out four personas on one task; exits with state transition
-5. report     agent writes REPORT.md and opens PR
+1. plan       skill writes SPEC.md (PRD-shaped, XML-element-structured)
+2. tasks      skill writes TASKS.md (one task sized for one agent session); skill calls `speccy lock`
+3. implement  skill implements one task; exits with state transition
+4. review     skill fans out four personas on one task; exits with state transition
+5. report     skill writes REPORT.md and opens PR
 ```
 
-The CLI does not spawn sub-agents. The CLI does not run loops. The
-CLI renders prompts, queries artifact state, runs checks, and
-records nothing about its own execution. Multi-task composition
-lives in the caller (a human at the terminal, the existing `/loop`
-skill, or a future orchestrator).
+Phase verbs are skill responsibilities, not CLI verbs. The CLI
+never renders natural-text prompts. Its job is deterministic state
+work: scaffolding (`init`), state queries (`status`, `next`,
+`vacancy`), hash recording (`lock`), scenario rendering (`check`),
+and proof-shape gating (`verify`). Skills discover paths and the
+derived `next_action` through the CLI's `schema_version: 1` JSON
+envelopes; the CLI is the sole authority on the `NNNN-slug`
+directory rule. Multi-task composition lives in the caller (a human
+at the terminal, the existing `/loop` skill, or a future
+orchestrator).
 
 ---
 
 # CLI Surface
 
-Ten commands. Two optional flags (`--kind`, `--persona`). Each
-command maps to a specific lifecycle phase or query. No state-
-transition verbs. No mode toggles.
+Seven flat commands. Each has one job. `--json` toggles
+representation, never content; there are no other mode flags, no
+state-transition verbs, no per-phase rendering verbs.
 
 ```text
-speccy init                       Scaffold .speccy/ + host skill pack
-speccy plan [SPEC-ID]             Phase 1 prompt
-                                    no arg:  AGENTS.md north star + optional MISSION.md -> new SPEC scaffold
-                                    SPEC-ID: amend existing SPEC.md
-speccy tasks SPEC-ID              Phase 2 prompt
-                                    TASKS.md absent:  initial generation
-                                    TASKS.md present: amendment prompt
-speccy implement TASK-ID          Phase 3 prompt (implementer)
-speccy review TASK-ID             Phase 4 prompt (reviewer)
-                                    --persona business | tests | security
-                                              | style | architecture | docs
-speccy report SPEC-ID             Phase 5 prompt (REPORT.md)
-speccy status                     Show state, lint findings  (--json)
-speccy next [--kind K]            Next actionable thing      (--json)
-                                    --kind implement -> next state="pending" task
-                                    --kind review    -> next state="in-review" task
-                                    default          -> highest-priority
-speccy check [SELECTOR]           Render check scenarios (no execution)
-                                    no arg:            all scenarios across all specs
+speccy init                       Scaffold .speccy/ + host skill pack.
+                                    --host claude-code | codex (auto-detected if omitted)
+                                    --force            overwrite differing shipped files
+speccy status [SELECTOR]          Workspace overview; spec subset by default.
+                                    no arg:        attention-list view
+                                    SPEC-NNNN:     one spec, unfiltered
+                                    --all:         every spec, unfiltered
+                                    --json:        schema_version=1 envelope with resolved paths
+speccy next [SPEC-ID]             Next actionable per spec, derived from state.
+                                    no arg:        every active spec with next_action
+                                    SPEC-ID:       one spec or {next_action: null, reason}
+                                    --json:        schema_version=1 envelope
+                                  Action kind is derived (review > implement > ship,
+                                  with `decompose` when TASKS.md is absent); spec
+                                  state fully determines the kind, so there is no
+                                  caller-supplied `--kind` filter.
+speccy check [SELECTOR]           Render check scenarios (no execution).
+                                    no arg:            every scenario across every spec
                                     SPEC-NNNN:         every scenario under one spec
-                                    SPEC-NNNN/CHK-NNN: one scenario, disambiguated by spec
+                                    SPEC-NNNN/CHK-NNN: one scenario, spec-qualified
                                     SPEC-NNNN/T-NNN:   scenarios covering a qualified task
-                                    CHK-NNN:           every spec's CHK-NNN (DEC-003)
+                                    CHK-NNN:           every spec's CHK-NNN
                                     T-NNN:             scenarios covering an unqualified task
-speccy verify                     CI gate: proof-shape validation only
+speccy verify                     CI gate: proof-shape validation only.
+                                    --json:        schema_version=1 envelope
                                     parse errors, requirements with no scenarios,
-                                    unresolved scenario refs, unreferenced scenarios.
+                                    unresolved scenario refs, stale task hash, etc.
                                     Does NOT run project tests; that's CI's job.
+speccy lock SPEC-NNNN             Record SPEC.md sha256 + UTC timestamp into TASKS.md
+                                  frontmatter (`spec_hash_at_generation`,
+                                  `generated_at`). Used by `/speccy-tasks` after
+                                  decomposition; replaces the old
+                                  `speccy tasks --commit` sub-action.
+speccy vacancy                    Return the next free `SPEC-NNNN`.
+                                    no arg:   bare `SPEC-NNNN\n` to stdout
+                                    --json:   {schema_version: 1, next_spec_id: "SPEC-NNNN"}
+                                  Used by `/speccy-plan` in greenfield mode so
+                                  the skill never globs `.speccy/specs/`.
 ```
 
-The split between `implement` and `review` is deliberate: they are
-different lifecycle phases that happen to both operate on tasks,
-and conflating them under a generic `prompt --persona` flag was
-miscategorising "what loop am I in" as "which sub-type of
-reviewer." `--persona` lives only on `review` because review is
-the only phase with parallel sub-types.
+Phase prose lives in skill content under `.claude/skills/...` and
+`.agents/skills/...`, not in the CLI. There is no `speccy plan` /
+`speccy tasks` (render-form) / `speccy implement` / `speccy review`
+/ `speccy report` verb; conflating "what loop am I in" with "which
+sub-type of reviewer" through a `--persona` flag on a generic
+`prompt` command would be the wrong abstraction. Persona selection
+lives in the `/speccy-review` skill, which dispatches to the
+matching `reviewer-<persona>` sub-agent file.
 
-`speccy tasks SPEC-ID --commit` is a sub-action that records the
-SPEC.md hash into TASKS.md frontmatter after the agent finishes
-writing it. Used by skills, not typed directly.
+The CLI is the sole authority on the spec directory rule
+(`NNNN-slug` flat or one level inside a mission folder). Skills
+read paths from `speccy status --json` / `speccy next --json` /
+`speccy vacancy --json` rather than globbing the filesystem; the
+JSON envelopes carry `spec_md_path`, `tasks_md_path`, and
+`mission_md_path` (nullable when absent).
 
 That is the complete public surface. Anything else is a skill
 responsibility.
@@ -191,12 +211,15 @@ AGENTS.md                Project-wide product north star + agent conventions
   speccy.toml
   specs/
     0001-user-signup/                Ungrouped spec (no mission folder)
-      SPEC.md            Frontmatter + PRD prose + marker-structured
-                         requirements / scenarios / decisions / changelog
-                         (SPEC-0019 collapsed the former `spec.toml`
-                         into marker comments here)
-      TASKS.md           Frontmatter (gen hash) + checklist + notes
-      REPORT.md          Frontmatter (outcome) + summary (end of loop)
+      SPEC.md            Frontmatter + PRD prose + nested XML element tree
+                         (<requirement>/<scenario>/<decision>/<open-question>
+                         /<changelog>); the requirement-to-scenario graph is
+                         carried in-band by these elements
+      TASKS.md           Frontmatter (spec_hash_at_generation, generated_at)
+                         + <tasks>/<task>/<task-scenarios> XML tree + inline
+                         implementer / reviewer notes
+      REPORT.md          Frontmatter (outcome) + <report>/<coverage> XML tree
+                         (end of loop)
     auth/                            Mission folder (optional grouping)
       MISSION.md                     Scope/context for this focus area
       0002-signup/
@@ -209,14 +232,29 @@ AGENTS.md                Project-wide product north star + agent conventions
 
 resources/               Shipped with Speccy; rendered/copied by `speccy init`
   modules/               Single-source bodies (no host duplication)
-    personas/            Reviewer persona prompts
-    prompts/             Render-time prompt templates
-    skills/              Skill bodies for the speccy-* verbs
+    personas/            Six reviewer persona body files + co-located
+                         topic-named snippets (verdict_return_contract.md,
+                         inline_note_format.md, no_tasks_md_writes.md,
+                         diff_fetch_command.md)
+    phases/              Three pinned phase-worker bodies (speccy-tasks.md,
+                         speccy-work.md, speccy-ship.md); plus speccy-init.md
+                         which is dual-consumed by `speccy init` itself
+    skills/              Five interactive skill bodies (speccy-brainstorm.md,
+                         speccy-plan.md, speccy-amend.md, speccy-review.md
+                         orchestrator) — full-body SKILL.md eject targets
+    examples/            Progressive-disclosure example bodies (evidence.md)
   agents/                Per-host wrappers (MiniJinja-templated)
     .claude/             Renders to <project>/.claude/{skills,agents}/
     .agents/             Renders to <project>/.agents/skills/ (Codex)
     .codex/              Renders to <project>/.codex/agents/ (Codex)
 ```
+
+There is no `resources/modules/prompts/` directory and no
+CLI-embedded phase prompt body. Phase prose ships as host skill
+content; the CLI does not render natural text. Reviewer persona
+content lives at the host-native sub-agent files
+(`.claude/agents/reviewer-<persona>.md` and the Codex twin) and
+there is no project-local `.speccy/skills/personas/` override.
 
 `AGENTS.md` lives at project root, not inside `.speccy/`. Every
 project already keeps `AGENTS.md` (and often `CLAUDE.md` as a symlink)
@@ -237,14 +275,31 @@ specs into the focus folder. Existing flat specs may be moved into
 a focus folder retroactively; spec IDs do not change.
 
 `resources/` is the top-level directory in the Speccy workspace that
-holds shipped bodies: `resources/modules/{personas,prompts,skills}/`
+holds shipped bodies. `resources/modules/{personas,phases,skills,examples}/`
 are the single source of truth, and `resources/agents/` carries the
 per-host wrappers as MiniJinja templates. `speccy init` renders those
-wrappers into the user's project at the host-native location:
-`.claude/skills/speccy-<verb>/` plus `.claude/agents/reviewer-*.md`
-for Claude Code; `.agents/skills/speccy-<verb>/` plus
-`.codex/agents/reviewer-*.toml` for Codex. Persona/prompt bodies the
-user may tune locally are copied once into `.speccy/skills/`.
+wrappers into the user's project at the host-native location.
+
+For Claude Code that lands as `.claude/skills/speccy-<verb>/SKILL.md`
+for every shipped skill (full body for the five interactive skills;
+thin ≤10-line stub for the three pinned phase workers), plus
+`.claude/agents/speccy-{tasks,work,ship}.md` for the pinned phase
+worker bodies and `.claude/agents/reviewer-<persona>.md` for the six
+reviewer sub-agents. Neither `speccy-init` nor `speccy-review` ships
+an agent file: both stay in the parent session because both are
+interactive (init Q&A; review verdict consolidation) and need the
+parent session's full capacity for user prompts and serialised
+TASKS.md writes.
+
+For Codex the parallel is `.agents/skills/speccy-<verb>/SKILL.md`
+plus `.codex/agents/speccy-{tasks,work,ship}.toml` and
+`.codex/agents/reviewer-<persona>.toml`.
+
+There is no project-local persona override directory. The
+host-native sub-agent files under `.claude/agents/` and
+`.codex/agents/` are the sole canonical persona surface, and
+`speccy init` classifies them Skip-on-exists so local edits to a
+persona's body survive `speccy init --force`.
 
 Decisions (ADRs) are not a separate folder. Each spec's `## Design
 > Decisions` subsection holds the architectural choices made for
@@ -256,75 +311,92 @@ in that focus area's `MISSION.md`.
 
 # Workflow Phases
 
+Each phase below is a skill responsibility, not a CLI invocation.
+The CLI surface that backs each phase is named where it matters
+(state queries, hash recording, scenario rendering), but the prose
+body the agent reads lives in a skill file under
+`.claude/skills/...` (or the Codex twin), ejected at `speccy init`
+time. The CLI has no `plan` / `tasks` / `implement` / `review` /
+`report` verbs; the phase recipes are `/speccy-plan`,
+`/speccy-tasks`, `/speccy-work`, `/speccy-review`, and
+`/speccy-ship` respectively.
+
 ## Phase 1: Planning
 
-```sh
-speccy plan
-```
+The `/speccy-plan` skill (interactive, full-body SKILL.md) drives
+the planning phase. The skill body instructs the agent to:
 
-Renders a deterministic prompt that asks the agent to:
-
-- read `AGENTS.md` (carries the project-wide product north star)
+- read `AGENTS.md` (carries the project-wide product north star);
 - read the nearest parent `MISSION.md` if writing into an existing
-  focus area (the planner skill walks upward from the target spec
-  path; absent MISSION.md is fine, just means the spec is ungrouped)
-- propose the next SPEC slice
+  focus area (the skill walks upward from the target spec path;
+  absent MISSION.md is fine, the spec is ungrouped);
+- call `speccy vacancy --json` to learn the next free `SPEC-NNNN`
+  without globbing `.speccy/specs/` itself;
+- propose the next SPEC slice;
 - write `specs/[focus]/NNNN-slug/SPEC.md` when targeting a focus
-  area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped, see template),
-  including `<requirement>` and nested `<scenario>` element
-  blocks for IDs and check scenarios
-- surface material questions inline in SPEC.md
+  area, otherwise `specs/NNNN-slug/SPEC.md` (PRD-shaped; see the
+  template under "SPEC.md" below), including `<requirement>` and
+  nested `<scenario>` element blocks for IDs and check scenarios;
+- surface material questions inline in SPEC.md.
 
-If `SPEC-ID` is passed, the prompt instead asks for a minimal
-amendment to the existing SPEC.md.
+Mid-loop amendments use the parallel `/speccy-amend` skill, which
+walks the SPEC.md edits and reconciles TASKS.md against the new
+shape, then calls `speccy lock SPEC-NNNN` to re-record the hash.
 
 ## Phase 2: Task decomposition
 
-```sh
-speccy tasks SPEC-001
-```
+The `/speccy-tasks` skill (pinned phase worker; thin SKILL.md stub
+plus full body at `.claude/agents/speccy-tasks.md`) drives task
+decomposition. The agent body instructs the agent to:
 
-Renders a prompt that asks the agent to:
-
-- read the SPEC.md
-- decompose into ordered tasks small enough for one sub-agent
-- group by phase if useful
-- reference REQ IDs each task covers
-- write `specs/NNNN-slug/TASKS.md`
+- read the SPEC.md (path supplied via `speccy next --json` or the
+  user-supplied SPEC-NNNN argument);
+- decompose into ordered tasks small enough for one sub-agent;
+- group by phase if useful;
+- reference REQ IDs each task covers via the `<task covers="...">`
+  attribute;
+- write `specs/NNNN-slug/TASKS.md`.
 
 After the agent writes TASKS.md, the skill calls:
 
 ```sh
-speccy tasks SPEC-001 --commit
+speccy lock SPEC-001
 ```
 
-This records the current SPEC.md sha256 hash and timestamp into
-TASKS.md frontmatter (`spec_hash_at_generation`, `generated_at`).
-Used for staleness detection in later phases.
+`speccy lock` records the current SPEC.md sha256 + UTC timestamp
+into TASKS.md frontmatter (`spec_hash_at_generation`,
+`generated_at`). Used for staleness detection in later phases. It
+is the only verb that mutates a TASKS.md frontmatter field; the
+skill calls it once after decomposition lands.
 
-If TASKS.md already exists, the prompt is an **amendment** prompt:
-preserve completed tasks, modify or remove invalidated tasks, add
-new ones for new requirements.
+If TASKS.md already exists, decomposition runs as an amendment
+under `/speccy-amend`, which preserves completed tasks, modifies
+or removes invalidated tasks, and adds new ones for new
+requirements.
 
 ## Phase 3: Implementation (single-task primitive)
 
-The `/speccy:work` skill is a single-task primitive. One invocation
+The `/speccy-work` skill is a single-task primitive. One invocation
 implements one task and exits with one state transition recorded in
-TASKS.md.
+TASKS.md. The skill ships as a thin SKILL.md stub plus a full agent
+body at `.claude/agents/speccy-work.md` (pinned `model: sonnet[1m]`,
+`effort: medium`) and the Codex twin at
+`.codex/agents/speccy-work.toml`.
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
-that specific task. Without an argument the session resolves the next
-implementable task via `speccy next --kind implement --json` and
-implements that one. In either case the session:
+that specific task. Without an argument the session calls
+`speccy next --json` and filters for `next_action.kind == "implement"`
+to resolve the next implementable task. In either case the session:
 
-- flips `state="pending"` to `state="in-progress"` on the target task,
-- renders the implementer prompt via `speccy implement SPEC-NNNN/T-NNN`,
-- writes tests first, then code; runs the project's own test command
-  locally and fails fast on red; uses `speccy check SPEC-NNNN/T-NNN`
-  only to render the scenarios it is satisfying,
-- appends one implementer note using the six-field handoff template
-  the prompt supplies,
-- flips `state="in-progress"` to `state="in-review"`, and exits.
+- flips `state="pending"` to `state="in-progress"` on the target
+  task;
+- writes tests first, then code; runs the project's own test
+  command locally and fails fast on red;
+- uses `speccy check SPEC-NNNN/T-NNN` only to render the scenarios
+  it is satisfying;
+- appends one implementer note using the handoff template the agent
+  body supplies;
+- flips `state="in-progress"` to `state="in-review"` and exits.
 
 The session does not pick up another task on its way out. If two
 implementers run in parallel against different `state="pending"`
@@ -338,38 +410,41 @@ behalf.
 
 ## Phase 4: Review (single-task primitive)
 
-The `/speccy:review` skill is a single-task primitive. One invocation
-runs one round of adversarial review on one task and exits with one
-state transition recorded in TASKS.md.
+The `/speccy-review` skill is a single-task primitive. One
+invocation runs one round of adversarial review on one task and
+exits with one state transition recorded in TASKS.md. The
+orchestrator stays in the parent session (no agent file) because
+it is the sole writer to TASKS.md during the review loop and needs
+the parent session's full capacity to fan out, parse return
+messages, and consolidate verdicts atomically.
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session reviews
-that specific task. Without an argument the session resolves the
-next reviewable task via `speccy next --kind review --json` and
-reviews that one. In either case the session:
+that specific task. Without an argument the session calls
+`speccy next --json` and filters for `next_action.kind == "review"`.
+In either case the session:
 
 - fans out four reviewer sub-agents in parallel within this single
   task, one per persona in the default fan-out (`business`, `tests`,
-  `security`, `style`); each sub-agent's prompt is the bash form
-  `Run speccy review SPEC-NNNN/T-NNN --persona <persona> and follow
-  its output`, with the persona body already loaded from
-  `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
-- aggregates the four inline notes appended to the task subtree,
+  `security`, `style`); each sub-agent's body is loaded from
+  `.claude/agents/reviewer-<persona>.md` or its Codex parallel, with
+  per-persona model pins (Opus[1m] xhigh for business / tests /
+  architecture; Sonnet[1m] high for security; Sonnet[1m] medium for
+  style / docs);
+- aggregates the four inline notes appended to the task subtree;
 - flips `state="in-review"` to `state="completed"` if every persona
   note is `pass`; otherwise flips `state="in-review"` to
-  `state="pending"` and appends a `Retry: ...` bullet summarising the
-  blockers, and exits.
+  `state="pending"` and appends a `Retry: ...` bullet summarising
+  the blockers, and exits.
 
 The within-task four-persona fan-out is intrinsic to the primitive,
 not orchestration: adversarial diversity requires fresh contexts per
 persona, and the fan-out is bounded to four sub-agents on one task
-in one round (DEC-002). Failed tasks return to `state="pending"` for
-a later Phase 3 invocation to pick up.
+in one round. Failed tasks return to `state="pending"` for a later
+Phase 3 invocation to pick up.
 
 The default fan-out is **business**, **tests**, **security**,
 **style**. The other personas (**architecture**, **docs**) are
-available via `--persona` but not in the default set. Projects can
-override the default later in `speccy.toml` if necessary; v1 ships
-with this default.
+available by user request but not in the default set.
 
 Composing multiple Phase 4 invocations into a batch is a future
 Layer-2 concern not built today. The interim composer is the
@@ -378,24 +453,22 @@ behalf.
 
 ## Phase 5: Report and PR
 
-When `speccy next` returns empty for both `--kind` values, the loop
-is complete.
+When `speccy next` returns no actionable task across the workspace,
+the loop is complete. The `/speccy-ship` skill (pinned phase worker
+at `.claude/agents/speccy-ship.md`) instructs the agent to write
+`REPORT.md` summarising:
 
-```sh
-speccy report SPEC-001
-```
+- requirements satisfied;
+- tasks completed (with retry counts derived from inline notes);
+- out-of-scope items absorbed;
+- deferred or known limitations;
+- check results summary.
 
-Renders a prompt that asks the agent to write `REPORT.md`
-summarizing:
-
-- requirements satisfied
-- tasks completed (with retry counts derived from inline notes)
-- out-of-scope items absorbed
-- deferred or known limitations
-- check results summary
-
-The skill then opens a PR via `gh` (or equivalent). Speccy does not
-touch GitHub.
+REPORT.md is shaped by raw XML element tags (`<report spec="...">`
+wrapping one `<coverage req="...">` per surviving requirement); the
+"REPORT.md format" section below covers the grammar and the
+`RPT-*` lint family that gates the proof shape. The skill then opens
+a PR via `gh` (or equivalent); Speccy itself never touches GitHub.
 
 ---
 
@@ -415,14 +488,6 @@ A retry is just `state="pending"` with prior notes attached. We do
 not introduce a fifth state because the inline notes already say
 "this is a retry; see review findings." Adding a state would add
 cases for skills to handle without adding information.
-
-> Historical note (SPEC-0022 migration): before SPEC-0022, task state
-> was carried by leading Markdown checkbox glyphs. The mapping is
-> `[ ]` -> `pending`, `[~]` -> `in-progress`, `[?]` -> `in-review`,
-> `[x]` -> `completed`. Post-SPEC-0022 the checkbox form is no longer
-> the machine contract; the parser reads state from the `state`
-> attribute on the `<task>` element and ignores any glyph in the
-> task body.
 
 ## Conventions for inline notes
 
@@ -996,7 +1061,7 @@ Plain Markdown prose remains plain Markdown.
 
 <scenario id="CHK-001">
 Given a task covers REQ-001,
-when `speccy check SPEC-0020/T-001` runs,
+when `speccy check SPEC-NNNN/T-NNN` runs,
 then only REQ-001's scenarios are rendered.
 </scenario>
 </requirement>
@@ -1061,17 +1126,13 @@ Open-tag forms in canonical order:
 <changelog>
 ```
 
-SPEC-0020's `<spec>` and `<overview>` were retired by SPEC-0021
-DEC-008; the parser now rejects them with a diagnostic noting they
-are no longer part of the whitelist.
-
 The Speccy element whitelist is **disjoint from the HTML5 element
-name set** by construction (see SPEC-0020 DEC-002): a `<section>` or
-`<details>` line in a SPEC.md body is unambiguously prose, never
-Speccy structure. The disjointness invariant is enforced by a unit
-test against a checked-in copy of the WHATWG element index. New
-structural additions must avoid HTML5 element names; that test
-catches accidental collisions at build time.
+name set** by construction: a `<section>` or `<details>` line in a
+SPEC.md body is unambiguously prose, never Speccy structure. The
+disjointness invariant is enforced by a unit test against a
+checked-in copy of the WHATWG element index. New structural
+additions must avoid HTML5 element names; that test catches
+accidental collisions at build time.
 
 ### IDs and nesting
 
@@ -1107,43 +1168,15 @@ catches accidental collisions at build time.
 - parse / render / parse yields a structurally equivalent
   `SpecDoc`.
 
-The deterministic renderer is library-internal. Per DEC-003 of
-SPEC-0019 there is no public `speccy fmt` command; rendering is
-used by CLI internals, prompt slicing, and tests.
-
-> Historical note (SPEC-0019 → SPEC-0020 migration): SPEC-0019
-> shipped a line-isolated HTML-comment marker grammar
-> (`<!-- speccy:requirement id="REQ-001" -->`, paired
-> `<!-- /speccy:requirement -->` close) that wrapped the same
-> Markdown bodies. SPEC-0020 superseded that carrier with raw XML
-> element tags (`<requirement id="REQ-001">` / `</requirement>`)
-> for tighter alignment with vendor prompt-structuring conventions;
-> the typed model is unchanged. Post-SPEC-0020 the legacy comment
-> form is a parse error and surfaces a dedicated diagnostic that
-> names the offending marker line and suggests the equivalent
-> element tag.
-
-> Historical note (SPEC-0019 `spec.toml` migration): before
-> SPEC-0019, the requirement-to-check graph and the scenario text
-> lived in a per-spec `spec.toml` (SPEC-0019) alongside `SPEC.md`.
-> SPEC-0019 migration collapsed `spec.toml` into the in-band
-> structure inside `SPEC.md`; per-spec `spec.toml` (SPEC-0019) is
-> now a stray file and the workspace loader rejects it. The only
-> TOML left in the file layout is the workspace-level
-> `.speccy/speccy.toml`.
-
-> Historical note: before SPEC-0018, checks carried `kind`,
-> `command` or `prompt`, and `proves` fields, and `speccy check`
-> spawned subprocesses. That execution surface was removed in
-> SPEC-0018 because semantic judgment about whether a test
-> meaningfully proves behavior belongs to reviewers and project
-> CI, not to Speccy's deterministic core. The old schema and the
-> migration rules live in the SPEC-0018 history.
+The deterministic renderer is library-internal. There is no public
+`speccy fmt` command; rendering is used by CLI internals, prompt
+slicing, and tests.
 
 ## REPORT.md
 
-Generated by the agent at the end of Phase 5. Speccy renders the
-prompt; the agent writes the file.
+Written by the agent at the end of Phase 5 via the `/speccy-ship`
+skill body. Speccy itself does not author REPORT.md and never
+renders natural-text prompts.
 
 REPORT.md is Markdown with requirement coverage carried by raw XML
 element tags, mirroring SPEC.md and TASKS.md. Outcome and narrative
@@ -1289,33 +1322,38 @@ persona.
 
 ## Definition
 
-```toml
-[[checks]]
-id = "CHK-001"
-scenario = """
-Given no account exists for alice@example.com, when the signup
-endpoint receives a valid request, then a user row is persisted and
-the response includes a session token.
-"""
+Scenarios live inside SPEC.md as `<scenario id="CHK-NNN">` elements
+nested under their parent `<requirement id="REQ-NNN">`:
+
+```markdown
+<requirement id="REQ-001">
+### REQ-001: Account creation
+...
+
+<scenario id="CHK-001">
+Given no account exists for alice@example.com,
+when the signup endpoint receives a valid request,
+then a user row is persisted and the response includes a session token.
+</scenario>
+</requirement>
 ```
 
-Required fields: exactly `id` and `scenario`. Unknown fields are
-rejected at parse via `#[serde(deny_unknown_fields)]`. Empty or
-whitespace-only `scenario` values are parse errors naming the
-containing `CHK-NNN`.
+Required attribute: `id` matching `CHK-\d{3,}`. Unknown attributes
+on a `<scenario>` element are parse errors. Empty or whitespace-only
+scenario bodies are parse errors naming the containing `CHK-NNN`.
 
 Scenarios are typically Given/When/Then prose, but the CLI does not
-parse the inner structure. Multi-line TOML literal strings
-(`'''...'''`) preserve backslashes and odd whitespace verbatim.
+parse the inner structure. The body is preserved verbatim except for
+trailing whitespace normalisation at element boundaries.
 
 ## Rendering
 
 ```sh
 speccy check                       # render all scenarios across all specs
-speccy check SPEC-0001             # every scenario under SPEC-0001
-speccy check SPEC-0001/CHK-001     # one spec-scoped scenario
-speccy check SPEC-0001/T-002       # scenarios covering one task
-speccy check CHK-001               # CHK-001 across every spec (DEC-003)
+speccy check SPEC-NNNN             # every scenario under one spec
+speccy check SPEC-NNNN/CHK-NNN     # one spec-scoped scenario
+speccy check SPEC-NNNN/T-NNN       # scenarios covering one task
+speccy check CHK-NNN               # CHK-NNN across every spec (unqualified)
 ```
 
 Behavior:
@@ -1415,9 +1453,12 @@ things become possible:
 
 1. Add a new persona without changing the CLI.
 2. Swap persona definitions when models improve.
-3. Projects can override shipped personas in
-   `.speccy/skills/personas/reviewer-security.md` -- the CLI
-   prefers project-local over shipped.
+3. Projects edit the host-native sub-agent file in place
+   (`.claude/agents/reviewer-security.md`,
+   `.codex/agents/reviewer-security.toml`). The host-native location
+   is the only persona surface, and `speccy init` classifies those
+   files Skip-on-exists so a local edit survives
+   `speccy init --force`.
 
 ---
 
@@ -1425,41 +1466,37 @@ things become possible:
 
 Amendments are not a separate first-class artifact in v1. The
 amendment story is a **skill concern** built from existing CLI
-primitives.
+primitives. There is no `speccy amend` verb, and no longer any
+`speccy plan` / `speccy tasks` rendering verbs either; the existing
+seven-verb CLI is sufficient.
 
 ## What happens when SPEC.md needs to change
 
-The `/speccy:amend SPEC-001` skill orchestrates:
+The `/speccy-amend SPEC-001` skill orchestrates the mid-loop change
+in the parent session:
 
-```sh
-speccy plan SPEC-001         # renders "amend this SPEC.md" prompt
-# Agent edits SPEC.md surgically (preserves what works)
+1. The skill reads `speccy status SPEC-001 --json` to learn
+   `spec_md_path`, `tasks_md_path`, and the spec's current
+   `next_action`.
+2. The agent edits `SPEC.md` surgically — preserve what works,
+   minimal diff, append a `## Changelog` row recording the why.
+3. The agent edits `TASKS.md` surgically:
+   - keep `state="completed"` tasks unless invalidated by the
+     SPEC change;
+   - keep `state="in-progress"` / `state="in-review"` tasks unless
+     invalidated;
+   - flip invalidated `state="completed"` tasks back to
+     `state="pending"` with a "spec amended" note;
+   - add new `<task>` elements for new requirements;
+   - remove tasks for dropped requirements.
+4. The skill calls `speccy lock SPEC-001` to record the new
+   `spec_hash_at_generation` + `generated_at` into TASKS.md
+   frontmatter so subsequent staleness checks pass.
 
-speccy tasks SPEC-001        # renders "amend TASKS.md" prompt
-                             # because TASKS.md already exists
-# Agent edits TASKS.md surgically:
-#   - keeps state="completed" tasks unless invalidated by changes
-#   - keeps state="in-progress" / state="in-review" tasks unless invalidated
-#   - flips invalidated state="completed" tasks back to state="pending"
-#     with a "spec amended" note
-#   - adds new <task> elements for new requirements
-#   - removes tasks for dropped requirements
-
-speccy tasks SPEC-001 --commit
-# Records new spec_hash + timestamp into TASKS.md frontmatter
-```
-
-The cleverness lives in the skill prompt templates:
-
-- `prompts/plan-amend.md` instructs: "do not rewrite the spec;
-  produce a minimal diff against existing SPEC.md."
-- `prompts/tasks-amend.md` instructs: "preserve `state=\"completed\"`
-  tasks unless the spec change invalidates them; add a 'spec amended'
-  note next to flipped tasks."
-
-The CLI renders these context-aware prompts based on whether the
-target file exists. No `speccy amend` command; the existing
-commands are sufficient.
+The skill body ships as host skill content under
+`.claude/skills/speccy-amend/SKILL.md` and the Codex twin. There is
+no CLI-embedded prompt template for amendment; the recipe lives
+entirely in the skill file.
 
 ## Lineage
 
@@ -1513,37 +1550,45 @@ to-end without each project inventing its own integration.
 ```
 resources/
   modules/
-    skills/
-      speccy-init.md
+    skills/                  Full-body SKILL.md sources for interactive skills
+      speccy-brainstorm.md
       speccy-plan.md
-      speccy-tasks.md
+      speccy-amend.md
+      speccy-review.md       Orchestrator (dispatches the six reviewer sub-agents)
+    phases/                  Full-body sources for the pinned phase workers
+      speccy-init.md         Used by speccy-init's interactive SKILL.md too
+      speccy-tasks.md        Decompose one SPEC into TASKS.md
       speccy-work.md         Implement one task (single-task primitive)
-      speccy-review.md       Review one task (single-task primitive)
-      speccy-amend.md        SPEC.md + TASKS.md surgical edit
-      speccy-ship.md         Run report, open PR
-    personas/
-      planner.md
-      implementer.md
+      speccy-ship.md         Write REPORT.md + open PR
+    personas/                Six reviewer persona bodies + co-located snippets
       reviewer-business.md
       reviewer-tests.md
       reviewer-security.md
       reviewer-style.md
       reviewer-architecture.md
       reviewer-docs.md
-    prompts/
-      plan-greenfield.md
-      plan-amend.md
-      tasks-generate.md
-      tasks-amend.md
-      implementer.md
-      reviewer-<persona>.md
-      report.md
-  agents/
-    .claude/skills/speccy-<verb>/SKILL.md.tmpl
-    .claude/agents/reviewer-<persona>.md.tmpl
-    .agents/skills/speccy-<verb>/SKILL.md.tmpl
+      verdict_return_contract.md   Topic-named snippets {% included %} by
+      inline_note_format.md         the persona bodies above. Filename pattern
+      no_tasks_md_writes.md         distinguishes snippets from body files;
+      diff_fetch_command.md         no `_partials/` subdirectory exists.
+      planner.md                    Two extra bodies referenced by
+      implementer.md                /speccy-plan and /speccy-work prompts.
+    examples/                Progressive-disclosure example bodies
+      evidence.md
+  agents/                    Per-host MiniJinja wrappers (rendered at init time)
+    .claude/skills/speccy-<verb>/SKILL.md.tmpl   Eight skills total
+    .claude/agents/speccy-{tasks,work,ship}.md.tmpl   Pinned phase workers
+    .claude/agents/reviewer-<persona>.md.tmpl    Six reviewer sub-agents
+    .agents/skills/speccy-<verb>/SKILL.md.tmpl   Codex skill files
+    .codex/agents/speccy-{tasks,work,ship}.toml.tmpl
     .codex/agents/reviewer-<persona>.toml.tmpl
 ```
+
+There is no `resources/modules/prompts/` directory and no embedded
+phase prompt body inside the CLI binary. The CLI ships
+`resources/modules/` as the single source of truth for skill
+content and `resources/agents/` as the per-host MiniJinja wrappers;
+nothing else.
 
 ## `speccy init` host detection
 
@@ -1556,48 +1601,69 @@ speccy init --host codex
 Init renders the per-host wrappers into host-native locations:
 
 - Claude Code: `.claude/skills/speccy-<verb>/SKILL.md` plus
-  `.claude/agents/reviewer-<persona>.md`
+  `.claude/agents/speccy-{tasks,work,ship}.md` for the pinned phase
+  workers and `.claude/agents/reviewer-<persona>.md` for the six
+  reviewer sub-agents.
 - Codex: `.agents/skills/speccy-<verb>/SKILL.md` plus
-  `.codex/agents/reviewer-<persona>.toml`
+  `.codex/agents/speccy-{tasks,work,ship}.toml` and
+  `.codex/agents/reviewer-<persona>.toml`.
 
-The user gets immediate access to the `speccy-*` skills in their host
-without any further setup. Reviewer personas register as native
-subagents on Claude Code and as agent definitions on Codex.
+Existing files are handled by a three-way per-file classification:
+absent → `created`; byte-identical to planned content → `unchanged`;
+differs from planned content → `Conflict`, and the entire batch
+refuses atomically unless `--force` is passed, in which case
+differing files are overwritten with the `(!) overwritten` log
+marker. Recovery from an unwanted overwrite is via `git checkout`;
+there is no in-CLI merge or backup mechanism. Host-native reviewer
+files (`.claude/agents/reviewer-<persona>.md` and the Codex twin)
+remain Skip-on-exists so local persona-body edits survive
+`--force`.
 
 ## Workflow recipes
 
-Each top-level skill is a recipe:
+Each top-level skill is a recipe. The five interactive skills
+(`speccy-init`, `speccy-brainstorm`, `speccy-plan`, `speccy-amend`,
+`speccy-review` orchestrator) eject as full-body SKILL.md only. The
+three pinned phase workers (`speccy-tasks`, `speccy-work`,
+`speccy-ship`) eject as a thin SKILL.md stub (≤10 non-blank lines
+naming the matching agent file) plus a full-body agent file at
+`.claude/agents/speccy-<phase>.md` (Codex:
+`.codex/agents/speccy-<phase>.toml`). The eject shape follows the
+invocation pattern: recurring loop-friendly phases pin a
+heavy-model fork via the agent file; interactive skills stay in
+the parent session.
 
-- `/speccy:init` -- bootstrap the project
-- `/speccy:plan` -- Phase 1 (AGENTS.md north star + optional MISSION.md -> SPEC)
-- `/speccy:tasks` -- Phase 2 (SPEC -> TASKS)
-- `/speccy:work` -- Phase 3 (implement one task)
-- `/speccy:review` -- Phase 4 (review one task)
-- `/speccy:amend` -- Mid-loop spec change
-- `/speccy:ship` -- Phase 5 (report + PR)
+- `/speccy-init` -- bootstrap the project (interactive)
+- `/speccy-brainstorm` -- atomize a fuzzy ask before drafting a SPEC
+- `/speccy-plan` -- Phase 1 (AGENTS.md north star + optional MISSION.md -> SPEC)
+- `/speccy-tasks` -- Phase 2 (SPEC -> TASKS, then `speccy lock`)
+- `/speccy-work` -- Phase 3 (implement one task)
+- `/speccy-review` -- Phase 4 (review one task; orchestrator)
+- `/speccy-amend` -- Mid-loop SPEC + TASKS reconciliation
+- `/speccy-ship` -- Phase 5 (REPORT.md + PR)
 
 A typical full session in Claude Code looks like:
 
 ```
-/speccy:plan
-[agent writes SPEC.md]
+/speccy-plan
+[agent reads `speccy vacancy --json`, writes SPEC.md]
 
-/speccy:tasks SPEC-001
-[agent writes TASKS.md, then speccy tasks --commit]
+/speccy-tasks SPEC-001
+[agent writes TASKS.md, then `speccy lock SPEC-001`]
 
-/speccy:work SPEC-001/T-001
+/speccy-work SPEC-001/T-001
 [agent implements one task, flips state="pending" -> state="in-review", exits]
 
-/speccy:review SPEC-001/T-001
-[agent fans out four personas on one task, aggregates notes,
+/speccy-review SPEC-001/T-001
+[orchestrator fans out four personas on one task, aggregates notes,
  flips state="in-review" -> state="completed" (or back to "pending"
  with a Retry note), exits]
 
-[caller re-invokes /speccy:work and /speccy:review on the remaining
+[caller re-invokes /speccy-work and /speccy-review on the remaining
  tasks; the existing /loop skill is the interim composer for batched
  iteration]
 
-/speccy:ship SPEC-001
+/speccy-ship SPEC-001
 [agent writes REPORT.md, opens PR]
 ```
 
@@ -1655,7 +1721,10 @@ lives. They are upgradeable as models improve; the CLI is not.
 
 # JSON Interfaces
 
-Two commands have stable JSON contracts.
+Four commands carry stable JSON contracts: `status`, `next`,
+`vacancy`, and `verify`. `--json` switches representation; the
+content is the same as the text output. Schema versions are pinned
+per-envelope and bumped only on breaking shape changes.
 
 ## `speccy status --json`
 
@@ -1665,7 +1734,7 @@ Two commands have stable JSON contracts.
   "repo_sha": "abc123",
   "specs": [
     {
-      "id": "SPEC-001",
+      "id": "SPEC-0001",
       "slug": "user-signup",
       "title": "User signup",
       "status": "in-progress",
@@ -1682,130 +1751,169 @@ Two commands have stable JSON contracts.
       "open_questions": 1,
       "lint": {
         "errors": [],
-        "warnings": ["REQ-001: REQ-002 has no covering check"]
-      }
+        "warnings": [],
+        "info": []
+      },
+      "spec_md_path": ".speccy/specs/0001-user-signup/SPEC.md",
+      "tasks_md_path": ".speccy/specs/0001-user-signup/TASKS.md",
+      "mission_md_path": null
     }
   ]
 }
 ```
 
-By default, `speccy status` shows only specs with `status: in-progress`
-plus any with stale evidence or lint errors regardless of status.
-Specs with `status: implemented`, `dropped`, or `superseded` are
-excluded from the default view but always present in `--json` output
-so harnesses can filter as needed.
+By default `speccy status` shows only specs with
+`status: in-progress` plus any with stale evidence or lint errors
+regardless of status. Pass a positional `SPEC-NNNN` selector for one
+spec, or `--all` to render every spec in workspace order. Specs with
+`status: implemented`, `dropped`, or `superseded` are excluded from
+the default view but always present in `--json` output so harnesses
+can filter as needed.
 
-The `superseded_by` field is **computed** at query time by walking
-every parsed SPEC.md's `frontmatter.supersedes` and inverting the
-relation. It does not appear in any SPEC.md frontmatter on disk.
+Per-spec entries carry resolved paths (`spec_md_path`,
+`tasks_md_path`, `mission_md_path`) as repo-relative forward-slash
+strings. `tasks_md_path` is `null` when TASKS.md does not yet
+exist; `mission_md_path` is `null` when the spec lives flat (no
+mission folder). The `superseded_by` field is **computed** at query
+time by walking every parsed SPEC.md's `frontmatter.supersedes` and
+inverting the relation; it does not appear on disk.
 
 ## `speccy next --json`
 
-When the next actionable thing is implementation:
+Workspace form (no positional selector) — every active spec with
+its derived `next_action`:
 
 ```json
 {
   "schema_version": 1,
-  "kind": "implement",
-  "spec": "SPEC-001",
-  "task": "T-003",
-  "task_line": "Implement POST /api/signup",
-  "covers": ["REQ-001"],
-  "suggested_files": ["src/auth/signup.ts", "tests/auth/signup.spec.ts"],
-  "prompt_command": "speccy implement T-003"
+  "specs": [
+    {
+      "spec_id": "SPEC-0001",
+      "next_action": { "kind": "review", "task_id": "T-002" },
+      "spec_md_path": ".speccy/specs/0001-user-signup/SPEC.md",
+      "tasks_md_path": ".speccy/specs/0001-user-signup/TASKS.md",
+      "mission_md_path": null
+    },
+    {
+      "spec_id": "SPEC-0002",
+      "next_action": { "kind": "decompose" },
+      "spec_md_path": ".speccy/specs/0002-password-reset/SPEC.md",
+      "tasks_md_path": null,
+      "mission_md_path": null
+    }
+  ]
 }
 ```
 
-When the next actionable thing is review:
+Per-spec form (positional `SPEC-NNNN`) — one entry, or
+`{ next_action: null, reason }` when the spec is `completed` or
+`superseded`. Action kind is derived from spec state via the
+priority rule `review > implement > ship`, with `decompose` when
+TASKS.md is absent. There is no `--kind` flag: spec state fully
+determines the kind, so caller-supplied filtering would be
+redundant. Skills that want only one kind read the envelope and
+filter on `next_action.kind` themselves.
+
+## `speccy vacancy --json`
+
+```json
+{ "schema_version": 1, "next_spec_id": "SPEC-0036" }
+```
+
+Used by `/speccy-plan` greenfield mode so the skill never globs
+`.speccy/specs/` itself. One field, one query, smallest possible
+payload.
+
+## `speccy verify --json`
 
 ```json
 {
   "schema_version": 1,
-  "kind": "review",
-  "spec": "SPEC-001",
-  "task": "T-003",
-  "task_line": "Implement POST /api/signup",
-  "personas": ["business", "tests", "security", "style"],
-  "prompt_command_template": "speccy review T-003 --persona {persona}"
+  "repo_sha": "abc123",
+  "lint": {
+    "errors": [],
+    "warnings": [],
+    "info": []
+  },
+  "specs_total": 35,
+  "requirements_total": 142,
+  "scenarios_total": 287
 }
 ```
 
-The skill iterates over `personas` and invokes
-`prompt_command_template` for each.
+No `outcome`, `exit_code`, or `duration_ms` fields; the binary exit
+code is the contract for CI scripts, and the JSON payload is for
+downstream tooling that wants structured failure detail. Diagnostics
+on `in-progress` / `dropped` / `superseded` specs are demoted to
+`Level::Info` so only `implemented` specs gate the build.
 
-When all tasks are `state="completed"` and the report is pending:
-
-```json
-{
-  "schema_version": 1,
-  "kind": "report",
-  "spec": "SPEC-001",
-  "prompt_command": "speccy report SPEC-001"
-}
-```
-
-When nothing is actionable but state is incomplete (e.g. all tasks
-`state="in-progress"` claimed by other sessions):
-
-```json
-{
-  "schema_version": 1,
-  "kind": "blocked",
-  "reason": "all open tasks are claimed by other sessions"
-}
-```
-
-These are the only two contracts a harness needs. Everything else
-is text output to humans.
+These four envelopes are everything a harness needs. The rest of
+the CLI surface is text output to humans.
 
 ---
 
 # Lint Codes
 
 Speccy emits a small set of deterministic lint codes. None depend
-on LLM judgment. All have stable prefixes (`SPC-` for spec
-structure, `REQ-` for requirements, `TSK-` for task structure).
+on LLM judgment. All have stable prefixes: `SPC-` for spec
+structure, `REQ-` for requirements, `TSK-` for task structure,
+`QST-` for open questions, and `RPT-` for REPORT.md proof shape
+(in flight). The canonical, append-only list lives in
+`speccy-core::lint::registry::REGISTRY`; the snapshot test at
+`speccy-core/tests/lint_registry.rs` pins it. The summary below
+mirrors the registry.
 
 ```text
-SPC-001  Stray per-spec spec.toml file present in spec directory (SPEC-0019)
-         (per-spec spec.toml was removed in SPEC-0019; the workspace
-         loader rejects it as StraySpecToml)
-SPC-002  SPEC.md marker tree malformed (parse error from
-         speccy-core::parse::spec_markers)
-SPC-003  Reserved (historical; formerly: spec.toml requirement REQ-NNN
-         missing matching SPEC.md heading; obsolete post-SPEC-0019)
-SPC-004  SPEC.md frontmatter missing required field (id/slug/title/status/created)
-SPC-005  SPEC.md frontmatter status value is not one of: in-progress,
-         implemented, dropped, superseded
+SPC-001  Stray per-spec spec.toml file present in spec directory
+         (the only TOML carried at spec level today is the workspace
+         `.speccy/speccy.toml`; a per-spec spec.toml is a stale file)
+SPC-002  SPEC.md element tree malformed: heading declares an ID but
+         no matching `<requirement>` element exists
+SPC-003  SPEC.md element tree malformed: `<requirement>` element
+         exists but SPEC.md has no matching `### REQ-NNN` heading
+SPC-004  SPEC.md frontmatter missing required field
+         (id / slug / title / status / created)
+SPC-005  SPEC.md frontmatter status value is not one of:
+         in-progress, implemented, dropped, superseded
 SPC-006  status = superseded but no other spec in the workspace
          declares `supersedes` pointing to this spec
-SPC-007  status = implemented but some tasks have state != "completed" (informational)
+SPC-007  status = implemented but some tasks have state != "completed"
+         (informational)
 
 REQ-001  Requirement has no nested <scenario> element
-REQ-002  Reserved (formerly: requirement's check IDs reference
-         non-existent checks — obsolete post-SPEC-0019; containment
-         is now the only relation)
-REQ-003  Reserved (formerly: orphan [[checks]] row — obsolete
-         post-SPEC-0019; scenarios cannot exist outside a requirement)
 
 TSK-001  TASKS.md task references non-existent REQ ID
 TSK-002  TASKS.md task ID format invalid (expected T-NNN)
-TSK-003  Spec hash mismatch: TASKS.md may be stale relative to SPEC.md
+TSK-003  Spec hash mismatch: TASKS.md may be stale relative to
+         SPEC.md (warning, not error)
 TSK-004  TASKS.md frontmatter missing required field
-         (spec/spec_hash_at_generation/generated_at)
+         (spec / spec_hash_at_generation / generated_at)
+TSK-005  Spec ID disagreement: folder digits, SPEC.md frontmatter
+         `id:`, and TASKS.md frontmatter `spec:` must all agree
+         (error; skipped when any of the three is unobtainable so
+         upstream parse-error diagnostics cover those cases)
 
-QST-001  SPEC.md has unchecked open question (soft signal)
-
-JSON-001 status --json schema version mismatch (informational)
+QST-001  SPEC.md has unchecked open question (informational)
 ```
 
-Nothing here grades scenario quality mechanically. The CLI flags
-presence and reference shape only; whether a scenario is meaningful
-and whether the project tests actually cover it goes to review.
+The `RPT-*` family is in flight. It adds three Level::Error rules
+over the parsed REPORT.md result: parse failure of the file,
+`<coverage req="REQ-NNN">` pointing at a missing requirement, and a
+scenario id in `<coverage scenarios="...">` not resolving under the
+named requirement. When the slice ships, the same `<coverage>`
+shape the in-tree integration test asserts becomes a `speccy
+verify` gate so ship validation matches CI inside Speccy itself.
 
-> Historical note: the `VAL-*` lint family (missing `proves`,
-> kind/payload mismatch, no-op `command`) was retired in SPEC-0018
-> when execution-shaped check fields were removed.
+`REQ-002` and `REQ-003` are registry-only entries kept for stability:
+both fired pre-XML-canonical-SPEC.md but are no longer reachable at
+parse time (the parser rejects orphan scenarios before lint runs).
+Their slots stay in the snapshot so removing them would be a
+breaking change.
+
+Nothing in this list grades scenario quality mechanically. The CLI
+flags presence and reference shape only; whether a scenario is
+meaningful and whether the project tests actually cover it goes to
+review.
 
 Lint codes are stable: changing a code's meaning between minor
 versions is a breaking change. Adding new codes is fine.
@@ -1834,11 +1942,12 @@ These are not v1 features. Each was considered and rejected.
 | `origin` field | Brownfield context is the planner skill's responsibility, not a TOML field. |
 | Check `inputs` and freshness hashing | Wrong inputs poison the model worse than no inputs. Project CI runs tests. |
 | Check evidence records | Project CI captures execution; no need to commit. |
-| Speccy executing project tests | SPEC-0018 removed this. Project CI runs `cargo test` / `pnpm test` directly; `speccy verify` only validates proof shape. |
+| Speccy executing project tests | Project CI runs `cargo test` / `pnpm test` directly; `speccy verify` only validates proof shape. |
+| Phase prompt rendering in the CLI | Skill bodies under `.claude/skills/` and `.agents/skills/` carry the phase prose; the binary never renders natural-text prompts. |
 | `--strict` flag | Opinionated, not configurable. |
 | Validation kind enum | Free-form string with conventions. |
 | Solo review policy toggle | Different sessions / personas suffice. |
-| In-process LLM calls | CLI renders prompts; never invokes models. |
+| In-process LLM calls | CLI ships state queries and lint only; never invokes models. |
 | Worktree orchestration | Harness concern. |
 | Distributed locks | Harness concern. |
 | External tracker sync | Harness concern. |
@@ -1848,7 +1957,7 @@ These are not v1 features. Each was considered and rejected.
 | Mutation testing | Out of scope. |
 | Semantic dependency analysis | Out of scope. |
 | Bad-test detection beyond no-op commands | Review owns this. |
-| Public `speccy fmt` command | Per SPEC-0019 DEC-003. The deterministic SPEC.md renderer ships as library functionality (used by CLI internals, prompt slicing, and tests); a user-facing formatter is out of scope for v1. |
+| Public `speccy fmt` command | The deterministic SPEC.md renderer ships as library functionality (used by CLI internals and tests); a user-facing formatter is out of scope for v1. |
 
 The point is not that these features are wrong. The point is that
 v1 is small enough to trust.
@@ -1881,14 +1990,17 @@ iteration. That is where drift gets caught in this system.
 V1 makes these failures loud:
 
 - Spec has no requirements
-- Requirement has no covering scenario
-- A referenced `CHK-NNN` has no matching `[[checks]]` row
-- A `[[checks]]` row is unreferenced by any requirement
+- Requirement has no nested `<scenario>` element
+- Spec ID disagreement: folder digits, SPEC.md frontmatter `id:`,
+  and TASKS.md frontmatter `spec:` are not all the same
 - TASKS.md references requirements that don't exist
 - TASKS.md is stale relative to SPEC.md (hash drift)
 - Open question in SPEC.md is unchecked
 - Reviewer persona returns `blocking`
 - Task is `state="in-review"` but at least one persona review is missing
+- (in flight) REPORT.md `<coverage>` element references a
+  requirement or scenario that does not resolve under the sibling
+  SPEC.md
 
 V1 intentionally does not catch:
 
@@ -2022,8 +2134,7 @@ only. Lint warns on uppercase or non-ASCII. Mismatch between
 `.speccy/speccy.toml` requires `schema_version = 1`. SPEC.md /
 TASKS.md / REPORT.md frontmatter implicitly target schema version
 1; no declaration needed. The CLI rejects unknown `schema_version`
-values with a clear error. (SPEC-0019 migration: per-spec
-`spec.toml` migration removed it; it no longer carries any schema.)
+values with a clear error.
 
 ## `speccy verify` exit code
 
@@ -2032,20 +2143,24 @@ has at least one scenario, every referenced scenario resolves, no
 scenarios are unreferenced); `1` otherwise. `speccy verify` does
 not execute project tests; CI runs the project's own test commands
 alongside it. Detailed breakdown is available via
-`speccy verify --json` (`schema_version = 2`; no `outcome`,
+`speccy verify --json` (`schema_version = 1`; no `outcome`,
 `exit_code`, or `duration_ms` fields). CI scripts only check the
 exit code; downstream tooling parses the JSON if it needs
 structured failure info.
 
 ## `speccy next` priority
 
-When multiple specs have actionable work:
-
-1. Lowest spec ID first.
-2. Within a spec, prefer `state="in-review"` review-ready tasks
-   over `state="pending"` open tasks (so reviews don't accumulate).
-3. `--kind implement` or `--kind review` overrides the within-spec
-   preference and filters to the requested kind across all specs.
+Per-spec, the derived `next_action.kind` follows
+`review > implement > ship`, with `decompose` when TASKS.md is
+absent. Drift visibility favours short feedback
+loops; bugs caught in the piecewise (implement → review → implement
+→ review) workflow are cheap, while bugs caught after multiple
+tasks build on top of an inherited mistake are expensive, so the
+default nudges agents toward piecewise. Callers that want
+batched-implementation Pattern B override by invoking
+`/speccy-work SPEC-NNNN/T-NNN` directly against a `state="pending"`
+task; the CLI surfaces a recommendation, not a gate. Workspace-form
+ordering is lowest spec ID first.
 
 ## `speccy check` rendering
 
@@ -2057,61 +2172,47 @@ root (the directory containing `.speccy/`). No subprocesses are
 spawned; exit code is non-zero only for selector, lookup, parse,
 or workspace errors.
 
-## `speccy review` diff scoping
+## Reviewer diff scoping
 
-Reviewer prompt includes the diff between the working tree and
-`HEAD`. This is what the implementer just produced, including
-uncommitted edits — the natural moment of review.
-
-If the working tree is clean (e.g. the implementer already
-committed), the diff is taken between `HEAD` and `HEAD~1`. If that
-also yields nothing relevant, the prompt notes "no diff available;
-review based on SPEC.md and task notes alone."
-
-## Prompt context budget
-
-When a rendered prompt approaches the host model's context limit,
-sections are dropped in this order until the prompt fits:
-
-1. `## Notes` from SPEC.md (drop first)
-2. Answered `Open questions` entries (keep unchecked ones)
-3. SPEC.md `## Changelog` rows older than the 5 most recent
-4. TASKS.md review notes older than the 3 most recent per task
-5. Other specs' summaries (if multi-spec context was being shown)
-
-If a prompt still doesn't fit after these drops, the CLI prints a
-warning and emits the prompt anyway; the host model handles
-truncation. v1 does not implement smarter retrieval.
+The diff the reviewer sub-agent reasons over is fetched by the
+`/speccy-review` orchestrator (or the persona body itself, depending
+on the persona) via `git diff HEAD` — the implementer's
+uncommitted edits, which is the natural moment of review. When the
+working tree is clean (the implementer already committed) the
+fallback is `git diff HEAD~1 HEAD`; if that yields nothing relevant,
+the persona body falls back to SPEC.md plus task notes alone. The
+CLI is not in this loop; it does not invoke git.
 
 ---
 
 # Implementation Sequence
 
-In this order:
+Speccy was built in this order, and the current binary reflects the
+end state:
 
 1. Artifact parser: `speccy.toml`, SPEC.md (YAML frontmatter + XML
    element tree via `speccy-core::parse::spec_xml` + Changelog
    table), TASKS.md (YAML frontmatter + `task_xml` element tree),
-   REPORT.md (YAML frontmatter + `report_xml` element tree)
-2. `speccy init` -- scaffold + host skill copy
-3. Lint engine with the codes listed above
-4. `speccy status` (text + `--json`)
-5. `speccy plan` (greenfield prompt rendering)
-6. `speccy tasks` (initial + amendment prompts)
-7. `speccy tasks --commit` (record spec_hash)
-8. `speccy next` (text + `--json`)
-9. `speccy implement` prompt rendering
-10. `speccy review` with persona rendering
-11. `speccy check` (scenario rendering)
-12. `speccy report` prompt rendering
-13. `speccy verify` (proof-shape validation)
-14. Skill packs: Claude Code, Codex, shared personas
-15. Worked example: dogfood Speccy's own development in
-    `.speccy/specs/` once enough of the above lands
+   REPORT.md (YAML frontmatter + `report_xml` element tree).
+2. `speccy init` — scaffold + host skill copy with three-way
+   per-file classification.
+3. Lint engine with the codes listed in "Lint Codes".
+4. `speccy status` (text + `--json schema_version: 1`).
+5. `speccy next` (text + `--json schema_version: 1`); action kind
+   derived from spec state.
+6. `speccy check` (scenario rendering).
+7. `speccy verify` (proof-shape validation; `--json schema_version: 1`).
+8. `speccy lock` (record SPEC.md hash into TASKS.md frontmatter).
+9. `speccy vacancy` (next free SPEC-NNNN; `--json schema_version: 1`).
+10. Skill packs: shipped under `resources/modules/{personas,phases,skills,examples}/`
+    plus per-host MiniJinja wrappers under `resources/agents/`.
+11. Dogfood: Speccy's own development tracked under `.speccy/specs/`,
+    with every shipped CLI verb proven by its own SPEC.
 
-The implementation sequence is itself the first project we should
-drive through Speccy. By the time step 13 lands, Speccy's own
-SPECs should exist for steps 1-12.
+Speccy dogfoods its own development. Every SPEC in this repo's
+`.speccy/specs/` is the proof for the corresponding slice of the
+binary; if a SPEC's `status` is `implemented`, the behaviour it
+describes is what the binary does today.
 
 ---
 

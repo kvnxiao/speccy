@@ -10,7 +10,8 @@ use serde::Serialize;
 /// downstream consumers can sniff it cheaply.
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonOutput {
-    /// Schema version. `2` since SPEC-0033 T-005 (added resolved paths).
+    /// Schema version. Pinned at `1` pre-v1; bump only when an external
+    /// consumer of `1` exists and the shape must break.
     pub schema_version: u32,
     /// HEAD commit SHA, or `""` if unavailable.
     pub repo_sha: String,

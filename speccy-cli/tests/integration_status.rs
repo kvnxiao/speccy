@@ -88,7 +88,7 @@ fn status_json_emits_valid_json() -> TestResult {
     let output = cmd.assert().success().get_output().clone();
     let text = String::from_utf8(output.stdout)?;
     let parsed: serde_json::Value = serde_json::from_str(&text)?;
-    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(2)));
+    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(1)));
     Ok(())
 }
 

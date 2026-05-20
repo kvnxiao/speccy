@@ -56,7 +56,7 @@ fn contract() -> TestResult {
     let parsed: serde_json::Value = serde_json::from_str(&json_text)?;
 
     // Schema version is the first field.
-    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(2)));
+    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(1)));
     // repo_sha may be empty or a 40-char hex; both are acceptable.
     let sha = parsed
         .get("repo_sha")

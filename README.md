@@ -26,17 +26,25 @@ deterministically, queries workspace state, and runs checks. The
 intelligence (loops, personas, and "what to do next" decisions)
 lives in skill files alongside `.speccy/`.
 
-Consequently, the human-facing CLI surface is small:
+Consequently, the human-facing CLI surface is small. Seven flat
+commands, each with one job; `--json` toggles representation, not
+content:
 
-| Command         | When you type it                          |
-| --------------- | ----------------------------------------- |
-| `speccy init`   | Once per repo, to bootstrap.              |
-| `speccy status` | Occasionally, to inspect workspace state. |
-| `speccy check`  | Occasionally, to run proofs locally.      |
-| `speccy verify` | In CI, as the gate.                       |
+| Command          | When you type it                                                          |
+| ---------------- | ------------------------------------------------------------------------- |
+| `speccy init`    | Once per repo, to bootstrap.                                              |
+| `speccy status`  | Occasionally, to inspect workspace state.                                 |
+| `speccy check`   | Occasionally, to render the Given/When/Then scenarios for one or more specs. |
+| `speccy verify`  | In CI, as the gate.                                                       |
+| `speccy next`    | Mostly invoked by the shipped skills to resolve the next actionable task. |
+| `speccy lock`    | Invoked by `/speccy-tasks` to record the SPEC.md hash into TASKS.md after decomposition. |
+| `speccy vacancy` | Invoked by `/speccy-plan` (greenfield path) to allocate the next free `SPEC-NNNN`. |
 
-Everything else (`plan`, `tasks`, `implement`, `review`, `report`,
-and `next`) is invoked by the shipped skills.
+Phase prompts (`plan`, `tasks`, `implement`, `review`, `report`) are
+not CLI commands. They live as skill bodies in the host pack and
+drive the loop entirely through the seven CLI verbs above. The
+deterministic core does state queries, hash recording, and proof-
+shape lint only; it never renders natural-text prompts.
 
 All of this lives inside your repo. The `.speccy/` workspace sits at
 the repo root, and the host skill pack is copied into your local
@@ -195,22 +203,30 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
   speccy.toml                   Minimal project config (just schema_version + name)
   specs/
     NNNN-slug/                  One spec, flat layout
-      SPEC.md                   Frontmatter + PRD prose + Decisions + Changelog
-      TASKS.md                  Checklist + inline implementer/reviewer notes
-      spec.toml                 Requirement <-> Check mapping
-      REPORT.md                 Written at end of loop
+      SPEC.md                   Frontmatter + PRD prose + nested <requirement>/<scenario>/<decision> elements + Changelog
+      TASKS.md                  Frontmatter (spec_hash_at_generation) + <task> elements + inline implementer/reviewer notes
+      REPORT.md                 Frontmatter (outcome) + <report>/<coverage> elements (end of loop)
 
 .claude/                        (if host is Claude Code)
-  skills/speccy-*/              Workflow recipes (init, plan, tasks, work, review, ship, amend)
-  agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents
-  agents/reviewer-*.md                 Reviewer persona sub-agents
+  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship}/
+                                Eight workflow recipes. The five interactive skills
+                                (init, brainstorm, plan, review, amend) eject as
+                                full-body SKILL.md; the three pinned phase workers
+                                (tasks, work, ship) eject as thin SKILL.md stubs
+                                pointing at the matching agent file.
+  agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents (full body)
+  agents/reviewer-*.md                 Six reviewer persona sub-agents
 
 .agents/                        (if host is Codex)
-  skills/speccy-*/
+  skills/speccy-*/                     Eight Codex skill SKILL.md files
 .codex/
   agents/speccy-{tasks,work,ship}.toml Pinned phase-worker sub-agents
-  agents/reviewer-*.toml               Reviewer persona sub-agents
+  agents/reviewer-*.toml               Six reviewer persona sub-agents
 ```
+
+The requirement-to-scenario graph lives in-band as XML element tags
+inside `SPEC.md`; there is no per-spec `spec.toml`. The only TOML
+left in the layout is the workspace-level `.speccy/speccy.toml`.
 
 Specs may additionally be grouped under an optional **mission
 folder** (`.speccy/specs/[focus]/MISSION.md` plus one folder per
@@ -366,7 +382,8 @@ Speccy commits to six durable principles:
    mechanism by which drift gets caught. Personas live as markdown
    skills.
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, and
-   Check), ten commands, and no mode toggles.
+   Check), seven commands, and no mode toggles. `--json` toggles
+   representation, never content.
 6. **Surface unknowns; never invent.** An ambiguous spec means stop
    and surface the ambiguity; an inability to validate something
    means say so out loud.

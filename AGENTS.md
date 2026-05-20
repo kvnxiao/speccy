@@ -46,9 +46,11 @@ intent at every step.
 
 ### V1.0 outcome
 
-- Ten-command Rust CLI implementing the surface in
-  `.speccy/ARCHITECTURE.md`: `init`, `plan`, `tasks`, `implement`,
-  `review`, `report`, `status`, `next`, `check`, `verify`.
+- Seven-command Rust CLI implementing the surface in
+  `.speccy/ARCHITECTURE.md`: `init`, `status`, `next`, `check`,
+  `verify`, `lock`, `vacancy`. Phase prompts (plan / tasks /
+  implement / review / report) live in the shipped skill bodies,
+  not in the CLI; the binary never renders natural-text prompts.
 - Shipped skill packs for Claude Code and Codex driving the full
   development loop end-to-end without humans chaining commands.
 - Speccy's own implementation tracked in `.speccy/specs/` — by the
@@ -83,11 +85,6 @@ by hypothetical broader audiences are out of scope for v1.
   project-configurable before v1.
 - Whether the `serde-saphyr` `0.0.x` dependency surfaces stabilization
   pain (API churn, behavioral changes) before Speccy's first release.
-- Loader-switch bootstrap friction: `speccy implement <SPEC>/<TASK>`
-  can't render its own prompt when the task is to swap the workspace
-  loader (surfaced during SPEC-0022 T-007). A direct
-  `task_xml::parse`-on-spec-folder fallback would fix it, but the
-  shape of the right escape hatch isn't decided yet.
 
 Non-goals and the full list of "what we deliberately don't do" are
 catalogued in `.speccy/ARCHITECTURE.md`'s "What We Deliberately Don't
@@ -119,7 +116,7 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
    their prompts. Speccy never tries to grade tests algorithmically.
 
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check),
-   ten commands, no mode toggles, no orchestration runtime. Speccy
+   seven commands, no mode toggles, no orchestration runtime. Speccy
    works identically in any project state — there is no
    greenfield/brownfield distinction.
 

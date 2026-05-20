@@ -274,11 +274,11 @@ fn text_output_summary_on_empty_workspace() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Bullet 6: JSON envelope is schema_version=2 and has no execution fields
+// JSON envelope is schema_version=1 and has no execution fields
 // ---------------------------------------------------------------------------
 
 #[test]
-fn json_envelope_bumps_schema_to_two_and_drops_execution_fields() -> TestResult {
+fn json_envelope_is_schema_one_and_has_no_execution_fields() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
         &ws.root,
@@ -292,7 +292,7 @@ fn json_envelope_bumps_schema_to_two_and_drops_execution_fields() -> TestResult 
     assert_eq!(code, 0);
 
     let json: Value = serde_json::from_str(&out)?;
-    assert_eq!(field(&json, "schema_version"), &Value::from(2));
+    assert_eq!(field(&json, "schema_version"), &Value::from(1));
     assert!(field(&json, "repo_sha").is_string());
 
     // Structural counts must be present and match the text summary line.
@@ -307,11 +307,10 @@ fn json_envelope_bumps_schema_to_two_and_drops_execution_fields() -> TestResult 
     );
     assert_eq!(at(&json, &["summary", "shape", "errors"]), &Value::from(0));
 
-    // Execution-shaped fields must be absent at every level the legacy
-    // schema exposed them.
+    // Execution-shaped fields must be absent at every level.
     assert!(
         json.get("checks").is_none(),
-        "schema_version=2 must not carry a per-check execution array",
+        "verify JSON must not carry a per-check execution array",
     );
     assert_no_execution_keys(&json);
 
@@ -333,8 +332,8 @@ fn json_envelope_is_pretty_printed_with_trailing_newline() -> TestResult {
     let (_code, out, _err) = invoke(&ws.root, true)?;
     assert!(out.ends_with('\n'), "JSON output must end with newline");
     assert!(
-        out.contains("\n  \"schema_version\": 2,"),
-        "JSON must be pretty-printed and declare schema_version 2; got:\n{out}",
+        out.contains("\n  \"schema_version\": 1,"),
+        "JSON must be pretty-printed and declare schema_version 1; got:\n{out}",
     );
     Ok(())
 }

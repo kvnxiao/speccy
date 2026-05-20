@@ -82,8 +82,8 @@ fn per_spec_json_envelope_shape_review() -> TestResult {
     let parsed: serde_json::Value = serde_json::from_str(&text)?;
     assert_eq!(
         parsed.get("schema_version"),
-        Some(&serde_json::json!(2)),
-        "schema_version must be 2: {parsed}",
+        Some(&serde_json::json!(1)),
+        "schema_version must be 1: {parsed}",
     );
     assert_eq!(
         parsed.get("spec_id"),
@@ -159,8 +159,8 @@ fn workspace_json_envelope_shape() -> TestResult {
     let parsed: serde_json::Value = serde_json::from_str(&text)?;
     assert_eq!(
         parsed.get("schema_version"),
-        Some(&serde_json::json!(2)),
-        "schema_version must be 2: {parsed}",
+        Some(&serde_json::json!(1)),
+        "schema_version must be 1: {parsed}",
     );
     let specs = parsed.get("specs").expect("specs must be present");
     assert!(specs.is_array(), "specs must be an array: {parsed}");
