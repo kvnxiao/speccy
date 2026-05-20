@@ -1,9 +1,9 @@
 
 # {{ cmd_prefix }}speccy-tasks
 
-Renders the task-decomposition prompt: read the SPEC and decompose it
-into an ordered, single-agent-sized task list. If `TASKS.md` already
-exists, renders the amendment prompt instead.
+Decomposes the SPEC into an ordered, single-agent-sized task list in
+`TASKS.md`. If `TASKS.md` already exists, amends it surgically instead
+(preserving the state of any task already in flight).
 
 ## When to use
 

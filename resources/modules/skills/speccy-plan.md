@@ -1,15 +1,16 @@
 
 # {{ cmd_prefix }}speccy-plan
 
-Renders the planning prompt: the host harness auto-loads `AGENTS.md`
-(which carries the project-wide product north star), and the prompt
-walks the agent through writing or amending `SPEC.md`. Top-level
+Drafts a new `SPEC.md` from the `AGENTS.md` product north star, or
+amends an existing one when intent shifts. The host harness auto-loads
+`AGENTS.md` (which carries the project-wide product north star); this
+recipe walks the agent through writing or amending SPEC.md. Top-level
 intent surfaces (`<goals>`, `<non-goals>`, `<user-stories>`, optional
 `<assumptions>`) and per-requirement sub-sections (`<done-when>`,
 `<behavior>`, `<scenario>`) live as raw XML element blocks inside
-SPEC.md itself. With a SPEC-ID argument, renders the amendment
-prompt instead and names the nearest parent `MISSION.md` so
-focus-area context can be loaded via the host's Read primitive.
+SPEC.md itself. With a SPEC-ID argument, the recipe runs the amendment
+flow instead and names the nearest parent `MISSION.md` so focus-area
+context can be loaded via the host's Read primitive.
 
 ## When to use
 
