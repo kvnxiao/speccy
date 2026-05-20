@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0033
-spec_hash_at_generation: 95c2ae7094ade3624feecd2d5934ac15120eeccdea2904c9284da64c6e046e85
-generated_at: 2026-05-20T07:27:56Z
+spec_hash_at_generation: e9ff3d3f140629d871646462dd086bdcfb8ccc5ffb57e1cabd47b45279739205
+generated_at: 2026-05-20T19:00:01Z
 ---
 
 # Tasks: SPEC-0033 Eject phase prompt bodies into skill files; CLI does state only, no natural-text rendering

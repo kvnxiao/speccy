@@ -1343,12 +1343,15 @@ that time.
   `/speccy-review` unpinned in the parent session per
   REQ-002 / REQ-009. The orchestrator-dispatch shape is
   unchanged.)
-- [ ] Whether `speccy vacancy`'s implementation reuses
+- [x] ~~Whether `speccy vacancy`'s implementation reuses
   `allocate_next_spec_id` directly from speccy-core, or
   whether the function relocates (e.g. out of
   `prompt::id_alloc` into a more general
   `speccy_core::specs::next_id`) as part of the speccy-core
-  cleanup that REQ-001 implies. Decompose-time decision.
+  cleanup that REQ-001 implies.~~ Resolved in T-003:
+  `allocate_next_spec_id` stays at `speccy_core::prompt::id_alloc`
+  and is reused unchanged by `speccy-cli/src/vacancy.rs`; no
+  `speccy_core::specs` module is created for v1.
 - [x] ~~Exact path under `resources/modules/skills/` for shared
   partials. Candidates: `_partials/`, `_includes/`, `shared/`.~~
   Resolved by 2026-05-19 brainstorm: no `_partials/`-style
@@ -1357,23 +1360,30 @@ that time.
   (`resources/modules/personas/`,
   `resources/modules/phases/`), distinguished from body files
   by filename pattern. See REQ-007.
-- [ ] Exact filename convention for shared snippets inside
+- [x] ~~Exact filename convention for shared snippets inside
   `modules/personas/` and `modules/phases/`. Brainstorm
   proposed topic-named (e.g., `verdict_return_contract.md`); a
   prefix-marked alternative (e.g., `_shared_verdict.md`) was
   considered and rejected because the existing folders use no
-  prefix convention. Decompose-time picks exact names; SPEC
-  names the category constraint only (must not collide with
-  the `reviewer-<persona>.md` or `speccy-<phase>.md`
-  patterns).
-- [ ] Whether `--force` stdout summary lists each overwritten
+  prefix convention.~~ Resolved in T-006: topic-named, no
+  prefix — `verdict_return_contract.md`,
+  `no_tasks_md_writes.md`, `inline_note_format.md`, and
+  `diff_fetch_command.md` ship under
+  `resources/modules/personas/`; no phase-level snippets were
+  extracted because the three phase bodies don't share enough
+  yet.
+- [x] ~~Whether `--force` stdout summary lists each overwritten
   file individually or just gives a tally. UX detail;
   SPEC-level position is "log per-file with `(!) overwritten`
   marker plus a final summary tally," but the exact line
-  format is decompose-time.
-- [ ] Whether the `speccy-review` orchestrator's body source
+  format is decompose-time.~~ Resolved in T-008: both — each
+  file emits a per-item label (`created` / `unchanged` /
+  `(!) overwritten`), followed by a single
+  `Init complete: N created, N overwritten, N unchanged.`
+  tally line.
+- [x] ~~Whether the `speccy-review` orchestrator's body source
   belongs in `resources/modules/skills/` (current location,
   consistent with other interactive skills under DEC-008) or
-  elsewhere given its dispatch-to-personas role. Brainstorm
-  leaned toward staying in `modules/skills/`; decompose-time
-  decision.
+  elsewhere given its dispatch-to-personas role.~~ Resolved in
+  T-007: stays at `resources/modules/skills/speccy-review.md`,
+  consistent with the other interactive skills under DEC-008.
