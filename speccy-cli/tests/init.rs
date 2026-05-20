@@ -1337,3 +1337,312 @@ fn architecture_doc_pins_verify_command_is_shape_only() {
         ".speccy/ARCHITECTURE.md `speccy verify` row must disclaim running project tests",
     );
 }
+
+// --------------------------------------------------------------------
+// SPEC-0032 T-007 / REQ-006: `speccy init` end-to-end against fresh
+// tempdirs renders the per-phase model and effort pin assignments that
+// the in-tree dogfood pack already encodes. The shape covered here is
+// the full slice REQ-006 owns: Claude Code phase-worker subagent files,
+// Codex phase-worker TOML files, reviewer files on both hosts, and the
+// four mechanical-phase SKILL.md files (plus speccy-review's SKILL.md)
+// carrying no pin keys. The drift check enforced by
+// `dogfood_outputs_match_committed_tree` already locks template-vs-
+// rendered byte identity for these files; this test locks the
+// fresh-tempdir render outcome the user actually experiences when they
+// run `speccy init` in their own project.
+// --------------------------------------------------------------------
+
+/// Pinned-agent frontmatter shared by Claude Code phase-worker and
+/// reviewer subagent files. The `[1m]` 1M-context-window suffix on
+/// `model` parses as a plain YAML scalar via `serde_saphyr`.
+#[derive(Debug, Deserialize)]
+struct ClaudePinFrontmatter {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    effort: Option<String>,
+}
+
+/// Mechanical-phase and `speccy-review` SKILL.md frontmatter. REQ-001 /
+/// REQ-002 / DEC-001 require zero pin keys on these files; the
+/// `Option<String>` fields surface as `None` when the keys are absent
+/// and as `Some` when a regression leaks one in.
+#[derive(Debug, Deserialize)]
+struct SkillNoPinsFrontmatter {
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    effort: Option<String>,
+    #[serde(default)]
+    context: Option<String>,
+    #[serde(default)]
+    agent: Option<String>,
+}
+
+fn parse_claude_pins(root: &Utf8Path, rel: &str) -> TestResult<ClaudePinFrontmatter> {
+    let body = read_file(root, rel)?;
+    let (yaml, _) = split_frontmatter(&body)
+        .ok_or_else(|| format!("rendered {rel} must have a `---` frontmatter fence"))?;
+    let fm: ClaudePinFrontmatter = serde_saphyr::from_str(yaml)
+        .map_err(|err| format!("rendered {rel} frontmatter must parse as YAML: {err}"))?;
+    Ok(fm)
+}
+
+fn parse_no_pin_skill(root: &Utf8Path, rel: &str) -> TestResult<SkillNoPinsFrontmatter> {
+    let body = read_file(root, rel)?;
+    let (yaml, _) = split_frontmatter(&body)
+        .ok_or_else(|| format!("rendered {rel} must have a `---` frontmatter fence"))?;
+    let fm: SkillNoPinsFrontmatter = serde_saphyr::from_str(yaml)
+        .map_err(|err| format!("rendered {rel} frontmatter must parse as YAML: {err}"))?;
+    Ok(fm)
+}
+
+fn assert_no_pin_keys(rel: &str, fm: &SkillNoPinsFrontmatter) {
+    assert!(
+        fm.model.is_none(),
+        "rendered {rel} must carry no `model:` key (REQ-001/REQ-002 unpinned SKILL.md); got {:?}",
+        fm.model,
+    );
+    assert!(
+        fm.effort.is_none(),
+        "rendered {rel} must carry no `effort:` key (REQ-001/REQ-002 unpinned SKILL.md); got {:?}",
+        fm.effort,
+    );
+    assert!(
+        fm.context.is_none(),
+        "rendered {rel} must carry no `context:` key (DEC-001 dropped auto-fork); got {:?}",
+        fm.context,
+    );
+    assert!(
+        fm.agent.is_none(),
+        "rendered {rel} must carry no `agent:` key (DEC-001 dropped auto-fork); got {:?}",
+        fm.agent,
+    );
+}
+
+/// Assert a phase-worker SKILL.md rendered file carries a thin-stub
+/// body per REQ-010 / T-009: the body references the matching agent
+/// file path and the `/agent speccy-<phase>` invocation pointer, and
+/// it is short (no leakage of the full phase prompt body).
+fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &str) -> TestResult {
+    let body = read_file(root, rel)?;
+    let (_, post_fm) = split_frontmatter(&body)
+        .ok_or_else(|| format!("rendered {rel} must have a `---` frontmatter fence"))?;
+    assert!(
+        post_fm.contains(agent_path),
+        "rendered {rel} thin-stub body must reference `{agent_path}`; got:\n{post_fm}",
+    );
+    let invocation = format!("/agent speccy-{phase}");
+    assert!(
+        post_fm.contains(&invocation),
+        "rendered {rel} thin-stub body must mention the `{invocation}` invocation pointer; got:\n{post_fm}",
+    );
+    let non_empty_lines = post_fm.lines().filter(|l| !l.trim().is_empty()).count();
+    assert!(
+        non_empty_lines < 12,
+        "rendered {rel} thin-stub body must be short (< 12 non-empty lines), got {non_empty_lines} lines; full body has leaked",
+    );
+    Ok(())
+}
+
+/// Assert the `speccy-init` SKILL.md rendered file retains its full
+/// body. REQ-010 explicitly exempts `speccy-init` from the thin-stub
+/// transformation because there is no pinned subagent to delegate to.
+fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
+    let body = read_file(root, rel)?;
+    let (_, post_fm) = split_frontmatter(&body)
+        .ok_or_else(|| format!("rendered {rel} must have a `---` frontmatter fence"))?;
+    let non_empty_lines = post_fm.lines().filter(|l| !l.trim().is_empty()).count();
+    assert!(
+        non_empty_lines >= 20,
+        "rendered {rel} must retain full body (>= 20 non-empty lines), got {non_empty_lines}; the thin-stub transformation must not apply to speccy-init",
+    );
+    assert!(
+        !post_fm.contains("/agent speccy-init"),
+        "rendered {rel} must not delegate to `/agent speccy-init` (REQ-010 / DEC-009: no speccy-init subagent on either host); got:\n{post_fm}",
+    );
+    Ok(())
+}
+
+const CLAUDE_PINNED_PHASES: [&str; 3] = ["tasks", "work", "ship"];
+const CLAUDE_OPUS_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
+const CLAUDE_SONNET_HIGH_REVIEWERS: [&str; 1] = ["security"];
+const CLAUDE_SONNET_MEDIUM_REVIEWERS: [&str; 2] = ["style", "docs"];
+const CODEX_HIGH_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
+const CODEX_MEDIUM_REVIEWERS: [&str; 1] = ["security"];
+const CODEX_LOW_REVIEWERS: [&str; 2] = ["style", "docs"];
+
+fn read_codex_toml(root: &Utf8Path, rel: &str) -> TestResult<toml::Table> {
+    let body = read_file(root, rel)?;
+    let parsed: toml::Table =
+        toml::from_str(&body).map_err(|err| format!("rendered {rel} must parse as TOML: {err}"))?;
+    Ok(parsed)
+}
+
+fn assert_codex_pin(table: &toml::Table, rel: &str, expected_effort: &str) {
+    let model = table
+        .get("model")
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default();
+    assert_eq!(
+        model, "gpt-5.5",
+        "rendered {rel} must carry `model = \"gpt-5.5\"`; got `{model}`",
+    );
+    let effort = table
+        .get("model_reasoning_effort")
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default();
+    assert_eq!(
+        effort, expected_effort,
+        "rendered {rel} must carry `model_reasoning_effort = \"{expected_effort}\"`; got `{effort}`",
+    );
+}
+
+#[test]
+fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> TestResult {
+    // REQ-006 / CHK-006 (Claude Code half): `speccy init` against a
+    // fresh empty directory must materialise the per-phase model/effort
+    // pin assignments that the in-tree dogfood pack already encodes.
+    let fx = project_with_name("t007-claude-pins")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    for phase in CLAUDE_PINNED_PHASES {
+        let rel = format!(".claude/agents/speccy-{phase}.md");
+        let fm = parse_claude_pins(&fx.root, &rel)?;
+        assert_eq!(
+            fm.name.as_deref(),
+            Some(format!("speccy-{phase}").as_str()),
+            "rendered {rel} `name` field must equal `speccy-{phase}`",
+        );
+        assert_eq!(
+            fm.model.as_deref(),
+            Some("sonnet[1m]"),
+            "rendered {rel} must carry `model: sonnet[1m]`; got {:?}",
+            fm.model,
+        );
+        assert_eq!(
+            fm.effort.as_deref(),
+            Some("medium"),
+            "rendered {rel} must carry `effort: medium`; got {:?}",
+            fm.effort,
+        );
+    }
+
+    let init_agent = fx.root.join(".claude/agents/speccy-init.md");
+    assert!(
+        !init_agent.exists(),
+        "DEC-009 / REQ-010: speccy init must not render `.claude/agents/speccy-init.md` (no pinned init subagent); found at `{init_agent}`",
+    );
+
+    assert_claude_reviewer_pins(&fx.root)?;
+
+    for phase in ["tasks", "work", "ship", "init"] {
+        let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
+        let fm = parse_no_pin_skill(&fx.root, &rel)?;
+        assert_no_pin_keys(&rel, &fm);
+    }
+    let review_fm = parse_no_pin_skill(&fx.root, ".claude/skills/speccy-review/SKILL.md")?;
+    assert_no_pin_keys(".claude/skills/speccy-review/SKILL.md", &review_fm);
+
+    for phase in CLAUDE_PINNED_PHASES {
+        let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
+        let agent_path = format!(".claude/agents/speccy-{phase}.md");
+        assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
+    }
+    assert_init_full_body(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
+    Ok(())
+}
+
+fn assert_claude_reviewer_pins(root: &Utf8Path) -> TestResult {
+    let cases: &[(&[&str], &str, &str)] = &[
+        (&CLAUDE_OPUS_REVIEWERS, "opus[1m]", "xhigh"),
+        (&CLAUDE_SONNET_HIGH_REVIEWERS, "sonnet[1m]", "high"),
+        (&CLAUDE_SONNET_MEDIUM_REVIEWERS, "sonnet[1m]", "medium"),
+    ];
+    for (personas, expected_model, expected_effort) in cases {
+        for persona in *personas {
+            let rel = format!(".claude/agents/reviewer-{persona}.md");
+            let fm = parse_claude_pins(root, &rel)?;
+            assert_eq!(
+                fm.model.as_deref(),
+                Some(*expected_model),
+                "rendered {rel} must carry `model: {expected_model}` (REQ-003 asymmetric pin); got {:?}",
+                fm.model,
+            );
+            assert_eq!(
+                fm.effort.as_deref(),
+                Some(*expected_effort),
+                "rendered {rel} must carry `effort: {expected_effort}` (REQ-003 asymmetric pin); got {:?}",
+                fm.effort,
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult {
+    // REQ-006 / CHK-006 (Codex half): mirror of the Claude Code test
+    // against the Codex host pack. Asserts the three pinned phase-worker
+    // TOMLs, the absence invariants for `speccy-review.toml` and
+    // `speccy-init.toml`, the asymmetric reviewer assignment, the
+    // pinned-phase thin-stub bodies, and the full-body `speccy-init`
+    // SKILL.md.
+    let fx = project_with_name("t007-codex-pins")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("codex")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    for phase in CLAUDE_PINNED_PHASES {
+        let rel = format!(".codex/agents/speccy-{phase}.toml");
+        let table = read_codex_toml(&fx.root, &rel)?;
+        assert_codex_pin(&table, &rel, "medium");
+    }
+
+    let review_toml = fx.root.join(".codex/agents/speccy-review.toml");
+    assert!(
+        !review_toml.exists(),
+        "REQ-002 / DEC-002: speccy init must not render `.codex/agents/speccy-review.toml` (orchestrator stays unpinned on Codex); found at `{review_toml}`",
+    );
+    let init_toml = fx.root.join(".codex/agents/speccy-init.toml");
+    assert!(
+        !init_toml.exists(),
+        "DEC-009 / REQ-010: speccy init must not render `.codex/agents/speccy-init.toml` (no pinned init subagent); found at `{init_toml}`",
+    );
+
+    assert_codex_reviewer_pins(&fx.root)?;
+
+    for phase in CLAUDE_PINNED_PHASES {
+        let rel = format!(".agents/skills/speccy-{phase}/SKILL.md");
+        let agent_path = format!(".codex/agents/speccy-{phase}.toml");
+        assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
+    }
+    assert_init_full_body(&fx.root, ".agents/skills/speccy-init/SKILL.md")?;
+    Ok(())
+}
+
+fn assert_codex_reviewer_pins(root: &Utf8Path) -> TestResult {
+    let cases: &[(&[&str], &str)] = &[
+        (&CODEX_HIGH_REVIEWERS, "high"),
+        (&CODEX_MEDIUM_REVIEWERS, "medium"),
+        (&CODEX_LOW_REVIEWERS, "low"),
+    ];
+    for (personas, expected_effort) in cases {
+        for persona in *personas {
+            let rel = format!(".codex/agents/reviewer-{persona}.toml");
+            let table = read_codex_toml(root, &rel)?;
+            assert_codex_pin(&table, &rel, expected_effort);
+        }
+    }
+    Ok(())
+}

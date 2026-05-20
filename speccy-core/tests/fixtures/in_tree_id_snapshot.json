@@ -761,5 +761,120 @@
       "CHK-006",
       "CHK-007"
     ]
+  },
+  "0032-phase-model-pinning": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007",
+      "DEC-008",
+      "DEC-009"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008",
+      "REQ-009",
+      "REQ-010"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010"
+    ]
+  },
+  "0033-eject-prompt-bodies": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005",
+      "DEC-006",
+      "DEC-007"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010",
+      "CHK-011",
+      "CHK-012",
+      "CHK-013",
+      "CHK-014",
+      "CHK-015",
+      "CHK-016",
+      "CHK-017",
+      "CHK-018"
+    ]
+  },
+  "0034-authoring-self-review": {
+    "decisions": [
+      "DEC-001",
+      "DEC-002",
+      "DEC-003",
+      "DEC-004",
+      "DEC-005"
+    ],
+    "requirements": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008",
+      "REQ-009",
+      "REQ-010"
+    ],
+    "scenarios": [
+      "CHK-001",
+      "CHK-002",
+      "CHK-003",
+      "CHK-004",
+      "CHK-005",
+      "CHK-006",
+      "CHK-007",
+      "CHK-008",
+      "CHK-009",
+      "CHK-010",
+      "CHK-011",
+      "CHK-012",
+      "CHK-013",
+      "CHK-014"
+    ]
   }
 }

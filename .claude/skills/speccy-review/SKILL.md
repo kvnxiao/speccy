@@ -52,11 +52,22 @@ flipped there by `/speccy-work`).
      across specs — every spec has its own `T-001`).
 
 2. Fan out four reviewer sub-agents in parallel via the host-native
-   sub-agent primitive, one per persona in the default fan-out:
-   `business`, `tests`, `security`, `style`. Each sub-agent's prompt
-   is the bash command form below, not the CLI-rendered prompt text
-   inlined into the spawn call. The CLI command remains the source
-   of truth for what each persona reads.
+   sub-agent primitive, one per persona in the **default fan-out:
+   `business`, `tests`, `security`, `style`**. Two additional
+   personas (`architecture`, `docs`) are off the default fan-out
+   and are invoked explicitly when an architectural or documentation
+   risk is suspected (add them to the spawn call when needed; omit
+   them for routine task reviews). Each sub-agent's prompt is the
+   bash command form below, not the CLI-rendered prompt text inlined
+   into the spawn call. The CLI command remains the source of truth
+   for what each persona reads.
+
+   Each spawned reviewer **returns its verdict via its final
+   message** as a `<review persona="..." verdict="...">…</review>`
+   element block. Reviewers do not write to TASKS.md directly;
+   they return their verdict to this orchestrator. After all spawned
+   reviewers return, this orchestrator is the **sole writer to
+   TASKS.md** for the review-induced state transition.
 
    Invoke the `Task` tool four times in parallel, once per persona,
    with `subagent_type: "reviewer-business"`,
@@ -65,30 +76,42 @@ flipped there by `/speccy-work`).
    `subagent_type: "reviewer-style"`. The prompt for each spawn is:
 
    > Run `speccy review SPEC-NNNN/T-NNN --persona <persona>` and
-   > follow its output. Your only deliverable is a single inline
-   > note appended to TASKS.md.
+   > follow its output. Return your verdict as your final message
+   > as a `<review persona="<persona>" verdict="...">…</review>`
+   > element block. Do not edit TASKS.md.
 
    Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name
    into the command. Each subagent resolves to its markdown file at
    `.claude/agents/reviewer-<persona>.md`, so the persona body is
    already loaded for the sub-agent.
 
-3. After all four sub-agents return, aggregate the four `<review>`
-   element blocks they appended to the task subtree. Exit
-   transition:
+3. After all spawned sub-agents return, **consolidate** the
+   `<review>` element blocks from each reviewer's final message into
+   a single per-task verdict. Apply the state transition to
+   **TASKS.md serially in this orchestrator turn** — do not
+   delegate the write back to a reviewer subagent. Exit transition:
 
-   - If every `<review verdict="...">` is `verdict="pass"`, flip the
-     task's `state="..."` attribute from `in-review` to `completed`.
-   - If any `<review verdict="...">` is `verdict="blocking"`, flip
-     `state="..."` from `in-review` to `pending` and append a
-     `<retry>…</retry>` element block to the task subtree
-     summarising the blockers. The block has the form:
+   - If every spawned reviewer's `<review verdict="...">` is
+     `verdict="pass"`, flip the task's `state="..."` attribute
+     from `in-review` to `completed` and append each
+     `<review>` block to the task subtree.
+   - If any spawned reviewer's `<review verdict="...">` is
+     `verdict="blocking"`, flip `state="..."` from `in-review` to
+     `pending`, append each `<review>` block to the task subtree,
+     and append a single consolidated `<retry>…</retry>` element
+     block that aggregates all failing reviewers' feedback — not
+     one `<retry>` per reviewer, not a partial write. The block
+     has the form:
 
          <retry>
          <one-line summary of what to change before the next
          implementer pass>.
          <optional bullets enumerating each persona's blocker>.
          </retry>
+
+   This serial write in the orchestrator turn eliminates the
+   parallel-write race that would occur if each reviewer subagent
+   wrote to TASKS.md directly (per DEC-008).
 
 4. Exit. Do not pick up another `in-review` task. If the caller
    wants another task reviewed, the caller invokes this skill again.

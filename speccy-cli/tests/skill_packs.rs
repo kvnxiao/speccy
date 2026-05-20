@@ -195,6 +195,15 @@ const SKILL_NAMES: &[&str] = &[
 /// has no skills bundle.
 const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex", ".agents")];
 
+/// The three pinned phase-worker skill verbs whose SKILL.md.tmpl bodies
+/// became thin stubs (T-009 / REQ-010). These stubs do not contain a
+/// single `{% include %}` directive, do not contain `## When to use`,
+/// and do not carry a full `speccy …` command in a code fence — they
+/// are pointer-only bodies. The fourth phase (`speccy-init`) keeps its
+/// full body sourced from `modules/phases/speccy-init.md` (T-009 scope
+/// explicitly excludes it from the stub transformation).
+const PINNED_STUB_PHASES: &[&str] = &["speccy-tasks", "speccy-work", "speccy-ship"];
+
 const SPECCY_COMMANDS: &[&str] = &[
     "speccy init",
     "speccy plan",
@@ -529,6 +538,14 @@ fn recipe_content_shape() {
     // SPEC-0016 renderer and check the rendered SKILL.md body against
     // the same content-shape invariants the legacy per-host files used
     // to satisfy.
+    //
+    // T-009 (REQ-010) introduced an exception: the three pinned
+    // phase-worker skills (`speccy-tasks`, `speccy-work`, `speccy-ship`)
+    // now have thin stub bodies. Stubs are pointer-only: they name the
+    // matching agent file and `/agent speccy-<phase>` invocation and
+    // explicitly do NOT carry `## When to use`, `## Steps`, or a full
+    // speccy command in a code fence. The full content-shape checks are
+    // skipped for these three verbs.
     for (host, install_root) in [
         (HostChoice::ClaudeCode, ".claude"),
         (HostChoice::Codex, ".agents"),
@@ -538,6 +555,22 @@ fn recipe_content_shape() {
         });
         for verb in SKILL_NAMES {
             let body = find_rendered_skill(&rendered, install_root, verb);
+
+            // Skip full content-shape checks for T-009 stub skills.
+            if PINNED_STUB_PHASES.contains(verb) {
+                // Stubs must be non-empty and must name the `/agent`
+                // invocation pointer — the only content-shape guarantee
+                // that applies to them.
+                assert!(
+                    !body.trim().is_empty(),
+                    "stub recipe `{install_root}/skills/{verb}/SKILL.md` must be non-empty",
+                );
+                assert!(
+                    body.contains(&format!("/agent {verb}")),
+                    "stub recipe `{install_root}/skills/{verb}/SKILL.md` must contain `/agent {verb}` (T-009 REQ-010)",
+                );
+                continue;
+            }
 
             assert!(
                 first_non_frontmatter_paragraph(body).is_some(),
@@ -1245,13 +1278,45 @@ fn t005_claude_code_wrapper_shape_and_body() {
             path.display(),
         );
 
-        let expected_body = format!("{{% include \"modules/skills/{verb}.md\" %}}");
-        assert_eq!(
-            body.trim(),
-            expected_body,
-            "wrapper `{}` body (post-frontmatter, trimmed) must be exactly the single `{{% include %}}` directive for the module body",
-            path.display(),
-        );
+        // T-009 (REQ-010): the three pinned phase-worker skills
+        // (`speccy-tasks`, `speccy-work`, `speccy-ship`) now have thin
+        // stub bodies instead of a single `{% include %}` directive.
+        // `speccy-init` keeps its full body but now includes from
+        // `modules/phases/` rather than `modules/skills/`.
+        // All other skills retain the original single-include shape.
+        if PINNED_STUB_PHASES.contains(verb) {
+            // Stub body: must reference `/agent speccy-<verb>` and the
+            // matching agent file path. Must NOT be a single include
+            // directive.
+            assert!(
+                !body.trim().starts_with("{%"),
+                "stub wrapper `{}` body must not start with a `{{%` include directive (T-009 REQ-010); got: {:?}",
+                path.display(),
+                body.trim(),
+            );
+            assert!(
+                body.contains(&format!("/agent {verb}")),
+                "stub wrapper `{}` body must contain `/agent {verb}` (T-009 REQ-010)",
+                path.display(),
+            );
+        } else if *verb == "speccy-init" {
+            // init keeps full body but include path moved to modules/phases/.
+            let expected_body = format!("{{% include \"modules/phases/{verb}.md\" %}}");
+            assert_eq!(
+                body.trim(),
+                expected_body,
+                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (T-009 path rename)",
+                path.display(),
+            );
+        } else {
+            let expected_body = format!("{{% include \"modules/skills/{verb}.md\" %}}");
+            assert_eq!(
+                body.trim(),
+                expected_body,
+                "wrapper `{}` body (post-frontmatter, trimmed) must be exactly the single `{{% include %}}` directive for the module body",
+                path.display(),
+            );
+        }
     }
 }
 
@@ -1351,13 +1416,45 @@ fn t006_codex_wrapper_shape_and_body() {
             path.display(),
         );
 
-        let expected_body = format!("{{% include \"modules/skills/{verb}.md\" %}}");
-        assert_eq!(
-            body.trim(),
-            expected_body,
-            "wrapper `{}` body (post-frontmatter, trimmed) must be exactly the single `{{% include %}}` directive for the module body",
-            path.display(),
-        );
+        // T-009 (REQ-010): the three pinned phase-worker skills
+        // (`speccy-tasks`, `speccy-work`, `speccy-ship`) now have thin
+        // stub bodies instead of a single `{% include %}` directive.
+        // `speccy-init` keeps its full body but now includes from
+        // `modules/phases/` rather than `modules/skills/`.
+        // All other skills retain the original single-include shape.
+        if PINNED_STUB_PHASES.contains(verb) {
+            // Stub body: must reference `/agent speccy-<verb>` and the
+            // matching agent file path. Must NOT be a single include
+            // directive.
+            assert!(
+                !body.trim().starts_with("{%"),
+                "stub wrapper `{}` body must not start with a `{{%` include directive (T-009 REQ-010); got: {:?}",
+                path.display(),
+                body.trim(),
+            );
+            assert!(
+                body.contains(&format!("/agent {verb}")),
+                "stub wrapper `{}` body must contain `/agent {verb}` (T-009 REQ-010)",
+                path.display(),
+            );
+        } else if *verb == "speccy-init" {
+            // init keeps full body but include path moved to modules/phases/.
+            let expected_body = format!("{{% include \"modules/phases/{verb}.md\" %}}");
+            assert_eq!(
+                body.trim(),
+                expected_body,
+                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (T-009 path rename)",
+                path.display(),
+            );
+        } else {
+            let expected_body = format!("{{% include \"modules/skills/{verb}.md\" %}}");
+            assert_eq!(
+                body.trim(),
+                expected_body,
+                "wrapper `{}` body (post-frontmatter, trimmed) must be exactly the single `{{% include %}}` directive for the module body",
+                path.display(),
+            );
+        }
     }
 }
 
@@ -1505,14 +1602,18 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
     // persona module file.
     let rendered = render_host_pack(HostChoice::ClaudeCode)
         .expect("render_host_pack(claude-code) should succeed");
+    // SPEC-0032 T-001 added phase-worker subagent files at
+    // `.claude/agents/speccy-<phase>.md` alongside the existing
+    // reviewer subagent files. Filter on the `reviewer-` prefix so
+    // the reviewer-shape assertions below stay scoped to reviewers.
     let agent_files: Vec<&speccy_cli::render::RenderedFile> = rendered
         .iter()
-        .filter(|f| f.rel_path.as_str().starts_with(".claude/agents/"))
+        .filter(|f| f.rel_path.as_str().starts_with(".claude/agents/reviewer-"))
         .collect();
     assert_eq!(
         agent_files.len(),
         6,
-        "claude-code host pack should render six reviewer subagent files under .claude/agents/; got {}",
+        "claude-code host pack should render six reviewer subagent files under .claude/agents/reviewer-*.md; got {}",
         agent_files.len(),
     );
 
@@ -1695,16 +1796,21 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
     // required top-level keys, name equals filename stem, and the
     // security reviewer carries the focus bullet drawn verbatim from
     // the persona module file.
+    //
+    // SPEC-0032 T-004 added phase-worker subagent files at
+    // `.codex/agents/speccy-<phase>.toml` alongside the existing
+    // reviewer subagent files. Filter on the `reviewer-` prefix so
+    // the reviewer-shape assertions below stay scoped to reviewers.
     let rendered =
         render_host_pack(HostChoice::Codex).expect("render_host_pack(codex) should succeed");
     let agent_files: Vec<&speccy_cli::render::RenderedFile> = rendered
         .iter()
-        .filter(|f| f.rel_path.as_str().starts_with(".codex/agents/"))
+        .filter(|f| f.rel_path.as_str().starts_with(".codex/agents/reviewer-"))
         .collect();
     assert_eq!(
         agent_files.len(),
         6,
-        "codex host pack should render six reviewer subagent files under .codex/agents/; got {}",
+        "codex host pack should render six reviewer subagent files under .codex/agents/reviewer-*.toml; got {}",
         agent_files.len(),
     );
 

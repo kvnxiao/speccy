@@ -1,0 +1,7 @@
+name = "speccy-ship"
+description = "Closes out a Speccy spec: writes REPORT.md, runs speccy verify as a CI dry-run, commits, and opens a pull request. Invoke via /agent speccy-ship for the pinned execution path defined in this file's frontmatter."
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+developer_instructions = """
+{% include "modules/phases/speccy-ship.md" %}
+"""

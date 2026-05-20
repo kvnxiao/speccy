@@ -131,10 +131,26 @@ pub fn render_host_pack(host: HostChoice) -> Result<Vec<RenderedFile>, RenderErr
                     })?;
             let rendered = render_template(&mut env, bundle_path, template_body, &ctx)?;
             let rel_path = destination_rel_path(bundle_path)?;
-            out.push(RenderedFile {
-                rel_path,
-                contents: rendered,
-            });
+            // SPEC-0032 T-003 retry: `.editorconfig` requires
+            // `insert_final_newline = true` for `*.toml`. The `.tmpl`
+            // exemption (`[*.tmpl] insert_final_newline = false`) applies
+            // to template sources only, not rendered outputs. The renderer
+            // faithfully preserves the template's trailing-byte state via
+            // `keep_trailing_newline = true`, so if the `.tmpl` ends
+            // without `\n` (as the shape test requires) the rendered TOML
+            // also ends without `\n`. Append `\n` here for all `.toml`
+            // outputs so the editorconfig rule is satisfied without forcing
+            // a trailing newline onto the template source.
+            let contents = if rel_path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"))
+                && !rendered.ends_with('\n')
+            {
+                rendered + "\n"
+            } else {
+                rendered
+            };
+            out.push(RenderedFile { rel_path, contents });
         }
     }
 

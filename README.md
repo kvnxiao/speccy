@@ -202,12 +202,14 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
 
 .claude/                        (if host is Claude Code)
   skills/speccy-*/              Workflow recipes (init, plan, tasks, work, review, ship, amend)
-  agents/reviewer-*.md          Reviewer persona sub-agents
+  agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents
+  agents/reviewer-*.md                 Reviewer persona sub-agents
 
 .agents/                        (if host is Codex)
   skills/speccy-*/
 .codex/
-  agents/reviewer-*.toml
+  agents/speccy-{tasks,work,ship}.toml Pinned phase-worker sub-agents
+  agents/reviewer-*.toml               Reviewer persona sub-agents
 ```
 
 Specs may additionally be grouped under an optional **mission
@@ -217,6 +219,111 @@ with a single focus area typically stay flat, and mission folders
 earn their existence only when two or more related specs share
 enough context that loading them together at plan time becomes
 cheaper than rediscovering the context on every run.
+
+---
+
+## Model pinning
+
+Speccy's shipped skill packs pin specific model and effort tiers for
+each phase of the development loop. The pin assignment is asymmetric
+and reflects the work-shape of each role: mechanical phases pin a
+mid-tier model so they run cheaply; adversarial reviewers pin a
+higher tier so they catch real drift. The orchestrator phases
+(`/speccy-init` and `/speccy-review`) stay unpinned and inherit
+whatever model the parent session is using.
+
+### Pin assignment
+
+| Phase / persona         | Claude Code (`.claude/agents/...md`)    | Codex (`.codex/agents/...toml`)              | Agent file ships? |
+| ----------------------- | --------------------------------------- | -------------------------------------------- | ----------------- |
+| `speccy-tasks`          | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-work`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-ship`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-init`           | unpinned, inherits session              | unpinned, inherits session                   | no                |
+| `speccy-review`         | unpinned, inherits session              | unpinned, inherits session                   | no                |
+| `reviewer-business`     | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
+| `reviewer-tests`        | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
+| `reviewer-architecture` | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
+| `reviewer-security`     | `model: sonnet[1m]`, `effort: high`     | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `reviewer-style`        | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `reviewer-docs`         | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+
+The `[1m]` suffix selects the 1M-context variant on Claude Code so
+each agent can read the full SPEC, the full diff, and the relevant
+TASKS.md slice without truncation. On Codex, `gpt-5.5` covers every
+pinned role and the asymmetric work-shape is carried entirely by
+`model_reasoning_effort`.
+
+The three pinned phase workers (`speccy-tasks`, `speccy-work`,
+`speccy-ship`) ship sub-agent files. `speccy-init` and
+`speccy-review` ship no agent file on either host — only the
+SKILL.md surface — because both phases need to drive the parent
+session directly (interactive Q&A in init's case; serial TASKS.md
+writes in review's case).
+
+### Activating a pin (opt-in)
+
+The pin lives in the agent file, not the slash-command surface.
+Typing `/speccy-work` runs the workflow in the **parent session at
+the parent session's model**; the agent file is ignored. To
+activate the pin, invoke the sub-agent explicitly before running
+the phase:
+
+- **Claude Code:** `/agent speccy-work` (or use the host's sub-agent
+  spawning tool), then run `/speccy-work`.
+- **Codex:** invoke the equivalent sub-agent spawner against
+  `.codex/agents/speccy-work.toml`, then run `/speccy-work`.
+
+For the three pinned phases, the SKILL.md body is a thin stub
+that points at the matching agent file as the canonical procedure
+source. The agent file's body is the single on-disk source of
+truth for that phase. `/speccy-init`'s SKILL.md and
+`/speccy-review`'s SKILL.md both remain full-body because there is
+no sub-agent file for either to defer to.
+
+The `/speccy-review` orchestrator stays unpinned on both hosts
+deliberately: it is the sole writer to `TASKS.md` during the review
+loop (reviewer sub-agents return their verdicts and the
+orchestrator serializes the state transition), and it needs the
+parent session's full capacity to fan out, parse return messages,
+and consolidate verdicts without dropping state. Pinning it to a
+sub-agent would either force a serial-write race or strand the
+verdict-consolidation logic in a context that does not own
+`TASKS.md`.
+
+> **Design lesson.** An earlier draft of this work auto-forked the
+> mechanical phases into pinned sub-agents via Claude Code's
+> `context: fork` mechanism. Auto-forking hides the sub-agent's
+> tool output from the parent session by design, which on
+> multi-minute phase work produces minutes of dead air in the
+> parent UI with no progress signal. The opt-in `/agent` surface
+> preserves the cost-and-time pin without the silent-by-design UX
+> cost.
+
+### Overriding a pin
+
+The shipped pins are defaults, not policy. To swap models or
+remove a pin entirely, edit the agent file's YAML or TOML
+frontmatter under `.claude/agents/` or `.codex/agents/` and commit
+the change. Examples:
+
+- Lock `speccy-work` to a specific Claude version for
+  reproducibility: change `model: sonnet[1m]` to
+  `model: claude-sonnet-4-6[1m]` in
+  `.claude/agents/speccy-work.md`.
+- Run a reviewer at a lighter tier in a cost-sensitive repo:
+  change `model: opus[1m]` to `model: sonnet[1m]` (and adjust
+  `effort:` accordingly) in
+  `.claude/agents/reviewer-business.md`.
+- Remove the pin entirely so the sub-agent inherits the parent
+  session's model: delete the `model:` and `effort:` lines.
+
+Pins use **aliases** (`sonnet[1m]`, `opus[1m]`, `gpt-5.5`) rather
+than long-form versioned snapshot IDs by default so they float
+forward as vendors ship newer generations of each tier. Users who
+want byte-stable reproducibility across a release boundary can
+lock to a specific version by editing the alias to a long-form ID
+in the ejected file.
 
 ---
 
