@@ -17,7 +17,7 @@ rendering paths. `status` and `next` JSON envelopes bump to `schema_version:
 2` with resolved paths plus derived `next_action`. Final CLI surface is
 seven flat verbs, each doing one job, no mode flags.
 
-<report>
+<report spec="SPEC-0033">
 
 <coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
 Five prompt-rendering verbs and the `trim_to_budget` mechanism deleted from
