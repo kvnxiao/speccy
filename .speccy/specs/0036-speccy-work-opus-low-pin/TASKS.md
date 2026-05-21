@@ -180,7 +180,7 @@ All style criteria satisfied. Rust changes are idiomatic, naming conventions mat
 </review>
 </task>
 
-<task id="T-002" state="in-review" covers="REQ-002">
+<task id="T-002" state="completed" covers="REQ-002">
 ## T-002: Update README pin-assignment table row and `speccy-work` override example
 
 Update the project `README.md` so it describes the post-SPEC
@@ -280,6 +280,22 @@ Given the four hygiene gates run against the working tree at the
 commit that lands this task, when each exits, then each exit
 code is 0.
 </task-scenarios>
+
+<review persona="business" verdict="pass">
+T-002 satisfies REQ-002 cleanly. Commit `58a5fe9` lands exactly the two surgical edits the SPEC describes: (1) the "Pin assignment" table's `speccy-work` row Claude Code column at `README.md:256` now reads `model: opus[1m]`, `effort: low` while the Codex column and "Agent file ships?" column are unchanged; (2) the "Overriding a pin" worked example at lines 326-329 references `model: opus[1m]` as the before-alias and `claude-opus-4-7[1m]` (a `claude-opus-*` family member) as the lock target. CHK-004 / CHK-005 / CHK-006 all hold — grep for `speccy-work.*sonnet[1m]` returns zero matches across the README. The bounded README diff is two hunks, six total line touches, with no drift to other table rows (`speccy-tasks`, `speccy-ship`, `speccy-init`, `speccy-review`, and all six `reviewer-*` rows are byte-identical to HEAD~), no drift to surrounding sections, no Codex-side edits, no skill-body edits. Non-goals all respected. The second "Overriding a pin" bullet ("change `model: opus[1m]` to `model: sonnet[1m]`" for a reviewer downgrade) is pre-existing prose about reviewer pins, not `speccy-work`, so it correctly does not trigger CHK-006. Both open questions in SPEC.md remain unchecked, matching the SPEC's recommendations. Evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md` follows the SPEC-0031 paper-trail convention established under T-001.
+</review>
+
+<review persona="tests" verdict="pass">
+Evidence at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md` genuinely captures the red→green transition for CHK-006. Reproduced the red probe via `git show HEAD~1:README.md | Select-String -Pattern 'speccy-work.*sonnet\[1m\]'` (one match — the pre-edit `| speccy-work | sonnet[1m] | medium | ...` table row) and the green probe via `Select-String -Pattern 'speccy-work.*sonnet\[1m\]' README.md` (zero matches). Commit `58a5fe9` lands README.md + evidence + TASKS.md exactly as described, and `git show 58a5fe9 -- README.md` matches the diff hunks the evidence file reprints byte-for-byte. CHK-006 is directly probed by the captured grep; CHK-004 is visible at `README.md:256` and confirmed by the hunk at `@@ -253,7 +253,7 @@` showing only that single row changed; CHK-005 is visible in the second hunk at `README.md:327-328`. The other ten table rows in the diff are untouched. Fabrication checks: captured commands are scoped per-scenario, red and green outputs differ materially (one match vs zero), the line number cited lines up with the actual commit's pre-image, and the diff bytes match `git show 58a5fe9` exactly.
+</review>
+
+<review persona="security" verdict="pass">
+T-002 introduces no security concerns. Commit `58a5fe9` touches exactly three files: `README.md` (two hunks replacing model/effort strings), `.speccy/specs/0036-speccy-work-opus-low-pin/TASKS.md` (state flip + implementer note append), and the new evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md`. No credentials, tokens, API keys, or secrets appear anywhere in the diff. The evidence file contains only PowerShell grep output and Cargo runner stdout; no sensitive data captured. No auth boundaries touched. No tool grants widened or narrowed. No injection surfaces. No new dependencies (`cargo deny check` exits 0). The model aliases `opus[1m]` and `claude-opus-4-7[1m]` are public model identifiers, not credentials.
+</review>
+
+<review persona="style" verdict="pass">
+All style criteria satisfied for T-002. Commit `58a5fe9` exists in `git log`, message follows the `SPEC-NNNN T-NNN:` convention, `Co-Authored-By` trailer is present and correctly formatted. Working tree clean (`git status --short` returned empty). The `speccy-work` table row's columns are byte-aligned with every surrounding row (col widths 25/41/46/19 characters throughout the table). README trailing newline byte-probe returns `0a`. All four hygiene gates exit 0 against the post-commit tree. Evidence file present at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md`. The commit contains exactly three files: `README.md` (two-hunk surgical edit), the evidence file, and the TASKS.md state/note append — no scope creep, no unused imports, no dead code introduced.
+</review>
 </task>
 
 </tasks>

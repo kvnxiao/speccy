@@ -2,7 +2,7 @@
 id: SPEC-0036
 slug: speccy-work-opus-low-pin
 title: Repin Claude Code speccy-work implementer to opus[1m] / low effort
-status: in-progress
+status: implemented
 created: 2026-05-20
 supersedes: []
 ---
