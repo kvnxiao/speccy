@@ -38,23 +38,11 @@ pub fn write_spec(
     root: &Utf8Path,
     dir_name: &str,
     spec_md: &str,
-    // Legacy pre-SPEC-0019 spec.toml content. The third argument is
-    // preserved so the many call sites don't all need touch-ups in this
-    // task. When the string is non-empty it is written to disk, which
-    // surfaces as `WorkspaceError::StraySpecToml` (recorded on the
-    // parsed spec). T-006 will sweep the remaining call sites and drop
-    // the parameter; for now writing it keeps tests that expected a
-    // per-spec parse failure (`speccy check` warning, exit code 1)
-    // working.
-    legacy_spec_toml: &str,
     tasks_md: Option<&str>,
 ) -> TestResult<Utf8PathBuf> {
     let dir = root.join(".speccy").join("specs").join(dir_name);
     fs_err::create_dir_all(dir.as_std_path())?;
     fs_err::write(dir.join("SPEC.md").as_std_path(), spec_md)?;
-    if !legacy_spec_toml.is_empty() {
-        fs_err::write(dir.join("spec.toml").as_std_path(), legacy_spec_toml)?;
-    }
     if let Some(tm) = tasks_md {
         fs_err::write(dir.join("TASKS.md").as_std_path(), tm)?;
     }
@@ -137,21 +125,6 @@ pub fn spec_md_with_open_questions(id: &str, status: &str, questions: usize) -> 
 /// guaranteeing the module-level `expect(dead_code)` is fulfilled.
 pub fn touch_for_dead_code_expect() {
     let _ = indoc! {""};
-}
-
-pub fn valid_spec_toml() -> String {
-    indoc! {r#"
-        schema_version = 1
-
-        [[requirements]]
-        id = "REQ-001"
-        checks = ["CHK-001"]
-
-        [[checks]]
-        id = "CHK-001"
-        scenario = "Given REQ-001, when the suite runs, then it covers REQ-001."
-    "#}
-    .to_owned()
 }
 
 pub fn bootstrap_tasks_md(spec_id: &str) -> String {

@@ -18,7 +18,6 @@ mod common;
 use common::TestResult;
 use common::Workspace;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
@@ -75,7 +74,6 @@ fn per_spec_json_envelope_shape_review() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let text = render_per_spec(&ws, "SPEC-0001")?;
@@ -121,7 +119,6 @@ fn per_spec_json_envelope_shape_implement() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let text = render_per_spec(&ws, "SPEC-0001")?;
@@ -152,7 +149,6 @@ fn workspace_json_envelope_shape() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let text = render_workspace(&ws)?;
@@ -195,7 +191,6 @@ fn determinism() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
 

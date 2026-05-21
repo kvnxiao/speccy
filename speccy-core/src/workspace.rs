@@ -410,23 +410,11 @@ fn resolve_mission_md_path(dir: &Utf8Path) -> Option<Utf8PathBuf> {
 
 fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     let spec_md_path = dir.join("SPEC.md");
-    let spec_toml_path = dir.join("spec.toml");
     let tasks_md_path = dir.join("TASKS.md");
     let has_tasks = fs_err::metadata(tasks_md_path.as_std_path()).is_ok_and(|m| m.is_file());
 
     let spec_md_result = spec_md(&spec_md_path);
-    // SPEC-0019 REQ-002: a per-spec `spec.toml` is a stray after
-    // migration. Surface it through the per-spec parse-failure channel
-    // (the lint engine already renders these) instead of going to the
-    // marker parser.
-    let stray_spec_toml = fs_err::metadata(spec_toml_path.as_std_path()).is_ok();
-    let spec_doc_result = if stray_spec_toml {
-        Err(Box::new(ParseError::StraySpecToml {
-            path: spec_toml_path.clone(),
-        }))
-    } else {
-        parse_spec_doc(&spec_md_path)
-    };
+    let spec_doc_result = parse_spec_doc(&spec_md_path);
     let tasks_md_result = if has_tasks {
         Some(parse_one_tasks_xml(&tasks_md_path))
     } else {

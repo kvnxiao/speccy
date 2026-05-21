@@ -15,7 +15,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_with_open_questions;
-use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::status::StatusArgs;
 use speccy_cli::status::run;
@@ -47,7 +46,6 @@ fn empty_and_single_spec() -> TestResult {
         &ws2.root,
         "0001-foo",
         &spec_md_with_open_questions("SPEC-0001", "in-progress", 2),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
 
@@ -67,7 +65,7 @@ fn empty_and_single_spec() -> TestResult {
 fn workspace_lint_block_appears_at_end_when_present() -> TestResult {
     let ws = Workspace::new()?;
     let spec_md = "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\nsupersedes: [\"SPEC-9999\"]\n---\n\n# SPEC-0001\n\n### REQ-001: First\n".to_owned();
-    write_spec(&ws.root, "0001-x", &spec_md, &valid_spec_toml(), None)?;
+    write_spec(&ws.root, "0001-x", &spec_md, None)?;
 
     let text = render_text(&ws.root)?;
     assert!(text.contains("Workspace lint:"));

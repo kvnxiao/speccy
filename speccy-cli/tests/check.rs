@@ -273,21 +273,18 @@ fn no_selector_renders_all_scenarios_with_count_summary() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_three_scenarios("SPEC-0001"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
         &marker_spec_md_three_scenarios("SPEC-0002"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0003-gamma",
         &marker_spec_md_three_scenarios("SPEC-0003"),
-        "",
         None,
     )?;
 
@@ -333,7 +330,6 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
         &ws.root,
         "0001-multiline",
         &marker_spec_md_multiline_scenario("SPEC-0001"),
-        "",
         None,
     )?;
 
@@ -358,39 +354,6 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy field hard break: post-SPEC-0018 a spec.toml row that still
-// carries `kind`, `command`, `prompt`, or `proves` must fail
-// deserialization via `#[serde(deny_unknown_fields)]` on `RawCheck`.
-// ---------------------------------------------------------------------------
-
-/// Post-SPEC-0019 the analogue to the SPEC-0018 "legacy `command`
-/// field" hard break is: a stray per-spec `spec.toml` (regardless of
-/// content) surfaces as a parse warning on `speccy check`. The
-/// underlying parse error variant changed from `Toml` to
-/// `StraySpecToml`.
-#[test]
-fn legacy_command_field_is_rejected_by_deny_unknown_fields() -> TestResult {
-    let ws = Workspace::new()?;
-    write_spec(
-        &ws.root,
-        "0001-legacy",
-        &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        // Stray spec.toml content is irrelevant — its presence alone is
-        // the SPEC-0019 violation.
-        "schema_version = 1\n",
-        None,
-    )?;
-
-    let (_code, _out, err) = invoke(&ws.root, None)?;
-    assert!(
-        err.contains("SPEC.md marker tree failed to parse")
-            && err.contains("stray per-spec spec.toml"),
-        "stray spec.toml should surface as a parse warning: {err}",
-    );
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // Selector shapes (SPEC-0017): preserved set of accepted forms
 // ---------------------------------------------------------------------------
 
@@ -401,14 +364,12 @@ fn spec_selector_renders_only_named_spec() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_three_scenarios("SPEC-0001"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
         &marker_spec_md_three_scenarios("SPEC-0002"),
-        "",
         None,
     )?;
 
@@ -432,14 +393,12 @@ fn qualified_check_selector_renders_one() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_three_scenarios("SPEC-0001"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-beta",
         &marker_spec_md_three_scenarios("SPEC-0002"),
-        "",
         None,
     )?;
 
@@ -461,14 +420,12 @@ fn bare_chk_selector_renders_across_specs() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_three_scenarios("SPEC-0001"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0003-gamma",
         &marker_spec_md_three_scenarios("SPEC-0003"),
-        "",
         None,
     )?;
 
@@ -550,7 +507,7 @@ fn qualified_task_selector_renders_covered_scenarios() -> TestResult {
         </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-001", "REQ-001"), ("T-002", "REQ-002")]);
-    write_spec(&ws.root, "0010-task-coverage", spec_md, "", Some(&tasks))?;
+    write_spec(&ws.root, "0010-task-coverage", spec_md, Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0010/T-002"))?;
     assert_eq!(code, 0);
@@ -614,7 +571,7 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
         </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0010", &[("T-007", "REQ-001")]);
-    write_spec(&ws.root, "0010-alpha", spec_md, "", Some(&tasks))?;
+    write_spec(&ws.root, "0010-alpha", spec_md, Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("T-007"))?;
     assert_eq!(code, 0);
@@ -702,7 +659,7 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
         </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100 REQ-200")]);
-    write_spec(&ws.root, "0020-dedup", spec_md, "", Some(&tasks))?;
+    write_spec(&ws.root, "0020-dedup", spec_md, Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0020/T-001"))?;
     assert_eq!(code, 0);
@@ -745,7 +702,6 @@ fn unknown_spec_preserves_no_spec_matching_wording() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -770,7 +726,6 @@ fn unknown_check_id_errors_with_no_check_matching() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -789,7 +744,6 @@ fn malformed_selector_errors() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -820,11 +774,11 @@ fn empty_workspace_prints_no_checks_defined() -> TestResult {
 }
 
 #[test]
-fn malformed_spec_toml_warns_and_other_specs_render() -> TestResult {
+fn malformed_spec_md_warns_and_other_specs_render() -> TestResult {
     let ws = Workspace::new()?;
-    // After SPEC-0019 the equivalent "malformed" condition for `speccy
-    // check` is a SPEC.md marker tree that fails to parse. Use a SPEC.md
-    // missing the required `speccy:changelog` marker to trip the parser.
+    // A SPEC.md element tree that fails to parse (missing the required
+    // `<changelog>` element) surfaces as a parse warning while the
+    // workspace's other specs still render.
     let broken_spec_md = indoc! {r#"
         ---
         id: SPEC-0001
@@ -852,12 +806,11 @@ fn malformed_spec_toml_warns_and_other_specs_render() -> TestResult {
         </scenario>
         </requirement>
     "#};
-    write_spec(&ws.root, "0001-broken", broken_spec_md, "", None)?;
+    write_spec(&ws.root, "0001-broken", broken_spec_md, None)?;
     write_spec(
         &ws.root,
         "0002-alpha",
         &marker_spec_md_two_scenarios("SPEC-0002", "in-progress"),
-        "",
         None,
     )?;
 
@@ -885,7 +838,6 @@ fn dropped_spec_skipped_in_run_all() -> TestResult {
         &ws.root,
         "0001-dropped",
         &marker_spec_md_two_scenarios("SPEC-0001", "dropped"),
-        "",
         None,
     )?;
 
@@ -906,7 +858,6 @@ fn dropped_spec_named_directly_surfaces_skip() -> TestResult {
         &ws.root,
         "0001-dropped",
         &marker_spec_md_two_scenarios("SPEC-0001", "dropped"),
-        "",
         None,
     )?;
 
@@ -946,7 +897,6 @@ fn binary_renders_headers_and_summary() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -967,7 +917,6 @@ fn binary_chk_099_no_match_preserves_no_check_matching_wording() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -988,7 +937,6 @@ fn binary_spec_9999_preserves_no_matching_spec_wording() -> TestResult {
         &ws.root,
         "0001-alpha",
         &marker_spec_md_two_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -1118,7 +1066,7 @@ fn check_task_prints_scenario_body_bytes_from_element_block() -> TestResult {
         </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0099", &[("T-001", "REQ-001")]);
-    write_spec(&ws.root, "0099-element-body", spec_md, "", Some(&tasks))?;
+    write_spec(&ws.root, "0099-element-body", spec_md, Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0099/T-001"))?;
     assert_eq!(code, 0);
@@ -1224,7 +1172,7 @@ fn check_duplicate_scenario_id_across_requirements_is_surfaced_as_parse_warning(
         | 2026-05-11 | t | init |
         </changelog>
     "#};
-    write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
+    write_spec(&ws.root, "0098-dup-chk", spec_md, None)?;
 
     let (code, _out, err) = invoke(&ws.root, None)?;
     assert_eq!(

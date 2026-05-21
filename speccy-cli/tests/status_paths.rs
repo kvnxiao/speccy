@@ -16,7 +16,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 
 fn tasks_md_xml_with_pending(spec_id: &str) -> String {
@@ -35,7 +34,6 @@ fn chk009_status_json_carries_resolved_paths_flat_spec() -> TestResult {
         &ws.root,
         "0031-foo",
         &spec_md_template("SPEC-0031", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0031")),
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -100,7 +98,6 @@ fn status_json_tasks_md_path_null_when_absent() -> TestResult {
         &ws.root,
         "0032-bar",
         &spec_md_template("SPEC-0032", "draft"),
-        &valid_spec_toml(),
         None, // no TASKS.md
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -190,7 +187,6 @@ fn next_json_mission_md_path_null_for_flat_spec() -> TestResult {
         &ws.root,
         "0001-flat",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml_with_pending("SPEC-0001")),
     )?;
 
@@ -222,7 +218,6 @@ fn next_workspace_json_carries_path_fields() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml_with_pending("SPEC-0001")),
     )?;
 

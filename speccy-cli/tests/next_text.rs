@@ -18,7 +18,6 @@ use assert_cmd::Command;
 use common::TestResult;
 use common::Workspace;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use predicates::str::contains;
 use speccy_cli::next::NextArgs;
@@ -60,7 +59,6 @@ fn one_line_per_active_spec() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let text = render_text(&ws)?;
@@ -82,7 +80,6 @@ fn one_line_per_active_spec() -> TestResult {
         &ws2.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml2)),
     )?;
     let text2 = render_text(&ws2)?;
@@ -99,7 +96,6 @@ fn one_line_per_active_spec() -> TestResult {
         &ws3.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
     let text3 = render_text(&ws3)?;
@@ -117,7 +113,6 @@ fn one_line_per_active_spec() -> TestResult {
         &ws4.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml4)),
     )?;
     let text4 = render_text(&ws4)?;
@@ -135,7 +130,6 @@ fn one_line_per_active_spec() -> TestResult {
         &ws5.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml5)),
     )?;
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
@@ -156,7 +150,6 @@ fn exit_code_is_zero_for_all_kinds() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     Command::cargo_bin("speccy")?
@@ -186,7 +179,6 @@ fn per_spec_form_text_output() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     Command::cargo_bin("speccy")?
@@ -204,7 +196,6 @@ fn per_spec_form_text_output() -> TestResult {
         &ws2.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
     Command::cargo_bin("speccy")?

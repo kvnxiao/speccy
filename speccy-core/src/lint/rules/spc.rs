@@ -34,9 +34,6 @@ pub fn lint(spec: &ParsedSpec, workspace: &Workspace<'_>, out: &mut Vec<Diagnost
 fn spc_001_spec_doc_parse(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     if let Err(err) = &spec.spec_doc {
         let message = match err.as_ref() {
-            ParseError::StraySpecToml { path } => format!(
-                "stray per-spec spec.toml at {path}: SPEC-0019 removed spec.toml; remove the file and rely on SPEC.md elements"
-            ),
             ParseError::Io { source, .. } => {
                 format!("SPEC.md element tree could not be read: {source}")
             }

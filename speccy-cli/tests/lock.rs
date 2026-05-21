@@ -19,7 +19,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use predicates::str::contains;
 
@@ -30,7 +29,6 @@ fn lock_writes_hash_and_rfc3339_timestamp_into_tasks_md_frontmatter() -> TestRes
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
 
@@ -104,13 +102,7 @@ fn lock_spec_md_parse_failure_exits_one_and_tasks_md_unchanged() -> TestResult {
     let ws = Workspace::new()?;
     let malformed_spec_md = "no frontmatter\n";
     let tasks_before = bootstrap_tasks_md("SPEC-0001");
-    let spec_dir = write_spec(
-        &ws.root,
-        "0001-foo",
-        malformed_spec_md,
-        &valid_spec_toml(),
-        Some(&tasks_before),
-    )?;
+    let spec_dir = write_spec(&ws.root, "0001-foo", malformed_spec_md, Some(&tasks_before))?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("lock")
@@ -176,7 +168,6 @@ fn lock_missing_tasks_md_exits_one_without_creating_file() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
 
@@ -207,7 +198,6 @@ fn lock_preserves_body_bytes_byte_identical() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap),
     )?;
 

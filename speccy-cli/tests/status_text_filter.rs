@@ -16,6 +16,7 @@ use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
 use common::write_spec;
+use indoc::indoc;
 use speccy_cli::status::StatusArgs;
 use speccy_cli::status::run;
 
@@ -40,7 +41,6 @@ fn in_progress_specs_are_always_shown() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -57,14 +57,12 @@ fn clean_implemented_specs_are_hidden() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -84,7 +82,6 @@ fn stale_implemented_spec_is_shown() -> TestResult {
         &ws.root,
         "0001-done",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         // bootstrap-pending makes it stale.
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
@@ -104,14 +101,22 @@ fn stale_implemented_spec_is_shown() -> TestResult {
 #[test]
 fn implemented_with_lint_error_is_shown() -> TestResult {
     let ws = Workspace::new()?;
-    // SPEC-0019: a stray per-spec spec.toml fires SPC-001.
+    // A SPEC.md missing the required `<changelog>` element fails to
+    // parse and fires SPC-001.
     let dir = ws.root.join(".speccy").join("specs").join("0001-broken");
     fs_err::create_dir_all(dir.as_std_path())?;
-    fs_err::write(
-        dir.join("SPEC.md").as_std_path(),
-        spec_md_template("SPEC-0001", "implemented"),
-    )?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), "schema_version = 1\n")?;
+    let broken_spec_md = indoc! {r"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: y
+        status: implemented
+        created: 2026-05-11
+        ---
+
+        # SPEC-0001
+    "};
+    fs_err::write(dir.join("SPEC.md").as_std_path(), broken_spec_md)?;
 
     let text = render_text(&ws.root)?;
     assert!(

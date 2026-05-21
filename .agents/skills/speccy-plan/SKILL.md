@@ -105,9 +105,7 @@ is already agreed.
    already exists, preserve existing ordinals and allocate the next free
    letter for any new question added (no renumbering). Reaching `z.`
    signals an over-scoped session — 26 open questions is a scope smell,
-   not a format limitation. This format applies going forward only;
-   existing SPECs retain their current `- [ ]` formatting unless
-   explicitly amended.
+   not a format limitation.
 
 5. Suggest the next step: `speccy-tasks SPEC-NNNN` to
    decompose into `TASKS.md`.

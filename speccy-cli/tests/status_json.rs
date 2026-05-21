@@ -14,7 +14,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::status::StatusArgs;
 use speccy_cli::status::run;
@@ -40,7 +39,6 @@ fn contract() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
     // Even a 'dropped' spec must appear in JSON regardless of status.
@@ -48,7 +46,6 @@ fn contract() -> TestResult {
         &ws.root,
         "0002-dropped",
         &spec_md_template("SPEC-0002", "dropped"),
-        &valid_spec_toml(),
         None,
     )?;
 
@@ -128,14 +125,12 @@ fn output_is_deterministic_across_runs() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
     write_spec(
         &ws.root,
         "0002-active",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0002")),
     )?;
 
@@ -151,15 +146,22 @@ fn output_is_deterministic_across_runs() -> TestResult {
 #[test]
 fn lint_diagnostics_are_structured_objects() -> TestResult {
     let ws = Workspace::new()?;
-    // After SPEC-0019 SPC-001 fires when a stray per-spec `spec.toml`
-    // is present (the marker tree is the new spec carrier).
+    // A SPEC.md missing the required `<changelog>` element fails to
+    // parse and fires SPC-001.
     let dir = ws.root.join(".speccy").join("specs").join("0001-broken");
     fs_err::create_dir_all(dir.as_std_path())?;
-    fs_err::write(
-        dir.join("SPEC.md").as_std_path(),
-        spec_md_template("SPEC-0001", "in-progress"),
-    )?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), "schema_version = 1\n")?;
+    let broken_spec_md = indoc::indoc! {r"
+        ---
+        id: SPEC-0001
+        slug: x
+        title: y
+        status: in-progress
+        created: 2026-05-11
+        ---
+
+        # SPEC-0001
+    "};
+    fs_err::write(dir.join("SPEC.md").as_std_path(), broken_spec_md)?;
 
     let json_text = render_json(&ws.root)?;
     let parsed: serde_json::Value = serde_json::from_str(&json_text)?;
@@ -191,13 +193,7 @@ fn stale_reasons_in_declared_order() -> TestResult {
     // Hash mismatch with no mtime drift -> only HashDrift.
     let spec_md = spec_md_template("SPEC-0001", "in-progress");
     let tasks_md = "---\nspec: SPEC-0001\nspec_hash_at_generation: 0000000000000000000000000000000000000000000000000000000000000000\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n</tasks>\n".to_owned();
-    write_spec(
-        &ws.root,
-        "0001-stale",
-        &spec_md,
-        &valid_spec_toml(),
-        Some(&tasks_md),
-    )?;
+    write_spec(&ws.root, "0001-stale", &spec_md, Some(&tasks_md))?;
 
     let json_text = render_json(&ws.root)?;
     let parsed: serde_json::Value = serde_json::from_str(&json_text)?;

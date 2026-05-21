@@ -33,9 +33,7 @@ reconciliation are not forgotten.
    (do not renumber on amend); allocate the next free letter when
    appending a new question. Reaching `z.` signals an over-scoped
    session — 26 open questions is a scope smell, not a format
-   limitation. This format applies going forward only; existing SPECs
-   retain their current `- [ ]` formatting unless touched by this
-   amendment.
+   limitation.
 3. **Self-review pass.** Run this pass exactly once after writing the
    SPEC.md diff and appending the Changelog row. Do not re-check after
    applying fixes.

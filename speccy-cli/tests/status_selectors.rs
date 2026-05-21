@@ -81,7 +81,6 @@ fn unknown_spec_id_errors_without_writing_stdout() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -111,7 +110,6 @@ fn positional_renders_one_spec_text_even_if_it_would_be_filtered() -> TestResult
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     // SPEC-0002 clean implemented (would normally be filtered).
@@ -119,7 +117,6 @@ fn positional_renders_one_spec_text_even_if_it_would_be_filtered() -> TestResult
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -146,14 +143,12 @@ fn positional_renders_one_spec_json() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -187,7 +182,6 @@ fn all_flag_renders_every_spec_text() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     // Clean implemented would normally be filtered.
@@ -195,7 +189,6 @@ fn all_flag_renders_every_spec_text() -> TestResult {
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -230,14 +223,12 @@ fn all_flag_json_matches_default_json_shape() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -271,7 +262,6 @@ fn footer_appended_when_default_filter_hides_specs() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     // Hidden: clean implemented (no TASKS.md → not stale).
@@ -279,7 +269,6 @@ fn footer_appended_when_default_filter_hides_specs() -> TestResult {
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 
@@ -303,7 +292,6 @@ fn footer_suppressed_when_nothing_is_hidden() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -325,14 +313,12 @@ fn footer_appended_when_attention_list_empty_but_filter_hides_specs() -> TestRes
         &ws.root,
         "0001-done",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-done",
         &spec_md_template("SPEC-0002", "implemented"),
-        "",
         None,
     )?;
 

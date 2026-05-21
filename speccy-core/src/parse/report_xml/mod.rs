@@ -149,8 +149,6 @@ fn scan_report_tags(
     let cfg = ScanConfig {
         whitelist: REPORT_ELEMENT_NAMES,
         structure_shaped_names: REPORT_ELEMENT_NAMES,
-        retired_names: &[],
-        detect_legacy_markers: false,
     };
     scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
 }

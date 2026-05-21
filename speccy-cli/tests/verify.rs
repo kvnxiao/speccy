@@ -145,7 +145,6 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
         "0001-empty",
         // Implemented so REQ-001 stays at Error (no in-progress demotion).
         &spec_md_empty_scenarios("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
 
@@ -193,7 +192,6 @@ fn clean_workspace_exits_zero_without_spawning_child_processes() -> TestResult {
         &ws.root,
         "0001-no-spawn",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
 
@@ -217,7 +215,6 @@ fn text_output_ends_with_shape_summary_line() -> TestResult {
         &ws.root,
         "0001-one",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -239,14 +236,12 @@ fn text_output_summary_counts_aggregate_across_specs() -> TestResult {
         &ws.root,
         "0001-a",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     write_spec(
         &ws.root,
         "0002-b",
         &spec_md_template("SPEC-0002", "in-progress"),
-        "",
         None,
     )?;
 
@@ -284,7 +279,6 @@ fn json_envelope_is_schema_one_and_has_no_execution_fields() -> TestResult {
         &ws.root,
         "0001-json",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -325,7 +319,6 @@ fn json_envelope_is_pretty_printed_with_trailing_newline() -> TestResult {
         &ws.root,
         "0001-pretty",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -345,7 +338,6 @@ fn json_envelope_is_byte_identical_across_runs() -> TestResult {
         &ws.root,
         "0001-deterministic",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -368,7 +360,6 @@ fn dropped_spec_with_shape_errors_is_non_gating() -> TestResult {
         &ws.root,
         "0001-dropped",
         &spec_md_empty_scenarios("SPEC-0001", "dropped"),
-        "",
         None,
     )?;
 
@@ -394,7 +385,6 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
         &ws.root,
         "0001-old",
         &spec_md_empty_scenarios("SPEC-0001", "superseded"),
-        "",
         None,
     )?;
     let supersedes_md = indoc! {r#"
@@ -445,7 +435,7 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
         | 2026-05-11 | t | init |
         </changelog>
     "#};
-    write_spec(&ws.root, "0002-new", supersedes_md, "", None)?;
+    write_spec(&ws.root, "0002-new", supersedes_md, None)?;
 
     let (code, _out, _err) = invoke(&ws.root, false)?;
     assert_eq!(code, 0, "superseded spec shape errors must not gate verify");
@@ -456,7 +446,7 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
 fn workspace_level_parse_errors_still_gate_verify() -> TestResult {
     let ws = Workspace::new()?;
     // SPEC.md missing `id` -> SPC-004 (Error) -> gating.
-    write_spec(&ws.root, "0001-bad", &spec_md_missing_id(), "", None)?;
+    write_spec(&ws.root, "0001-bad", &spec_md_missing_id(), None)?;
 
     let (code, out, _err) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "SPC-004 parse error must gate verify");
@@ -483,7 +473,6 @@ fn in_progress_spec_shape_errors_are_demoted_not_gating() -> TestResult {
         &ws.root,
         "0001-drafting",
         &spec_md_empty_scenarios("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -512,7 +501,6 @@ fn implemented_spec_shape_errors_still_gate() -> TestResult {
         &ws.root,
         "0001-shipped",
         &spec_md_empty_scenarios("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
 
@@ -558,7 +546,6 @@ fn binary_propagates_exit_zero_on_pass() -> TestResult {
         &ws.root,
         "0001-pass",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
 
@@ -578,7 +565,6 @@ fn binary_propagates_exit_one_on_shape_failure() -> TestResult {
         &ws.root,
         "0001-fail",
         &spec_md_empty_scenarios("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
 
@@ -658,7 +644,7 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
         | 2026-05-11 | t | init |
         </changelog>
     "#};
-    write_spec(&ws.root, "0098-dup-chk", spec_md, "", None)?;
+    write_spec(&ws.root, "0098-dup-chk", spec_md, None)?;
 
     let (code, out, _err) = invoke(&ws.root, true)?;
     assert_eq!(
@@ -765,7 +751,6 @@ fn report_md_missing_spec_attribute_fires_rpt_001() -> TestResult {
         &ws.root,
         "0001-rpt001",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
     fs_err::write(
@@ -806,7 +791,6 @@ fn report_md_dangling_req_fires_rpt_002() -> TestResult {
         &ws.root,
         "0001-rpt002",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
     fs_err::write(
@@ -867,7 +851,6 @@ fn report_md_dangling_scenario_fires_rpt_003() -> TestResult {
         &ws.root,
         "0001-rpt003",
         &spec_md_template("SPEC-0001", "implemented"),
-        "",
         None,
     )?;
     fs_err::write(
@@ -929,7 +912,6 @@ fn report_md_rpt_demotes_on_in_progress_spec() -> TestResult {
         &ws.root,
         "0001-rpt-demote",
         &spec_md_template("SPEC-0001", "in-progress"),
-        "",
         None,
     )?;
     fs_err::write(

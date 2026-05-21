@@ -2,14 +2,7 @@
 members = [
     "speccy-cli",
     "speccy-core",
-    "speccy-core/tools/migrate_tasks_schema",
 ]
-# Keep `cargo run -- verify` ergonomic: the SPEC-0029 migration tool is
-# excluded from default-members so workspace-root `cargo run` resolves
-# unambiguously to the `speccy` binary. The migration tool is invoked
-# explicitly via `cargo run -p migrate-tasks-schema -- ...` (see its
-# README).
-default-members = ["speccy-cli", "speccy-core"]
 resolver = "3"
 
 [workspace.package]

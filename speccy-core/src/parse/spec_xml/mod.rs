@@ -1,14 +1,11 @@
-//! Raw-XML-element-structured SPEC.md parser and renderer (SPEC-0020
-//! carrier, extended by SPEC-0021's section-level element whitelist).
+//! Raw-XML-element-structured SPEC.md parser and renderer.
 //!
 //! Reads a SPEC.md whose body is ordinary Markdown plus line-isolated raw
 //! XML open/close tag pairs drawn from a closed whitelist (`requirement`,
-//! `scenario`, `decision`, `open-question`, `changelog`, plus SPEC-0021's
-//! top-level `goals`, `non-goals`, `user-stories`, optional `assumptions`,
-//! and per-requirement `done-when` / `behavior` sub-sections) and returns a
-//! typed [`SpecDoc`]. SPEC-0020's `<spec>` root and `<overview>` section
-//! were retired by SPEC-0021 DEC-008 and are now rejected by the parser
-//! with a dedicated diagnostic.
+//! `scenario`, `decision`, `open-question`, `changelog`, plus the
+//! top-level wrappers `goals`, `non-goals`, `user-stories`, optional
+//! `assumptions`, and per-requirement `done-when` / `behavior`
+//! sub-sections) and returns a typed [`SpecDoc`].
 //!
 //! The element scanner is line-aware and treats element-looking content
 //! inside fenced code blocks as Markdown body — never structure. Body
@@ -23,10 +20,7 @@
 //! **not** roundtrip. Parse-then-render-then-parse on a rendered document
 //! is structurally equivalent (ids, parent links, element names, bodies);
 //! parse-then-render-then-parse on an arbitrary hand-authored SPEC.md
-//! drops free prose. The SPEC-0020 migration tool (T-003) preserves free
-//! prose by writing files directly rather than going through this
-//! renderer, mirroring the choice SPEC-0019 T-003 made for the marker
-//! renderer.
+//! drops free prose.
 //!
 //! See `.speccy/specs/0020-raw-xml-spec-carrier/SPEC.md` REQ-001/REQ-002/
 //! REQ-003 for the contract this module satisfies, and DEC-002/DEC-003
@@ -188,11 +182,6 @@ const ALLOWED_RESOLVED_VALUES: &[&str] = &["true", "false"];
 /// Closed whitelist of Speccy structure element names. Must remain
 /// disjoint from [`HTML5_ELEMENT_NAMES`]; the disjointness unit test
 /// below enforces this at build time.
-///
-/// SPEC-0021 retired `spec` and `overview` from this list (DEC-008) and
-/// added six new entries: the per-requirement `behavior` / `done-when`
-/// sub-sections (DEC-002) plus four top-level section wrappers
-/// (`goals`, `non-goals`, `user-stories`, `assumptions`).
 pub const SPECCY_ELEMENT_NAMES: &[&str] = &[
     "requirement",
     "scenario",
@@ -207,30 +196,9 @@ pub const SPECCY_ELEMENT_NAMES: &[&str] = &[
     "assumptions",
 ];
 
-/// Element names that used to be in the SPEC-0020 whitelist but were
-/// retired by SPEC-0021 DEC-008. The scanner still recognises lines that
-/// open or close these tags so it can surface a dedicated
-/// [`ParseError::RetiredMarkerName`] diagnostic that names SPEC-0021,
-/// instead of silently treating them as Markdown body.
-const RETIRED_ELEMENT_NAMES: &[&str] = &["spec", "overview"];
-
-/// Concatenate [`SPECCY_ELEMENT_NAMES`] and [`RETIRED_ELEMENT_NAMES`]
-/// to drive structure-shaped malformed-tag diagnostics. Retired names
-/// still need malformed-shape diagnostics so that, say, an unclosed
-/// `<spec ...` line gets the retirement diagnostic from the scanner
-/// rather than silently being treated as Markdown.
-fn build_structure_shaped_names() -> Vec<&'static str> {
-    let mut names: Vec<&'static str> =
-        Vec::with_capacity(SPECCY_ELEMENT_NAMES.len() + RETIRED_ELEMENT_NAMES.len());
-    names.extend_from_slice(SPECCY_ELEMENT_NAMES);
-    names.extend_from_slice(RETIRED_ELEMENT_NAMES);
-    names
-}
-
-/// Run the shared XML scanner with the SPEC.md whitelist, retired-name
-/// set, and SPEC-0019 legacy-marker detection enabled. Centralising the
-/// configuration keeps [`parse`] short and gives a single grep target
-/// for "what tags does SPEC.md recognise".
+/// Run the shared XML scanner with the SPEC.md whitelist. Centralising
+/// the configuration keeps [`parse`] short and gives a single grep
+/// target for "what tags does SPEC.md recognise".
 fn scan_spec_tags(
     source: &str,
     body: &str,
@@ -238,12 +206,9 @@ fn scan_spec_tags(
     path: &Utf8Path,
 ) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
-    let structure_shaped_names = build_structure_shaped_names();
     let cfg = ScanConfig {
         whitelist: SPECCY_ELEMENT_NAMES,
-        structure_shaped_names: &structure_shaped_names,
-        retired_names: RETIRED_ELEMENT_NAMES,
-        detect_legacy_markers: true,
+        structure_shaped_names: SPECCY_ELEMENT_NAMES,
     };
     scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
 }
@@ -2261,161 +2226,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_html_comment_marker_open_errors_with_dedicated_variant() {
-        let src = make(indoc! {r#"
-            <!-- speccy:requirement id="REQ-001" -->
-            body
-
-            <!-- speccy:scenario id="CHK-001" -->
-            text
-            <!-- /speccy:scenario -->
-            <!-- /speccy:requirement -->
-
-            <changelog>
-            row
-            </changelog>
-        "#});
-        let err = parse(&src, path()).expect_err("legacy marker must fail");
-        assert!(
-            matches!(*err, ParseError::LegacyMarker { .. }),
-            "expected LegacyMarker variant, got {err:?}",
-        );
-        if let ParseError::LegacyMarker {
-            ref legacy_form,
-            ref suggested_element,
-            ..
-        } = *err
-        {
-            assert!(
-                legacy_form.contains("speccy:requirement"),
-                "legacy form did not mention `speccy:requirement`: {legacy_form:?}",
-            );
-            assert!(
-                suggested_element.contains("<requirement"),
-                "suggestion did not contain `<requirement`: {suggested_element:?}",
-            );
-        }
-        // The Display impl must also surface both pieces.
-        let rendered = format!("{err}");
-        assert!(
-            rendered.contains("speccy:requirement") && rendered.contains("<requirement"),
-            "Display should mention legacy form and suggestion: {rendered}",
-        );
-    }
-
-    #[test]
-    fn legacy_html_comment_marker_close_errors_with_dedicated_variant() {
-        let src = make(indoc! {r#"
-            <requirement id="REQ-001">
-            body
-
-            <done-when>
-            - placeholder.
-            </done-when>
-
-            <behavior>
-            - placeholder.
-            </behavior>
-
-            <scenario id="CHK-001">
-            text
-            </scenario>
-            <!-- /speccy:requirement -->
-
-            <changelog>
-            row
-            </changelog>
-        "#});
-        let err = parse(&src, path()).expect_err("legacy close marker must fail");
-        assert!(
-            matches!(*err, ParseError::LegacyMarker { .. }),
-            "expected LegacyMarker variant, got {err:?}",
-        );
-        if let ParseError::LegacyMarker {
-            ref legacy_form,
-            ref suggested_element,
-            ..
-        } = *err
-        {
-            assert!(legacy_form.contains("/speccy:requirement"));
-            assert_eq!(suggested_element, "</requirement>");
-        }
-    }
-
-    #[test]
-    fn legacy_marker_in_inline_prose_is_not_an_error() {
-        // Documentation prose that mentions the legacy form inline (for
-        // example wrapped in inline backticks and parentheses as part of
-        // ordinary Markdown sentence text) must not trip the LegacyMarker
-        // diagnostic. The scanner only flags line-isolated legacy markers
-        // — same line-isolation rule the raw XML element scanner enforces
-        // for new structure tags.
-        let src = make(indoc! {r#"
-            History note: SPEC-0019 used HTML-comment markers (e.g.
-            `<!-- speccy:requirement id="REQ-001" -->`) which SPEC-0020
-            replaces with raw XML element tags.
-
-            <requirement id="REQ-001">
-            body
-
-            <done-when>
-            - placeholder.
-            </done-when>
-
-            <behavior>
-            - placeholder.
-            </behavior>
-
-            <scenario id="CHK-001">
-            text
-            </scenario>
-            </requirement>
-
-            <changelog>
-            row
-            </changelog>
-        "#});
-        let doc = parse(&src, path()).expect("parse should succeed");
-        assert_eq!(doc.requirements.len(), 1);
-    }
-
-    #[test]
-    fn legacy_marker_inside_fenced_code_is_not_an_error() {
-        // Documentation about the legacy form inside a fenced code
-        // block must not trigger the LegacyMarker diagnostic; it is
-        // example text, not structure.
-        let src = make(indoc! {r#"
-            History note: the SPEC-0019 form looked like this:
-
-            ```markdown
-            <!-- speccy:requirement id="REQ-XXX" -->
-            ```
-
-            <requirement id="REQ-001">
-            body
-
-            <done-when>
-            - placeholder.
-            </done-when>
-
-            <behavior>
-            - placeholder.
-            </behavior>
-
-            <scenario id="CHK-001">
-            text
-            </scenario>
-            </requirement>
-
-            <changelog>
-            row
-            </changelog>
-        "#});
-        let doc = parse(&src, path()).expect("parse should succeed");
-        assert_eq!(doc.requirements.len(), 1);
-    }
-
-    #[test]
     fn canonical_fixture_parses_cleanly() {
         // Sanity check that the checked-in canonical fixture (used by
         // T-002's roundtrip test) is valid against the T-001 parser.
@@ -2443,13 +2253,9 @@ mod tests {
 
     #[test]
     fn speccy_whitelist_is_disjoint_from_html5_element_set() {
-        // The disjointness invariant from SPEC-0020 REQ-001 / DEC-002
-        // and SPEC-0021 REQ-005. Each Speccy structure element name
-        // must be absent from the checked-in HTML5 element set;
-        // future additions that collide surface as a build-time test
-        // failure. The list below pins the post-SPEC-0021 whitelist
-        // names so a future edit can extend the same assertion as new
-        // tags ship.
+        // Every Speccy structure element name must be absent from the
+        // checked-in HTML5 element set; future additions that collide
+        // surface as a build-time test failure.
         for &name in SPECCY_ELEMENT_NAMES {
             assert!(
                 !is_html5_element_name(name),
@@ -2471,18 +2277,13 @@ mod tests {
         ] {
             assert!(
                 SPECCY_ELEMENT_NAMES.contains(&expected),
-                "post-SPEC-0021 whitelist is missing `{expected}`; SPECCY_ELEMENT_NAMES = {SPECCY_ELEMENT_NAMES:?}",
-            );
-        }
-        for retired in ["spec", "overview"] {
-            assert!(
-                !SPECCY_ELEMENT_NAMES.contains(&retired),
-                "SPEC-0021 DEC-008 retired `{retired}`; it must no longer appear in SPECCY_ELEMENT_NAMES",
+                "whitelist is missing `{expected}`; SPECCY_ELEMENT_NAMES = {SPECCY_ELEMENT_NAMES:?}",
             );
         }
         // Sanity: ensure the HTML5 list contains the names called out
-        // in REQ-001 — if a future edit accidentally drops `summary`,
-        // the collision check above silently loses coverage.
+        // in the disjointness invariant — if a future edit accidentally
+        // drops `summary`, the collision check above silently loses
+        // coverage.
         for required in [
             "html", "head", "body", "title", "summary", "details", "section", "table", "tr", "td",
             "script", "style", "template", "svg", "math",

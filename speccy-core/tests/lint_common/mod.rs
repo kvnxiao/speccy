@@ -28,9 +28,8 @@ use tempfile::TempDir;
 /// with `?` while staying inside the test-code expect/unwrap policy.
 pub type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-/// One on-disk spec fixture rooted at a `TempDir`. The legacy
-/// `spec_toml` field was removed by SPEC-0019; per-spec data lives in
-/// `SPEC.md` raw XML elements (SPEC-0020).
+/// One on-disk spec fixture rooted at a `TempDir`. Per-spec data lives
+/// entirely in `SPEC.md` raw XML elements.
 pub struct Fixture {
     pub _dir: TempDir,
     pub spec_md_path: Utf8PathBuf,
@@ -65,31 +64,22 @@ pub fn write_spec_fixture(spec_md: &str, tasks_md: Option<&str>) -> TestResult<F
     })
 }
 
-/// Build a `ParsedSpec` by parsing each artifact via SPEC-0001's
-/// parsers and SPEC-0020's raw XML element parser.
+/// Build a `ParsedSpec` by parsing each artifact via the shipped
+/// parsers.
 pub fn parse_fixture(fx: &Fixture) -> ParsedSpec {
     let spec_md_result = spec_md(&fx.spec_md_path);
     let spec_id = spec_md_result
         .as_ref()
         .ok()
         .map(|s| s.frontmatter.id.clone());
-    // Mirror the workspace loader's SPEC-0019 stray-spec.toml check so
-    // SPC-001 fires on the lint side of the test harness too.
-    let stray_path = fx.dir_path.join("spec.toml");
-    let spec_doc_result = if fs_err::metadata(stray_path.as_std_path()).is_ok() {
-        Err(Box::new(speccy_core::ParseError::StraySpecToml {
-            path: stray_path,
-        }))
-    } else {
-        fs_err::read_to_string(fx.spec_md_path.as_std_path())
-            .map_err(|e| {
-                Box::new(speccy_core::ParseError::Io {
-                    path: fx.spec_md_path.clone(),
-                    source: e,
-                })
+    let spec_doc_result = fs_err::read_to_string(fx.spec_md_path.as_std_path())
+        .map_err(|e| {
+            Box::new(speccy_core::ParseError::Io {
+                path: fx.spec_md_path.clone(),
+                source: e,
             })
-            .and_then(|src| parse_spec_xml(&src, &fx.spec_md_path))
-    };
+        })
+        .and_then(|src| parse_spec_xml(&src, &fx.spec_md_path));
     let tasks_md_result = fx.tasks_md_path.as_ref().map(|p| {
         fs_err::read_to_string(p.as_std_path())
             .map_err(|e| {
@@ -207,9 +197,7 @@ pub fn valid_spec_md(id: &str) -> String {
     template.replace("__ID__", id)
 }
 
-/// Minimal valid raw-XML-element-structured SPEC.md, kept as a separate
-/// helper name so older test bodies that referenced `valid_spec_toml`
-/// for pairing can be adapted incrementally.
+/// Minimal valid raw-XML-element-structured SPEC.md.
 pub fn valid_spec_md_default() -> String {
     valid_spec_md("SPEC-0001")
 }

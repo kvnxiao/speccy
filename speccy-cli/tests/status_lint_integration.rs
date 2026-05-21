@@ -16,7 +16,6 @@ use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use speccy_cli::status::assemble;
 use speccy_core::lint;
@@ -29,14 +28,12 @@ fn diagnostics_route_by_spec_id() -> TestResult {
         &ws.root,
         "0001-first",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0001")),
     )?;
     write_spec(
         &ws.root,
         "0002-second",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
         Some(&bootstrap_tasks_md("SPEC-0002")),
     )?;
 
@@ -83,7 +80,7 @@ fn workspace_level_diagnostics_route_to_top_block() -> TestResult {
     let ws = Workspace::new()?;
     // SPEC-0001 declares supersedes: [SPEC-9999] which is dangling.
     let spec_md = "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\nsupersedes: [\"SPEC-9999\"]\n---\n\n# SPEC-0001\n\n### REQ-001: First\n";
-    write_spec(&ws.root, "0001-x", spec_md, &valid_spec_toml(), None)?;
+    write_spec(&ws.root, "0001-x", spec_md, None)?;
 
     let workspace = scan(&ws.root);
     let diags = lint::run(&workspace.as_lint_workspace());

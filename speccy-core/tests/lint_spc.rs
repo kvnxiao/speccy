@@ -36,20 +36,6 @@ fn assert_no_code(diags: &[Diagnostic], code: &str) {
     );
 }
 
-/// SPC-001 now fires when a stray per-spec `spec.toml` is present
-/// (SPEC-0019 REQ-002) or when the SPEC.md marker tree fails to parse.
-#[test]
-fn spc_001_fires_when_stray_spec_toml_present() -> TestResult {
-    let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), None)?;
-    // Write a stray spec.toml next to the SPEC.md.
-    let stray = fx.dir_path.join("spec.toml");
-    fs_err::write(stray.as_std_path(), "schema_version = 1\n")?;
-
-    let diags = lint_fixture(&fx);
-    assert_has_code(&diags, "SPC-001");
-    Ok(())
-}
-
 #[test]
 fn spc_002_fires_when_req_only_in_spec_md_heading() -> TestResult {
     // SPEC.md heading declares REQ-002, but only REQ-001 has a marker.

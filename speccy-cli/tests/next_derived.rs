@@ -17,7 +17,6 @@ use assert_cmd::Command;
 use common::TestResult;
 use common::Workspace;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use predicates::str::contains;
 
@@ -49,7 +48,6 @@ fn chk007_per_spec_json_in_review_priority() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -91,7 +89,6 @@ fn chk007_per_spec_json_implement_after_review_done() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -131,7 +128,6 @@ fn chk008_workspace_text_decompose_when_no_tasks_md() -> TestResult {
         &ws.root,
         "0002-bar",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
         None, // no TASKS.md
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -175,7 +171,6 @@ fn per_spec_json_decompose_when_no_tasks_md() -> TestResult {
         &ws.root,
         "0002-bar",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
     let output = Command::cargo_bin("speccy")?
@@ -213,7 +208,6 @@ fn per_spec_json_null_when_all_done_and_report_present() -> TestResult {
         &ws.root,
         "0003-baz",
         &spec_md_template("SPEC-0003", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0003", &tasks_xml)),
     )?;
     // Write REPORT.md so kind resolution lands on "completed".
@@ -254,7 +248,6 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml_active)),
     )?;
     // SPEC-0002: all done + REPORT.md (should be omitted).
@@ -263,7 +256,6 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
         &ws.root,
         "0002-bar",
         &spec_md_template("SPEC-0002", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0002", &tasks_xml_done)),
     )?;
     fs_err::write(spec_dir_done.join("REPORT.md").as_std_path(), "# Report\n")?;
@@ -313,7 +305,6 @@ fn per_spec_json_ship_when_all_done_no_report() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     // No REPORT.md → kind should be "ship".
@@ -376,7 +367,6 @@ fn workspace_json_active_specs_listed() -> TestResult {
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
     )?;
     let output = Command::cargo_bin("speccy")?

@@ -107,9 +107,7 @@ own judgment.
       template's `## Open Questions` section so the output is
       copy-pasteable into the eventual SPEC.md without reformatting.
       Reaching `z.` signals an over-scoped session — 26 open
-      questions is a scope smell, not a format limitation. This
-      format applies going forward only; sessions begun before this
-      format was adopted may use unordered `- [ ]` bullets.
+      questions is a scope smell, not a format limitation.
 
 4. **Pre-check pass.** Before presenting the four artifacts to the
    user, run this internal review pass exactly once. Do not re-check

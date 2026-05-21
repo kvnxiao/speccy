@@ -81,30 +81,19 @@ pub struct RawTag {
 ///
 /// Callers supply the whitelist of element names they recognise as
 /// structure. Tag-shaped lines whose names are outside the whitelist
-/// pass through as Markdown body content unless they also appear in
-/// `retired_names` (which surface a [`ParseError::RetiredMarkerName`])
-/// or `structure_shaped_names` (which surface
-/// [`ParseError::MalformedMarker`] for malformed tag shapes).
-///
-/// The default for `structure_shaped_names` is the whitelist itself; if
-/// a caller wants to flag malformed-but-retired names too they should
-/// pass the union.
+/// pass through as Markdown body content. `structure_shaped_names`
+/// names the elements whose malformed shapes (unquoted attribute,
+/// missing `>`, etc.) should still surface
+/// [`ParseError::MalformedMarker`] rather than be silently treated as
+/// Markdown body; in the common case this is just the whitelist.
 #[derive(Debug, Clone, Copy)]
 pub struct ScanConfig<'a> {
     /// Element names the caller wants extracted as [`RawTag`]s.
     pub whitelist: &'a [&'a str],
     /// Element names whose malformed tag shapes should produce
     /// [`ParseError::MalformedMarker`] diagnostics rather than be
-    /// silently treated as Markdown. Typically the union of
-    /// `whitelist` and `retired_names`.
+    /// silently treated as Markdown.
     pub structure_shaped_names: &'a [&'a str],
-    /// Element names that produce
-    /// [`ParseError::RetiredMarkerName`] diagnostics.
-    pub retired_names: &'a [&'a str],
-    /// When `true`, surface SPEC-0019 HTML-comment
-    /// `<!-- speccy:... -->` markers outside fenced code blocks as
-    /// [`ParseError::LegacyMarker`] diagnostics.
-    pub detect_legacy_markers: bool,
 }
 
 #[expect(
@@ -161,20 +150,6 @@ fn attribute_regex() -> &'static Regex {
     CELL.get_or_init(|| Regex::new(r#"\s+([A-Za-z_][\w-]*)="([^"]*)""#).unwrap())
 }
 
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn legacy_marker_regex() -> &'static Regex {
-    // Matches the SPEC-0019 HTML-comment marker form when it is the only
-    // non-whitespace content on a line. Capture 1: optional leading
-    // slash (close marker). Capture 2: element name.
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| {
-        Regex::new(r"(?m)^\s*<!--\s*(/?)speccy:([a-z][a-z-]*)(?:\s[^>]*)?-->\s*$").unwrap()
-    })
-}
-
 /// Build an [`ParseError::UnknownMarkerAttribute`] diagnostic carrying
 /// the element name, attribute name, byte offset of the open tag, and
 /// the comma-separated set of valid attribute names. SPEC-0022 REQ-003
@@ -206,11 +181,6 @@ pub fn unknown_attribute_error(
 ///
 /// # Errors
 ///
-/// - [`ParseError::LegacyMarker`] when a SPEC-0019 HTML-comment marker appears
-///   outside a fenced code block (only when `cfg.detect_legacy_markers` is
-///   `true`).
-/// - [`ParseError::RetiredMarkerName`] when a tag whose name is in
-///   `cfg.retired_names` appears.
 /// - [`ParseError::MalformedMarker`] when a structure-shaped line is malformed
 ///   (unquoted attribute, missing `>`, content before/after the tag) and the
 ///   name is in `cfg.structure_shaped_names`.
@@ -312,12 +282,6 @@ fn classify_line(
     let abs_line_end_excl = line_info.abs_line_end_excl;
     let next_start_in_body = line_info.next_start_in_body;
 
-    if cfg.detect_legacy_markers
-        && let Some(legacy) = detect_legacy_marker(line, abs_line_start, path)
-    {
-        return Err(legacy);
-    }
-
     let trimmed = line.trim_start();
     let leading_ws = line.len().saturating_sub(trimmed.len());
     let abs_tag_offset = abs_line_start
@@ -330,13 +294,6 @@ fn classify_line(
             .get(1)
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
-        if cfg.retired_names.contains(&name.as_str()) {
-            return Err(Box::new(ParseError::RetiredMarkerName {
-                path: path.to_path_buf(),
-                marker_name: name,
-                offset: abs_tag_offset,
-            }));
-        }
         if !cfg.whitelist.contains(&name.as_str()) {
             return Ok(());
         }
@@ -357,13 +314,6 @@ fn classify_line(
             .get(1)
             .map(|m| m.as_str().to_owned())
             .unwrap_or_default();
-        if cfg.retired_names.contains(&name.as_str()) {
-            return Err(Box::new(ParseError::RetiredMarkerName {
-                path: path.to_path_buf(),
-                marker_name: name,
-                offset: abs_tag_offset,
-            }));
-        }
         if !cfg.whitelist.contains(&name.as_str()) {
             return Ok(());
         }
@@ -414,32 +364,6 @@ fn build_open_tag(
         body_start,
         body_end_after_tag: abs_tag_offset,
     }
-}
-
-fn detect_legacy_marker(
-    line: &str,
-    abs_line_start: usize,
-    path: &Utf8Path,
-) -> Option<Box<ParseError>> {
-    let caps = legacy_marker_regex().captures(line)?;
-    let raw_match = caps.get(0).map_or("", |m| m.as_str()).trim();
-    let leading_ws = line.len().saturating_sub(line.trim_start().len());
-    let abs_offset = abs_line_start
-        .checked_add(leading_ws)
-        .unwrap_or(abs_line_start);
-    let slash = caps.get(1).map_or("", |m| m.as_str());
-    let name = caps.get(2).map_or("", |m| m.as_str());
-    let suggested = if slash == "/" {
-        format!("</{name}>")
-    } else {
-        format!("<{name} ...>")
-    };
-    Some(Box::new(ParseError::LegacyMarker {
-        path: path.to_path_buf(),
-        offset: abs_offset,
-        legacy_form: raw_match.to_owned(),
-        suggested_element: suggested,
-    }))
 }
 
 fn detect_malformed_tag(
@@ -588,8 +512,6 @@ mod tests {
         ScanConfig {
             whitelist,
             structure_shaped_names: whitelist,
-            retired_names: &[],
-            detect_legacy_markers: false,
         }
     }
 

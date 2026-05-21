@@ -74,20 +74,6 @@ pub enum ParseError {
         context: String,
     },
 
-    /// A per-spec `spec.toml` file was present after the SPEC-0019
-    /// migration. SPEC-0019 REQ-002 deleted per-spec TOML; the marker
-    /// tree in `SPEC.md` is the only carrier. The workspace loader
-    /// surfaces a stray file as a per-spec parse failure so callers
-    /// (lint, status, verify) see it through the existing per-spec
-    /// error channel.
-    #[error(
-        "stray per-spec spec.toml present at {path}: SPEC-0019 removed spec.toml; the marker tree in SPEC.md is the only spec carrier"
-    )]
-    StraySpecToml {
-        /// Absolute path to the stray `spec.toml` file.
-        path: Utf8PathBuf,
-    },
-
     /// A markdown file declared an opening `---` fence but no closing one.
     #[error("unterminated YAML frontmatter in {path}")]
     UnterminatedFrontmatter {
@@ -220,42 +206,6 @@ pub enum ParseError {
         value: String,
         /// Comma-separated list of allowed values.
         allowed: String,
-    },
-
-    /// A SPEC.md still carries a SPEC-0019 HTML-comment Speccy marker
-    /// (`<!-- speccy:NAME ... -->` or `<!-- /speccy:NAME -->`) outside any
-    /// fenced code block. After the SPEC-0020 migration the raw XML element
-    /// form is the only accepted carrier; surfacing this as a dedicated
-    /// variant lets the diagnostic suggest the equivalent element syntax.
-    #[error(
-        "legacy HTML-comment speccy marker in {path} at byte offset {offset}: {legacy_form} (rewrite as the raw XML element {suggested_element})"
-    )]
-    LegacyMarker {
-        /// Path of the offending file.
-        path: Utf8PathBuf,
-        /// Byte offset of the offending marker's start in the source.
-        offset: usize,
-        /// Legacy marker line as it appears in the source.
-        legacy_form: String,
-        /// Suggested raw XML element form that replaces the legacy marker.
-        suggested_element: String,
-    },
-
-    /// A SPEC.md used an element name retired by SPEC-0021 (`<spec>`,
-    /// `<overview>`). SPEC-0021 DEC-008 retires these from the whitelist
-    /// in the same pass that adds the new section tags; surfacing the
-    /// retirement in the diagnostic lets the author find SPEC-0021 in
-    /// the project log when they hit the message.
-    #[error(
-        "retired speccy element `<{marker_name}>` in {path} at byte offset {offset}: this element was retired in SPEC-0021"
-    )]
-    RetiredMarkerName {
-        /// Path of the offending file.
-        path: Utf8PathBuf,
-        /// Marker name found in the source.
-        marker_name: String,
-        /// Byte offset of the offending tag's start in the source.
-        offset: usize,
     },
 
     /// A SPEC.md is missing a top-level section element that SPEC-0021

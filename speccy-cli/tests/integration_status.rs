@@ -15,7 +15,6 @@ use assert_cmd::Command;
 use common::TestResult;
 use common::Workspace;
 use common::spec_md_template;
-use common::valid_spec_toml;
 use common::write_spec;
 use predicates::str::contains;
 
@@ -26,7 +25,6 @@ fn status_runs_from_workspace_root() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
 
@@ -44,7 +42,6 @@ fn status_runs_from_nested_subdir() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
     let nested = ws.root.join("a").join("b");
@@ -77,7 +74,6 @@ fn status_json_emits_valid_json() -> TestResult {
         &ws.root,
         "0001-active",
         &spec_md_template("SPEC-0001", "in-progress"),
-        &valid_spec_toml(),
         None,
     )?;
 
