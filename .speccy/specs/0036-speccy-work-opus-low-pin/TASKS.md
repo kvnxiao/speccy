@@ -8,7 +8,7 @@ generated_at: 2026-05-21T03:33:41Z
 
 <tasks spec="SPEC-0036">
 
-<task id="T-001" state="in-progress" covers="REQ-001">
+<task id="T-001" state="in-review" covers="REQ-001">
 ## T-001: Repin Claude Code `speccy-work` agent frontmatter to `opus[1m]` / `low`
 
 Flip the `model:` and `effort:` YAML frontmatter values on the
@@ -130,6 +130,34 @@ Add a red→green evidence file proving the test-refactor transition, then commi
 - tests (blocking): Implementer-note lacks `Evidence:` field; `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` does not exist. Capture the red phase (scoped invocations of `t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` and `phase_worker_agent_has_model_and_effort_frontmatter` failing against the new agent frontmatter under the pre-refactor uniform-loop assertions) and the green phase (same scoped invocations passing after the per-phase tuple refactor), per the SPEC-0031 paper-trail convention every other recent spec follows.
 - style (blocking): The four files touched by T-001 (`.claude/agents/speccy-work.md`, `resources/agents/.claude/agents/speccy-work.md.tmpl`, `speccy-cli/tests/init.rs`, `speccy-cli/tests/init_phase_agents.rs`) plus the evidence file plus this TASKS.md update must land in one commit so the in-review claim matches the git history. Hygiene gates re-run against the post-commit tree must exit 0.
 </retry>
+
+<implementer-note session="2026-05-21-retry">
+Completed: Addressed both blockers from the round-1 review. Created the evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` with captured shell transcripts proving the red→green transition: used `git stash push` on the two test files to revert to pre-refactor state (uniform-loop assertions expecting `sonnet[1m]`/`medium` for all phases), ran each of the two scoped tests to capture exit-101 failures, then `git stash pop` to restore the per-phase tuple refactor and ran both tests again to capture exit-0 passes. Committed all seven files (four implementation edits from round 1, the new evidence file, SPEC.md, and TASKS.md) in one commit (`3e72382`) with the standard `Co-Authored-By` trailer. All four hygiene gates re-run against the post-commit tree exit 0.
+
+Undone: Nothing left undone. All scenarios in CHK-001, CHK-002, and CHK-003 remain satisfied. Both review blockers (missing evidence, uncommitted files) are resolved.
+
+Commands run:
+- `git stash push` on test files (to produce red phase)
+- `cargo test -p speccy-cli --test init t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` (exit 101 — red)
+- `cargo test -p speccy-cli --test init_phase_agents phase_worker_agent_has_model_and_effort_frontmatter` (exit 101 — red)
+- `git stash pop` (restore refactor)
+- `cargo test -p speccy-cli --test init t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` (exit 0 — green)
+- `cargo test -p speccy-cli --test init_phase_agents phase_worker_agent_has_model_and_effort_frontmatter` (exit 0 — green)
+- `cargo test --workspace` (exit 0)
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
+- `cargo +nightly fmt --all --check` (exit 0)
+- `cargo deny check` (exit 0)
+- `git add` + `git commit` (commit `3e72382`)
+- `cargo test --workspace` post-commit (exit 0, all test result lines "ok")
+
+Exit codes: all 0 (except the intentional red-phase runs at exit 101 as expected).
+
+Discovered issues: None beyond what round 1 surfaced. The stash/pop technique cleanly isolated the red phase without disturbing the agent file edits, confirming the two test files were the only change needed to unblock the tests persona's concern.
+
+Procedural compliance: No stale skill instructions encountered. No skill files required updating. The retry instruction specified using `git stash` to revert one half of the change for red-phase capture — followed exactly.
+
+Evidence: .speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md
+</implementer-note>
 </task>
 
 <task id="T-002" state="pending" covers="REQ-002">
