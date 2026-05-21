@@ -44,8 +44,8 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    ```markdown
    ---
    spec: SPEC-0007
-   spec_hash_at_generation: <hash from speccy lock output>
-   generated_at: <ISO-8601 timestamp>
+   spec_hash_at_generation: bootstrap-pending
+   generated_at: bootstrap-pending
    ---
 
    # Tasks: SPEC-0007 My feature title
@@ -70,11 +70,20 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    - Multiple requirements in `covers=` are separated by single ASCII
      spaces — `covers="REQ-001 REQ-002"` — never by commas. The parser
      rejects comma-separated values with a `TSK-004` lint error.
-3. After writing, record the current spec hash:
+   - Seed `spec_hash_at_generation` and `generated_at` with the
+     `bootstrap-pending` sentinel; step 3 fills them in. Do not invoke
+     `speccy lock` before TASKS.md exists on disk — the command edits
+     the file in place and errors when it is missing.
+3. After writing, run `speccy lock` to rewrite the two
+   `bootstrap-pending` placeholders to the current SPEC.md sha256 and
+   the UTC timestamp:
 
    ```bash
    speccy lock SPEC-0007
    ```
+
+   `speccy lock` edits TASKS.md's frontmatter in place; it does not
+   emit a hash to stdout, and it requires TASKS.md to already exist.
 
 4. Suggest the next step: `/speccy-work SPEC-0007` to start the
    implementation loop.

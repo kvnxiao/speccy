@@ -2,7 +2,7 @@
 //!
 //! Takes parsed artifacts from [`crate::parse`] plus a workspace-wide
 //! supersession index and emits structured [`Diagnostic`] values with
-//! stable codes (`SPC-*`, `REQ-*`, `VAL-*`, `TSK-*`, `QST-*`).
+//! stable codes (`SPC-*`, `REQ-*`, `VAL-*`, `TSK-*`, `QST-*`, `RPT-*`).
 //!
 //! All semantic judgement of quality stays in review. Lint catches only
 //! mechanical inconsistencies. See
@@ -34,6 +34,7 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
         rules::req::lint(spec, &mut diagnostics);
         rules::tsk::lint(spec, &mut diagnostics);
         rules::qst::lint(spec, &mut diagnostics);
+        rules::rpt::lint(spec, &mut diagnostics);
     }
 
     diagnostics.sort_by(|a, b| {

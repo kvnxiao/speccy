@@ -685,3 +685,283 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// SPEC-0035: RPT-* lint family integration tests (CHK-001 / CHK-002 / CHK-003
+// plus in-progress demotion)
+// ---------------------------------------------------------------------------
+
+/// Minimal valid REPORT.md frontmatter + heading, followed by a `<report>`
+/// root open tag with no `spec="..."` attribute.  The parser requires
+/// `spec=`, so this triggers RPT-001.
+fn report_md_missing_spec_attr() -> String {
+    indoc! {r"
+        ---
+        spec: SPEC-0001
+        outcome: satisfied
+        generated_at: 2026-05-20T00:00:00Z
+        ---
+
+        # REPORT: SPEC-0001
+
+        <report>
+        </report>
+    "}
+    .to_owned()
+}
+
+/// Minimal valid REPORT.md with a `<coverage>` row referencing `REQ-999`
+/// (a requirement that does not exist in the sibling SPEC.md which only
+/// declares `REQ-001`).  Triggers RPT-002.
+fn report_md_dangling_req() -> String {
+    indoc! {r#"
+        ---
+        spec: SPEC-0001
+        outcome: satisfied
+        generated_at: 2026-05-20T00:00:00Z
+        ---
+
+        # REPORT: SPEC-0001
+
+        <report spec="SPEC-0001">
+
+        <coverage req="REQ-999" result="satisfied" scenarios="CHK-001">
+        </coverage>
+
+        </report>
+    "#}
+    .to_owned()
+}
+
+/// Minimal valid REPORT.md with a `<coverage>` row for `REQ-001` referencing
+/// both `CHK-001` (valid) and `CHK-999` (dangling).  Triggers RPT-003 for
+/// `CHK-999` only.
+fn report_md_dangling_scenario() -> String {
+    indoc! {r#"
+        ---
+        spec: SPEC-0001
+        outcome: satisfied
+        generated_at: 2026-05-20T00:00:00Z
+        ---
+
+        # REPORT: SPEC-0001
+
+        <report spec="SPEC-0001">
+
+        <coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-999">
+        </coverage>
+
+        </report>
+    "#}
+    .to_owned()
+}
+
+/// CHK-001: REPORT.md with `<report>` but no `spec=` attribute triggers
+/// RPT-001 on an `implemented` spec, gating verify (exit 1).
+#[test]
+fn report_md_missing_spec_attribute_fires_rpt_001() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-rpt001",
+        &spec_md_template("SPEC-0001", "implemented"),
+        "",
+        None,
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        report_md_missing_spec_attr(),
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "RPT-001 on implemented spec must gate verify");
+
+    assert!(
+        out.contains("RPT-001"),
+        "text output must contain RPT-001; out:\n{out}",
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    let rpt_001 = errors
+        .iter()
+        .find(|d| field(d, "code").as_str() == Some("RPT-001"))
+        .expect("RPT-001 must appear in lint.errors");
+    let file = field(rpt_001, "file").as_str().unwrap_or("");
+    assert!(
+        file.ends_with("/REPORT.md") || file.ends_with("\\REPORT.md"),
+        "RPT-001 file must end with REPORT.md; got: {file}",
+    );
+    Ok(())
+}
+
+/// CHK-002: REPORT.md with `<coverage req="REQ-999">` on a SPEC that only
+/// declares `REQ-001` triggers RPT-002 (naming REQ-999) and no RPT-003.
+#[test]
+fn report_md_dangling_req_fires_rpt_002() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-rpt002",
+        &spec_md_template("SPEC-0001", "implemented"),
+        "",
+        None,
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        report_md_dangling_req(),
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "RPT-002 on implemented spec must gate verify");
+
+    assert!(
+        out.contains("RPT-002"),
+        "text output must contain RPT-002; out:\n{out}",
+    );
+    assert!(
+        out.contains("REQ-999"),
+        "text output must name REQ-999; out:\n{out}",
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+
+    assert!(
+        errors
+            .iter()
+            .any(|d| field(d, "code").as_str() == Some("RPT-002")),
+        "RPT-002 must appear in lint.errors; got: {out}",
+    );
+    // RPT-003 must NOT fire: the row short-circuited at the missing req.
+    assert!(
+        !errors
+            .iter()
+            .any(|d| field(d, "code").as_str() == Some("RPT-003")),
+        "RPT-003 must not fire when req is missing; got: {out}",
+    );
+    // Also not in info or warnings.
+    let info = at(&json, &["lint", "info"])
+        .as_array()
+        .expect("lint.info array");
+    assert!(
+        !info
+            .iter()
+            .any(|d| field(d, "code").as_str() == Some("RPT-003")),
+        "RPT-003 must not appear in any bucket when req is missing; got: {out}",
+    );
+    Ok(())
+}
+
+/// CHK-003: REPORT.md with `<coverage req="REQ-001" scenarios="CHK-001
+/// CHK-999">` where REQ-001 has only CHK-001 triggers RPT-003 for CHK-999
+/// and no diagnostic for CHK-001.
+#[test]
+fn report_md_dangling_scenario_fires_rpt_003() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-rpt003",
+        &spec_md_template("SPEC-0001", "implemented"),
+        "",
+        None,
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        report_md_dangling_scenario(),
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(code, 1, "RPT-003 on implemented spec must gate verify");
+
+    assert!(
+        out.contains("RPT-003"),
+        "text output must contain RPT-003; out:\n{out}",
+    );
+    assert!(
+        out.contains("CHK-999"),
+        "text output must name CHK-999; out:\n{out}",
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+
+    let rpt_003_diags: Vec<_> = errors
+        .iter()
+        .filter(|d| field(d, "code").as_str() == Some("RPT-003"))
+        .collect();
+    assert_eq!(rpt_003_diags.len(), 1, "exactly one RPT-003 diagnostic");
+    let msg = rpt_003_diags
+        .first()
+        .expect("one RPT-003 diagnostic")
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    assert!(
+        msg.contains("CHK-999"),
+        "RPT-003 message must name CHK-999; got: {msg}",
+    );
+    // No diagnostic for CHK-001.
+    assert!(
+        !errors.iter().any(|d| {
+            field(d, "message")
+                .as_str()
+                .is_some_and(|m| m.contains("CHK-001"))
+        }),
+        "no diagnostic must mention CHK-001; got: {out}",
+    );
+    Ok(())
+}
+
+/// In-progress demotion: same malformed REPORT.md (no `spec=`) but the spec's
+/// frontmatter is `status: in-progress`.  RPT-001 is demoted to `Level::Info`
+/// by `partition_lint`; exit code must be 0.
+#[test]
+fn report_md_rpt_demotes_on_in_progress_spec() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-rpt-demote",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        "",
+        None,
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        report_md_missing_spec_attr(),
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(
+        code, 0,
+        "RPT-001 on in-progress spec must be demoted; must not gate verify; out:\n{out}",
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+
+    // Must appear in lint.info, not lint.errors.
+    let info = at(&json, &["lint", "info"])
+        .as_array()
+        .expect("lint.info array");
+    assert!(
+        info.iter()
+            .any(|d| field(d, "code").as_str() == Some("RPT-001")),
+        "RPT-001 must be demoted to info on in-progress spec; got: {out}",
+    );
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    assert!(
+        !errors
+            .iter()
+            .any(|d| field(d, "code").as_str() == Some("RPT-001")),
+        "RPT-001 must not appear in errors when spec is in-progress; got: {out}",
+    );
+    Ok(())
+}

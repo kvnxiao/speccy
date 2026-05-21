@@ -1857,8 +1857,8 @@ the CLI surface is text output to humans.
 Speccy emits a small set of deterministic lint codes. None depend
 on LLM judgment. All have stable prefixes: `SPC-` for spec
 structure, `REQ-` for requirements, `TSK-` for task structure,
-`QST-` for open questions, and `RPT-` for REPORT.md proof shape
-(in flight). The canonical, append-only list lives in
+`QST-` for open questions, and `RPT-` for REPORT.md proof shape.
+The canonical, append-only list lives in
 `speccy-core::lint::registry::REGISTRY`; the snapshot test at
 `speccy-core/tests/lint_registry.rs` pins it. The summary below
 mirrors the registry.
@@ -1894,15 +1894,27 @@ TSK-005  Spec ID disagreement: folder digits, SPEC.md frontmatter
          upstream parse-error diagnostics cover those cases)
 
 QST-001  SPEC.md has unchecked open question (informational)
-```
 
-The `RPT-*` family is in flight. It adds three Level::Error rules
-over the parsed REPORT.md result: parse failure of the file,
-`<coverage req="REQ-NNN">` pointing at a missing requirement, and a
-scenario id in `<coverage scenarios="...">` not resolving under the
-named requirement. When the slice ships, the same `<coverage>`
-shape the in-tree integration test asserts becomes a `speccy
-verify` gate so ship validation matches CI inside Speccy itself.
+RPT-001  REPORT.md present but failed to parse (Level::Error).
+         Fires when `ParsedSpec.report_md` is `Some(Err(_))`.
+         Covers every failure the parser returns: missing `spec="..."`
+         attribute on the root `<report>` element, malformed
+         `<coverage>` shape, fenced-code-block boundary violations,
+         and any other parse error. The diagnostic message includes
+         the underlying parse error rendered via its Display impl.
+RPT-002  `<coverage req="REQ-NNN">` row references a requirement id
+         that has no matching `<requirement id="REQ-NNN">` in the
+         sibling SPEC.md (Level::Error). Fires once per dangling
+         reference. Does not fire when SPEC.md itself failed to parse
+         (SPC-001 owns that surface). When RPT-002 fires for a row,
+         RPT-003 does not fire for any of that row's scenarios.
+RPT-003  Scenario id in `<coverage scenarios="...">` does not resolve
+         to a `<scenario id="...">` nested under the named requirement
+         in the sibling SPEC.md (Level::Error). Fires once per
+         dangling scenario id. Suppressed for rows where RPT-002
+         already fired (the row is already broken at the requirement
+         level; one diagnostic per row rather than N).
+```
 
 `REQ-002` and `REQ-003` are registry-only entries kept for stability:
 both fired pre-XML-canonical-SPEC.md but are no longer reachable at
@@ -1998,9 +2010,8 @@ V1 makes these failures loud:
 - Open question in SPEC.md is unchecked
 - Reviewer persona returns `blocking`
 - Task is `state="in-review"` but at least one persona review is missing
-- (in flight) REPORT.md `<coverage>` element references a
-  requirement or scenario that does not resolve under the sibling
-  SPEC.md
+- REPORT.md `<coverage>` element references a requirement or
+  scenario that does not resolve under the sibling SPEC.md
 
 V1 intentionally does not catch:
 

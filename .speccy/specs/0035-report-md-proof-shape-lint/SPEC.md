@@ -2,7 +2,7 @@
 id: SPEC-0035
 slug: report-md-proof-shape-lint
 title: RPT lint family — speccy verify gates on REPORT.md proof shape so ship validation matches CI
-status: in-progress
+status: implemented
 created: 2026-05-20
 supersedes: []
 ---
