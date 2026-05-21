@@ -1259,7 +1259,31 @@ disappears from REPORT.md alongside it.
 
 `scenarios` is one or more `CHK-\d{3,}` ids separated by single
 ASCII spaces. Each scenario id must be nested under the matching
-`<requirement>` in SPEC.md; dangling ids are workspace-load errors.
+`<requirement>` in SPEC.md; dangling ids are RPT-* lint errors
+(see below).
+
+### Proof-shape gates (RPT-* lint family)
+
+The grammar above is enforced at workspace-load time by the
+`RPT-*` lint family. The full entries live in the "Lint Codes"
+section below; the short form:
+
+- **RPT-001** — REPORT.md is present but failed to parse (e.g. a
+  `<report>` root element missing its `spec="..."` attribute, or
+  any malformed XML the `report_xml` parser rejects).
+- **RPT-002** — a `<coverage req="REQ-NNN">` row points at a
+  requirement id that has no matching `<requirement id="REQ-NNN">`
+  in the sibling SPEC.md.
+- **RPT-003** — a scenario id listed in
+  `<coverage scenarios="...">` does not resolve to a
+  `<scenario id="...">` nested under the named requirement in the
+  sibling SPEC.md.
+
+All three default to `Level::Error` and gate `speccy verify`. The
+existing `partition_lint` demotion pass downgrades them to
+`Level::Info` when the owning SPEC.md is `status: in-progress`, so
+an in-flight amendment loop is never blocked by a REPORT.md that
+has not yet been written.
 
 REPORT.md is the durable record of what happened during the loop.
 Future agents reading the repo can reconstruct intent from SPEC.md
