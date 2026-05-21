@@ -17,13 +17,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Spec lookup and argument validation
 
-<tasks spec="SPEC-0006">
 
 <task id="T-001" state="completed" covers="REQ-005">
 Implement SPEC-ID parsing and spec-directory lookup
 
 - Suggested files: `speccy-cli/src/tasks.rs`, `speccy-cli/tests/tasks_args.rs`
-
 
 <task-scenarios>
   - Argument matching `SPEC-\d{4,}` is accepted; non-matching argument returns `TasksError::InvalidSpecIdFormat`.
@@ -39,7 +37,6 @@ Implement SPEC-ID parsing and spec-directory lookup
 Detect initial form (TASKS.md absent) and render `tasks-generate.md`
 
 - Suggested files: `speccy-cli/src/tasks.rs` (extend), `skills/shared/prompts/tasks-generate.md` (stub), `speccy-cli/tests/tasks_initial.rs`
-
 
 <task-scenarios>
   - TASKS.md absent -> initial template is selected.
@@ -57,7 +54,6 @@ Detect initial form (TASKS.md absent) and render `tasks-generate.md`
 Render `tasks-amend.md` when TASKS.md is present
 
 - Suggested files: `speccy-cli/src/tasks.rs` (extend), `skills/shared/prompts/tasks-amend.md` (stub), `speccy-cli/tests/tasks_amendment.rs`
-
 
 <task-scenarios>
   - TASKS.md present -> amendment template is selected.
@@ -93,7 +89,6 @@ Handle the bootstrap-pending sentinel and missing-frontmatter cases
 
 - Suggested files: `speccy-core/src/tasks.rs` (extend), `speccy-core/tests/tasks_commit.rs` (extend)
 
-
 <task-scenarios>
   - TASKS.md with `spec_hash_at_generation: bootstrap-pending` -> after commit, sentinel is replaced with the real hex hash.
   - TASKS.md with no frontmatter at all (just markdown body) -> commit prepends a fresh frontmatter block with `spec`, `spec_hash_at_generation`, `generated_at` (in that order) followed by the original body bytes.
@@ -108,7 +103,6 @@ Handle the bootstrap-pending sentinel and missing-frontmatter cases
 Wire `--commit` sub-action through the CLI
 
 - Suggested files: `speccy-cli/src/tasks.rs` (extend), `speccy-cli/tests/tasks_commit.rs`
-
 
 <task-scenarios>
   - `speccy tasks SPEC-NNNN --commit` with TASKS.md present succeeds; resulting file has updated frontmatter and unchanged body.
@@ -148,4 +142,3 @@ Self-referential dogfood test: commit SPEC-0006's own TASKS.md
 </task-scenarios>
 </task>
 
-</tasks>

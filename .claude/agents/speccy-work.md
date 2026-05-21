@@ -63,11 +63,66 @@ spec hash must have been committed before this skill runs.
    them).
 
 5. Exit transition. When the implementation is done, flip the task's
-   `state="..."` attribute from `in-progress` to `in-review` and
-   append one implementer note using the six-field handoff template
-   the implementer prompt supplies (`Completed`, `Undone`,
-   `Commands run`, `Exit codes`, `Discovered issues`,
-   `Procedural compliance`).
+   `state="..."` attribute from `in-progress` to `in-review` in
+   TASKS.md, then append one `<implementer>` block to the per-task
+   journal file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (a
+   sibling of `SPEC.md` and `TASKS.md`). Do NOT inline an
+   `<implementer-note>` inside the `<task>` body in TASKS.md —
+   that element is retired; the parser rejects it. The journal file
+   is the canonical home for implementer handoff prose.
+
+   File creation. If `journal/T-NNN.md` does not yet exist (round 1,
+   first implementer attempt on the task), create it with YAML
+   frontmatter declaring exactly three fields, then the
+   `<implementer>` block beneath:
+
+   ```markdown
+   ---
+   spec: SPEC-NNNN
+   task: T-NNN
+   generated_at: 2026-05-21T18:00:00Z
+   ---
+
+   <implementer date="2026-05-21T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
+   Completed: ...
+   Undone: ...
+   Commands run: ...
+   Exit codes: ...
+   Discovered issues: ...
+   Procedural compliance: ...
+   </implementer>
+   ```
+
+   `generated_at` is the ISO8601 timestamp at file creation; do not
+   rewrite it on later appends. On subsequent rounds, append the new
+   `<implementer>` block after the existing journal contents — do
+   not modify earlier blocks.
+
+   Required attributes on `<implementer>`. All three are required;
+   there are no optional attributes:
+
+   - `date` — full ISO8601 date-time with seconds and timezone
+     designator (e.g. `2026-05-21T18:00:00Z` or
+     `2026-05-21T18:00:00+00:00`).
+   - `model` — the model identity that ran the implementer turn. A
+     slash-suffix encodes effort / reasoning-intensity when the host
+     harness exposes that knob (e.g.
+     `model="claude-opus-4.7[1m]/low"`,
+     `model="claude-opus-4.7[1m]/medium"`). Hosts without an effort
+     knob omit the suffix entirely (e.g. `model="claude-opus-4.7"`).
+     The slash-suffix is a documented convention; the parser
+     validates `model` is non-empty but does not enforce suffix
+     membership.
+   - `round` — a monotonic positive integer starting at 1.
+     Increment by exactly 1 on each post-blocker retry attempt. The
+     first implementer turn on a task is `round="1"`; if a review
+     round blocks and the task flips back to `pending`, the next
+     implementer attempt writes `round="2"`, and so on. Do not skip
+     values; do not reset.
+
+   Body content. Use the six-field handoff template the implementer
+   prompt supplies (`Completed`, `Undone`, `Commands run`,
+   `Exit codes`, `Discovered issues`, `Procedural compliance`).
 
 6. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.

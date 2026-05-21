@@ -12,6 +12,7 @@ const TSK_001: &str = "TSK-001";
 const TSK_003: &str = "TSK-003";
 const TSK_004: &str = "TSK-004";
 const TSK_005: &str = "TSK-005";
+const TSK_006: &str = "TSK-006";
 
 const BOOTSTRAP_SENTINEL: &str = "bootstrap-pending";
 const REQUIRED_FRONTMATTER_FIELDS: &[&str] = &["spec", "spec_hash_at_generation", "generated_at"];
@@ -32,6 +33,7 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             tsk_001_covers(spec, &tasks_path, tasks_md, out);
             tsk_003_staleness(spec, &tasks_path, tasks_md, out);
             tsk_005_id_triple(spec, &tasks_path, tasks_md, out);
+            tsk_006_no_notes_in_tasks_md(spec, &tasks_path, tasks_md, out);
         }
     }
 }
@@ -232,6 +234,32 @@ fn tsk_005_id_triple(
             "ID disagreement: folder=`{folder_id}`, SPEC.md.id=`{spec_md_id}`, TASKS.md.spec=`{tasks_md_id}`"
         ),
     ));
+}
+
+/// TSK-006: error on any `<implementer>`, `<review>`, or `<blockers>`
+/// element parsed inside a TASKS.md `<task>` body. SPEC-0037 REQ-006.
+/// The rule is not lifecycle-gated — it fires at any task state. The
+/// canonical destination for these activity-prose elements is
+/// `journal/T-NNN.md`.
+fn tsk_006_no_notes_in_tasks_md(
+    spec: &ParsedSpec,
+    tasks_path: &camino::Utf8Path,
+    tasks_md: &crate::parse::TasksDoc,
+    out: &mut Vec<Diagnostic>,
+) {
+    for misplaced in &tasks_md.misplaced_journal_elements {
+        out.push(Diagnostic::with_file(
+            TSK_006,
+            Level::Error,
+            spec.spec_id.clone(),
+            tasks_path.to_path_buf(),
+            format!(
+                "<{name}> element inside task `{task_id}` belongs in journal/{task_id}.md, not in TASKS.md (activity prose was ejected from TASKS.md by SPEC-0037)",
+                name = misplaced.element_name,
+                task_id = misplaced.task_id,
+            ),
+        ));
+    }
 }
 
 fn hex_encode(bytes: &[u8; 32]) -> String {

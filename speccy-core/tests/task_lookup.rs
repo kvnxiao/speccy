@@ -68,7 +68,7 @@ fn spec_md_for(id: &str) -> String {
 /// `<task-scenarios>` so the new XML grammar parses cleanly.
 fn tasks_md_xml(spec_id: &str, tasks: &[(&str, &str, &str)]) -> String {
     use std::fmt::Write as _;
-    let mut body = format!("<tasks spec=\"{spec_id}\">\n\n");
+    let mut body = String::from("\n\n");
     for (task_id, covers, task_body) in tasks {
         write!(
             body,
@@ -76,7 +76,7 @@ fn tasks_md_xml(spec_id: &str, tasks: &[(&str, &str, &str)]) -> String {
         )
         .expect("writes to String are infallible");
     }
-    body.push_str("</tasks>\n");
+    body.push('\n');
     format!(
         "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n{body}",
     )

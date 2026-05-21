@@ -11,13 +11,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Captured check execution (speccy-core)
 
-<tasks spec="SPEC-0012">
 
 <task id="T-001" state="completed" covers="REQ-002">
 Implement `exec::run_checks_captured` with tee-to-stderr
 
 - Suggested files: `speccy-core/src/exec.rs`, `speccy-core/tests/exec_captured.rs`
-
 
 <task-scenarios>
   - Child stdio is piped (not inherited); a `Stdio::piped()` setup is wired for both stdout and stderr.
@@ -36,7 +34,6 @@ Run lint via `lint::run` and partition by Level
 
 - Suggested files: `speccy-cli/src/verify.rs`, `speccy-cli/tests/verify_lint_integration.rs`
 
-
 <task-scenarios>
   - `lint::run` is called against a `lint::Workspace` built from `workspace::scan` output.
   - Returned diagnostics are partitioned into `errors`, `warnings`, `info` based on each diagnostic's `Level`.
@@ -52,7 +49,6 @@ Run lint via `lint::run` and partition by Level
 Compose lint and check outcomes into a binary exit code
 
 - Suggested files: `speccy-cli/src/verify.rs` (extend), `speccy-cli/tests/verify_exit_code.rs`
-
 
 <task-scenarios>
   - Clean lint + all checks pass -> exit 0.
@@ -72,7 +68,6 @@ Implement text-mode summary output
 
 - Suggested files: `speccy-cli/src/verify_output.rs`, `speccy-cli/tests/verify_text.rs`
 
-
 <task-scenarios>
   - The last three stdout lines are `Lint: <E> errors, <W> warnings, <I> info`, `Checks: <P> passed, <F> failed, <M> manual`, `verify: PASS|FAIL`.
   - PASS appears iff exit code is 0; FAIL otherwise.
@@ -88,7 +83,6 @@ Implement text-mode summary output
 Implement `--json` envelope and structured per-check output
 
 - Suggested files: `speccy-cli/src/verify_output.rs` (extend), `speccy-cli/tests/verify_json.rs`
-
 
 <task-scenarios>
   - Output begins with `"schema_version": 1` (first non-whitespace key).
@@ -119,4 +113,3 @@ Wire `speccy verify [--json]` into the binary
 </task-scenarios>
 </task>
 
-</tasks>

@@ -6,8 +6,6 @@ generated_at: 2026-05-17T00:00:00Z
 
 # Tasks: SPEC-0022 Canonical TASKS.md fixture
 
-<tasks spec="SPEC-0022">
-
 <task id="T-001" state="pending" covers="REQ-001">
 Implement the first slice.
 
@@ -41,5 +39,3 @@ literal `<task>` inside backticks
 ```
 </task-scenarios>
 </task>
-
-</tasks>

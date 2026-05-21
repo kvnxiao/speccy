@@ -17,13 +17,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Embedded skill bundle
 
-<tasks spec="SPEC-0002">
 
 <task id="T-001" state="completed" covers="REQ-004">
 Add `include_dir!` and embed `skills/` at compile time
 
 - Suggested files: `speccy-cli/Cargo.toml` (add `include_dir`), `speccy-cli/src/embedded.rs`, `skills/claude-code/.gitkeep`, `skills/codex/.gitkeep`, `skills/shared/personas/.gitkeep`, `skills/shared/prompts/.gitkeep`
-
 
 <task-scenarios>
   - The embedded bundle exposes `skills/claude-code/`, `skills/codex/`, `skills/shared/personas/`, `skills/shared/prompts/` as walkable `include_dir::Dir` subtrees.
@@ -39,7 +37,6 @@ Add `include_dir!` and embed `skills/` at compile time
 Implement the host detector
 
 - Suggested files: `speccy-cli/src/host.rs`, `speccy-cli/tests/host.rs`
-
 
 <task-scenarios>
   - `--host claude-code` wins regardless of which host directories exist.
@@ -60,7 +57,6 @@ Implement the `.speccy/` scaffold writer
 
 - Suggested files: `speccy-cli/src/scaffold.rs`, `speccy-cli/src/templates/speccy_toml.txt`, `speccy-cli/tests/scaffold.rs`
 
-
 <task-scenarios>
   - Writes `.speccy/speccy.toml` with `schema_version = 1`, `[project]` block, and `name` from the parent directory of the project root.
   - Does **not** scaffold `.speccy/VISION.md` (the noun has been retired; the product north star lives in `AGENTS.md` instead, populated by the `speccy-init` skill).
@@ -77,7 +73,6 @@ Implement the `.speccy/` scaffold writer
 Implement the skill-pack copier
 
 - Suggested files: `speccy-cli/src/copy.rs`, `speccy-cli/tests/copy.rs`
-
 
 <task-scenarios>
   - `claude-code` host -> files copy from embedded `skills/claude-code/` to `.claude/commands/<filename>`.
@@ -114,7 +109,6 @@ Print "would create / would overwrite" plan before mutating
 
 - Suggested files: `speccy-cli/src/plan_output.rs` (or inline in init.rs)
 
-
 <task-scenarios>
   - Capture stdout during a successful init; assert a line per file is printed before any actual write.
   - On `--force`, files being overwritten are tagged `overwrite`; new files are tagged `create`.
@@ -138,4 +132,3 @@ End-to-end integration test via `assert_cmd`
 </task-scenarios>
 </task>
 
-</tasks>

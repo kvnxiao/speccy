@@ -107,10 +107,36 @@ reconciliation are not forgotten.
 
 4. Reconcile TASKS.md: preserve `state="completed"` tasks unless the
    SPEC change invalidated them (those flip their `state` back to
-   `pending` with a `<retry>spec amended; ...</retry>` element
-   appended inside the `<task>` body); add new `<task>` elements for
-   newly added requirements; remove `<task>` elements for dropped
+   `pending`, and the amendment appends a
+   `<blockers date="..." round="N+1">spec amended; ...</blockers>`
+   element to `.speccy/specs/NNNN-slug/journal/T-NNN.md` — the
+   per-task journal file sibling to `SPEC.md` and `TASKS.md` — rather
+   than into the `<task>` body in TASKS.md, which now unconditionally
+   rejects journal elements); add new `<task>` elements for newly
+   added requirements; remove `<task>` elements for dropped
    requirements.
+
+   The `<blockers>` element has two required attributes: `date` (the
+   amendment timestamp, ISO 8601 UTC) and `round`. Pick the `round`
+   value by reading the existing journal:
+
+   - If the task already has a journal file with rounds up to N
+     (i.e. the highest `round="N"` across its existing
+     `<implementer>` / `<review>` / `<blockers>` blocks), use
+     `round="N+1"`. The next implementer attempt continues from
+     that round.
+   - If the task has no prior journal file (it was completed in a
+     single round without prior blockers and the journal was never
+     created, or the journal exists but has no rounds yet), use
+     `round="1"`. If the journal file does not exist, create it
+     with the standard frontmatter (`spec`, `task`, `generated_at`)
+     before appending.
+
+   The `<blockers>` body remains an amendment-driven blocker
+   directive: name what changed in SPEC and what the next
+   implementer attempt must address. Only the write target and
+   element name change relative to the legacy flow; the
+   `completed` → `pending` state flip is unchanged.
 5. Record the new spec hash:
 
    ```bash

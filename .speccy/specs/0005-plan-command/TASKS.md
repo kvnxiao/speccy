@@ -16,13 +16,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Template loading
 
-<tasks spec="SPEC-0005">
 
 <task id="T-001" state="completed" covers="REQ-005">
 Implement `prompt::load_template` consuming embedded resources
 
 - Suggested files: `speccy-core/src/prompt/template.rs`, `speccy-core/Cargo.toml` (add `include_dir`), `skills/shared/prompts/plan-greenfield.md` (stub), `skills/shared/prompts/plan-amend.md` (stub), `speccy-core/tests/prompt_template.rs`
-
 
 <task-scenarios>
   - Looking up `"plan-greenfield.md"` returns the template content (stub or real).
@@ -39,7 +37,6 @@ Implement `prompt::load_template` consuming embedded resources
 Implement `prompt::render`
 
 - Suggested files: `speccy-core/src/prompt/render.rs`, `speccy-core/tests/prompt_render.rs`
-
 
 <task-scenarios>
   - `"hello {{name}}"` + `{"name": "world"}` renders to `"hello world"`.
@@ -59,7 +56,6 @@ Implement `prompt::load_agents_md`
 
 - Suggested files: `speccy-core/src/prompt/agents_md.rs`, `speccy-core/tests/prompt_agents_md.rs`
 
-
 <task-scenarios>
   - Given `<project_root>/AGENTS.md` exists with content `# Agents\n...`, the function returns that content verbatim.
   - Given AGENTS.md is missing, the function returns the literal marker string and stderr contains a one-line warning naming the expected path.
@@ -74,7 +70,6 @@ Implement `prompt::load_agents_md`
 Implement `prompt::allocate_next_spec_id`
 
 - Suggested files: `speccy-core/src/prompt/id_alloc.rs`, `speccy-core/tests/id_alloc.rs`
-
 
 <task-scenarios>
   - Empty `specs/` directory -> returns `"0001"`.
@@ -94,7 +89,6 @@ Implement `prompt::trim_to_budget` with the ARCHITECTURE.md drop ordering
 
 - Suggested files: `speccy-core/src/prompt/budget.rs`, `speccy-core/tests/prompt_budget.rs`
 
-
 <task-scenarios>
   - 60,000-char input + 80,000 budget -> output unchanged, `dropped = []`, `fits = true`.
   - Input with a `## Notes` section that puts it over budget; trimming `## Notes` alone makes it fit -> `dropped = ["## Notes"]`.
@@ -112,7 +106,6 @@ Implement greenfield prompt assembler
 
 - Suggested files: `speccy-cli/src/plan.rs`, `speccy-cli/tests/plan_greenfield.rs`
 
-
 <task-scenarios>
   - End-to-end: AGENTS.md content appears in the rendered output where `{{agents}}` was; `{{next_spec_id}}` substituted to the allocated ID. There is no `{{vision}}` placeholder.
   - Output goes to stdout.
@@ -129,7 +122,6 @@ Implement greenfield prompt assembler
 Implement amendment prompt assembler
 
 - Suggested files: `speccy-cli/src/plan.rs` (extend), `speccy-cli/tests/plan_amend.rs`
-
 
 <task-scenarios>
   - `speccy plan SPEC-0001` resolves to `.speccy/specs/0001-<slug>/SPEC.md` and inlines it.
@@ -157,4 +149,3 @@ Wire `speccy plan [SPEC-ID]` into the binary
 </task-scenarios>
 </task>
 
-</tasks>

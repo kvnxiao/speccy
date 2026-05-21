@@ -216,10 +216,14 @@ AGENTS.md                Project-wide product north star + agent conventions
                          /<changelog>); the requirement-to-scenario graph is
                          carried in-band by these elements
       TASKS.md           Frontmatter (spec_hash_at_generation, generated_at)
-                         + <tasks>/<task>/<task-scenarios> XML tree + inline
-                         implementer / reviewer notes
+                         + bare <task>/<task-scenarios> XML tree (no
+                         <tasks> wrapper; no implementer / review prose)
       REPORT.md          Frontmatter (outcome) + <report>/<coverage> XML tree
                          (end of loop)
+      journal/           Per-task activity journal (see "TASKS.md
+        T-001.md         per-task journal" below). One T-NNN.md per task
+        T-002.md         that has been claimed by an implementer; each
+        T-003.md         carries <implementer>/<review>/<blockers> blocks.
     auth/                            Mission folder (optional grouping)
       MISSION.md                     Scope/context for this focus area
       0002-signup/
@@ -394,8 +398,11 @@ to resolve the next implementable task. In either case the session:
   command locally and fails fast on red;
 - uses `speccy check SPEC-NNNN/T-NNN` only to render the scenarios
   it is satisfying;
-- appends one implementer note using the handoff template the agent
-  body supplies;
+- appends one `<implementer>` block to
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` using the six-field
+  handoff template the agent body supplies (the journal file is
+  created on round 1 if it does not exist; subsequent rounds
+  append);
 - flips `state="in-progress"` to `state="in-review"` and exits.
 
 The session does not pick up another task on its way out. If two
@@ -430,11 +437,17 @@ In either case the session:
   per-persona model pins (Opus[1m] xhigh for business / tests /
   architecture; Sonnet[1m] high for security; Sonnet[1m] medium for
   style / docs);
-- aggregates the four inline notes appended to the task subtree;
+- aggregates the four returned `<review>` blocks and appends each
+  to `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the orchestrator
+  is the sole writer to the journal during review — reviewer
+  sub-agents return their `<review>` element to the orchestrator
+  which writes serially, preserving the existing concurrency
+  contract);
 - flips `state="in-review"` to `state="completed"` if every persona
-  note is `pass`; otherwise flips `state="in-review"` to
-  `state="pending"` and appends a `Retry: ...` bullet summarising
-  the blockers, and exits.
+  `<review>` carries `verdict="pass"`; otherwise flips
+  `state="in-review"` to `state="pending"` and appends a
+  `<blockers>` block to the journal summarising the blockers, and
+  exits.
 
 The within-task four-persona fan-out is intrinsic to the primitive,
 not orchestration: adversarial diversity requires fresh contexts per
@@ -459,7 +472,7 @@ at `.claude/agents/speccy-ship.md`) instructs the agent to write
 `REPORT.md` summarising:
 
 - requirements satisfied;
-- tasks completed (with retry counts derived from inline notes);
+- tasks completed (with retry counts derived from journal rounds);
 - out-of-scope items absorbed;
 - deferred or known limitations;
 - check results summary.
@@ -484,66 +497,182 @@ XML element (see "TASKS.md format" below for the full grammar).
 | `in-review` | Implementation done, awaiting review | Implementer when finishing |
 | `completed` | All persona reviews passed | Reviewer skill at exit of review primitive |
 
-A retry is just `state="pending"` with prior notes attached. We do
-not introduce a fifth state because the inline notes already say
-"this is a retry; see review findings." Adding a state would add
-cases for skills to handle without adding information.
+A retry is just `state="pending"` with prior activity entries
+attached in the per-task journal. We do not introduce a fifth state
+because the journal entries already say "this is a retry; see
+review findings." Adding a state would add cases for skills to
+handle without adding information.
 
-## Conventions for inline notes
+## TASKS.md per-task journal
 
-Inline notes are ordinary Markdown bullets nested inside a `<task>`
-element. Implementer notes when claiming a task:
+Implementer handoff prose, reviewer verdicts, and amendment-driven
+blocker directives **do not live inside the `<task>` element body
+in TASKS.md**. They live in a sibling `journal/T-NNN.md` file
+under the same spec directory:
 
-```markdown
-<task id="T-002" state="in-progress" covers="REQ-002">
-## T-002: Add password_hash column
-
-<task-scenarios>
-Given a `users` table without a password hash column,
-when the migration runs forward,
-then the resulting schema has a non-null `password_hash` column.
-</task-scenarios>
-
-- Suggested files: `migrations/`, `db/schema/users.ts`
-- Implementer claim (session-abc, 2026-05-11T18:00Z).
-</task>
+```text
+.speccy/specs/0001-user-signup/
+  SPEC.md
+  TASKS.md
+  REPORT.md
+  journal/
+    T-001.md
+    T-002.md
+    T-003.md
 ```
 
-When the implementer finishes:
+The journal directory sits alongside `SPEC.md`, `TASKS.md`, and
+`REPORT.md`. A journal file is created on the first `<implementer>`
+write (round 1 of an implementer attempt) and accumulates one
+`<implementer>` block per round plus N `<review>` blocks per round
+of fan-out plus at most one `<blockers>` block per round (when a
+reviewer blocks or an amendment flips the task back to `pending`).
+
+Each `journal/T-NNN.md` file has YAML frontmatter binding it to its
+task plus a chronological body of bare `<implementer>`, `<review>`,
+and `<blockers>` element blocks (no wrapper element):
 
 ```markdown
-<task id="T-002" state="in-review" covers="REQ-002">
-## T-002: Add password_hash column
+---
+spec: SPEC-0001
+task: T-002
+generated_at: 2026-05-11T18:00:00Z
+---
 
-<task-scenarios>...</task-scenarios>
+<implementer date="2026-05-11T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
+Renamed existing `password` column. Added migration to hash
+plaintext rows. **Out of scope**: touched
+`tests/migration_helpers.ts` to fix a test helper assuming
+plaintext.
+</implementer>
 
-- Suggested files: `migrations/`, `db/schema/users.ts`
-- Implementer note (session-abc): Renamed existing `password` column.
-  Added migration to hash plaintext rows. **Out of scope**: touched
-  `tests/migration_helpers.ts` to fix a test helper assuming plaintext.
-</task>
+<review persona="business" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.7[1m]/high" round="1">
+Matches REQ-002 intent.
+</review>
+
+<review persona="tests" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.7[1m]/medium" round="1">
+Hash assertion present.
+</review>
+
+<review persona="security" verdict="blocking" date="2026-05-11T19:00:00Z" model="claude-sonnet-4-6[1m]/medium" round="1">
+bcrypt cost 10; policy requires >=12. See `src/auth/password.ts:14`.
+</review>
+
+<review persona="style" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-sonnet-4-6[1m]/medium" round="1">
+Conventions OK.
+</review>
+
+<blockers date="2026-05-11T19:00:00Z" round="2">
+Address bcrypt cost.
+</blockers>
 ```
 
-After review (blocked, flipped back to `pending`):
+### Journal binding rules
 
-```markdown
-<task id="T-002" state="pending" covers="REQ-002">
-## T-002: Add password_hash column
+Two bindings tie a journal file to its task and spec:
 
-<task-scenarios>...</task-scenarios>
+- **Filename ↔ task.** `journal/T-NNN.md` carries activity for the
+  `<task id="T-NNN">` in the sibling TASKS.md. The frontmatter's
+  `task:` field must agree with the filename digits; mismatches
+  fire `JNL-003`.
+- **Frontmatter ↔ spec.** The frontmatter's `spec:` field must
+  agree with the parent directory's spec id and the sibling
+  TASKS.md frontmatter's `spec:` field; mismatches fire `JNL-003`.
 
-- Implementer note (session-abc): ...
-- Review (business, pass): matches REQ-002 intent.
-- Review (tests, pass): hash assertion present.
-- Review (security, blocking): bcrypt cost 10; policy requires >=12.
-  See `src/auth/password.ts:14`.
-- Review (style, pass): conventions OK.
-- Retry: address bcrypt cost.
-</task>
-```
+The frontmatter requires exactly three fields: `spec` (matching
+`SPEC-\d{3,}`), `task` (matching `T-\d{3,}`), and `generated_at`
+(ISO8601 timestamp with seconds and timezone designator).
 
-The implementer picking this up reads all notes, addresses
-blockers, flips `state` back to `in-progress`, and so on.
+### Journal element grammar
+
+| Element | Cardinality | Parent | Required attributes | Notes |
+|---|---|---|---|---|
+| `implementer` | 1+ per round, ≥1 round total | bare under frontmatter | `date`, `model`, `round` | Implementer handoff for one round. Body is Markdown using the six-field handoff template (Completed / Undone / Commands run / Exit codes / Discovered issues / Procedural compliance). |
+| `review` | 1+ per reviewed round | bare under frontmatter | `date`, `model`, `persona`, `verdict`, `round` | One reviewer's verdict for one round. `verdict` is `pass` or `blocking`; `persona` is one of the persona registry values. |
+| `blockers` | 0 or 1 per round | bare under frontmatter | `date`, `round` | Directive carried across a retry boundary — either reviewer-aggregated blockers or an amendment-driven blocker. Body names what the next round must address. |
+
+All attributes listed are required; there are no optional
+attributes in the journal schema. Attribute value rules:
+
+- `date` — full ISO8601 with seconds and timezone designator
+  (regex `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`).
+  `generated_at` in frontmatter uses the same format.
+- `model` — non-empty string. The agreed skill-layer convention
+  encodes effort via a slash suffix (e.g.
+  `claude-opus-4.7[1m]/low`, `claude-sonnet-4-6[1m]/medium`); the
+  parser does NOT validate slash-suffix internal structure — it
+  only enforces non-empty.
+- `round` — positive integer (regex `^[1-9][0-9]*$`).
+- `verdict` — closed value set `{pass, blocking}`.
+- `persona` — closed persona registry (`business`, `tests`,
+  `security`, `style`, `architecture`, `docs`).
+
+### Round monotonicity
+
+The journal parser validates round sequence within a single file:
+
+- The first `<implementer>` block must have `round="1"`.
+- The `round` counter is monotonic non-decreasing across blocks.
+- Counter must not skip values (no jumping from N to N+2 without an
+  intervening N+1 block).
+- Multiple blocks at the same round are allowed (one
+  `<implementer>` plus N `<review>` plus at most one `<blockers>`
+  per round).
+
+Shape violations under either binding or monotonicity surface as
+`JNL-003`.
+
+### Lint family for journal artifacts (JNL-*)
+
+Three new lint codes (registered in the canonical registry alongside
+`SPC-*`, `TSK-*`, `RPT-*`) enforce the journal contract. All three
+default to `Level::Error` and gate `speccy verify`:
+
+- **JNL-001** — Task is `state="pending"` but `journal/T-NNN.md`
+  exists. A pending task has not yet been claimed by an
+  implementer; a journal file at that ID is unexpected (likely a
+  leftover from a prior loop, or a state-flip that did not also
+  clean up the journal).
+- **JNL-002** — Task is `state="completed"` but `journal/T-NNN.md`
+  is missing. Every completed task must carry its journal as the
+  durable record of how it was implemented and reviewed.
+- **JNL-003** — Task is `state="completed"` but the journal file
+  has shape or binding violations (filename ↔ frontmatter mismatch,
+  spec ↔ parent-dir mismatch, missing frontmatter field,
+  attribute-schema violation, or round-monotonicity violation).
+
+Tasks at `state="in-progress"` or `state="in-review"` are silently
+skipped by all three JNL codes — the family never runs mid-loop, so
+a half-written journal in flight is not a lint error. The
+activation gate lives in the lint runner; each rule does its own
+work assuming activation is granted.
+
+### TSK-006: no journal elements inside TASKS.md
+
+`<implementer>`, `<review>`, and `<blockers>` elements are not in
+the allow-list for TASKS.md bodies. If any of them appears inside a
+`<task>` element in TASKS.md, the parser still records the
+location, and `TSK-006` fires at `Level::Error` regardless of task
+state. The diagnostic names which element appeared, the containing
+task id, and the canonical fix (move the block to
+`journal/T-NNN.md`).
+
+`TSK-006` is not state-gated — the misplaced element fires
+identically against `pending`, `in-progress`, `in-review`, and
+`completed` tasks. It fires before any `JNL-*` diagnostic on the
+same task, because a misplaced element in TASKS.md is more
+fundamental than a journal-shape issue.
+
+### Lifecycle reading
+
+An implementer picking up a task reads TASKS.md to find the next
+`state="pending"` task, then reads `journal/T-NNN.md` (if it
+exists) to learn what prior rounds did, what reviewers blocked, and
+what an amendment-driven `<blockers>` directive (if any) asks the
+next round to address. The implementer then flips `state` back to
+`in-progress`, appends a new `<implementer>` block with the next
+`round` value, does the work, flips `state` to `in-review`, and
+exits.
 
 ## Concurrent pickup
 
@@ -883,8 +1012,12 @@ and how it has evolved.
 ## TASKS.md format
 
 `TASKS.md` is Markdown with structure carried by raw XML element
-tags. Frontmatter records the generating spec hash; the body wraps
-each task in a `<task>` element nested under a single `<tasks>` root.
+tags. Frontmatter records the generating spec hash; the body holds
+each task as a bare `<task>` element directly under the
+`# Tasks: SPEC-NNNN ...` heading (no wrapper element). The spec
+binding resolves from the frontmatter `spec:` field plus the parent
+directory name; there is no redundant `spec="..."` attribute on the
+body root.
 
 ```markdown
 ---
@@ -894,8 +1027,6 @@ generated_at: 2026-05-11T18:00:00Z
 ---
 
 # Tasks: SPEC-001 User signup
-
-<tasks spec="SPEC-001">
 
 ## Phase 1: Schema
 
@@ -972,8 +1103,6 @@ then they differ (salt is applied).
 
 - Suggested files: `src/auth/signup.ts`, `src/auth/password.ts`
 </task>
-
-</tasks>
 ```
 
 ### TASKS.md element grammar
@@ -984,9 +1113,18 @@ deterministic rendering).
 
 | Element | Cardinality | Parent | Required attributes | Notes |
 |---|---|---|---|---|
-| `tasks` | required, single | top-level | `spec="SPEC-NNNN"` | Wraps every `<task>` in the file. |
-| `task` | required, 1+ | inside `<tasks>` | `id="T-NNN"`, `state="..."`, `covers="REQ-NNN[ REQ-NNN]*"` | Body is Markdown plus exactly one `<task-scenarios>` element. |
+| `task` | required, 1+ | top-level (bare under `# Tasks:` heading) | `id="T-NNN"`, `state="..."`, `covers="REQ-NNN[ REQ-NNN]*"` | Body is Markdown plus exactly one `<task-scenarios>` element. No `<implementer>` / `<review>` / `<blockers>` element may appear inside a `<task>` body — that activity prose lives in the sibling `journal/T-NNN.md` file (see "TASKS.md per-task journal" below). |
 | `task-scenarios` | required, single per `<task>` | inside `<task>` | none | Slice-level Given/When/Then prose. Must be non-empty. |
+
+Only `task` and `task-scenarios` are the live Speccy element names
+inside a TASKS.md body. The closed XML element set across all
+Speccy artifacts is five element names total — `task`,
+`task-scenarios`, `implementer`, `review`, `blockers` — with the
+last three only ever appearing inside `journal/T-NNN.md` (never in
+TASKS.md). The legacy `<tasks spec="...">` wrapper, the legacy
+`<implementer-note session="...">` element, and the legacy
+`<retry>` element are no longer in the allow-list; the parser
+rejects any of them as unknown elements.
 
 Valid `state` attribute values are exactly `pending`, `in-progress`,
 `in-review`, `completed`. The `covers` attribute is one or more
@@ -1026,9 +1164,10 @@ Speccy parses TASKS.md to:
   block
 - find the next actionable task (`state="pending"`)
 - detect "suggested files" hints in the task body
-- preserve inline notes for status reporting
 
-It does not validate note format or persona-review prose.
+It does not validate journal prose. The sibling `journal/T-NNN.md`
+file carries `<implementer>`, `<review>`, and `<blockers>` activity
+prose; TASKS.md itself stays free of those elements (see TSK-006).
 
 ## SPEC.md element grammar
 
@@ -1423,51 +1562,57 @@ Architecture and docs are available via explicit `--persona` but
 not in the default set. A future change may make the fan-out
 project-configurable; v1 does not.
 
-## CLI invocation
+## Invocation
 
-```sh
-speccy review T-003 --persona security
-```
+The seven-command CLI has no `review` verb. Review runs through the
+`/speccy-review` skill (Phase 4 primitive). The skill resolves the
+target task (either via an explicit `SPEC-NNNN/T-NNN` selector or
+via `speccy next --json` filtered for `next_action.kind == "review"`)
+and fans out one reviewer sub-agent per persona in the default
+fan-out.
 
-Renders a prompt that includes:
+Each persona sub-agent is loaded from its host-native agent file
+(`.claude/agents/reviewer-<persona>.md` or its Codex parallel,
+materialised from `resources/modules/personas/reviewer-<persona>.md`
+by `speccy init`). The shipped persona body composes a prompt that
+includes:
 
 - the relevant SPEC.md (full, including its `### Decisions` block)
-- the task line from TASKS.md (with all prior notes)
+- the task body from TASKS.md (the bare `<task>` element — no inline
+  notes live there post-T-001)
+- prior implementer / reviewer / blocker history from
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md`
 - the diff for the task's claimed work
 - `AGENTS.md`
-- the persona's review-style guidance from
-  `resources/modules/personas/reviewer-{persona}.md` (shipped) or
-  `.speccy/skills/personas/reviewer-{persona}.md` (project-local
-  override after `speccy init`)
+- the persona's review-style guidance from the shipped persona body
 
 The reviewer sub-agent reads the prompt, performs the review, and
-appends an inline note to the task in TASKS.md:
-
-```markdown
-- Review (security, blocking): bcrypt cost 10; policy requires >=12.
-  See `src/auth/password.ts:14`.
-```
-
-Or:
-
-```markdown
-- Review (security, pass): No new auth surface. Password hashing
-  routes through the existing module. OK.
-```
+returns a single `<review>` element to the orchestrator. The
+orchestrator (the `/speccy-review` skill session, sole writer to the
+journal during review) appends each returned `<review>` to
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` serially. Reviewer
+sub-agents never write to TASKS.md or to the journal themselves —
+TSK-006 rejects `<review>` elements inside `<task>` bodies, and the
+journal-writer concurrency contract belongs to the orchestrator.
 
 ## State transitions
 
-Each persona sub-agent **does not** flip the task's `state`
-attribute. That would create a race when the four personas run in
-parallel. The `/speccy:review` skill flips state once after all four
-persona reviews have completed for the task:
+Persona sub-agents **do not** flip the task's `state` attribute.
+That would create a race when the four personas run in parallel. The
+`/speccy-review` skill flips state once after all four persona
+`<review>` elements have been aggregated:
 
-- All `pass` -> `state="in-review"` becomes `state="completed"`.
-- Any `blocking` -> `state="in-review"` becomes `state="pending"`,
-  plus a `Retry:` note summarizing the blockers.
+- All `verdict="pass"` -> `state="in-review"` becomes
+  `state="completed"`.
+- Any `verdict="blocking"` -> `state="in-review"` becomes
+  `state="pending"`, and the orchestrator appends a `<blockers>`
+  block to `journal/T-NNN.md` summarising the blocking findings
+  (`round` monotonically increasing across rounds; see the journal
+  element grammar).
 
-This puts state-mutation atomicity in one place (the skill session)
-and keeps persona sub-agents to a single inline append per review.
+This puts state-mutation atomicity in one place (the orchestrator
+session) and keeps the journal the single source of truth for
+review history.
 
 ## Why personas live in skills, not CLI
 
@@ -1710,8 +1855,10 @@ Example skeleton for `reviewer-security.md`:
 
 ## Role
 You are an adversarial security reviewer for one task in one spec.
-You read the SPEC.md, the task's diff, and the implementer notes.
-You produce a single inline note appended to the task in TASKS.md.
+You read the SPEC.md, the task's diff, and the prior journal
+entries in `.speccy/specs/NNNN-slug/journal/T-NNN.md`. You return
+a single `<review>` element to the orchestrator, which appends it
+verbatim to the journal file.
 
 ## Focus
 - Authentication and authorization boundaries
@@ -1727,15 +1874,27 @@ You produce a single inline note appended to the task in TASKS.md.
 - Error messages that disclose user existence
 - Missing rate limiting on auth endpoints
 
-## Inline note format
-Append exactly one bullet to the task:
+## Return format
+Return one `<review>` element to the orchestrator, of the shape:
 
-- Review (security, pass | blocking): <one-line summary>.
-  <optional file:line refs and details>.
+    <review persona="security" verdict="pass | blocking"
+            date="<ISO8601>" model="<model-id>[/effort]" round="<N>">
+    <one-paragraph summary; file:line refs encouraged>
+    </review>
+
+The orchestrator transcribes the element verbatim into
+`journal/T-NNN.md`. The `model` attribute is required and is
+copied verbatim from this returned element; the orchestrator does
+not infer it from skill-pack identity.
 
 ## Example
-- Review (security, blocking): bcrypt cost 10; policy requires
-  >=12. See `src/auth/password.ts:14`.
+
+    <review persona="security" verdict="blocking"
+            date="2026-05-21T19:00:00Z"
+            model="claude-sonnet-4-6[1m]/medium" round="1">
+    bcrypt cost 10; policy requires >=12.
+    See `src/auth/password.ts:14`.
+    </review>
 ```
 
 These files are the durable surface where review intelligence
@@ -1881,7 +2040,8 @@ the CLI surface is text output to humans.
 Speccy emits a small set of deterministic lint codes. None depend
 on LLM judgment. All have stable prefixes: `SPC-` for spec
 structure, `REQ-` for requirements, `TSK-` for task structure,
-`QST-` for open questions, and `RPT-` for REPORT.md proof shape.
+`QST-` for open questions, `RPT-` for REPORT.md proof shape, and
+`JNL-` for `journal/T-NNN.md` per-task journal proof shape.
 The canonical, append-only list lives in
 `speccy-core::lint::registry::REGISTRY`; the snapshot test at
 `speccy-core/tests/lint_registry.rs` pins it. The summary below
@@ -1916,6 +2076,32 @@ TSK-005  Spec ID disagreement: folder digits, SPEC.md frontmatter
          `id:`, and TASKS.md frontmatter `spec:` must all agree
          (error; skipped when any of the three is unobtainable so
          upstream parse-error diagnostics cover those cases)
+TSK-006  Misplaced journal element in TASKS.md: an `<implementer>`,
+         `<review>`, or `<blockers>` element appears inside a
+         `<task>` body. These elements only ever live in
+         `journal/T-NNN.md` (Level::Error). Not gated by task
+         state — fires identically against pending, in-progress,
+         in-review, and completed tasks. Fires before any JNL-*
+         diagnostic on the same task.
+
+JNL-001  Task `state="pending"` but `journal/T-NNN.md` exists
+         (Level::Error). A pending task has no implementer history;
+         a journal file is unexpected.
+JNL-002  Task `state="completed"` but `journal/T-NNN.md` is missing
+         (Level::Error). Every completed task must carry its
+         journal as the durable record of how it was implemented
+         and reviewed.
+JNL-003  Task `state="completed"` and `journal/T-NNN.md` has a
+         shape or binding violation (Level::Error). Covers
+         filename ↔ frontmatter `task:` mismatch, frontmatter
+         `spec:` ↔ parent-dir mismatch, missing or unparseable
+         frontmatter, attribute-schema violations on
+         `<implementer>` / `<review>` / `<blockers>`, and
+         round-monotonicity violations (first round must be 1,
+         monotonic non-decreasing, no skipped rounds).
+         The JNL-* family silently skips tasks at
+         `state="in-progress"` or `state="in-review"` — a
+         half-written journal in flight is not a lint error.
 
 QST-001  SPEC.md has unchecked open question (informational)
 
@@ -2036,6 +2222,12 @@ V1 makes these failures loud:
 - Task is `state="in-review"` but at least one persona review is missing
 - REPORT.md `<coverage>` element references a requirement or
   scenario that does not resolve under the sibling SPEC.md
+- Per-task `journal/T-NNN.md` is missing for a completed task,
+  exists for a pending task, or has shape / binding / round-sequence
+  violations
+- `<implementer>`, `<review>`, or `<blockers>` element appears
+  inside a `<task>` body in TASKS.md (misplaced — they belong in
+  the sibling journal file)
 
 V1 intentionally does not catch:
 
@@ -2044,7 +2236,7 @@ V1 intentionally does not catch:
   and the reviewer-tests persona own this)
 - Whether the implementation actually meets `done_when`
 - Whether the reviewer was thorough
-- Whether the agent invented assumptions in implementer notes
+- Whether the agent invented assumptions in `<implementer>` journal entries
 - Whether the PR description matches REPORT.md
 - Whether the project will work end-to-end in production
 - Architecture drift across specs
@@ -2095,14 +2287,18 @@ fenced code blocks with example markdown (this document does too),
 and regex cannot reliably skip those contexts. The 4-crate cost is
 worth the robustness.
 
-TASKS.md and REPORT.md share the same line-aware XML element
-scanner as SPEC.md. `speccy-core::parse::task_xml` extracts the
-`<tasks>` / `<task>` / `<task-scenarios>` tree; `report_xml`
-extracts the `<report>` / `<coverage>` tree. Body Markdown inside
-each element is preserved verbatim except for trailing whitespace
-normalization at element boundaries. No regex is used for
-structure; element opens, closes, and attributes are parsed
-line-by-line with fenced-code awareness inherited from SPEC.md.
+TASKS.md, REPORT.md, and `journal/T-NNN.md` share the same
+line-aware XML element scanner as SPEC.md.
+`speccy-core::parse::task_xml` extracts the bare `<task>` /
+`<task-scenarios>` tree (no `<tasks>` wrapper); `report_xml`
+extracts the `<report>` / `<coverage>` tree; `journal_xml` extracts
+the chronological bare-element sequence of `<implementer>` /
+`<review>` / `<blockers>` blocks (no wrapper) under the
+frontmatter. Body Markdown inside each element is preserved
+verbatim except for trailing whitespace normalization at element
+boundaries. No regex is used for structure; element opens, closes,
+and attributes are parsed line-by-line with fenced-code awareness
+inherited from SPEC.md.
 
 ## Spec ID allocation
 

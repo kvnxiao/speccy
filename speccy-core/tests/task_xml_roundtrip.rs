@@ -47,7 +47,6 @@ fn assert_task_field_equal(a: &Task, b: &Task) {
 fn parses_canonical_fixture() {
     let src = load_fixture();
     let doc = parse(&src);
-    assert_eq!(doc.spec_id, "SPEC-0022");
     assert_eq!(doc.tasks.len(), 2);
     let t1 = doc.tasks.first().expect("two tasks");
     assert_eq!(t1.id, "T-001");
@@ -66,7 +65,6 @@ fn render_then_reparse_is_field_equal() {
     let rendered = render_task_xml(&doc);
     let doc2 = parse_task_xml(&rendered, Utf8Path::new("fixture/TASKS.md"))
         .expect("rendered TASKS.md should parse back");
-    assert_eq!(doc.spec_id, doc2.spec_id, "spec_id mismatch");
     assert_eq!(
         doc.tasks.len(),
         doc2.tasks.len(),

@@ -13,7 +13,6 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Scaffolding
 
-<tasks spec="SPEC-0001">
 
 <task id="T-001" state="completed" covers="REQ-007">
 Initialise Cargo workspace with `speccy` and `speccy-core` crates
@@ -32,7 +31,6 @@ Pin parsing-stack dependencies and configure `cargo-deny`
 
 - Suggested files: `speccy-core/Cargo.toml`, `deny.toml`
 
-
 <task-scenarios>
   - `cargo deny check` passes (advisories, bans, licenses, sources).
   - `serde-saphyr` is pinned exactly to its chosen `0.0.x` patch in `speccy-core/Cargo.toml`.
@@ -47,7 +45,6 @@ Pin parsing-stack dependencies and configure `cargo-deny`
 Implement frontmatter splitter (DIY string slicing)
 
 - Suggested files: `speccy-core/src/parse/frontmatter.rs`, `speccy-core/tests/frontmatter.rs`
-
 
 <task-scenarios>
   - Valid `---\n<yaml>\n---\n<body>` returns `Some((yaml, body))`.
@@ -66,7 +63,6 @@ Implement frontmatter splitter (DIY string slicing)
 Implement `parse::speccy_toml` and `parse::spec_toml`
 
 - Suggested files: `speccy-core/src/parse/toml.rs`, `speccy-core/tests/toml_parsers.rs`
-
 
 <task-scenarios>
   - Valid `speccy.toml` round-trips into `SpeccyConfig`.
@@ -117,7 +113,6 @@ Implement `parse::report_md` (frontmatter only; body verbatim)
 
 - Suggested files: `speccy-core/src/parse/report_md.rs`, `speccy-core/tests/report_md_parser.rs`
 
-
 <task-scenarios>
   - Frontmatter deserialises (spec, outcome, generated_at).
   - `outcome` outside `{delivered, partial, abandoned}` returns a parse error naming the invalid value.
@@ -145,7 +140,6 @@ Implement `parse::cross_ref` (SpecMd x SpecToml -> CrossRef)
 Implement `parse::supersession_index` (inverse `supersedes` across a workspace)
 
 - Suggested files: `speccy-core/src/parse/supersession.rs`, `speccy-core/tests/supersession_index.rs`
-
 
 <task-scenarios>
   - Given SPEC-0017 (no `supersedes`), SPEC-0042 (`supersedes: [SPEC-0017]`), and SPEC-0050 (`supersedes: [SPEC-0017, SPEC-0030]`), `index.superseded_by("SPEC-0017")` returns `["SPEC-0042", "SPEC-0050"]` in input order.
@@ -182,4 +176,3 @@ Lock in CI hygiene gates
 </task-scenarios>
 </task>
 
-</tasks>

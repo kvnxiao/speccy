@@ -1,6 +1,6 @@
 ---
 name: speccy-review
-description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `<retry>` element. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
+description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `<blockers>` block appended to the per-task journal file. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
 ---
 
 # speccy-review
@@ -10,7 +10,9 @@ exits. With an optional `[SPEC-NNNN/T-NNN]` selector argument, the
 session reviews that specific task. Without an argument, the session
 resolves the next reviewable task via `speccy next --json` and reviews
 that one. Task state lives in the `state` attribute on each `<task>`
-XML element in TASKS.md.
+XML element in TASKS.md; review activity prose lives in the sibling
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` file, never inside the
+`<task>` body.
 
 This is a single-task primitive. It does not iterate over the
 remaining `in-review` tasks; composition across tasks belongs to a
@@ -62,22 +64,32 @@ flipped there by `speccy-work`).
    for what each persona reads.
 
    Each spawned reviewer **returns its verdict via its final
-   message** as a `<review persona="..." verdict="...">…</review>`
-   element block. Reviewers do not write to TASKS.md directly;
-   they return their verdict to this orchestrator. After all spawned
-   reviewers return, this orchestrator is the **sole writer to
-   TASKS.md** for the review-induced state transition.
+   message** as a
+   `<review persona="..." verdict="..." model="...">…</review>`
+   element block. Reviewers do not write to TASKS.md and do not write
+   to `journal/T-NNN.md` directly; they return their verdict to this
+   orchestrator. After all spawned reviewers return, this orchestrator
+   is the **sole writer to `.speccy/specs/NNNN-slug/journal/T-NNN.md`**
+   for the review-induced journal appends, and the **sole writer to
+   TASKS.md** for the review-induced `state` transition. No
+   `<review>` block is ever appended to the `<task>` body in
+   TASKS.md — TSK-006 rejects journal elements there.
 
    Prose-spawn the four reviewer subagents by name in parallel:
    `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
    `reviewer-style`. The prompt for each spawn is:
 
    > Review task `SPEC-NNNN/T-NNN`. Run `speccy check SPEC-NNNN/T-NNN`
-   > to load the task scenarios, read the implementation in TASKS.md,
-   > and apply your persona's review criteria. Return your verdict as
-   > your final message as a
-   > `<review persona="<persona>" verdict="...">…</review>` element
-   > block. Do not edit TASKS.md.
+   > to load the task scenarios, read the bare `<task>` body in
+   > TASKS.md and the prior activity in
+   > `.speccy/specs/NNNN-slug/journal/T-NNN.md`, and apply your
+   > persona's review criteria. Return your verdict as your final
+   > message as a
+   > `<review persona="<persona>" verdict="..." model="...">…</review>`
+   > element block. The `model` attribute is required and must
+   > identify the model that produced the verdict (with the optional
+   > slash-suffix effort convention from the verdict-return contract).
+   > Do not edit TASKS.md and do not edit the journal file.
 
    Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name.
    Codex resolves each name to its TOML file at
@@ -85,32 +97,58 @@ flipped there by `speccy-work`).
    already loaded as the sub-agent's developer instructions.
 
 3. After all spawned sub-agents return, **consolidate** the
-   `<review>` element blocks from each reviewer's final message into
-   a single per-task verdict. Apply the state transition to
-   **TASKS.md serially in this orchestrator turn** — do not
-   delegate the write back to a reviewer subagent. Exit transition:
+   `<review>` element blocks from each reviewer's final message and
+   write them to `.speccy/specs/NNNN-slug/journal/T-NNN.md`
+   **serially in this orchestrator turn** — do not delegate the
+   write back to a reviewer subagent, and do not write to TASKS.md.
+
+   When transcribing each returned `<review>` into the journal:
+
+   - Copy the `model` attribute **verbatim** from the reviewer's
+     reply per `resources/modules/personas/verdict_return_contract.md`.
+     Do not infer a model value from the persona name, the host
+     skill-pack identity, or any other source. If a returned
+     `<review>` is missing `model`, halt the fan-out and surface the
+     non-conforming persona rather than inventing a value.
+   - Ensure each appended `<review>` carries the full required
+     attribute set: `date` (ISO8601 with seconds and timezone),
+     `model` (verbatim from the reviewer), `persona`, `verdict`
+     (`pass` or `blocking`), and `round` (positive integer matching
+     the implementer round under review). All five are required.
+   - If `journal/T-NNN.md` does not exist yet (a task can reach
+     `in-review` only after the implementer wrote its round-1
+     `<implementer>` block, so this should be rare — but if the
+     file is somehow missing, surface that as an error rather than
+     silently creating one without the implementer entry).
+
+   Apply the state transition to **TASKS.md serially in this
+   orchestrator turn** (separate write from the journal append):
 
    - If every spawned reviewer's `<review verdict="...">` is
      `verdict="pass"`, flip the task's `state="..."` attribute
-     from `in-review` to `completed` and append each
-     `<review>` block to the task subtree.
+     from `in-review` to `completed`.
    - If any spawned reviewer's `<review verdict="...">` is
      `verdict="blocking"`, flip `state="..."` from `in-review` to
-     `pending`, append each `<review>` block to the task subtree,
-     and append a single consolidated `<retry>…</retry>` element
-     block that aggregates all failing reviewers' feedback — not
-     one `<retry>` per reviewer, not a partial write. The block
-     has the form:
+     `pending`, and append a single consolidated
+     `<blockers>…</blockers>` element block to
+     `journal/T-NNN.md` that aggregates all failing reviewers'
+     feedback — not one `<blockers>` per reviewer, not a partial
+     write. The block carries required attributes `date` and
+     `round` (matching the round of the `<review>` blocks just
+     appended) and has the form:
 
-         <retry>
+         <blockers date="2026-05-21T22:10:00Z" round="1">
          <one-line summary of what to change before the next
          implementer pass>.
          <optional bullets enumerating each persona's blocker>.
-         </retry>
+         </blockers>
 
    This serial write in the orchestrator turn eliminates the
    parallel-write race that would occur if each reviewer subagent
-   wrote to TASKS.md directly (per DEC-008).
+   wrote to the journal or TASKS.md directly (per DEC-008). Per-task
+   journal files do not introduce parallel writes from reviewer
+   subagents — the orchestrator remains the sole journal writer
+   during review.
 
 4. Exit. Do not pick up another `in-review` task. If the caller
    wants another task reviewed, the caller invokes this skill again.

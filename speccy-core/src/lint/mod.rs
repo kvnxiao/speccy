@@ -35,6 +35,12 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
         rules::tsk::lint(spec, &mut diagnostics);
         rules::qst::lint(spec, &mut diagnostics);
         rules::rpt::lint(spec, &mut diagnostics);
+        // SPEC-0037 REQ-002: JNL-* validates per-task journal files
+        // gated by task state. The activation gate (skip when
+        // state is `in-progress` or `in-review`) lives inside the
+        // rule itself; per-task state is read from the parsed
+        // TasksDoc.
+        rules::jnl::lint(spec, &mut diagnostics);
     }
 
     diagnostics.sort_by(|a, b| {

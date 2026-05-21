@@ -15,6 +15,7 @@
 
 pub mod cross_ref;
 pub mod frontmatter;
+pub mod journal_xml;
 pub mod markdown;
 pub mod report_xml;
 pub mod spec_md;
@@ -26,6 +27,9 @@ pub mod xml_scanner;
 
 pub use cross_ref::CrossRef;
 pub use cross_ref::cross_ref;
+pub use journal_xml::JournalDoc;
+pub use journal_xml::JournalEntry;
+pub use journal_xml::parse as parse_journal_xml;
 pub use report_xml::CoverageResult;
 pub use report_xml::ReportDoc;
 pub use report_xml::RequirementCoverage;
@@ -48,13 +52,11 @@ pub use spec_xml::parse as parse_spec_xml;
 pub use spec_xml::render as render_spec_xml;
 pub use supersession::SupersessionIndex;
 pub use supersession::supersession_index;
-pub use task_xml::BodyItem;
-pub use task_xml::ReviewVerdict;
+pub use task_xml::MisplacedJournalElement;
 pub use task_xml::Task;
 pub use task_xml::TaskState;
 pub use task_xml::TasksDoc;
 pub use task_xml::parse as parse_task_xml;
-pub use task_xml::redact_implementer_notes;
 pub use task_xml::render as render_task_xml;
 pub use toml_files::ProjectConfig;
 pub use toml_files::SpeccyConfig;

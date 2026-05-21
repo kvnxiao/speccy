@@ -11,7 +11,6 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Persona files
 
-<tasks spec="SPEC-0013">
 
 <task id="T-001" state="completed" covers="REQ-001 REQ-005">
 Write the planner and implementer personas
@@ -30,7 +29,6 @@ Write the six reviewer personas
 
 - Suggested files: `skills/shared/personas/reviewer-business.md`, `skills/shared/personas/reviewer-tests.md`, `skills/shared/personas/reviewer-security.md`, `skills/shared/personas/reviewer-style.md`, `skills/shared/personas/reviewer-architecture.md`, `skills/shared/personas/reviewer-docs.md`
 - Implementer note: each persona filed with `# Reviewer Persona: <Name>` title plus the five required sections in declared order. Names match `personas::ALL`; CHK-002 (`persona_names_match_registry`) asserts the registry alignment; CHK-007 (`persona_content_shape`) asserts ordered headings.
-
 
 <task-scenarios>
   - All six files exist: `reviewer-business.md`, `reviewer-tests.md`, `reviewer-security.md`, `reviewer-style.md`, `reviewer-architecture.md`, `reviewer-docs.md`.
@@ -99,7 +97,6 @@ Write the Phase 5 prompt template (report)
 - Suggested files: `skills/shared/prompts/report.md`
 - Implementer note: template existed from SPEC-0011's prompt-assembly land. CHK-004 confirms placeholder coverage; the body already instructs the agent to write `(spec, outcome, generated_at)` frontmatter.
 
-
 <task-scenarios>
   - `report.md` contains `{{spec_id}}`, `{{spec_md}}`, `{{tasks_md}}`, `{{retry_summary}}`, `{{agents}}` (per SPEC-0011 REQ-004).
   - Content instructs the agent to write REPORT.md frontmatter matching SPEC-0001 REQ-005 shape (spec / outcome / generated_at).
@@ -114,7 +111,6 @@ Write Claude Code top-level recipes
 
 - Suggested files: `skills/claude-code/speccy/init.md`, `skills/claude-code/speccy/plan.md`, `skills/claude-code/speccy/tasks.md`, `skills/claude-code/speccy/work.md`, `skills/claude-code/speccy/review.md`, `skills/claude-code/speccy/amend.md`, `skills/claude-code/speccy/ship.md`
 - Implementer note: replaced all seven stubs with `description:`-frontmatter recipes including intro paragraph, `## When to use`, numbered steps with fenced `speccy ...` commands, and (for `speccy:work` / `speccy:review` / `speccy:amend`) explicit "Loop exit criteria" sections. CHK-005 (`claude_code_recipes`) parses each frontmatter via `serde-saphyr`; CHK-008 (`recipe_content_shape`) covers intro / heading / fenced-command / loop-exit assertions.
-
 
 <task-scenarios>
   - Seven files exist under `skills/claude-code/`: `speccy/init.md`, `speccy/plan.md`, `speccy/tasks.md`, `speccy/work.md`, `speccy/review.md`, `speccy/amend.md`, `speccy/ship.md`.
@@ -132,7 +128,6 @@ Write Codex parallel recipes
 
 - Suggested files: `skills/codex/speccy/init.md`, `skills/codex/speccy/plan.md`, `skills/codex/speccy/tasks.md`, `skills/codex/speccy/work.md`, `skills/codex/speccy/review.md`, `skills/codex/speccy/amend.md`, `skills/codex/speccy/ship.md`
 - Implementer note: each Codex recipe ships with `name:` + `description:` frontmatter (the conservative shape Codex's skill loader expects), the same intro / `## When to use` / steps / loop-exit shape as its Claude Code counterpart, and references the un-slashed `speccy-<name>` form Codex uses to invoke skills. CHK-006 (`codex_recipes`) enforces both fields are non-empty.
-
 
 <task-scenarios>
   - Same seven file names under `skills/codex/`.
@@ -157,4 +152,3 @@ Manual smoke test in Claude Code and Codex
 </task-scenarios>
 </task>
 
-</tasks>

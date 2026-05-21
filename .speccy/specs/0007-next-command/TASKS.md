@@ -17,7 +17,6 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Task discovery and priority logic (speccy-core)
 
-<tasks spec="SPEC-0007">
 
 <task id="T-001" state="completed" covers="REQ-001">
 Implement task enumeration from `workspace::scan`
@@ -36,7 +35,6 @@ Implement task enumeration from `workspace::scan`
 Implement default-priority logic (no `--kind`)
 
 - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs`
-
 
 <task-scenarios>
   - Within a spec, an `AwaitingReview` (`[?]`) task is returned before an `Open` (`[ ]`) task in the same spec.
@@ -67,7 +65,6 @@ Implement `KindFilter::Review` strict filter with persona fan-out
 
 - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_priority.rs` (extend)
 
-
 <task-scenarios>
   - Only `AwaitingReview` (`[?]`) tasks are returned as `NextResult::Review`.
   - The persona fan-out is the hardcoded `DEFAULT_PERSONAS = ["business", "tests", "security", "style"]`.
@@ -94,7 +91,6 @@ Implement `kind: report` detection
 Implement `kind: blocked` with canonical reasons
 
 - Suggested files: `speccy-core/src/next.rs` (extend), `speccy-core/tests/next_blocked.rs`
-
 
 <task-scenarios>
   - Empty workspace -> `Blocked { reason: "no specs in workspace" }`.
@@ -126,7 +122,6 @@ Implement `--json` renderer
 
 - Suggested files: `speccy-cli/src/next_output.rs` (extend), `speccy-cli/tests/next_json.rs`
 
-
 <task-scenarios>
   - Output begins with `"schema_version": 1`.
   - The `"kind"` field discriminates between `"implement"`, `"review"`, `"report"`, `"blocked"`.
@@ -154,4 +149,3 @@ Wire `speccy next [--kind] [--json]` into the binary
 </task-scenarios>
 </task>
 
-</tasks>

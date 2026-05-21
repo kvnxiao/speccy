@@ -100,7 +100,7 @@ fn fresh_when_hash_matches() -> TestResult {
     let hash = hex_of(&parsed_spec.sha256);
 
     let tasks_body = format!(
-        "---\nspec: SPEC-0001\nspec_hash_at_generation: {hash}\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n</tasks>\n"
+        "---\nspec: SPEC-0001\nspec_hash_at_generation: {hash}\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n\n\n"
     );
     let tasks_md_path = root.join("TASKS.md");
     fs_err::write(tasks_md_path.as_std_path(), &tasks_body)?;
@@ -114,7 +114,7 @@ fn fresh_when_hash_matches() -> TestResult {
 
 #[test]
 fn hash_mismatch_yields_hash_drift() -> TestResult {
-    let tasks_body = indoc! {r#"
+    let tasks_body = indoc! {r"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
@@ -123,9 +123,7 @@ fn hash_mismatch_yields_hash_drift() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-        </tasks>
-    "#};
+                    "};
     let fx = write_fixture(SPEC_MD, tasks_body)?;
     let (spec, tasks) = parse_pair(&fx)?;
 
@@ -137,7 +135,7 @@ fn hash_mismatch_yields_hash_drift() -> TestResult {
 
 #[test]
 fn hash_drift_fires_alone_when_spec_body_changes() -> TestResult {
-    let tasks_body = indoc! {r#"
+    let tasks_body = indoc! {r"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: 0000000000000000000000000000000000000000000000000000000000000000
@@ -146,9 +144,7 @@ fn hash_drift_fires_alone_when_spec_body_changes() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-        </tasks>
-    "#};
+                    "};
     let fx = write_fixture(SPEC_MD, tasks_body)?;
     let (spec, tasks) = parse_pair(&fx)?;
 
@@ -160,7 +156,7 @@ fn hash_drift_fires_alone_when_spec_body_changes() -> TestResult {
 
 #[test]
 fn bootstrap_pending_short_circuits_other_reasons() -> TestResult {
-    let tasks_body = indoc! {r#"
+    let tasks_body = indoc! {r"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
@@ -169,9 +165,7 @@ fn bootstrap_pending_short_circuits_other_reasons() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-        </tasks>
-    "#};
+                    "};
     let fx = write_fixture(SPEC_MD, tasks_body)?;
     let (spec, tasks) = parse_pair(&fx)?;
 

@@ -11,13 +11,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Argument validation and spec lookup
 
-<tasks spec="SPEC-0011">
 
 <task id="T-001" state="completed" covers="REQ-001">
 Parse SPEC-ID and locate the spec
 
 - Suggested files: `speccy-cli/src/report.rs`, `speccy-cli/tests/report_args.rs`
-
 
 <task-scenarios>
   - `"SPEC-0001"` -> proceed; `"FOO"` -> exit 1 with format error.
@@ -34,7 +32,6 @@ Parse SPEC-ID and locate the spec
 Refuse when tasks aren't all `[x]`
 
 - Suggested files: `speccy-cli/src/report.rs` (extend), `speccy-cli/tests/report_completeness.rs`
-
 
 <task-scenarios>
   - 5 `[x]` + 1 `[ ]` task -> exit 1; stderr lists the `[ ]` task ID and state.
@@ -53,7 +50,6 @@ Refuse when tasks aren't all `[x]`
 Count `Retry:` markers per task
 
 - Suggested files: `speccy-cli/src/report.rs` (extend), `speccy-cli/tests/report_retry.rs`
-
 
 <task-scenarios>
   - Task with two notes starting `Retry:` -> count 2.
@@ -81,4 +77,3 @@ Render report prompt and wire CLI
 </task-scenarios>
 </task>
 
-</tasks>

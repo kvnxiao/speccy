@@ -190,7 +190,7 @@ fn lock_missing_tasks_md_exits_one_without_creating_file() -> TestResult {
 #[test]
 fn lock_preserves_body_bytes_byte_identical() -> TestResult {
     let ws = Workspace::new()?;
-    let body = "\n# Tasks\n\n<tasks spec=\"SPEC-0001\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nfirst\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n</tasks>\n";
+    let body = "\n# Tasks\n\n\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nfirst\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n";
     let bootstrap = format!(
         "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---{body}",
     );

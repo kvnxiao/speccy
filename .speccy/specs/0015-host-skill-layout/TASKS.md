@@ -11,7 +11,6 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Bundle restructure
 
-<tasks spec="SPEC-0015">
 
 <task id="T-001" state="completed" covers="REQ-001 REQ-003">
 Restructure the host packs from flat-file to SKILL.md
@@ -67,7 +66,6 @@ Add bundle layout tests (CHK-001, CHK-002)
 
 - Suggested files:
   - `speccy-cli/tests/skill_packs.rs`
-
 
 <task-scenarios>
   - `cargo test -p speccy-cli --test skill_packs --
@@ -130,7 +128,6 @@ Add frontmatter shape and description quality tests (CHK-005, CHK-006)
 - Suggested files:
   - `speccy-cli/tests/skill_packs.rs`
 
-
 <task-scenarios>
   - `cargo test -p speccy-cli --test skill_packs --
     shipped_skill_md_frontmatter_shape` walks the bundle, parses
@@ -184,7 +181,6 @@ Rewire init tests for the new destinations and add CHK-003 / CHK-004
 - Suggested files:
   - `speccy-cli/tests/init.rs`
 
-
 <task-scenarios>
   - Update every `.claude/commands/speccy/<verb>.md` reference
     in `speccy-cli/tests/init.rs` (search hits at lines 128,
@@ -237,7 +233,6 @@ Amend SPEC-0002 REQ-004 and Changelog to point at SPEC-0015
     Append a Changelog row:
     `| 2026-05-14 | agent/claude | REQ-004 destinations updated by SPEC-0015 (Claude Code pack moves from .claude/commands/ to .claude/skills/<name>/; layout changes from flat .md to SKILL.md directory format). Old destination is deprecated; users with prior installs must rm -rf .claude/commands/speccy/. |`
 
-
 <task-scenarios>
   - No code tests. The amendment is a documentation edit.
   - Manually run `cargo run -p speccy-cli --release -- status`
@@ -274,4 +269,3 @@ Run the full hygiene sweep
 </task-scenarios>
 </task>
 
-</tasks>

@@ -43,7 +43,7 @@ inline review note; the orchestrating skill flips the task's `state` attribute.
 
 ## Example
 
-    <review persona="security" verdict="blocking">
+    <review persona="security" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
     bcrypt cost factor 10; project policy in `AGENTS.md` requires
     >= 12. See `src/auth/password.ts:14`. Bump and re-run the hash
     benchmarks.

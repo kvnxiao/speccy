@@ -6,53 +6,11 @@ generated_at: 2026-05-20T18:49:25Z
 
 # Tasks: SPEC-0027 Host-native files are the sole canonical persona surface; drop .speccy/skills/ override directory
 
-<tasks spec="SPEC-0027">
 
 ## Phase 1: Drop the persona body from the CLI-rendered reviewer prompt
 
 <task id="T-001" state="completed" covers="REQ-003">
 ## T-001: Strip `{{persona_content}}` from reviewer prompt templates and `speccy review`'s render-vars map
-
-<review persona="business" verdict="pass">
-REQ-003 satisfied. The six
-`resources/modules/prompts/reviewer-*.md` templates have zero
-matches for `## Persona` and `{{persona_content}}` (verified by
-grep). `speccy-cli/src/review.rs:108` replaces the
-`ReviewError::Persona(PersonaError::UnknownName{..})` construction
-with the inline `ReviewError::UnknownPersona { name, valid }`
-variant, dropping the `vars.insert("persona_content", ...)` line
-and the `resolve_persona_file` call; `speccy-cli/src/main.rs:391`
-pattern-matches the new variant and preserves the
-`"valid personas: …"` user-facing diagnostic verbatim. The
-strengthened `prompt_renders_substitutes_every_placeholder` test
-in `speccy-cli/tests/review.rs:203-238` asserts the absence of
-`## Persona`, `# Reviewer Persona:`, and `{{persona_content}}` on
-a synthetic task entry that doesn't itself mention the retired
-strings — the test correctly captures REQ-003's intent. Note: the
-done-when bullet "output of speccy review … contains no occurrence
-of `# Reviewer Persona: Business`" reads literally as a property of
-the entire stdout, which includes the verbatim `<task>` element
-copied from TASKS.md; this particular T-001's task entry quotes the
-retired strings descriptively (see lines 31, 34, 43, 55, 69-79, 106,
-117-119, 122, 133 of the rendered prompt). That tension is benign —
-the contract is about the template not carrying the persona body,
-and the template change is clean — but worth surfacing for future
-spec wording. Slice-level `<task-scenarios>` all pass; `cargo test
---workspace` exit 0. Non-goals respected: `personas::resolve_file`
-and the override resolver chain remain in place (correctly deferred
-to T-004), and `speccy init`'s plan is untouched (correctly
-deferred to T-002/T-003).
-</review>
-
-<implementer-note session="2026-05-17-T001">
-- Completed: Removed the `## Persona` heading and `{{persona_content}}` line from all six `resources/modules/prompts/reviewer-<persona>.md` templates (business, tests, security, style, architecture, docs) — surrounding sections byte-identical. Edited `speccy-cli/src/review.rs`: dropped `PersonaError` and `resolve_file as resolve_persona_file` imports, dropped the `resolve_persona_file` call, dropped the `persona_content` insert from the `vars` map, replaced `ReviewError::Persona(#[from] PersonaError)` with a new `ReviewError::UnknownPersona { name, valid: &'static [&'static str] }` variant (preserves the user-facing "valid personas: …" diagnostic), updated module docs to reference SPEC-0027. Updated `speccy-cli/src/main.rs` to match the new variant and drop the `PersonaError` import. Updated `speccy-cli/tests/skill_packs.rs` to drop `persona_content` from the required-placeholders list and to assert no reviewer template contains `{{persona_content}}` or `## Persona`. Rewrote `speccy-cli/tests/review.rs`: deleted the override-pickup test (`prompt_renders_picks_up_project_local_persona_override`), strengthened `prompt_renders_substitutes_every_placeholder` to also assert the absence of `# Reviewer Persona:` and `## Persona` and added `{{persona_content}}` to the retired-placeholder loop. Regenerated the six in-tree dogfood prompt mirrors at `.speccy/skills/prompts/reviewer-<persona>.md` to match the new bundle (these are slated for removal in T-005 but the existing `dogfood_outputs_match_committed_tree` walker would fail otherwise; T-003 will remove the walker contract for prompts).
-- Undone: (none)
-- Commands run: `cargo run --quiet -- tasks SPEC-0027 --commit`; `cargo test --workspace` (initial — 2 failures: dogfood walker mismatch, snapshot fixture missing SPEC-0027); sync dogfood mirrors; add SPEC-0027 entry to `speccy-core/tests/fixtures/in_tree_id_snapshot.json` (REQ-001..004 + CHK-001..004 + DEC-001..005); fix pre-existing missing `# Report:` heading in `.speccy/specs/0026-skill-router-anti-triggers/REPORT.md` (peripheral bug surfaced by `every_in_tree_report_md_parses_and_resolves_against_parent_spec`); `cargo test --workspace` (final — all suites green).
-- Exit codes: final `cargo test --workspace` exit 0.
-- Discovered issues: (1) `.speccy/specs/0026-skill-router-anti-triggers/REPORT.md` shipped without a level-1 `# Report:` heading after the frontmatter, which made `every_in_tree_report_md_parses_and_resolves_against_parent_spec` fail (parse error `missing required field "level-1 heading"`). Pre-existing on `main` since commit 68f6fcf; every other in-tree REPORT.md (0001-0025) carries the heading. Fixed in-place by inserting `# Report: SPEC-0026 skill-router-anti-triggers` between the frontmatter close fence and the `<report spec="SPEC-0026">` opening tag. Not introduced by this SPEC. (2) The init-test dogfood walker (`dogfood_outputs_match_committed_tree`, lines 661-692 of `speccy-cli/tests/init.rs`) compares the embedded `PROMPTS` bundle against `.speccy/skills/prompts/<name>`; this contract is being deleted across SPEC-0027 (T-003 removes init's writes to that subtree; T-005 deletes the in-tree files). For T-001's slice, the in-tree mirrors were resynced so the walker stays green; the walker block itself will be removed in T-003 or T-005.
-- Procedural compliance: (none — friction stemmed from a pre-existing REPORT.md defect and a dogfood walker that SPEC-0027 retires later; no skill-file edit needed.)
-</implementer-note>
-
 
 Drop the `## Persona` section header and the
 `{{persona_content}}` placeholder line from each of the six
@@ -159,38 +117,6 @@ and T-004.
 <task id="T-002" state="completed" covers="REQ-002">
 ## T-002: Classify `.claude/agents/reviewer-*.md` and `.codex/agents/reviewer-*.toml` as Skip-on-exists
 
-<review persona="business" verdict="pass">
-REQ-002 satisfied. `is_host_native_reviewer_file` in
-`speccy-cli/src/init.rs:259` matches `.claude/agents/reviewer-<p>.md` and
-`.codex/agents/reviewer-<p>.toml` for every persona in `personas::ALL`
-(path normalised across backslashes for Windows hosts — sensible defensive
-touch). The classifier wire-up at `init.rs:228` collapses
-`Overwrite | Skip` → `Action::Skip` on existence and keeps `Action::Create`
-on absence; all other host-pack paths (skill wrappers under
-`.claude/skills/`, `.agents/skills/`) flow through the unchanged
-`classify(&destination)` and continue to overwrite. Empirical proof from a
-live `init --force` run shows the contract intact: six
-`.claude/agents/reviewer-*.md` lines marked `skip`, eight
-`.claude/skills/speccy-*/SKILL.md` lines marked `overwrite`, zero
-`.speccy/skills/` lines. The four new tests in
-`speccy-cli/tests/init.rs:622-779` cover sentinel preservation,
-delete-and-recreate, plan-summary labels (asserting both halves of the
-classification split), and the Codex twin. Non-goals respected: no
-`--force-personas`, no two-tier frontmatter/body split, no change to
-`render_host_pack`. The `Action::Skip` doc comment was updated to drop the
-retired legacy reference and document the new sole use.
-</review>
-
-<implementer-note session="2026-05-17-T002">
-- Completed: In `speccy-cli/src/init.rs`, added `is_host_native_reviewer_file(rel_path)` predicate that returns true iff `rel_path` equals `.claude/agents/reviewer-<persona>.md` or `.codex/agents/reviewer-<persona>.toml` for any `<persona>` in `speccy_core::personas::ALL`. Extended `append_host_pack_items` to route the rendered file's classification through this predicate: when matched, `Overwrite` and `Skip` both collapse to `Action::Skip`; otherwise the existing `classify(&destination)` result flows through unchanged. Added `use speccy_core::personas::ALL as PERSONAS_ALL;` import. Updated the `Action::Skip` doc comment to document the dual use (legacy `.speccy/skills/` directories slated for SPEC-0027 removal, plus the new host-native reviewer-file Skip-on-exists case). All other host-pack files (skill wrappers under `.claude/skills/`, `.agents/skills/`, etc., plus `.speccy/speccy.toml`) retain today's Create-or-Overwrite classification. Added four new tests under `speccy-cli/tests/init.rs`: (1) `t002_claude_reviewer_agent_files_preserve_user_edits_under_force` — append a sentinel to `.claude/agents/reviewer-business.md`, run `init --force`, assert the sentinel survives; (2) `t002_claude_reviewer_agent_files_recreate_when_deleted_under_force` — delete the file, run `init --force`, assert it is recreated with the shipped `# Reviewer Persona: Business` header; (3) `t002_claude_init_force_plan_summary_marks_reviewer_agents_skip_and_skills_overwrite` — capture stdout and assert all six `.claude/agents/reviewer-*.md` lines show `skip` while every `.claude/skills/<verb>/SKILL.md` line shows `overwrite`; (4) `t002_codex_reviewer_agent_files_preserve_user_edits_under_force` — Codex twin covering both sentinel-preservation and deletion-recreation against `.codex/agents/reviewer-business.toml`.
-- Undone: (none)
-- Commands run: `cargo test --workspace` after the edit — all suites green (no new failures introduced; the four new tests all pass).
-- Exit codes: `cargo test --workspace` exit 0.
-- Discovered issues: (none)
-- Procedural compliance: (none)
-</implementer-note>
-
-
 Extend the init-plan classifier (the function that decides
 `Action::Create` / `Action::Overwrite` / `Action::Skip` for each
 rendered host-pack file in `speccy-cli/src/init.rs`) so that when a
@@ -288,42 +214,6 @@ Skip-on-exists classification this task adds is for the
 <task id="T-003" state="completed" covers="REQ-001">
 ## T-003: Stop appending `.speccy/skills/` items to the init plan
 
-<review persona="business" verdict="pass">
-REQ-001 satisfied. `build_plan` in
-`speccy-cli/src/init.rs:198` no longer calls
-`append_user_tunable_dir_items(&PERSONAS, …)` or
-`append_user_tunable_dir_items(&PROMPTS, …)` — both call sites replaced by
-a SPEC-0027 explanatory comment. The helpers themselves
-(`append_user_tunable_dir_items`, `collect_bundle_files`,
-`has_md_extension`) and their imports (`include_dir::Dir`,
-`std::path::Component`, `speccy_core::personas::PERSONAS`,
-`speccy_core::prompt::PROMPTS`) are gone from the module. Three new tests
-in `speccy-cli/tests/init.rs:556-614` exercise the contract: empty-init
-produces no `.speccy/skills/` dir; stdout contains no `.speccy/skills/`
-substring; pre-existing `.speccy/skills/personas/reviewer-business.md`
-with arbitrary bytes survives `init --force` byte-for-byte (DEC-003).
-Non-goals respected: no active deletion of pre-existing
-`.speccy/skills/` (matches the SPEC's explicit non-goal that
-`init` should not silently remove files outside its current write plan).
-Note: the implementer left `PERSONAS`/`PROMPTS` imports in the test
-file (`speccy-cli/tests/init.rs`) under a SPEC-0027 comment because
-`PERSONAS` still feeds the legacy-needle sweep
-(`persona_and_prompt_sources_have_no_legacy_check_authoring_examples`)
-until T-004 deletes the static. That accommodation is documented in the
-implementer note and unwound in T-004's diff — clean dependency
-layering between phases.
-</review>
-
-<implementer-note session="2026-05-17-T003">
-- Completed: Edited `speccy-cli/src/init.rs`: dropped the two `append_user_tunable_dir_items(&PERSONAS, …)` and `append_user_tunable_dir_items(&PROMPTS, …)` calls from `build_plan` (replaced by a SPEC-0027 explanatory comment); removed the `append_user_tunable_dir_items`, `collect_bundle_files`, and `has_md_extension` helpers; removed imports of `speccy_core::personas::PERSONAS`, `speccy_core::prompt::PROMPTS`, `include_dir::Dir`, and `std::path::Component`. Updated the `Action::Skip` doc comment to drop the legacy `.speccy/skills/` reference (it now documents the host-native reviewer Skip-on-exists case from T-002 only). Edited `speccy-cli/tests/init.rs`: deleted the `.speccy/skills/personas/`+`prompts/` walker block from `dogfood_outputs_match_committed_tree` (replaced by a SPEC-0027 comment); deleted the `let persona = read_file(…)` byte-equality assertion from `copy_claude_code_pack_skill_md` that pinned `.speccy/skills/personas/reviewer-security.md`; removed the now-unused `SHIPPED_PERSONA_SECURITY` const and the `has_md_ext` helper. Added three T-003 tests: (1) `t003_init_does_not_create_speccy_skills_dir` — empty tempdir + `init --host claude-code`, assert `.speccy/skills` does not exist; (2) `t003_init_plan_summary_does_not_mention_speccy_skills` — capture stdout, assert no `.speccy/skills/` substring; (3) `t003_init_force_preserves_pre_existing_speccy_skills_overrides` — pre-populate `.speccy/skills/personas/reviewer-business.md`, run `init --force`, assert byte-for-byte identical (DEC-003: init never writes into the subtree and never deletes from it). Re-added the `PERSONAS`/`PROMPTS` imports to the test file with a SPEC-0027 comment noting `PERSONAS` survives until T-004 (still consulted by `persona_and_prompt_sources_have_no_legacy_check_authoring_examples`); `PROMPTS` is permanent.
-- Undone: (none)
-- Commands run: `cargo test --workspace` — all suites green; `cargo clippy --workspace --all-targets --all-features -- -D warnings` — fails on the pre-existing `result_large_err` against `speccy-core::error::ParseError` (42+ sites, documented as out-of-scope by SPEC-0026 T-003 procedural compliance; not introduced by SPEC-0027).
-- Exit codes: `cargo test --workspace` exit 0; `cargo clippy …` exits non-zero on the pre-existing `result_large_err` only.
-- Discovered issues: (1) `clippy::result_large_err` on `speccy-core::error::ParseError` (largest variant ≥128 bytes, 42+ call sites) remains pre-existing — pinned out-of-scope by SPEC-0026 T-003 and not regressed by this slice. (2) The init.rs test's `PERSONAS`/`PROMPTS` imports are partially decoupled from the `.speccy/skills/` walker (which is gone) but still feed `persona_and_prompt_sources_have_no_legacy_check_authoring_examples`; T-004 will remove the `PERSONAS` half when the static is deleted.
-- Procedural compliance: (none — the only friction was the imports needing to stay in the test file for one legacy-needle sweep; that's a test-side accommodation, not a skill-file edit.)
-</implementer-note>
-
-
 Drop the code path in `speccy-cli/src/init.rs` that writes the
 `.speccy/skills/personas/` and `.speccy/skills/prompts/` directory
 contents into the init plan:
@@ -408,41 +298,6 @@ its own test module; clippy does not flag `pub` items as
 
 <task id="T-004" state="completed" covers="REQ-004">
 ## T-004: Delete `personas::resolve_file` and related resolver-chain surface
-
-<review persona="business" verdict="pass">
-REQ-004 satisfied. `speccy-core/src/personas.rs`
-is now a registry-only module — `PERSONAS` (the embedded body bytes),
-`PersonaError`, `resolve_file`, `resolve_file_with_warn`, and
-`persona_file_name` are all gone; the module-level doc comment rewritten
-to describe the surface as a persona-name registry and to point at
-SPEC-0027 + SPEC-0009. `ALL` survives unchanged, declaring the six
-personas in `business, tests, security, style, architecture, docs`
-order. `speccy-core/tests/personas.rs` retains the three registry tests
-(`registry_contains_six_personas_in_declared_order`,
-`registry_default_personas_is_first_four_prefix`,
-`registry_personas_are_unique`) and drops the seven resolver-chain tests
-enumerated in the SPEC done-when. Integration tests that previously
-consumed `PERSONAS` directly (`speccy-cli/tests/skill_packs.rs` and
-`speccy-cli/tests/init.rs`) were retargeted to read body bytes via
-`speccy_cli::embedded::RESOURCES.get_file("modules/personas/<name>")`
-/ `…/prompts/<name>` — the renaming keeps the legacy-needle sweep
-intact without re-exporting a deleted symbol. `cargo test --workspace`
-exit 0; the only clippy fire is the pre-existing
-`result_large_err` on `speccy-core::error::ParseError` (documented as
-out-of-scope under SPEC-0026 T-003 + carried forward here). Non-goals
-respected: no change to the prompt template pipeline; no introduction
-of a renamed override directory.
-</review>
-
-<implementer-note session="2026-05-17-T004">
-- Completed: Rewrote `speccy-core/src/personas.rs` to be a registry-only module: removed the `PERSONAS` static (the embedded copy of persona body bytes), the `PersonaError` enum, the `resolve_file` and `resolve_file_with_warn` functions, and the `persona_file_name` helper. Dropped the now-unused `use camino::Utf8Path;`, `use include_dir::{Dir, include_dir};`, `use std::io::Write;`, and `use thiserror::Error;` imports. Updated the module-level doc comment to describe the module as the persona-name registry only, cite SPEC-0027, and explain that persona body content reaches sub-agents via the host-pack renderer's Jinja `{% include %}` into `.claude/agents/reviewer-<persona>.md` / the Codex equivalent. Retained the `ALL` constant and its declared-order documentation. Rewrote `speccy-core/tests/personas.rs` to host only the three registry tests (`registry_contains_six_personas_in_declared_order`, `registry_default_personas_is_first_four_prefix`, `registry_personas_are_unique`); deleted the seven resolver-chain tests, the `make_tmp_root` / `write_override` helpers, and the `camino`/`speccy_core::personas::{PersonaError, resolve_file, resolve_file_with_warn}` imports. Retargeted the two integration test files that still consumed the deleted `PERSONAS` static: `speccy-cli/tests/skill_packs.rs` now reads persona/prompt bodies via `speccy_cli::embedded::RESOURCES.get_file("modules/personas/<name>")` (and the symmetric `modules/prompts/<name>` form); `speccy-cli/tests/init.rs` now iterates `RESOURCES.get_dir("modules/personas")` and `…/prompts` for the SPEC-0018 legacy-needle sweep, dropping the `PERSONAS`/`PROMPTS` imports and adding `use speccy_cli::embedded::RESOURCES;`.
-- Undone: (none)
-- Commands run: `cargo test --workspace` after the deletion + retargeting — all suites green.
-- Exit codes: `cargo test --workspace` exit 0.
-- Discovered issues: (pre-existing `clippy::result_large_err` on `speccy-core::error::ParseError`, documented under T-003 and SPEC-0026 T-003; not regressed by this slice).
-- Procedural compliance: (none)
-</implementer-note>
-
 
 Edit `speccy-core/src/personas.rs` to remove the persona-override
 resolver chain:
@@ -531,48 +386,6 @@ lint should fire as a consequence of the removals.
 
 <task id="T-005" state="completed" covers="REQ-001">
 ## T-005: Remove `.speccy/skills/` from this workspace and confirm `init --force` does not recreate it
-
-<review persona="business" verdict="pass">
-REQ-001's dogfood half satisfied. The
-in-tree `.speccy/skills/` directory is gone (verified by `ls
-.speccy/skills/` → "no such file"). A fresh `cargo run -- init --force
---host claude-code` does not recreate it: stdout shows zero
-`.speccy/skills/` lines, six `.claude/agents/reviewer-*.md` lines as
-`skip` (T-002 holding), eight `.claude/skills/speccy-*/SKILL.md` lines
-as `overwrite`, plus the `.speccy/speccy.toml` overwrite — final
-tallies `0 created, 9 overwritten, 6 skipped`. The implementer caught a
-spec-vs-reality drift the SPEC itself missed: `### Interfaces`
-enumerated 18 files, but the on-disk tree had 20 (the two extras —
-`implementer.md` and `planner.md` under `.speccy/skills/personas/` —
-served the same dogfood-override role as the reviewer personas). The
-implementer flagged this in the discovered-issues note and removed all
-20 via `git rm -rf .speccy/skills/`; that is the right call — REQ-001
-is normative on "no `.speccy/skills/` exists in this workspace,"
-not on the count of files removed, and the SPEC's enumeration is
-descriptive. The snapshot fixture at
-`speccy-core/tests/fixtures/in_tree_id_snapshot.json:638-660` adds the
-SPEC-0027 entry with REQ-001..004, CHK-001..004, DEC-001..005 — id
-sets match the SPEC.md verbatim. `cargo test --workspace`,
-`cargo +nightly fmt --all --check`, and `cargo deny check` all exit 0;
-`cargo clippy …` exits non-zero only on the pre-existing
-`result_large_err` carried forward. Non-goals respected: `init`
-itself still doesn't delete `.speccy/skills/`; the human implementer
-ran the `git rm` directly, which is the SPEC's documented recovery
-path. Follow-up note worth raising in the report: SPEC.md's
-`### Interfaces` should be re-tightened (or relaxed to "the tree
-including but not limited to these files") before SPEC-0027 ships, so
-future audits don't trip on the same 18-vs-20 drift.
-</review>
-
-<implementer-note session="2026-05-17-T005">
-- Completed: Ran `git rm -rf .speccy/skills/` to remove the 20 in-tree dogfood files (8 personas + 12 prompts; the persona walk surfaced two extra files — `implementer.md` and `planner.md` — beyond the 18 listed in SPEC `### Interfaces`, both legitimate persona bodies that shipped via the pre-SPEC override directory). Verified by re-running `cargo run -- init --force --host claude-code` and `cargo run -- init --force --host codex` that `.speccy/skills/` is not recreated in either case; the plan-summary output shows the six `.claude/agents/reviewer-*.md` lines with `skip` action (T-002's Skip-on-exists holding) and the eight `.claude/skills/speccy-*/SKILL.md` lines with `overwrite` action, with no `.speccy/skills/` lines anywhere. Ran the full hygiene gate: `cargo test --workspace` exits 0; `cargo +nightly fmt --all --check` exits 0 (applied formatter to fix a one-line wrap in `speccy-cli/tests/skill_packs.rs::read_prompt`); `cargo deny check` exits 0; `cargo clippy --workspace --all-targets --all-features -- -D warnings` fails only on the pre-existing `result_large_err` against `speccy-core::error::ParseError` (42+ sites, documented under SPEC-0026 T-003 and SPEC-0027 T-003 as out-of-scope).
-- Undone: (none)
-- Commands run: `git rm -rf .speccy/skills/`; `cargo run -- init --force --host claude-code`; `cargo run -- init --force --host codex`; `cargo test --workspace`; `cargo +nightly fmt --all`; `cargo +nightly fmt --all --check`; `cargo deny check`; `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- Exit codes: `git rm`, both init runs, cargo test, fmt, deny all exit 0. Clippy fails on pre-existing `result_large_err` only.
-- Discovered issues: (1) `.speccy/skills/personas/` also held two non-reviewer persona bodies — `implementer.md` and `planner.md` — that the SPEC `### Interfaces` "Files deleted (in-tree dogfood)" enumeration omitted (it listed only the six `reviewer-<persona>.md` files plus the twelve `.speccy/skills/prompts/*.md` files for a total of 18, but the actual on-disk tree had 20). These two files served the same dogfood-override role as the reviewer personas and are removed by the same `git rm -rf .speccy/skills/` walk. (2) `clippy::result_large_err` against `speccy-core::error::ParseError` remains pre-existing and out-of-scope (documented under SPEC-0026 T-003).
-- Procedural compliance: (none — the SPEC's recovery path for cleaning up `.speccy/skills/` was documented as `rm -rf` and that is what landed; no skill-file edit needed.)
-</implementer-note>
-
 
 After T-001 through T-004 have landed, remove the in-tree
 `.speccy/skills/` directory from this workspace as the dogfood
@@ -675,4 +488,3 @@ same commit so the in-tree-specs snapshot test stays green.
 </task-scenarios>
 </task>
 
-</tasks>

@@ -6,7 +6,6 @@ generated_at: 2026-05-21T03:33:41Z
 
 # Tasks: SPEC-0036 Repin Claude Code speccy-work implementer to opus[1m] / low effort
 
-<tasks spec="SPEC-0036">
 
 <task id="T-001" state="completed" covers="REQ-001">
 ## T-001: Repin Claude Code `speccy-work` agent frontmatter to `opus[1m]` / `low`
@@ -86,98 +85,6 @@ Given the Codex `speccy-work` files at
 diffed against their pre-SPEC contents, then the diff is empty
 (this task does not touch the Codex side).
 </task-scenarios>
-
-<implementer-note session="2026-05-21">
-Completed: Swapped `model: sonnet[1m]` → `model: opus[1m]` and `effort: medium` → `effort: low` in both `resources/agents/.claude/agents/speccy-work.md.tmpl` and `.claude/agents/speccy-work.md`. Updated two test files (`speccy-cli/tests/init.rs` and `speccy-cli/tests/init_phase_agents.rs`) that had hardcoded `sonnet[1m]`/`medium` assertions covering all three pinned phases uniformly; refactored each to check per-phase model/effort pairs so `speccy-work` is validated at `opus[1m]`/`low` while `speccy-tasks` and `speccy-ship` remain at `sonnet[1m]`/`medium`.
-
-Undone: Nothing left undone. All scenarios in CHK-001, CHK-002, and CHK-003 are satisfied.
-
-Commands run:
-- `cargo test --workspace` (twice, once to discover failing tests, once after fixes)
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `cargo +nightly fmt --all --check` (twice, once to discover formatter diffs, once after applying them)
-- `cargo deny check`
-- `cargo run -q -p speccy-cli -- check SPEC-0036/T-001`
-
-Exit codes: all 0.
-
-Discovered issues: Two test files contained uniform-loop assertions that assumed all three Claude Code pinned-phase agents share the same model/effort. The SPEC-0036 TASKS.md description mentioned only editing the two agent files, not the tests; the tests broke immediately because the dogfood drift-check test (`dogfood_outputs_match_committed_tree`) itself passed (templates and rendered files are in sync) but the pin-assertion tests encoded the old values. Both test files were updated as part of this task per the "run all four hygiene gates" requirement.
-
-Procedural compliance: No stale skill instructions encountered. No skill files required updating.
-</implementer-note>
-
-<review persona="business" verdict="pass">
-T-001 satisfies REQ-001 cleanly: both `.claude/agents/speccy-work.md` and `resources/agents/.claude/agents/speccy-work.md.tmpl` now declare `model: opus[1m]` / `effort: low`, with `name:`/`description:` and bodies byte-unchanged (verified via `git diff HEAD`). CHK-001 / CHK-002 / CHK-003 all hold. Non-goals respected: Codex pin untouched, `speccy-tasks` and `speccy-ship` stay on `sonnet[1m]`/`medium`, reviewer pins untouched, no skill-body or shared-phase-body edits, no schema or CLI surface change. The two test-file edits at `speccy-cli/tests/init.rs:1540` and `speccy-cli/tests/init_phase_agents.rs:140` are scope-justified — they refactor uniform-loop assertions that encoded the old pin into per-phase tuples, which is required for the SPEC's Goal #6 hygiene-gate criterion to hold; the implementer surfaced this under "Discovered issues" rather than silently expanding scope. The two open questions (Codex parallel repin, `low` vs `medium`) remain unchecked, matching the SPEC's recommendation.
-</review>
-
-<review persona="tests" verdict="blocking">
-Test refactors in `speccy-cli/tests/init.rs:1543-1569` and `speccy-cli/tests/init_phase_agents.rs:143-164` correctly tighten the invariant from a single uniform tuple to a per-phase `(phase, model, effort)` table — `speccy-work` is locked at `opus[1m]`/`low` and the other two pinned phases at `sonnet[1m]`/`medium`. I ran each of the three relevant tests locally (`t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack`, `phase_worker_agent_has_model_and_effort_frontmatter`, `dogfood_outputs_match_committed_tree`) and all three pass. A hypothetical regression of any single phase back to a wrong pin would now be caught individually — the refactor strengthens, not weakens, the assertion surface.
-
-Blocking on missing red-then-green evidence. The `<implementer-note session="2026-05-21">` on `T-001` has no `Evidence:` field, and no evidence file exists at the conventional path `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` (the spec directory contains only `SPEC.md` and `TASKS.md`). Per the SPEC-0031 paper-trail convention every other recent spec follows (0031-0035 all carry `Evidence:` pointers to per-task files), the absence is itself the blocking signal — there is no captured runner output proving the two test files transitioned from red (under the new agent-frontmatter values) to green after the refactor. The implementer-note's narrative claim that `cargo test --workspace` was run "twice, once to discover failing tests, once after fixes" is exactly the kind of transition that needs a captured artifact. Please add `Evidence: .speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` to the implementer-note and write that file with the scoped per-test invocations showing both the red phase (test names from the diff failing before the refactor) and the green phase (same test names passing after).
-</review>
-
-<review persona="security" verdict="pass">
-No security-relevant changes. This task is a two-line YAML frontmatter swap (`model: sonnet[1m]` → `model: opus[1m]`, `effort: medium` → `effort: low`) in two static markdown/template files, with matching test assertion updates. The speccy CLI does not parse or act on `model`/`effort` frontmatter; those fields are consumed solely by Claude Code's agent dispatch. No auth boundaries, injection surfaces, secret handling, sensitive data exposure, or cryptographic parameters are affected.
-</review>
-
-<review persona="style" verdict="blocking">
-All four files changed by T-001 are unstaged local edits — none of the implementation has been committed to git. `git status --short` shows `M .claude/agents/speccy-work.md`, `M resources/agents/.claude/agents/speccy-work.md.tmpl`, `M speccy-cli/tests/init.rs`, `M speccy-cli/tests/init_phase_agents.rs`. `git show HEAD:.claude/agents/speccy-work.md` still returns the old `sonnet[1m]`/`medium` values. The on-disk files carry the correct `opus[1m]`/`low` values and the test refactors are correct (per-phase pin table in both `init.rs` and `init_phase_agents.rs`), but none of it is committed. The task was flipped to `in-review` without a commit landing. AGENTS.md mandates "Before any commit lands, all four [hygiene gates] must pass" — the gates were run against the working tree but the work itself was never committed. The fix is straightforward: stage all four modified files and create a commit before the task can be considered in-review. No code changes are required; the on-disk edits are correct.
-</review>
-
-<retry>
-Add a red→green evidence file proving the test-refactor transition, then commit all four working-tree edits so T-001 actually lands in git.
-
-- tests (blocking): Implementer-note lacks `Evidence:` field; `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` does not exist. Capture the red phase (scoped invocations of `t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` and `phase_worker_agent_has_model_and_effort_frontmatter` failing against the new agent frontmatter under the pre-refactor uniform-loop assertions) and the green phase (same scoped invocations passing after the per-phase tuple refactor), per the SPEC-0031 paper-trail convention every other recent spec follows.
-- style (blocking): The four files touched by T-001 (`.claude/agents/speccy-work.md`, `resources/agents/.claude/agents/speccy-work.md.tmpl`, `speccy-cli/tests/init.rs`, `speccy-cli/tests/init_phase_agents.rs`) plus the evidence file plus this TASKS.md update must land in one commit so the in-review claim matches the git history. Hygiene gates re-run against the post-commit tree must exit 0.
-</retry>
-
-<implementer-note session="2026-05-21-retry">
-Completed: Addressed both blockers from the round-1 review. Created the evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` with captured shell transcripts proving the red→green transition: used `git stash push` on the two test files to revert to pre-refactor state (uniform-loop assertions expecting `sonnet[1m]`/`medium` for all phases), ran each of the two scoped tests to capture exit-101 failures, then `git stash pop` to restore the per-phase tuple refactor and ran both tests again to capture exit-0 passes. Committed all seven files (four implementation edits from round 1, the new evidence file, SPEC.md, and TASKS.md) in one commit (`3e72382`) with the standard `Co-Authored-By` trailer. All four hygiene gates re-run against the post-commit tree exit 0.
-
-Undone: Nothing left undone. All scenarios in CHK-001, CHK-002, and CHK-003 remain satisfied. Both review blockers (missing evidence, uncommitted files) are resolved.
-
-Commands run:
-- `git stash push` on test files (to produce red phase)
-- `cargo test -p speccy-cli --test init t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` (exit 101 — red)
-- `cargo test -p speccy-cli --test init_phase_agents phase_worker_agent_has_model_and_effort_frontmatter` (exit 101 — red)
-- `git stash pop` (restore refactor)
-- `cargo test -p speccy-cli --test init t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` (exit 0 — green)
-- `cargo test -p speccy-cli --test init_phase_agents phase_worker_agent_has_model_and_effort_frontmatter` (exit 0 — green)
-- `cargo test --workspace` (exit 0)
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings` (exit 0)
-- `cargo +nightly fmt --all --check` (exit 0)
-- `cargo deny check` (exit 0)
-- `git add` + `git commit` (commit `3e72382`)
-- `cargo test --workspace` post-commit (exit 0, all test result lines "ok")
-
-Exit codes: all 0 (except the intentional red-phase runs at exit 101 as expected).
-
-Discovered issues: None beyond what round 1 surfaced. The stash/pop technique cleanly isolated the red phase without disturbing the agent file edits, confirming the two test files were the only change needed to unblock the tests persona's concern.
-
-Procedural compliance: No stale skill instructions encountered. No skill files required updating. The retry instruction specified using `git stash` to revert one half of the change for red-phase capture — followed exactly.
-
-Evidence: .speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md
-</implementer-note>
-
-<review persona="business" verdict="pass">
-Round 2 retry addresses both round-1 blockers (missing evidence file, uncommitted work) without regressing the round-1 business pass. Verified: commit `3e72382` lands all four implementation edits + evidence file + SPEC/TASKS in one atomic change; commit `16a9493` flips state and appends the retry implementer-note. The agent-file frontmatter changes are byte-identical to what the round-1 pass approved (`model: opus[1m]` / `effort: low` in both `.claude/agents/speccy-work.md` and `resources/agents/.claude/agents/speccy-work.md.tmpl`), so CHK-001 / CHK-002 / CHK-003 still hold. Non-goals all still respected in commit `3e72382`: `git diff 28c6be2..3e72382` against `.codex/agents/speccy-work.toml`, `resources/agents/.codex/agents/`, `resources/modules/phases/speccy-work.md`, and `.claude/skills/speccy-work/` is empty, and `README.md` is untouched (correctly deferred to T-002). The retry's evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` captures the red-then-green transcript using the SPEC-0031 paper-trail convention. Both open questions remain unchecked, matching the SPEC's "ship `low` first, leave Codex alone" recommendation. No SPEC-promise-vs-diff gap, no scope creep, no silent open-question resolution.
-</review>
-
-<review persona="tests" verdict="pass">
-Round-2 retry resolves the round-1 blocker. Evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` captures a genuine red-then-green transition for the two scoped tests (`t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack` and `phase_worker_agent_has_model_and_effort_frontmatter`); the `<implementer-note session="2026-05-21-retry">` block carries `Evidence:` pointing at it.
-
-Genuineness checks pass: commands are scoped per-test invocations (`cargo test -p speccy-cli --test init <test_name>` and `cargo test -p speccy-cli --test init_phase_agents <test_name>`), not the workspace-wide gate; red-phase panic messages cite the pre-refactor uniform-loop assertion sites (`init.rs:1551:9` and `init_phase_agents.rs:148:9`) and report `got Some("opus[1m]")` for `model` — the exact cross-product the refactor was written to fix (test files reverted via `git stash push`, agent files held at new pin); red and green outputs are materially different (FAILED vs ok, exit 101 vs 0, distinct panic messages); compile times (0.72s–1.49s) are realistic post-edit cargo recompiles. Re-ran both green-phase invocations and reproduced the exact transcript bytes.
-
-Per-phase invariant holds: `speccy-cli/tests/init.rs:1543-1569` and `speccy-cli/tests/init_phase_agents.rs:143-164` both encode the per-phase tuple table (`speccy-work` → `opus[1m]`/`low`, `speccy-tasks` and `speccy-ship` → `sonnet[1m]`/`medium`). A regression of any single phase to a wrong pin would now be caught individually. Commit `3e72382` lands all seven files; the git tree is clean. CHK-001 / CHK-002 / CHK-003 satisfied.
-</review>
-
-<review persona="security" verdict="pass">
-Round-2 retry introduces no security concerns. The two commits (`3e72382`, `16a9493`) collectively change: two YAML frontmatter lines in agent files (`model:`/`effort:` swap), two test files tightening string-literal assertions, one evidence file containing only Cargo test runner stdout, and one TASKS.md state/note append. The evidence transcripts at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-001.md` contain no credentials, tokens, keys, or sensitive data — only build output and test assertion failure messages. No auth boundaries, injection surfaces, secret handling, sensitive data exposure, cryptographic parameters, or tool grant changes anywhere in the diff.
-</review>
-
-<review persona="style" verdict="pass">
-All style criteria satisfied. Rust changes are idiomatic, naming conventions match the surrounding file patterns, no `unwrap()` / `allow()` suppressions introduced, `?` propagation preserved. Commit messages follow the project's `SPEC-NNNN T-NNN:` convention and both carry the required `Co-Authored-By` trailer. The "No newline at end of file" diff marker in `speccy-work.md.tmpl` describes the OLD side (byte probe: `0x7d`, not `0x0a`) — pre-existing, not introduced by this task. All four hygiene gates exit 0 against the post-commit tree.
-</review>
 </task>
 
 <task id="T-002" state="completed" covers="REQ-002">
@@ -225,29 +132,6 @@ Suggested files:
 
 - `README.md`
 
-<implementer-note session="2026-05-21">
-Completed: Two surgical edits to `README.md`. (1) Pin-assignment table row for `speccy-work` updated from `model: sonnet[1m]`, `effort: medium` to `model: opus[1m]`, `effort: low`; Codex column and "Agent file ships?" column unchanged. (2) "Overriding a pin" section `speccy-work` worked example updated so the "before" alias is `model: opus[1m]` and the lock target is `model: claude-opus-4-7[1m]`, replacing the previous `sonnet[1m]` / `claude-sonnet-4-6[1m]` references. All other table rows are byte-identical to HEAD.
-
-Undone: Nothing left undone. All task scenarios are satisfied.
-
-Commands run:
-- `git show HEAD:README.md | Select-String -Pattern 'speccy-work.*sonnet\[1m\]'` (1 match — red)
-- `Select-String -Pattern 'speccy-work.*sonnet\[1m\]' README.md` (0 matches — green)
-- `cargo test --workspace`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `cargo +nightly fmt --all --check`
-- `cargo deny check`
-- `git add` + `git commit`
-
-Exit codes: all 0.
-
-Discovered issues: None. The edit was purely mechanical — two string replacements in markdown, no code changes required, no test assertions to update.
-
-Procedural compliance: No stale skill instructions encountered. No skill files required updating. The T-001 review blockers (evidence file, commit shape) were applied upfront: evidence file written before commit, all modified files staged in one commit per the retry instruction.
-
-Evidence: .speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md
-</implementer-note>
-
 <task-scenarios>
 Given `README.md` after this task lands, when the "Pin
 assignment" table is parsed and the row whose first column is
@@ -280,22 +164,5 @@ Given the four hygiene gates run against the working tree at the
 commit that lands this task, when each exits, then each exit
 code is 0.
 </task-scenarios>
-
-<review persona="business" verdict="pass">
-T-002 satisfies REQ-002 cleanly. Commit `58a5fe9` lands exactly the two surgical edits the SPEC describes: (1) the "Pin assignment" table's `speccy-work` row Claude Code column at `README.md:256` now reads `model: opus[1m]`, `effort: low` while the Codex column and "Agent file ships?" column are unchanged; (2) the "Overriding a pin" worked example at lines 326-329 references `model: opus[1m]` as the before-alias and `claude-opus-4-7[1m]` (a `claude-opus-*` family member) as the lock target. CHK-004 / CHK-005 / CHK-006 all hold — grep for `speccy-work.*sonnet[1m]` returns zero matches across the README. The bounded README diff is two hunks, six total line touches, with no drift to other table rows (`speccy-tasks`, `speccy-ship`, `speccy-init`, `speccy-review`, and all six `reviewer-*` rows are byte-identical to HEAD~), no drift to surrounding sections, no Codex-side edits, no skill-body edits. Non-goals all respected. The second "Overriding a pin" bullet ("change `model: opus[1m]` to `model: sonnet[1m]`" for a reviewer downgrade) is pre-existing prose about reviewer pins, not `speccy-work`, so it correctly does not trigger CHK-006. Both open questions in SPEC.md remain unchecked, matching the SPEC's recommendations. Evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md` follows the SPEC-0031 paper-trail convention established under T-001.
-</review>
-
-<review persona="tests" verdict="pass">
-Evidence at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md` genuinely captures the red→green transition for CHK-006. Reproduced the red probe via `git show HEAD~1:README.md | Select-String -Pattern 'speccy-work.*sonnet\[1m\]'` (one match — the pre-edit `| speccy-work | sonnet[1m] | medium | ...` table row) and the green probe via `Select-String -Pattern 'speccy-work.*sonnet\[1m\]' README.md` (zero matches). Commit `58a5fe9` lands README.md + evidence + TASKS.md exactly as described, and `git show 58a5fe9 -- README.md` matches the diff hunks the evidence file reprints byte-for-byte. CHK-006 is directly probed by the captured grep; CHK-004 is visible at `README.md:256` and confirmed by the hunk at `@@ -253,7 +253,7 @@` showing only that single row changed; CHK-005 is visible in the second hunk at `README.md:327-328`. The other ten table rows in the diff are untouched. Fabrication checks: captured commands are scoped per-scenario, red and green outputs differ materially (one match vs zero), the line number cited lines up with the actual commit's pre-image, and the diff bytes match `git show 58a5fe9` exactly.
-</review>
-
-<review persona="security" verdict="pass">
-T-002 introduces no security concerns. Commit `58a5fe9` touches exactly three files: `README.md` (two hunks replacing model/effort strings), `.speccy/specs/0036-speccy-work-opus-low-pin/TASKS.md` (state flip + implementer note append), and the new evidence file at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md`. No credentials, tokens, API keys, or secrets appear anywhere in the diff. The evidence file contains only PowerShell grep output and Cargo runner stdout; no sensitive data captured. No auth boundaries touched. No tool grants widened or narrowed. No injection surfaces. No new dependencies (`cargo deny check` exits 0). The model aliases `opus[1m]` and `claude-opus-4-7[1m]` are public model identifiers, not credentials.
-</review>
-
-<review persona="style" verdict="pass">
-All style criteria satisfied for T-002. Commit `58a5fe9` exists in `git log`, message follows the `SPEC-NNNN T-NNN:` convention, `Co-Authored-By` trailer is present and correctly formatted. Working tree clean (`git status --short` returned empty). The `speccy-work` table row's columns are byte-aligned with every surrounding row (col widths 25/41/46/19 characters throughout the table). README trailing newline byte-probe returns `0a`. All four hygiene gates exit 0 against the post-commit tree. Evidence file present at `.speccy/specs/0036-speccy-work-opus-low-pin/evidence/T-002.md`. The commit contains exactly three files: `README.md` (two-hunk surgical edit), the evidence file, and the TASKS.md state/note append — no scope creep, no unused imports, no dead code introduced.
-</review>
 </task>
 
-</tasks>

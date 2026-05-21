@@ -64,7 +64,7 @@ fn tasks_md(spec_id: &str, rows: &[(char, &str, &str)]) -> String {
     let mut body = String::new();
     write!(
         body,
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n",
     )
     .expect("writes to String are infallible");
     for (state, id, title) in rows {
@@ -75,7 +75,7 @@ fn tasks_md(spec_id: &str, rows: &[(char, &str, &str)]) -> String {
         )
         .expect("writes to String are infallible");
     }
-    body.push_str("</tasks>\n");
+    body.push('\n');
     body
 }
 

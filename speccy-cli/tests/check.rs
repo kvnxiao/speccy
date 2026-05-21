@@ -240,7 +240,7 @@ fn tasks_md_fixture(spec_id: &str, tasks: &[(&str, &str)]) -> String {
     let mut out = format!(
         "---\nspec: {spec_id}\nspec_hash_at_generation: \
          bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n\
-         # Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n",
+         # Tasks: {spec_id}\n\n\n\n",
     );
     for (task_id, covers) in tasks {
         writeln!(
@@ -249,7 +249,7 @@ fn tasks_md_fixture(spec_id: &str, tasks: &[(&str, &str)]) -> String {
         )
         .expect("writeln to String must not fail");
     }
-    out.push_str("</tasks>\n");
+    out.push('\n');
     out
 }
 

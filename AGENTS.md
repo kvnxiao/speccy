@@ -173,7 +173,21 @@ Before any commit lands, all four must pass:
   undocumented step), do this:
   update the relevant skill file under `skills/` before you finish
   the task, then call out the edit under `Procedural compliance` in
-  your implementer handoff note. Speccy dogfoods this loop: the same
+  your `<implementer>` block. Speccy dogfoods this loop: the same
   friction-to-skill-update pattern the shipped implementer prompt
   asks downstream users to follow applies here, so the next
   contributor inherits the fix instead of re-discovering it.
+
+## Implementer / reviewer activity records
+
+Implementer handoff prose, reviewer verdicts, and amendment-driven
+blocker directives live in `.speccy/specs/NNNN-slug/journal/T-NNN.md`
+— a per-task journal file sibling to `SPEC.md` and `TASKS.md`. The
+journal carries the closed-set XML elements `<implementer>`,
+`<review>`, and `<blockers>` under a small YAML frontmatter
+(`spec`, `task`, `generated_at`). These elements do not appear
+inside `<task>` bodies in `TASKS.md`; the parser rejects them
+there. See `.speccy/ARCHITECTURE.md` "TASKS.md per-task journal"
+for the full grammar, attribute schemas, the `JNL-001` / `JNL-002`
+/ `JNL-003` lint family, and the `TSK-006` "no journal elements in
+TASKS.md" rule.

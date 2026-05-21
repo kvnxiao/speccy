@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn extract_entry_pulls_xml_task_block() {
-        let raw = "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nFirst task body line.\n\n- Suggested files: `a.rs`\n\n<task-scenarios>\n- Scenario one.\n</task-scenarios>\n</task>\n\n<task id=\"T-002\" state=\"pending\" covers=\"REQ-001\">\nSecond task.\n\n<task-scenarios>\n- Scenario two.\n</task-scenarios>\n</task>\n\n</tasks>\n";
+        let raw = "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nFirst task body line.\n\n- Suggested files: `a.rs`\n\n<task-scenarios>\n- Scenario one.\n</task-scenarios>\n</task>\n\n<task id=\"T-002\" state=\"pending\" covers=\"REQ-001\">\nSecond task.\n\n<task-scenarios>\n- Scenario two.\n</task-scenarios>\n</task>\n";
         let doc =
             parse_task_xml(raw, Utf8Path::new("TASKS.md")).expect("fixture must parse as TasksDoc");
         let first = doc.tasks.first().expect("fixture has at least one task");

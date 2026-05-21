@@ -52,8 +52,6 @@ fn counts_match_state_distribution() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-
         <task id="T-001" state="pending" covers="REQ-001">
         a
         <task-scenarios>
@@ -89,8 +87,7 @@ fn counts_match_state_distribution() -> TestResult {
         </task-scenarios>
         </task>
 
-        </tasks>
-    "#};
+            "#};
     let fx = write_tasks(src)?;
     let parsed = parse(&fx.path)?;
     let counts = TaskCounts::from_tasks(&parsed);
@@ -108,7 +105,7 @@ fn counts_match_state_distribution() -> TestResult {
 
 #[test]
 fn empty_tasks_yield_zero_counts() -> TestResult {
-    let src = indoc! {r#"
+    let src = indoc! {r"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
@@ -117,9 +114,7 @@ fn empty_tasks_yield_zero_counts() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-        </tasks>
-    "#};
+                    "};
     let fx = write_tasks(src)?;
     let parsed = parse(&fx.path)?;
     let counts = TaskCounts::from_tasks(&parsed);

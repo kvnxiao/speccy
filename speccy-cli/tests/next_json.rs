@@ -24,7 +24,7 @@ use speccy_cli::next::run;
 
 fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
     format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n{tasks_xml}\n</tasks>\n",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n{tasks_xml}\n\n",
     )
 }
 

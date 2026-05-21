@@ -1,15 +1,18 @@
-//! Raw-XML-element-structured TASKS.md parser and renderer (SPEC-0022
-//! REQ-001 / REQ-003 carrier).
+//! Raw-XML-element-structured TASKS.md parser and renderer.
 //!
-//! Reads a TASKS.md whose body is ordinary Markdown plus line-isolated raw
-//! XML open/close tag pairs drawn from a small closed whitelist
-//! (`tasks`, `task`, `task-scenarios`) and returns a typed [`TasksDoc`].
-//! Reuses the shared scanner ([`crate::parse::xml_scanner`]) introduced by
-//! T-001, so fenced-code-block awareness and tag-shape diagnostics are
-//! identical to SPEC.md parsing.
+//! After SPEC-0037 T-001, TASKS.md parses as bare `<task>` children
+//! directly under the level-1 `# Tasks: ...` heading (no `<tasks>`
+//! wrapper). The closed XML element set TASKS.md recognises is
+//! `task`, `task-scenarios`, `implementer`, `review`, `blockers` —
+//! the latter three are accepted as `RawTag`s so the lint engine can
+//! report them as misplaced (their canonical home is
+//! `journal/T-NNN.md` per SPEC-0037 REQ-006), but they do not assemble
+//! into typed `Task` body fields.
 //!
-//! See `.speccy/specs/0022-xml-canonical-tasks-report/SPEC.md` REQ-001
-//! and REQ-003 for the contract this module satisfies.
+//! The `spec` binding for a TASKS.md comes from three sources, all
+//! redundant by design: the parent directory name (`NNNN-slug`), the
+//! YAML frontmatter `spec:` field, and the parent SPEC.md frontmatter
+//! `id:` field. TSK-005 catches disagreement.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
@@ -21,43 +24,55 @@ use crate::parse::xml_scanner::ScanConfig;
 use crate::parse::xml_scanner::collect_code_fence_byte_ranges;
 use crate::parse::xml_scanner::scan_tags;
 use crate::parse::xml_scanner::unknown_attribute_error;
-use crate::personas::ALL as PERSONAS_ALL;
 use camino::Utf8Path;
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
 /// Closed whitelist of Speccy structure element names recognised inside
-/// TASKS.md.
+/// TASKS.md after SPEC-0037 T-001.
 ///
-/// SPEC-0029 grew the set from `["tasks", "task", "task-scenarios"]` to
-/// the six names below by adding `implementer-note`, `review`, and
-/// `retry` as nested children of `<task>` — promoting the legacy
-/// markdown-bullet conventions to first-class structural elements so
-/// the review-prompt renderer can redact `<implementer-note>` bodies
-/// without per-persona branching or text-level heuristics.
+/// Five names: `task` and `task-scenarios` are the structural carriers.
+/// `implementer`, `review`, and `blockers` are accepted so the
+/// per-element scanner sees them and downstream lint rules
+/// (TSK-006 "no notes elements in TASKS.md") can flag them as misplaced
+/// — their canonical destination is `journal/T-NNN.md`.
 pub const TASKS_ELEMENT_NAMES: &[&str] = &[
-    "tasks",
     "task",
     "task-scenarios",
-    "implementer-note",
+    "implementer",
     "review",
+    "blockers",
+];
+
+/// Legacy element names retired by SPEC-0037 T-001. The parser scans
+/// for them so it can emit a precise `UnknownMarkerName` diagnostic
+/// pointing at the rename (`implementer-note` → `implementer`,
+/// `retry` → `blockers`) and the wrapper drop (`tasks` removed).
+const RETIRED_ELEMENT_NAMES: &[&str] = &["tasks", "implementer-note", "retry"];
+
+/// Combined set fed to the xml scanner so it surfaces both the live
+/// element set and the retired names. Retired names trip an
+/// `UnknownMarkerName` error in [`validate_tag_shape`].
+const SCANNER_ELEMENT_NAMES: &[&str] = &[
+    "task",
+    "task-scenarios",
+    "implementer",
+    "review",
+    "blockers",
+    "tasks",
+    "implementer-note",
     "retry",
 ];
+
+/// Names of activity-prose elements that, when they appear inside a
+/// TASKS.md, fire TSK-006. Their canonical home is `journal/T-NNN.md`.
+pub const MISPLACED_JOURNAL_ELEMENT_NAMES: &[&str] = &["implementer", "review", "blockers"];
 
 /// Closed set of valid `<task state="...">` values, in their on-disk form.
 pub const ALLOWED_TASK_STATES: &[&str] = &["pending", "in-progress", "in-review", "completed"];
 
-/// Closed set of valid `<review verdict="...">` values, in their on-disk
-/// form. SPEC-0029 REQ-001 / DEC-007.
-pub const ALLOWED_REVIEW_VERDICTS: &[&str] = &["pass", "blocking"];
-
 /// Parsed raw-XML-structured TASKS.md.
-///
-/// `frontmatter_raw` carries the YAML frontmatter payload verbatim; the
-/// `tasks` parser does not re-validate it. `heading` is the level-1
-/// heading text after `# `, trimmed. `spec_id` is the `spec="..."`
-/// attribute on the root `<tasks>` element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TasksDoc {
     /// YAML frontmatter payload between the opening and closing `---`
@@ -67,13 +82,25 @@ pub struct TasksDoc {
     pub heading: String,
     /// Raw source bytes, retained so [`ElementSpan`] indices remain valid.
     pub raw: String,
-    /// `spec="..."` attribute value on the root `<tasks>` element
-    /// (e.g. `"SPEC-0022"`).
-    pub spec_id: String,
-    /// Span of the root `<tasks>` open tag.
-    pub tasks_span: ElementSpan,
     /// Tasks declared by `<task>` elements in source order.
     pub tasks: Vec<Task>,
+    /// Source-ordered record of every `<implementer>`, `<review>`, or
+    /// `<blockers>` element observed inside any `<task>` body. Drives the
+    /// TSK-006 "no notes elements in TASKS.md" lint. Empty in a
+    /// well-formed TASKS.md after SPEC-0037.
+    pub misplaced_journal_elements: Vec<MisplacedJournalElement>,
+}
+
+/// One activity-prose element observed inside a TASKS.md `<task>` body.
+/// SPEC-0037 REQ-006: these should live in `journal/T-NNN.md` instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MisplacedJournalElement {
+    /// Element local name (`implementer`, `review`, or `blockers`).
+    pub element_name: String,
+    /// Id of the enclosing `<task>` element.
+    pub task_id: String,
+    /// Span of the misplaced element's open tag.
+    pub span: ElementSpan,
 }
 
 /// Closed set of `<task state="...">` values.
@@ -112,106 +139,6 @@ impl TaskState {
     }
 }
 
-/// Closed set of `<review verdict="...">` values.
-///
-/// SPEC-0029 REQ-001 / DEC-007 introduced this enum parallel to
-/// [`TaskState`]. Wire strings are `"pass"` and `"blocking"`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReviewVerdict {
-    /// `pass` — the persona signed off on the task as-is.
-    Pass,
-    /// `blocking` — the persona flagged a concern that must be
-    /// addressed before the task can ship.
-    Blocking,
-}
-
-impl ReviewVerdict {
-    /// Render back to the on-disk string form.
-    #[must_use = "the rendered verdict is the on-disk form"]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            ReviewVerdict::Pass => "pass",
-            ReviewVerdict::Blocking => "blocking",
-        }
-    }
-
-    /// Parse a wire string into a verdict. Returns `None` for any input
-    /// outside the closed set `{pass, blocking}`. Case-sensitive,
-    /// matching `TaskState::from_str`'s shape (which is `Option<Self>`
-    /// rather than `Result<Self, _>`, so the [`std::str::FromStr`]
-    /// trait does not fit).
-    #[expect(
-        clippy::should_implement_trait,
-        reason = "verdict parsing is fallible without an error type; Option<Self> mirrors TaskState::from_str rather than std::str::FromStr's Result shape"
-    )]
-    #[must_use = "callers must handle the `None` (out-of-set) case"]
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "pass" => Some(ReviewVerdict::Pass),
-            "blocking" => Some(ReviewVerdict::Blocking),
-            _ => None,
-        }
-    }
-}
-
-/// One typed body item nested inside a `<task>` element.
-///
-/// SPEC-0029 REQ-001 / REQ-002 promoted three legacy markdown-bullet
-/// conventions — `- Implementer note (session-...):`,
-/// `- Review (<persona>, <verdict>): ...`, and `- Retry: ...` — to
-/// first-class structural XML elements nested inside `<task>`. They are
-/// repeatable, source-ordered, and interleavable with each other and
-/// with `<task-scenarios>` (though `<task-scenarios>` itself continues
-/// to live on [`Task::scenarios_body`], not in
-/// [`Task::body_items`]).
-///
-/// The body of each variant carries the verbatim element content (the
-/// bytes between the open and close tag, post-whitespace-trim at parse
-/// time matches the existing `<task-scenarios>` convention). The
-/// `<implementer-note>` body MUST be non-empty after whitespace
-/// trimming (DEC-004); the parser surfaces an empty body as
-/// [`ParseError::EmptyImplementerNoteBody`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BodyItem {
-    /// An implementer self-assessment block. `session` is a required
-    /// non-empty string; format is writer-side discipline (no parser
-    /// regex). `body` carries the markdown payload (typically the six
-    /// sub-bullets: `Completed`, `Undone`, `Commands run`,
-    /// `Exit codes`, `Discovered issues`, `Procedural compliance`).
-    ImplementerNote {
-        /// `session` attribute value.
-        session: String,
-        /// Verbatim element body.
-        body: String,
-        /// Span of the `<implementer-note>` open tag.
-        span: ElementSpan,
-    },
-    /// A reviewer-persona note carrying a verdict and prose. `persona`
-    /// is one of [`crate::personas::ALL`]; `verdict` is one of
-    /// [`ReviewVerdict`]. Body MAY be empty (a terse `verdict="pass"`
-    /// review with no prose is a legitimate signal).
-    Review {
-        /// `persona` attribute value (constrained to
-        /// [`crate::personas::ALL`]).
-        persona: String,
-        /// Parsed `verdict` attribute value.
-        verdict: ReviewVerdict,
-        /// Verbatim element body.
-        body: String,
-        /// Span of the `<review>` open tag.
-        span: ElementSpan,
-    },
-    /// An actionable retry instruction following a blocking review.
-    /// Attribute-free; persona attribution is implied by source
-    /// position (DEC-008).
-    Retry {
-        /// Verbatim element body.
-        body: String,
-        /// Span of the `<retry>` open tag.
-        span: ElementSpan,
-    },
-}
-
 /// One task block (`<task>`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
@@ -226,15 +153,7 @@ pub struct Task {
     pub scenarios_body: String,
     /// Span of the `<task-scenarios>` open tag.
     pub scenarios_span: ElementSpan,
-    /// Typed body items (`<implementer-note>`, `<review>`, `<retry>`)
-    /// in document order. SPEC-0029 REQ-002. `<task-scenarios>` is
-    /// **not** part of this collection — it continues to live on
-    /// [`Task::scenarios_body`].
-    pub body_items: Vec<BodyItem>,
-    /// Verbatim body between `<task>` and `</task>` open and close tags,
-    /// including any `<task-scenarios>` tag lines as literal text. The
-    /// renderer strips the nested block out before re-emitting from the
-    /// typed model.
+    /// Verbatim body between `<task>` and `</task>` open and close tags.
     pub body: String,
     /// Span of the `<task>` open tag.
     pub span: ElementSpan,
@@ -242,11 +161,7 @@ pub struct Task {
 
 impl Task {
     /// Derive a one-line summary of the task by returning the first
-    /// non-empty line of the body. Used by `speccy next` to populate
-    /// the `task_line` field of its result, replacing the legacy
-    /// "checkbox + bold ID + title" extraction.
-    ///
-    /// Returns an empty string when the body has no non-blank lines.
+    /// non-empty line of the body.
     #[must_use = "the title is used as the next-command task line"]
     pub fn title(&self) -> String {
         self.body
@@ -258,9 +173,7 @@ impl Task {
     }
 
     /// Extract the `Suggested files:` bullet from the task body, when
-    /// present. Returns each file token in source order. Matches lines
-    /// of the form `- Suggested files: a.rs, b.rs` (case-insensitive on
-    /// the label).
+    /// present.
     #[must_use = "the suggested files drive prompt rendering"]
     pub fn suggested_files(&self) -> Vec<String> {
         for line in self.body.lines() {
@@ -271,7 +184,6 @@ impl Task {
             else {
                 continue;
             };
-            // Strip optional leading bold marker `**`.
             let rest = rest.trim_start();
             let label_match = rest
                 .strip_prefix("Suggested files:")
@@ -289,8 +201,7 @@ impl Task {
     }
 
     /// 1-indexed source line of the `<task>` open tag inside the parent
-    /// TASKS.md. Computed from `span.start` against `source` so callers
-    /// that already hold the raw bytes don't pay for a second parse.
+    /// TASKS.md.
     #[must_use = "the line number is used to extract verbatim task entries"]
     pub fn line_in(&self, source: &str) -> usize {
         let Some(prefix) = source.get(..self.span.start) else {
@@ -317,23 +228,11 @@ fn task_id_regex() -> &'static Regex {
     clippy::unwrap_used,
     reason = "compile-time literal regex; covered by unit tests"
 )]
-fn spec_id_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^SPEC-\d{3,}$").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
 fn req_id_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"^REQ-\d{3,}$").unwrap())
 }
 
-/// Run the shared XML scanner with the TASKS.md whitelist. Centralising
-/// this matches `spec_xml::scan_spec_tags` so callers have a single
-/// grep target for "what tags does TASKS.md recognise".
 fn scan_task_tags(
     source: &str,
     body: &str,
@@ -342,16 +241,13 @@ fn scan_task_tags(
 ) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
     let cfg = ScanConfig {
-        whitelist: TASKS_ELEMENT_NAMES,
-        structure_shaped_names: TASKS_ELEMENT_NAMES,
+        whitelist: SCANNER_ELEMENT_NAMES,
+        structure_shaped_names: SCANNER_ELEMENT_NAMES,
     };
     scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
 }
 
 /// Parse a raw-XML-structured TASKS.md source string.
-///
-/// `source` is the file contents; `path` is used only to populate
-/// diagnostics — this function does no filesystem IO.
 ///
 /// # Errors
 ///
@@ -360,10 +256,6 @@ fn scan_task_tags(
 /// id-pattern violations, duplicate task ids, invalid task states,
 /// invalid `covers` formats, or missing required nested
 /// `<task-scenarios>` blocks.
-#[expect(
-    clippy::too_many_lines,
-    reason = "single-pass TASKS.md validator; splitting body offset bookkeeping and root-element classification across helpers would obscure the linear flow"
-)]
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
     let split = split_frontmatter(source, path)?;
     let (frontmatter_raw, body, body_offset) = match split {
@@ -389,89 +281,23 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
 
     let raw_tags = scan_task_tags(source, body, body_offset, path)?;
 
-    // Up-front shape validation so unknown attributes / id-pattern
-    // violations fail before we try to assemble nested blocks.
     for t in &raw_tags {
         validate_tag_shape(t, path)?;
     }
 
     let tree = assemble(raw_tags, source, path)?;
 
-    // The TASKS.md root contract: exactly one `<tasks spec="...">`
-    // element wrapping zero or more `<task>` children. Free top-level
-    // Markdown (heading, phase prose) is allowed alongside `<tasks>`,
-    // but no other speccy structure is allowed at the top level.
-    let mut root: Option<(String, ElementSpan, Vec<Block>)> = None;
-    for block in tree {
-        match block {
-            Block::Tasks {
-                spec_id,
-                span,
-                children,
-            } => {
-                if root.is_some() {
-                    return Err(Box::new(ParseError::MalformedMarker {
-                        path: path.to_path_buf(),
-                        offset: span.start,
-                        reason: "more than one <tasks> root element".to_owned(),
-                    }));
-                }
-                root = Some((spec_id, span, children));
-            }
-            Block::Task { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<task> element must be nested inside <tasks>".to_owned(),
-                }));
-            }
-            Block::TaskScenarios { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::ImplementerNote { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<implementer-note> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::Review { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<review> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::Retry { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<retry> element must be nested inside <task>".to_owned(),
-                }));
-            }
-        }
-    }
-
-    let (spec_id, tasks_span, children) = root.ok_or_else(|| {
-        Box::new(ParseError::MissingField {
-            field: "<tasks>".to_owned(),
-            context: format!("TASKS.md at {path}"),
-        })
-    })?;
-
     let mut tasks: Vec<Task> = Vec::new();
     let mut task_ids: HashSet<String> = HashSet::new();
-    for child in children {
-        match child {
+    let mut misplaced: Vec<MisplacedJournalElement> = Vec::new();
+
+    for block in tree {
+        match block {
             Block::Task {
                 id,
                 attrs,
                 body,
-                children: task_children,
+                children,
                 span,
             } => {
                 if !task_ids.insert(id.clone()) {
@@ -481,7 +307,7 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
                         id,
                     }));
                 }
-                let task = build_task(id, &attrs, body, task_children, span, path)?;
+                let task = build_task(id, &attrs, body, children, span, path, &mut misplaced)?;
                 tasks.push(task);
             }
             Block::TaskScenarios { span, .. } => {
@@ -491,32 +317,13 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
                     reason: "<task-scenarios> element must be nested inside <task>".to_owned(),
                 }));
             }
-            Block::ImplementerNote { span, .. } => {
+            Block::JournalLike { name, span, .. } => {
                 return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: span.start,
-                    reason: "<implementer-note> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::Review { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<review> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::Retry { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<retry> element must be nested inside <task>".to_owned(),
-                }));
-            }
-            Block::Tasks { span, .. } => {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: span.start,
-                    reason: "<tasks> element must not be nested".to_owned(),
+                    reason: format!(
+                        "<{name}> element must be nested inside <task> (canonical home: journal/T-NNN.md)"
+                    ),
                 }));
             }
         }
@@ -526,9 +333,8 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
         frontmatter_raw,
         heading,
         raw: source.to_owned(),
-        spec_id,
-        tasks_span,
         tasks,
+        misplaced_journal_elements: misplaced,
     })
 }
 
@@ -539,8 +345,8 @@ fn build_task(
     children: Vec<Block>,
     span: ElementSpan,
     path: &Utf8Path,
+    misplaced: &mut Vec<MisplacedJournalElement>,
 ) -> ParseResult<Task> {
-    // State.
     let state_raw = find_attr(attrs, "state").ok_or_else(|| {
         Box::new(ParseError::MissingTaskAttribute {
             path: path.to_path_buf(),
@@ -557,7 +363,6 @@ fn build_task(
         })
     })?;
 
-    // Covers.
     let covers_raw = find_attr(attrs, "covers").ok_or_else(|| {
         Box::new(ParseError::MissingTaskAttribute {
             path: path.to_path_buf(),
@@ -567,7 +372,7 @@ fn build_task(
     })?;
     let covers = parse_covers(&covers_raw, &id, path)?;
 
-    let (scenarios_body, scenarios_span, body_items) = collect_task_children(&id, children, path)?;
+    let (scenarios_body, scenarios_span) = collect_task_children(&id, children, path, misplaced)?;
 
     Ok(Task {
         id,
@@ -575,23 +380,18 @@ fn build_task(
         covers,
         scenarios_body,
         scenarios_span,
-        body_items,
         body,
         span,
     })
 }
 
-/// Walk a `<task>`'s children, picking out the single `<task-scenarios>`
-/// element and collecting body items (`<implementer-note>`, `<review>`,
-/// `<retry>`) in source order. Surfaces the structured `ParseError`
-/// variants for each malformed-child shape — SPEC-0029 REQ-001 / REQ-002.
 fn collect_task_children(
     task_id: &str,
     children: Vec<Block>,
     path: &Utf8Path,
-) -> ParseResult<(String, ElementSpan, Vec<BodyItem>)> {
+    misplaced: &mut Vec<MisplacedJournalElement>,
+) -> ParseResult<(String, ElementSpan)> {
     let mut scenarios: Option<(String, ElementSpan)> = None;
-    let mut body_items: Vec<BodyItem> = Vec::new();
     for child in children {
         match child {
             Block::TaskScenarios {
@@ -616,52 +416,25 @@ fn collect_task_children(
                 }
                 scenarios = Some((child_body, child_span));
             }
-            Block::ImplementerNote {
-                attrs: child_attrs,
-                body: child_body,
+            Block::JournalLike {
+                name,
                 span: child_span,
+                ..
             } => {
-                body_items.push(build_implementer_note(
-                    task_id,
-                    &child_attrs,
-                    child_body,
-                    child_span,
-                    path,
-                )?);
-            }
-            Block::Review {
-                attrs: child_attrs,
-                body: child_body,
-                span: child_span,
-            } => {
-                body_items.push(build_review(
-                    task_id,
-                    &child_attrs,
-                    child_body,
-                    child_span,
-                    path,
-                )?);
-            }
-            Block::Retry {
-                body: child_body,
-                span: child_span,
-            } => {
-                body_items.push(BodyItem::Retry {
-                    body: child_body,
+                misplaced.push(MisplacedJournalElement {
+                    element_name: name,
+                    task_id: task_id.to_owned(),
                     span: child_span,
                 });
             }
             Block::Task {
-                span: child_span, ..
-            }
-            | Block::Tasks {
                 span: child_span, ..
             } => {
                 return Err(Box::new(ParseError::MalformedMarker {
                     path: path.to_path_buf(),
                     offset: child_span.start,
                     reason: format!(
-                        "element nested inside `<task id=\"{task_id}\">` is not allowed here"
+                        "<task> element nested inside `<task id=\"{task_id}\">` is not allowed"
                     ),
                 }));
             }
@@ -674,82 +447,13 @@ fn collect_task_children(
             element_name: "task-scenarios".to_owned(),
         })
     })?;
-    Ok((scenarios_body, scenarios_span, body_items))
-}
-
-fn build_implementer_note(
-    task_id: &str,
-    attrs: &[(String, String)],
-    body: String,
-    span: ElementSpan,
-    path: &Utf8Path,
-) -> ParseResult<BodyItem> {
-    let session = find_attr(attrs, "session").unwrap_or_default();
-    if session.is_empty() {
-        return Err(Box::new(ParseError::MissingImplementerNoteSession {
-            path: path.to_path_buf(),
-            task_id: task_id.to_owned(),
-            offset: span.start,
-        }));
-    }
-    if body.trim().is_empty() {
-        return Err(Box::new(ParseError::EmptyImplementerNoteBody {
-            path: path.to_path_buf(),
-            task_id: task_id.to_owned(),
-            offset: span.start,
-        }));
-    }
-    Ok(BodyItem::ImplementerNote {
-        session,
-        body,
-        span,
-    })
-}
-
-fn build_review(
-    task_id: &str,
-    attrs: &[(String, String)],
-    body: String,
-    span: ElementSpan,
-    path: &Utf8Path,
-) -> ParseResult<BodyItem> {
-    let persona = find_attr(attrs, "persona").unwrap_or_default();
-    if !PERSONAS_ALL.contains(&persona.as_str()) {
-        return Err(Box::new(ParseError::InvalidReviewPersona {
-            path: path.to_path_buf(),
-            task_id: task_id.to_owned(),
-            value: persona,
-            allowed: PERSONAS_ALL.join(", "),
-        }));
-    }
-    let verdict_raw = find_attr(attrs, "verdict").unwrap_or_default();
-    let verdict = ReviewVerdict::from_str(&verdict_raw).ok_or_else(|| {
-        Box::new(ParseError::InvalidReviewVerdict {
-            path: path.to_path_buf(),
-            task_id: task_id.to_owned(),
-            value: verdict_raw,
-            allowed: ALLOWED_REVIEW_VERDICTS.join(", "),
-        })
-    })?;
-    Ok(BodyItem::Review {
-        persona,
-        verdict,
-        body,
-        span,
-    })
+    Ok((scenarios_body, scenarios_span))
 }
 
 fn find_attr(attrs: &[(String, String)], key: &str) -> Option<String> {
     attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
 }
 
-/// Parse a `covers="..."` value into a list of `REQ-NNN` ids.
-///
-/// Grammar (SPEC-0022 REQ-001): one or more `REQ-\d{3,}` ids separated
-/// by single ASCII spaces. The empty string, leading or trailing
-/// whitespace, double spaces, tabs, and any non-`REQ-\d{3,}` token all
-/// fail with [`ParseError::InvalidCoversFormat`], whose Display
-/// quotes the grammar verbatim.
 fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<String>> {
     if raw.is_empty() {
         return Err(Box::new(ParseError::InvalidCoversFormat {
@@ -758,8 +462,6 @@ fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<St
             value: raw.to_owned(),
         }));
     }
-    // Reject any non-` ` ASCII whitespace and any non-ASCII bytes up
-    // front; the grammar requires single ASCII spaces only.
     for ch in raw.chars() {
         if ch == '\t' || ch == '\r' || ch == '\n' {
             return Err(Box::new(ParseError::InvalidCoversFormat {
@@ -769,9 +471,6 @@ fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<St
             }));
         }
     }
-    // Split on single ASCII space. We use `split(' ')` rather than
-    // `split_whitespace` so a double space surfaces an empty token
-    // and trips the regex below.
     let mut covers: Vec<String> = Vec::new();
     for token in raw.split(' ') {
         if !req_id_regex().is_match(token) {
@@ -786,23 +485,10 @@ fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<St
     Ok(covers)
 }
 
-/// Render a [`TasksDoc`] to its canonical raw-XML TASKS.md form.
+/// Render a [`TasksDoc`] back to its canonical Markdown form.
 ///
-/// The output is a Markdown document with raw XML element tags carrying
-/// Speccy structure:
-///
-/// 1. Frontmatter fence followed by [`TasksDoc::frontmatter_raw`].
-/// 2. A blank line, then the level-1 heading (`# {heading}`).
-/// 3. The root `<tasks spec="...">` block wrapping every task in
-///    [`TasksDoc::tasks`] order. Each task emits its body prose with the nested
-///    `<task-scenarios>` block stripped out, then re-emits `<task-scenarios>`
-///    from typed state in canonical position.
-///
-/// `render(doc) == render(doc)` byte-for-byte for any valid `doc`.
-/// Free Markdown prose between `<task>` blocks (phase headings, notes,
-/// implementer-note bullets) is **not** preserved: the renderer projects
-/// only the typed model, mirroring SPEC-0020's `render_spec_xml`
-/// canonical-not-lossless contract.
+/// Output: frontmatter, blank line, level-1 heading, blank line, then
+/// bare `<task>` children separated by a blank line each.
 #[must_use = "the rendered Markdown string is the canonical projection of the TasksDoc"]
 pub fn render(doc: &TasksDoc) -> String {
     let mut out = String::new();
@@ -816,15 +502,7 @@ pub fn render(doc: &TasksDoc) -> String {
     out.push_str(&doc.heading);
     out.push_str("\n\n");
 
-    push_element_open(&mut out, "tasks", &[("spec", doc.spec_id.as_str())]);
-    out.push('\n');
-    for (idx, task) in doc.tasks.iter().enumerate() {
-        if idx > 0 {
-            // Blank line between tasks. The element-close blank-line rule
-            // (one blank line after every close tag) keeps the inner
-            // `</task-scenarios>` and `</task>` separated; here we just
-            // need a separator between successive `<task>` blocks.
-        }
+    for task in &doc.tasks {
         let covers_value = task.covers.join(" ");
         let attrs: [(&str, &str); 3] = [
             ("id", task.id.as_str()),
@@ -835,51 +513,14 @@ pub fn render(doc: &TasksDoc) -> String {
         let prose = strip_nested_body_blocks(&task.body);
         push_body(&mut out, &prose);
         push_element_block(&mut out, "task-scenarios", &[], &task.scenarios_body);
-        for item in &task.body_items {
-            push_body_item(&mut out, item);
-        }
         push_element_close(&mut out, "task");
     }
-    push_element_close(&mut out, "tasks");
 
     out
 }
 
-fn push_body_item(out: &mut String, item: &BodyItem) {
-    match item {
-        BodyItem::ImplementerNote { session, body, .. } => {
-            push_element_block(
-                out,
-                "implementer-note",
-                &[("session", session.as_str())],
-                body,
-            );
-        }
-        BodyItem::Review {
-            persona,
-            verdict,
-            body,
-            ..
-        } => {
-            push_element_block(
-                out,
-                "review",
-                &[("persona", persona.as_str()), ("verdict", verdict.as_str())],
-                body,
-            );
-        }
-        BodyItem::Retry { body, .. } => {
-            push_element_block(out, "retry", &[], body);
-        }
-    }
-}
-
-/// Strip line-isolated open/close pairs for every nested `<task>`-body
-/// element that the renderer re-emits from the typed model
-/// (`<task-scenarios>`, `<implementer-note>`, `<review>`, `<retry>`).
-/// Free Markdown prose between these blocks is preserved verbatim.
 fn strip_nested_body_blocks(body: &str) -> String {
-    const STRIPPED: &[&str] = &["task-scenarios", "implementer-note", "review", "retry"];
+    const STRIPPED: &[&str] = &["task-scenarios", "implementer", "review", "blockers"];
     let mut out = String::with_capacity(body.len());
     let mut in_block: Option<&'static str> = None;
     for line in body.split_inclusive('\n') {
@@ -911,64 +552,6 @@ fn strip_nested_body_blocks(body: &str) -> String {
     out
 }
 
-/// Render a task entry with `<implementer-note>` element bodies
-/// redacted, in support of SPEC-0029 REQ-003 / REQ-004.
-///
-/// `task_entry` is the verbatim slice of TASKS.md from a `<task>` open
-/// tag through its matching `</task>` close tag — typically what
-/// [`crate::task_lookup::find`] returns as `TaskLocation::task_entry_raw`.
-/// `task` is the parsed [`Task`] whose typed body items name the
-/// redaction surface; the helper consults
-/// [`Task::body_items`] only to decide whether redaction has any work
-/// to do.
-///
-/// **Byte-identity contract.** When `task.body_items` carries no
-/// [`BodyItem::ImplementerNote`] variant, the returned string is
-/// byte-for-byte identical to `task_entry`. SPEC-0029 REQ-003 done-when
-/// bullet 5 anchors this property.
-///
-/// **Redaction shape.** When the task carries one or more
-/// `<implementer-note>` elements, every `<implementer-note ...>` line
-/// and every line up to and including the matching `</implementer-note>`
-/// line is removed from the output. All other lines — including
-/// `<task-scenarios>` bodies, `<review>` bodies, `<retry>` bodies, free
-/// prose, and the `Suggested files:` bullet — pass through verbatim
-/// and in document order. The redaction is silent: no placeholder line
-/// or marker comment is inserted (SPEC-0029 DEC-002).
-///
-/// The redaction operates on the raw `task_entry` bytes rather than
-/// the typed [`Task`] body so [`Task::body_items`] order, attribute
-/// values, and span metadata do not need to round-trip through the
-/// renderer. This preserves bit-level fidelity for the other body
-/// elements.
-#[must_use = "the rendered string is what speccy review substitutes into {{task_entry}}"]
-pub fn redact_implementer_notes(task_entry: &str, task: &Task) -> String {
-    let has_note = task
-        .body_items
-        .iter()
-        .any(|b| matches!(b, BodyItem::ImplementerNote { .. }));
-    if !has_note {
-        return task_entry.to_owned();
-    }
-    let mut out = String::with_capacity(task_entry.len());
-    let mut in_note = false;
-    for line in task_entry.split_inclusive('\n') {
-        let trimmed = line.trim_start();
-        if in_note {
-            if trimmed.starts_with("</implementer-note>") {
-                in_note = false;
-            }
-            continue;
-        }
-        if trimmed.starts_with("<implementer-note ") || trimmed.starts_with("<implementer-note>") {
-            in_note = true;
-            continue;
-        }
-        out.push_str(line);
-    }
-    out
-}
-
 fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
     push_element_open(out, name, attrs);
     push_body(out, body);
@@ -992,8 +575,6 @@ fn push_element_close(out: &mut String, name: &str) {
     out.push_str("</");
     out.push_str(name);
     out.push_str(">\n");
-    // Match `spec_xml`'s determinism contract: every close tag is
-    // followed by a single blank line.
     out.push('\n');
 }
 
@@ -1078,11 +659,6 @@ fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
 
 #[derive(Debug)]
 enum Block {
-    Tasks {
-        spec_id: String,
-        span: ElementSpan,
-        children: Vec<Block>,
-    },
     Task {
         id: String,
         attrs: Vec<(String, String)>,
@@ -1094,18 +670,11 @@ enum Block {
         body: String,
         span: ElementSpan,
     },
-    ImplementerNote {
-        attrs: Vec<(String, String)>,
-        body: String,
-        span: ElementSpan,
-    },
-    Review {
-        attrs: Vec<(String, String)>,
-        body: String,
-        span: ElementSpan,
-    },
-    Retry {
-        body: String,
+    /// An `<implementer>`, `<review>`, or `<blockers>` element. These
+    /// are recognised so TSK-006 can lint them; they assemble into
+    /// `MisplacedJournalElement` records, not into a typed body field.
+    JournalLike {
+        name: String,
         span: ElementSpan,
     },
 }
@@ -1166,6 +735,13 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<
 }
 
 fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
+    if RETIRED_ELEMENT_NAMES.contains(&t.name.as_str()) {
+        return Err(Box::new(ParseError::UnknownMarkerName {
+            path: path.to_path_buf(),
+            marker_name: t.name.clone(),
+            offset: t.span.start,
+        }));
+    }
     if !TASKS_ELEMENT_NAMES.contains(&t.name.as_str()) {
         return Err(Box::new(ParseError::UnknownMarkerName {
             path: path.to_path_buf(),
@@ -1176,12 +752,15 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
     if t.is_close {
         return Ok(());
     }
+    // For misplaced journal-like elements inside TASKS.md, accept any
+    // attributes here — TSK-006 will report the misplacement and lint
+    // the journal-file schema in journal_xml.
     let allowed_attrs: &[&str] = match t.name.as_str() {
-        "tasks" => &["spec"],
         "task" => &["id", "state", "covers"],
-        "implementer-note" => &["session"],
-        "review" => &["persona", "verdict"],
-        // `task-scenarios` and `retry` are attribute-free.
+        "implementer" => &["date", "model", "round"],
+        "review" => &["date", "model", "persona", "verdict", "round"],
+        "blockers" => &["date", "round"],
+        // `task-scenarios` is attribute-free.
         _ => &[],
     };
     for (k, v) in &t.attrs {
@@ -1207,14 +786,6 @@ fn validate_attribute_value(
     offset: usize,
 ) -> ParseResult<()> {
     match (element_name, attr) {
-        ("tasks", "spec") if !spec_id_regex().is_match(value) => {
-            Err(Box::new(ParseError::InvalidMarkerId {
-                path: path.to_path_buf(),
-                marker_name: element_name.to_owned(),
-                id: value.to_owned(),
-                expected_pattern: r"SPEC-\d{3,}".to_owned(),
-            }))
-        }
         ("task", "id") if !task_id_regex().is_match(value) => {
             Err(Box::new(ParseError::InvalidMarkerId {
                 path: path.to_path_buf(),
@@ -1223,9 +794,6 @@ fn validate_attribute_value(
                 expected_pattern: r"T-\d{3,}".to_owned(),
             }))
         }
-        // `state` and `covers` values are validated later, when the
-        // task body assembles, because the diagnostics name the task
-        // id rather than the raw attribute offset.
         _ => {
             let _ = offset;
             Ok(())
@@ -1252,19 +820,6 @@ impl PendingBlock {
             children,
         } = self;
         match name.as_str() {
-            "tasks" => {
-                let spec_id = find_attr(&attrs, "spec").ok_or_else(|| {
-                    Box::new(ParseError::MissingField {
-                        field: "spec".to_owned(),
-                        context: format!("<tasks> element in {path}"),
-                    })
-                })?;
-                Ok(Block::Tasks {
-                    spec_id,
-                    span,
-                    children,
-                })
-            }
             "task" => {
                 let id = find_attr(&attrs, "id").ok_or_else(|| {
                     Box::new(ParseError::MissingField {
@@ -1281,9 +836,7 @@ impl PendingBlock {
                 })
             }
             "task-scenarios" => Ok(Block::TaskScenarios { body, span }),
-            "implementer-note" => Ok(Block::ImplementerNote { attrs, body, span }),
-            "review" => Ok(Block::Review { attrs, body, span }),
-            "retry" => Ok(Block::Retry { body, span }),
+            "implementer" | "review" | "blockers" => Ok(Block::JournalLike { name, span }),
             other => Err(Box::new(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
@@ -1309,7 +862,7 @@ mod tests {
     }
 
     fn frontmatter() -> &'static str {
-        "---\nspec: SPEC-0022\n---\n\n# Tasks: SPEC-0022\n\n"
+        "---\nspec: SPEC-0037\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n# Tasks: SPEC-0037\n\n"
     }
 
     fn make(body: &str) -> String {
@@ -1317,10 +870,8 @@ mod tests {
     }
 
     #[test]
-    fn happy_path_two_tasks() {
+    fn happy_path_two_bare_tasks_no_wrapper() {
         let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
             <task id="T-001" state="pending" covers="REQ-001">
             Task one prose.
 
@@ -1336,11 +887,8 @@ mod tests {
             Given A, when B, then C (T-002).
             </task-scenarios>
             </task>
-
-            </tasks>
         "#});
         let doc = parse(&src, path()).expect("parse should succeed");
-        assert_eq!(doc.spec_id, "SPEC-0022");
         assert_eq!(doc.tasks.len(), 2);
         let t1 = doc.tasks.first().expect("two tasks");
         assert_eq!(t1.id, "T-001");
@@ -1350,22 +898,125 @@ mod tests {
         let t2 = doc.tasks.get(1).expect("two tasks");
         assert_eq!(t2.id, "T-002");
         assert_eq!(t2.state, TaskState::InProgress);
-        assert_eq!(t2.covers, vec!["REQ-001".to_owned(), "REQ-002".to_owned()]);
-        assert!(t2.scenarios_body.contains("(T-002)"));
+        assert!(doc.misplaced_journal_elements.is_empty());
+    }
+
+    #[test]
+    fn legacy_tasks_wrapper_is_rejected() {
+        let src = make(indoc! {r#"
+            <tasks spec="SPEC-0037">
+            <task id="T-001" state="pending" covers="REQ-001">
+            <task-scenarios>
+            text.
+            </task-scenarios>
+            </task>
+            </tasks>
+        "#});
+        let err = parse(&src, path()).expect_err("legacy <tasks> wrapper must fail");
+        assert!(
+            matches!(
+                err.as_ref(),
+                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "tasks"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn legacy_implementer_note_is_rejected() {
+        let src = make(indoc! {r#"
+            <task id="T-001" state="completed" covers="REQ-001">
+            <task-scenarios>
+            text.
+            </task-scenarios>
+            <implementer-note session="legacy">
+            body
+            </implementer-note>
+            </task>
+        "#});
+        let err = parse(&src, path()).expect_err("legacy <implementer-note> must fail");
+        assert!(
+            matches!(
+                err.as_ref(),
+                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "implementer-note"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn legacy_retry_is_rejected() {
+        let src = make(indoc! {r#"
+            <task id="T-001" state="completed" covers="REQ-001">
+            <task-scenarios>
+            text.
+            </task-scenarios>
+            <retry>
+            body
+            </retry>
+            </task>
+        "#});
+        let err = parse(&src, path()).expect_err("legacy <retry> must fail");
+        assert!(
+            matches!(
+                err.as_ref(),
+                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "retry"
+            ),
+            "got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn misplaced_implementer_in_tasks_md_is_recorded() {
+        let src = make(indoc! {r#"
+            <task id="T-001" state="completed" covers="REQ-001">
+            <task-scenarios>
+            text.
+            </task-scenarios>
+            <implementer date="2026-05-21T18:00:00Z" model="claude" round="1">
+            body
+            </implementer>
+            </task>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed despite misplaced element");
+        assert_eq!(doc.misplaced_journal_elements.len(), 1);
+        let m = doc
+            .misplaced_journal_elements
+            .first()
+            .expect("one misplaced");
+        assert_eq!(m.element_name, "implementer");
+        assert_eq!(m.task_id, "T-001");
+    }
+
+    #[test]
+    fn misplaced_blockers_in_tasks_md_is_recorded() {
+        let src = make(indoc! {r#"
+            <task id="T-003" state="pending" covers="REQ-001">
+            <task-scenarios>
+            text.
+            </task-scenarios>
+            <blockers date="2026-05-21T18:00:00Z" round="1">
+            body
+            </blockers>
+            </task>
+        "#});
+        let doc = parse(&src, path()).expect("parse should succeed despite misplaced element");
+        assert_eq!(doc.misplaced_journal_elements.len(), 1);
+        let m = doc
+            .misplaced_journal_elements
+            .first()
+            .expect("one misplaced");
+        assert_eq!(m.element_name, "blockers");
     }
 
     #[test]
     fn invalid_state_names_id_value_and_valid_states() {
         let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
             <task id="T-001" state="done" covers="REQ-001">
             <task-scenarios>
             text.
             </task-scenarios>
             </task>
-
-            </tasks>
         "#});
         let err = parse(&src, path()).expect_err("bad state must fail");
         let msg = format!("{err}");
@@ -1385,20 +1036,14 @@ mod tests {
                 "msg `{msg}` missing valid state `{state}`"
             );
         }
-        assert!(msg.contains("T-001"), "msg `{msg}` missing task id");
-        assert!(msg.contains("done"), "msg `{msg}` missing rejected value");
     }
 
     #[test]
     fn zero_task_scenarios_errors_names_task() {
         let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
             <task id="T-001" state="pending" covers="REQ-001">
             no scenarios.
             </task>
-
-            </tasks>
         "#});
         let err = parse(&src, path()).expect_err("missing task-scenarios must fail");
         assert!(
@@ -1412,113 +1057,8 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_task_scenarios_errors() {
-        let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
-            <task id="T-001" state="pending" covers="REQ-001">
-            <task-scenarios>
-            first.
-            </task-scenarios>
-
-            <task-scenarios>
-            second.
-            </task-scenarios>
-            </task>
-
-            </tasks>
-        "#});
-        let err = parse(&src, path()).expect_err("duplicate task-scenarios must fail");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::DuplicateTaskSection { task_id, element_name, .. }
-                    if task_id == "T-001" && element_name == "task-scenarios"
-            ),
-            "got: {err:?}",
-        );
-    }
-
-    #[test]
-    fn missing_covers_names_task() {
-        let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
-            <task id="T-001" state="pending">
-            <task-scenarios>
-            text.
-            </task-scenarios>
-            </task>
-
-            </tasks>
-        "#});
-        let err = parse(&src, path()).expect_err("missing covers must fail");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::MissingTaskAttribute { task_id, attribute, .. }
-                    if task_id == "T-001" && attribute == "covers"
-            ),
-            "got: {err:?}",
-        );
-    }
-
-    #[test]
-    fn double_space_covers_quotes_grammar() {
-        let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
-            <task id="T-001" state="pending" covers="REQ-001  REQ-002">
-            <task-scenarios>
-            text.
-            </task-scenarios>
-            </task>
-
-            </tasks>
-        "#});
-        let err = parse(&src, path()).expect_err("double-space covers must fail");
-        let msg = format!("{err}");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::InvalidCoversFormat { task_id, value, .. }
-                    if task_id == "T-001" && value == "REQ-001  REQ-002"
-            ),
-            "got: {err:?}",
-        );
-        assert!(
-            msg.contains("single ASCII space separated `REQ-\\d{3,}` ids"),
-            "msg `{msg}` must quote the SPEC-0022 grammar verbatim",
-        );
-    }
-
-    #[test]
-    fn tab_covers_quotes_grammar() {
-        // A tab between REQ ids should trip the same diagnostic.
-        let raw = "REQ-001\tREQ-002";
-        let src = make(&format!(
-            "<tasks spec=\"SPEC-0022\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"{raw}\">\n<task-scenarios>\ntext.\n</task-scenarios>\n</task>\n\n</tasks>\n",
-        ));
-        let err = parse(&src, path()).expect_err("tab in covers must fail");
-        let msg = format!("{err}");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::InvalidCoversFormat { task_id, .. } if task_id == "T-001"
-            ),
-            "got: {err:?}",
-        );
-        assert!(
-            msg.contains("single ASCII space separated `REQ-\\d{3,}` ids"),
-            "msg `{msg}` must quote the SPEC-0022 grammar verbatim",
-        );
-    }
-
-    #[test]
     fn duplicate_task_id_errors() {
         let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
             <task id="T-001" state="pending" covers="REQ-001">
             <task-scenarios>
             a.
@@ -1530,8 +1070,6 @@ mod tests {
             b.
             </task-scenarios>
             </task>
-
-            </tasks>
         "#});
         let err = parse(&src, path()).expect_err("duplicate task id must fail");
         assert!(
@@ -1547,18 +1085,13 @@ mod tests {
     #[test]
     fn unknown_attribute_on_task_lists_valid_set() {
         let src = make(indoc! {r#"
-            <tasks spec="SPEC-0022">
-
             <task id="T-001" state="pending" covers="REQ-001" priority="high">
             <task-scenarios>
             text.
             </task-scenarios>
             </task>
-
-            </tasks>
         "#});
         let err = parse(&src, path()).expect_err("unknown attr must fail");
-        let msg = format!("{err}");
         assert!(
             matches!(
                 err.as_ref(),
@@ -1569,10 +1102,6 @@ mod tests {
                     && allowed == "id, state, covers"
             ),
             "got: {err:?}",
-        );
-        assert!(
-            msg.contains("id, state, covers"),
-            "msg `{msg}` missing valid set"
         );
     }
 

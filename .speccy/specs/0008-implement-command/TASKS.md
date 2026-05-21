@@ -16,13 +16,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Task reference parsing
 
-<tasks spec="SPEC-0008">
 
 <task id="T-001" state="completed" covers="REQ-001">
 Implement `task_lookup::parse_ref`
 
 - Suggested files: `speccy-core/src/task_lookup.rs`, `speccy-core/tests/task_lookup.rs`
-
 
 <task-scenarios>
   - `"T-001"` parses to `TaskRef::Unqualified { id: "T-001" }`.
@@ -54,7 +52,6 @@ Implement ambiguity detection
 
 - Suggested files: `speccy-core/src/task_lookup.rs` (extend), `speccy-core/tests/task_lookup.rs` (extend)
 
-
 <task-scenarios>
   - T-001 in SPEC-0001 and SPEC-0002 -> `LookupError::Ambiguous` with `candidate_specs = ["SPEC-0001", "SPEC-0002"]` (ascending order).
   - T-001 in three specs -> all three appear in `candidate_specs`.
@@ -69,7 +66,6 @@ Implement ambiguity detection
 Render implementer prompt with full task entry
 
 - Suggested files: `speccy-cli/src/implement.rs`, `skills/shared/prompts/implementer.md` (stub), `speccy-cli/tests/implement_prompt.rs`
-
 
 <task-scenarios>
   - `implementer.md` template is loaded via `prompt::load_template`.
@@ -98,4 +94,3 @@ Wire `speccy implement TASK-ID` and map errors
 </task-scenarios>
 </task>
 
-</tasks>

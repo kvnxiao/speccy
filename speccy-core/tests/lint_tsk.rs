@@ -1,7 +1,3 @@
-#![allow(
-    clippy::expect_used,
-    reason = "test code may .expect() with descriptive messages"
-)]
 #![expect(
     clippy::panic_in_result_fn,
     reason = "tests use assert!/assert_eq! macros and return Result for ? propagation in setup"
@@ -30,7 +26,7 @@ fn assert_has_code(diags: &[Diagnostic], code: &str) {
 
 fn tasks_md_xml(state: &str, covers: &str) -> String {
     format!(
-        "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n\n<task id=\"T-001\" state=\"{state}\" covers=\"{covers}\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n</tasks>\n",
+        "---\nspec: SPEC-0001\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n\n\n<task id=\"T-001\" state=\"{state}\" covers=\"{covers}\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
     )
 }
 
@@ -47,7 +43,7 @@ fn tsk_001_fires_for_unknown_covered_req() -> TestResult {
 
 #[test]
 fn tsk_004_fires_when_frontmatter_missing_generated_at() -> TestResult {
-    let tasks_md = indoc! {r#"
+    let tasks_md = indoc! {r"
         ---
         spec: SPEC-0001
         spec_hash_at_generation: bootstrap-pending
@@ -55,9 +51,7 @@ fn tsk_004_fires_when_frontmatter_missing_generated_at() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-        </tasks>
-    "#};
+                    "};
     let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_has_code(&diags, "TSK-004");
@@ -120,7 +114,7 @@ fn write_named_fixture(
 
 fn tasks_md_with_spec(spec_id: &str) -> String {
     format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n<tasks spec=\"{spec_id}\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n</tasks>\n",
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
     )
 }
 
@@ -207,7 +201,7 @@ fn tsk_005_silent_when_spec_md_unparseable() -> TestResult {
 
 #[test]
 fn tsk_003_fires_at_warn_for_hash_mismatch() -> TestResult {
-    let body = "---\nspec: SPEC-0001\nspec_hash_at_generation: sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n<tasks spec=\"SPEC-0001\">\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n</tasks>\n".to_owned();
+    let body = "---\nspec: SPEC-0001\nspec_hash_at_generation: sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: SPEC-0001\n\n\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nt\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n".to_owned();
     let fx = write_spec_fixture(&valid_spec_md("SPEC-0001"), Some(&body))?;
     let diags = lint_fixture(&fx);
     let tsk_003 = diags

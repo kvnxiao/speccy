@@ -11,7 +11,6 @@ generated_at: 2026-05-18T03:34:52Z
 
 ## Phase 1: Workspace scanner (speccy-core)
 
-<tasks spec="SPEC-0004">
 
 <task id="T-001" state="completed" covers="REQ-001">
 Implement `workspace::find_root`
@@ -31,7 +30,6 @@ Implement `workspace::scan`
 
 - Suggested files: `speccy-core/src/workspace.rs` (extend), `speccy-core/tests/workspace_scan.rs`
 
-
 <task-scenarios>
   - Discovers every `.speccy/specs/NNNN-slug/` directory matching the regex `^\d{4}-[a-z0-9-]+$`.
   - Non-matching subdirectories (`_scratch`, `notes`) are ignored without warnings.
@@ -49,7 +47,6 @@ Implement `workspace::scan`
 Implement `workspace::stale_for`
 
 - Suggested files: `speccy-core/src/workspace.rs` (extend), `speccy-core/tests/stale_detection.rs`
-
 
 <task-scenarios>
   - Hash match + TASKS.md mtime >= SPEC.md mtime -> `Staleness { stale: false, reasons: [] }`.
@@ -82,7 +79,6 @@ Implement open-questions counter
 
 - Suggested files: `speccy-core/src/workspace.rs` (extend) or `speccy-core/src/parse/spec_md.rs` extension
 
-
 <task-scenarios>
   - Count of unchecked `- [ ]` items in `## Open questions` matches.
   - Checked `- [x]` items don't count.
@@ -111,7 +107,6 @@ Build `lint::Workspace` and call `lint::run`; partition by spec_id
 
 - Suggested files: `speccy-cli/src/status.rs`, `speccy-cli/tests/status_lint_integration.rs`
 
-
 <task-scenarios>
   - Diagnostics with `spec_id = Some("SPEC-NNNN")` route to that spec's lint block.
   - Diagnostics with `spec_id = None` route to the workspace-level lint block.
@@ -128,7 +123,6 @@ Build `lint::Workspace` and call `lint::run`; partition by spec_id
 Implement default text view with the in-progress + broken filter
 
 - Suggested files: `speccy-cli/src/status_output.rs`, `speccy-cli/tests/status_text_render.rs`, `speccy-cli/tests/status_text_filter.rs`
-
 
 <task-scenarios>
   - `status: in-progress` specs are shown unconditionally.
@@ -163,7 +157,6 @@ Wire `repo_sha` via shell-out to `git rev-parse HEAD`
 
 - Suggested files: `speccy-cli/src/git.rs`, `speccy-cli/tests/git_repo_sha.rs`
 
-
 <task-scenarios>
   - Inside a git repo with HEAD: `repo_sha` is the 40-character SHA.
   - Outside a git repo (no `.git/`): `repo_sha` is `""`, no error.
@@ -188,4 +181,3 @@ Wire `speccy status [--json]` into the binary
 </task-scenarios>
 </task>
 
-</tasks>

@@ -8,7 +8,6 @@ generated_at: 2026-05-17T17:37:24Z
 
 ## Phase 1: Parser, typed model, and renderer
 
-<tasks spec="SPEC-0021">
 
 <task id="T-001" state="completed" covers="REQ-001 REQ-002 REQ-005">
 Whitelist expansion, typed model fields, and parse-side validation
@@ -90,7 +89,6 @@ Renderer canonical order, blank-line spacing, and round-trip
 - Suggested files: `speccy-core/src/parse/spec_xml/mod.rs`,
   `speccy-core/tests/spec_xml_roundtrip.rs`,
   `speccy-core/tests/fixtures/spec_xml/canonical.md`
-
 
 <task-scenarios>
   - When `render(&SpecDoc)` runs on a `SpecDoc` parsed from a hand-
@@ -191,7 +189,6 @@ Apply migration across `.speccy/specs/*/SPEC.md` and dogfood `speccy verify`
   through `.speccy/specs/0022-xml-canonical-tasks-report/SPEC.md`,
   `speccy-core/tests/in_tree_specs.rs`
 
-
 <task-scenarios>
   - When the migration tool has run across every
     `.speccy/specs/*/SPEC.md` in the workspace, then each file
@@ -285,4 +282,3 @@ Delete the ephemeral migration tool
 </task-scenarios>
 </task>
 
-</tasks>

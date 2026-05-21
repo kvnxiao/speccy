@@ -48,17 +48,19 @@ write the code that makes them pass.
 
 ## Output format
 
-- Flip the task's `state` from `pending` to `in-progress` with a
-  session marker and timestamp when you start (e.g. append
-  `- Implementer claim (session-abc, 2026-05-11T18:00Z).` inside
-  the `<task>` body).
+- Flip the task's `state` from `pending` to `in-progress` when you
+  start. Do not write activity prose into the `<task>` body --
+  TASKS.md is the contract, not the journal.
 - Implement code + tests for the task.
 - Flip the task's `state` from `in-progress` to `in-review` when
-  finished, and append an `<implementer-note session="...">…</implementer-note>`
-  element block using the six-field handoff template the prompt
-  embeds (Completed, Undone, Commands run, Exit codes, Discovered
-  issues, Procedural compliance). Write `(none)` for empty fields;
-  do not omit them.
+  finished, and write an `<implementer>` element block to
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` using the six-field
+  handoff template the prompt embeds (Completed, Undone, Commands
+  run, Exit codes, Discovered issues, Procedural compliance).
+  Required attributes on `<implementer>`: `date`, `model`, `round`.
+  Write `(none)` for empty fields; do not omit them. Never write
+  `<implementer>` (or the retired `<implementer-note>`) into
+  `TASKS.md` -- the parser rejects journal elements there (TSK-006).
 - Do not modify SPEC.md -- it is the planner's domain.
 
 ## Example
@@ -68,11 +70,17 @@ hashed before persistence"). The task's `<task-scenarios>` block
 says: column stores hash; schema rejects missing column. Implementer
 writes the migration test first, then the migration. Discovers
 `tests/migration_helpers.ts` assumed plaintext; updates it to hash
-test fixtures. Flips the task's `state` to `in-review` with the
-note:
+test fixtures. Flips the task's `state` to `in-review` and writes
+the journal entry at `.speccy/specs/NNNN-slug/journal/T-002.md`:
 
 ```markdown
-<implementer-note session="session-abc">
+---
+spec: SPEC-NNNN
+task: T-002
+generated_at: 2026-05-11T18:00:00Z
+---
+
+<implementer date="2026-05-11T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
 - Completed: added `password_hash` migration; renamed column from
   `password`; updated `tests/migration_helpers.ts` fixtures to use
   bcrypt hashes so the existing suite compiles.
@@ -84,5 +92,5 @@ note:
   passwords; fixed inline since the migration test wouldn't compile
   otherwise.
 - Procedural compliance: (none)
-</implementer-note>
+</implementer>
 ```

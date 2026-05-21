@@ -191,8 +191,6 @@ fn spc_007_fires_on_implemented_with_open_tasks() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-
         <task id="T-001" state="pending" covers="REQ-001">
         still open
 
@@ -201,8 +199,7 @@ fn spc_007_fires_on_implemented_with_open_tasks() -> TestResult {
         </task-scenarios>
         </task>
 
-        </tasks>
-    "#};
+            "#};
     let fx = write_spec_fixture(&spec_md, Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     let info = diags
@@ -225,8 +222,6 @@ fn spc_007_does_not_fire_on_implemented_when_all_done() -> TestResult {
 
         # Tasks: SPEC-0001
 
-        <tasks spec="SPEC-0001">
-
         <task id="T-001" state="completed" covers="REQ-001">
         done
 
@@ -235,8 +230,7 @@ fn spc_007_does_not_fire_on_implemented_when_all_done() -> TestResult {
         </task-scenarios>
         </task>
 
-        </tasks>
-    "#};
+            "#};
     let fx = write_spec_fixture(&spec_md, Some(tasks_md))?;
     let diags = lint_fixture(&fx);
     assert_no_code(&diags, "SPC-007");

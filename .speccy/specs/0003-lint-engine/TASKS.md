@@ -11,7 +11,6 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Core types and orchestrator
 
-<tasks spec="SPEC-0003">
 
 <task id="T-001" state="completed" covers="REQ-006">
 Define `Diagnostic`, `Level`, `Workspace`, `ParsedSpec` and the `lint::run` skeleton
@@ -31,7 +30,6 @@ Define `Diagnostic`, `Level`, `Workspace`, `ParsedSpec` and the `lint::run` skel
 Set up `REGISTRY` and the stability snapshot test
 
 - Suggested files: `speccy-core/src/lint/registry.rs`, `speccy-core/tests/lint_registry.rs`, `speccy-core/tests/snapshots/lint_registry.snap`
-
 
 <task-scenarios>
   - `REGISTRY: &[(&'static str, Level)]` enumerates every code the engine emits with its severity.
@@ -76,7 +74,6 @@ Implement SPC-007 (informational status / task mismatch)
 
 - Suggested files: `speccy-core/src/lint/rules/spc.rs` (extend), `speccy-core/tests/lint_spc.rs` (extend)
 
-
 <task-scenarios>
   - `status: implemented` + all tasks `[x]` -> no SPC-007.
   - `status: implemented` + at least one `[ ]` / `[~]` / `[?]` task -> SPC-007 fires at `Level::Info`.
@@ -91,7 +88,6 @@ Implement SPC-007 (informational status / task mismatch)
 Implement REQ-001 and REQ-002 (coverage graph)
 
 - Suggested files: `speccy-core/src/lint/rules/req.rs`, `speccy-core/tests/lint_req.rs`
-
 
 <task-scenarios>
   - `[[requirements]] id = "REQ-001" checks = []` -> REQ-001 lint code fires naming the requirement.
@@ -120,7 +116,6 @@ Implement VAL-001, VAL-002, VAL-003 (check definition completeness)
 Implement VAL-004 (no-op command detection)
 
 - Suggested files: `speccy-core/src/lint/rules/val.rs` (extend), `speccy-core/tests/lint_val.rs` (extend)
-
 
 <task-scenarios>
   - Each pattern in the closed set fires: `true`, `:`, `exit 0`, `/bin/true`, `cmd /c exit 0`, `exit /b 0`.
@@ -151,7 +146,6 @@ Implement TSK-003 (staleness: hash and mtime drift, plus bootstrap-pending varia
 
 - Suggested files: `speccy-core/src/lint/rules/tsk.rs` (extend), `speccy-core/tests/lint_tsk.rs` (extend)
 
-
 <task-scenarios>
   - Hash match + TASKS.md mtime >= SPEC.md mtime -> no TSK-003.
   - Hash mismatch -> TSK-003 at `Level::Warn`; message names both stored and current hashes.
@@ -167,7 +161,6 @@ Implement TSK-003 (staleness: hash and mtime drift, plus bootstrap-pending varia
 Implement QST-001 (open question soft signal)
 
 - Suggested files: `speccy-core/src/lint/rules/qst.rs`, `speccy-core/tests/lint_qst.rs`
-
 
 <task-scenarios>
   - Three unchecked `- [ ] question?` lines in `## Open questions` -> three QST-001 diagnostics at `Level::Info`.
@@ -194,4 +187,3 @@ Build the fixture corpus and a loader helper
 </task-scenarios>
 </task>
 
-</tasks>

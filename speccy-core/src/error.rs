@@ -479,68 +479,44 @@ pub enum ParseError {
         reason: String,
     },
 
-    /// An `<implementer-note>` element was missing the required `session`
-    /// attribute (or `session` was empty). SPEC-0029 REQ-001 / DEC-004.
-    #[error(
-        "implementer-note in {path} (task `{task_id}`) is missing the required `session` attribute"
-    )]
-    MissingImplementerNoteSession {
-        /// Path of the offending TASKS.md.
+    /// A journal-file element carried an attribute value that failed
+    /// schema validation. SPEC-0037 REQ-003. Used for date (ISO8601),
+    /// round (positive integer), and model (non-empty) checks.
+    #[error("{element} in {path} has invalid `{attribute}=\"{value}\"`: {reason}")]
+    InvalidJournalAttribute {
+        /// Path of the offending journal file.
         path: Utf8PathBuf,
-        /// Id of the enclosing task.
-        task_id: String,
-        /// Byte offset of the offending `<implementer-note>` open tag.
+        /// Element name (`implementer`, `review`, `blockers`).
+        element: String,
+        /// Attribute name.
+        attribute: String,
+        /// Rejected value.
+        value: String,
+        /// Why the value was rejected.
+        reason: String,
+        /// Byte offset of the offending element open tag.
         offset: usize,
     },
 
-    /// An `<implementer-note>` element carried an empty body (only
-    /// whitespace between open and close tags). SPEC-0029 REQ-001 /
-    /// DEC-004: the empty-body invariant is load-bearing — the most
-    /// likely interpretation is that the task has not been implemented
-    /// yet by any implementer.
-    #[error(
-        "implementer-note in {path} (task `{task_id}`) has an empty body: the task may not yet have been implemented"
-    )]
-    EmptyImplementerNoteBody {
-        /// Path of the offending TASKS.md.
+    /// A journal file's `round` counter sequence violated REQ-004's
+    /// monotonic-from-1 rule (first round must be 1, no skips, no
+    /// decreases). SPEC-0037 REQ-004.
+    #[error("journal {path} has invalid round sequence: {reason}")]
+    InvalidJournalRoundSequence {
+        /// Path of the offending journal file.
         path: Utf8PathBuf,
-        /// Id of the enclosing task.
-        task_id: String,
-        /// Byte offset of the offending `<implementer-note>` open tag.
-        offset: usize,
+        /// Human-readable explanation of the violation.
+        reason: String,
     },
 
-    /// A `<review>` element carried a `verdict` value outside the closed
-    /// set `{pass, blocking}`. SPEC-0029 REQ-001 / DEC-007.
-    #[error(
-        "review in {path} (task `{task_id}`) has invalid verdict `{value}`: must be one of {allowed}"
-    )]
-    InvalidReviewVerdict {
-        /// Path of the offending TASKS.md.
+    /// A journal file's frontmatter binding (`spec:` or `task:`) did
+    /// not match the filename or parent directory. SPEC-0037 REQ-001.
+    #[error("journal {path} binding mismatch: {reason}")]
+    JournalBindingMismatch {
+        /// Path of the offending journal file.
         path: Utf8PathBuf,
-        /// Id of the enclosing task.
-        task_id: String,
-        /// Offending raw verdict value.
-        value: String,
-        /// Comma-separated closed set of allowed verdicts (`pass, blocking`).
-        allowed: String,
-    },
-
-    /// A `<review>` element carried a `persona` value outside the closed
-    /// set drawn from [`crate::personas::ALL`]. SPEC-0029 REQ-001.
-    #[error(
-        "review in {path} (task `{task_id}`) has invalid persona `{value}`: must be one of {allowed}"
-    )]
-    InvalidReviewPersona {
-        /// Path of the offending TASKS.md.
-        path: Utf8PathBuf,
-        /// Id of the enclosing task.
-        task_id: String,
-        /// Offending raw persona value.
-        value: String,
-        /// Comma-separated closed set of allowed personas drawn from
-        /// [`crate::personas::ALL`].
-        allowed: String,
+        /// Human-readable explanation.
+        reason: String,
     },
 }
 

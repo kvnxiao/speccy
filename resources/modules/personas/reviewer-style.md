@@ -79,7 +79,7 @@ is the source of truth; the diff is a navigational aid.
 
 ## Example
 
-    <review persona="style" verdict="blocking">
+    <review persona="style" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
     `signup.rs:78` uses `.unwrap()` while every other call site in
     `src/auth/` uses `?` propagation through `AuthError`. Match the
     surrounding style and propagate.

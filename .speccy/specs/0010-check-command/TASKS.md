@@ -11,13 +11,11 @@ generated_at: 2026-05-17T17:37:23Z
 
 ## Phase 1: Check discovery
 
-<tasks spec="SPEC-0010">
 
 <task id="T-001" state="completed" covers="REQ-001">
 Discover checks via `workspace::scan` (SPEC-0004)
 
 - Suggested files: `speccy-cli/src/check.rs`, `speccy-cli/tests/check_discovery.rs`
-
 
 <task-scenarios>
   - Enumerate every `[[checks]]` from every parsed `spec.toml`; ordering = `(spec_id ascending, declared check order within spec)`.
@@ -48,7 +46,6 @@ Implement live-streaming child execution
 
 - Suggested files: `speccy-cli/src/shell.rs` (extend)
 
-
 <task-scenarios>
   - Child inherits parent stdio via `Stdio::inherit()` (no piped capture by default).
   - Returns the child's exit code via `ExitStatus::code()` (or 130 for SIGINT-like signals on Unix; documented edge case).
@@ -63,7 +60,6 @@ Implement live-streaming child execution
 Implement CHK-ID filter and validation
 
 - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_id_filter.rs`
-
 
 <task-scenarios>
   - `speccy check CHK-001` runs only checks with `id == "CHK-001"` across all specs.
@@ -80,7 +76,6 @@ Implement CHK-ID filter and validation
 Implement manual-check rendering
 
 - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_manual.rs`
-
 
 <task-scenarios>
   - `kind = "manual"` -> prints `==> CHK-NNN (SPEC-NNNN, manual):` + prompt + `<-- CHK-NNN MANUAL (verify and proceed)`.
@@ -112,7 +107,6 @@ Implement run-all + first-non-zero exit code aggregation
 
 - Suggested files: `speccy-cli/src/check.rs` (extend), `speccy-cli/tests/check_exit_code.rs`
 
-
 <task-scenarios>
   - Three checks (pass, fail-2, fail-1) -> all three run; exit code is 2.
   - Three passing checks -> exit code 0.
@@ -129,7 +123,6 @@ Implement run-all + first-non-zero exit code aggregation
 Wire `speccy check [SELECTOR]` into the binary
 
 - Suggested files: `speccy-cli/src/main.rs`, `speccy-cli/src/check.rs`, `speccy-cli/tests/integration_check.rs`
-
 
 <task-scenarios>
   - `speccy check` runs from any cwd inside a speccy workspace.
@@ -153,4 +146,3 @@ Cross-platform integration smoke test
 </task-scenarios>
 </task>
 
-</tasks>

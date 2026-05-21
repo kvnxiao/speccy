@@ -41,21 +41,22 @@ orchestrating skill flips the task's `state` attribute.
 
 ## Evidence loading
 
-Every `<implementer-note>` element on the task carries an
-`Evidence:` field naming the path of a per-task evidence file. That
-file is your primary input alongside the diff -- it is the
-implementer's red-then-green paper trail and the surface on which
-fabrication risk lives. Walk these four steps before forming a
-verdict:
+Every `<implementer>` element in the task's journal file
+(`.speccy/specs/NNNN-slug/journal/T-NNN.md`) carries an `Evidence:`
+field naming the path of a per-task evidence file. That file is
+your primary input alongside the diff -- it is the implementer's
+red-then-green paper trail and the surface on which fabrication
+risk lives. Walk these four steps before forming a verdict:
 
-1. Locate the `Evidence:` field inside each `<implementer-note>`
-   element body on the task.
+1. Locate the `Evidence:` field inside each `<implementer>` element
+   body in the journal file at
+   `.speccy/specs/NNNN-slug/journal/T-NNN.md`.
 2. Read the referenced evidence file via your host Read primitive.
 3. Treat the absence of the `Evidence:` field, or the absence of
    the file at the referenced path, as a `verdict="blocking"`
    review. Name what is missing in the blocking summary (no
-   `Evidence:` field on `<implementer-note session="...">`, or
-   evidence file not found at the named path).
+   `Evidence:` field on `<implementer date="..." model="..." round="N">`
+   in the journal, or evidence file not found at the named path).
 4. Treat fabricated-looking evidence content as a
    `verdict="blocking"` review. Name the fabrication pattern you
    matched in the blocking summary.
@@ -116,7 +117,7 @@ diff in front of you.
 
 ## Example
 
-    <review persona="tests" verdict="blocking">
+    <review persona="tests" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
     `signup.spec.ts:34` asserts `mockHash.toHaveBeenCalled()` but
     never invokes the real `hashPassword` function -- the test passes
     even if `hashPassword` is `(_) => "plaintext"`. Replace the mock
