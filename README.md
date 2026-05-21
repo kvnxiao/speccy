@@ -253,7 +253,7 @@ whatever model the parent session is using.
 | Phase / persona         | Claude Code (`.claude/agents/...md`)    | Codex (`.codex/agents/...toml`)              | Agent file ships? |
 | ----------------------- | --------------------------------------- | -------------------------------------------- | ----------------- |
 | `speccy-tasks`          | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
-| `speccy-work`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-work`           | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-ship`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-init`           | unpinned, inherits session              | unpinned, inherits session                   | no                |
 | `speccy-review`         | unpinned, inherits session              | unpinned, inherits session                   | no                |
@@ -324,8 +324,8 @@ frontmatter under `.claude/agents/` or `.codex/agents/` and commit
 the change. Examples:
 
 - Lock `speccy-work` to a specific Claude version for
-  reproducibility: change `model: sonnet[1m]` to
-  `model: claude-sonnet-4-6[1m]` in
+  reproducibility: change `model: opus[1m]` to
+  `model: claude-opus-4-7[1m]` in
   `.claude/agents/speccy-work.md`.
 - Run a reviewer at a lighter tier in a cost-sensitive repo:
   change `model: opus[1m]` to `model: sonnet[1m]` (and adjust
