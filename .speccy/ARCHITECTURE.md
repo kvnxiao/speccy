@@ -89,8 +89,8 @@ is always in context for any planner, implementer, or reviewer agent.
 
 A **Mission** is a narrower thing: the scope of one long-running
 initiative composed of multiple related specs. Mission folders are
-optional. A solo greenfield project with one focus area may have
-zero MISSION.md files; specs live flat under `.speccy/specs/`. When
+optional. A project with one focus area may have zero MISSION.md
+files; specs live flat under `.speccy/specs/`. When
 a focus accumulates 2+ specs that share enough context that loading
 them together at plan time is cheaper than rediscovering it, the
 planner skill creates `specs/[focus]/MISSION.md` and writes new
@@ -176,8 +176,8 @@ speccy lock SPEC-NNNN             Record SPEC.md sha256 + UTC timestamp into TAS
 speccy vacancy                    Return the next free `SPEC-NNNN`.
                                     no arg:   bare `SPEC-NNNN\n` to stdout
                                     --json:   {schema_version: 1, next_spec_id: "SPEC-NNNN"}
-                                  Used by `/speccy-plan` in greenfield mode so
-                                  the skill never globs `.speccy/specs/`.
+                                  Used by `/speccy-plan` so the skill never
+                                  globs `.speccy/specs/` itself.
 ```
 
 Phase prose lives in skill content under `.claude/skills/...` and
@@ -605,7 +605,7 @@ filesystem-and-skill convention, not a CLI-aware noun. (This is a
 deliberate v1 simplification; promote to a parsed noun later only
 if dogfooding shows pain.)
 
-### Greenfield bootstrap
+### AGENTS.md bootstrap
 
 When `AGENTS.md` is missing or lacks a product north star section,
 the **`speccy-init` skill** (not the CLI) runs an interactive Q&A to
@@ -1820,8 +1820,8 @@ filter on `next_action.kind` themselves.
 { "schema_version": 1, "next_spec_id": "SPEC-0036" }
 ```
 
-Used by `/speccy-plan` greenfield mode so the skill never globs
-`.speccy/specs/` itself. One field, one query, smallest possible
+Used by `/speccy-plan` so the skill never globs `.speccy/specs/`
+itself. One field, one query, smallest possible
 payload.
 
 ## `speccy verify --json`
@@ -1971,7 +1971,7 @@ each.
 
 | Tool | Strength Speccy borrows | Speccy diverges by |
 |---|---|---|
-| **OpenSpec** | Lightweight change proposals, low-ceremony | Smaller surface; more focused on greenfield loop |
+| **OpenSpec** | Lightweight change proposals, low-ceremony | Smaller surface; less focused on iterative review loop |
 | **Spec Kit** | `/specify` `/plan` `/tasks` opinionated flow, PRD-shaped templates | Speccy adds adversarial review loop, multi-persona |
 | **Kiro** | Steering files for durable agent context | We use `AGENTS.md` + `skills/`; no IDE coupling |
 | **GSD** | Milestone-driven verification, autonomy levels | Speccy drops formal milestones; verification stays |
@@ -2241,7 +2241,7 @@ Speccy v1 is complete enough when:
 
 Speccy v1 does not need to autonomously ship software. It needs
 to make autonomous software construction less blind, and to make
-the next greenfield project I (or anyone using it) build feel
+the next project I (or anyone using it) build feel
 qualitatively different from "ask the agent to do everything and
 hope."
 

@@ -12,9 +12,9 @@
 //!   `.speccy/specs/*` globs or bare `SPEC.md`/`TASKS.md`/`MISSION.md`/
 //!   `REPORT.md` paths (not bound to a template placeholder) appear in any
 //!   skill or phase body file.
-//! - [`chk015_speccy_plan_uses_vacancy_not_status_for_greenfield_id`]:
+//! - [`chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id`]:
 //!   `speccy-plan.md` invokes `speccy vacancy --json` (not `speccy status
-//!   --json`) for the new-spec greenfield path.
+//!   --json`) to allocate a new SPEC ID.
 //! - [`no_old_cli_verbs_in_skill_or_phase_bodies`]: deleted CLI verbs (`speccy
 //!   plan`, `speccy tasks`, `speccy implement`, `speccy review`, `speccy
 //!   report`) do not appear as commands in any skill or phase body file.
@@ -188,41 +188,27 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-015: speccy-plan uses vacancy not status for greenfield SPEC ID
+// CHK-015: speccy-plan uses vacancy not status for new SPEC ID
 // ---------------------------------------------------------------------------
 
 /// CHK-015: `resources/modules/skills/speccy-plan.md` invokes
-/// `speccy vacancy --json` for the new-spec (greenfield) path, not
-/// `speccy status --json`. The greenfield block is identified as the
-/// section before the amendment path description — the `speccy vacancy
-/// --json` command must appear and `speccy status --json` must NOT appear
-/// in the greenfield-specific portion.
+/// `speccy vacancy --json` to allocate a new SPEC ID, not
+/// `speccy status --json`.
 #[test]
-fn chk015_speccy_plan_uses_vacancy_not_status_for_greenfield_id() {
+fn chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id() {
     let body = require_module("skills/speccy-plan.md");
 
-    // The greenfield block appears before the amendment section.
-    // We locate the amendment marker to isolate the greenfield text.
-    // `body.find` returns a byte offset at a char boundary, so `.get(..idx)`
-    // is safe, but we use `get` + `unwrap_or` to satisfy the
-    // `clippy::string_slice` lint.
-    let greenfield_section = body
-        .find("**Amendment**")
-        .and_then(|idx| body.get(..idx))
-        .unwrap_or(body);
-
     assert!(
-        greenfield_section.contains("speccy vacancy --json"),
-        "`resources/modules/skills/speccy-plan.md` greenfield section \
-         must invoke `speccy vacancy --json` to learn the next SPEC ID \
-         (SPEC-0033 REQ-008 / CHK-015); \
-         the command was not found before the amendment section",
+        body.contains("speccy vacancy --json"),
+        "`resources/modules/skills/speccy-plan.md` must invoke \
+         `speccy vacancy --json` to learn the next SPEC ID \
+         (SPEC-0033 REQ-008 / CHK-015)",
     );
 
     assert!(
-        !greenfield_section.contains("speccy status --json"),
-        "`resources/modules/skills/speccy-plan.md` greenfield section \
-         must NOT invoke `speccy status --json` to allocate a new SPEC ID \
+        !body.contains("speccy status --json"),
+        "`resources/modules/skills/speccy-plan.md` must NOT invoke \
+         `speccy status --json` to allocate a new SPEC ID \
          — use `speccy vacancy --json` instead \
          (SPEC-0033 REQ-008 / CHK-015)",
     );
@@ -305,6 +291,38 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// CHK-019: speccy-tasks template documents TASKS.md output shape
+// ---------------------------------------------------------------------------
+
+/// CHK-019: `resources/modules/phases/speccy-tasks.md` Step 2 must contain
+/// a concrete example fragment documenting the required TASKS.md output
+/// shape, including the `# Tasks: SPEC-` level-1 heading and the
+/// space-separated `covers="REQ-001 REQ-002"` multi-REQ form.
+///
+/// The two literal substrings CHK-019 asserts are the same substrings that
+/// downstream agents must produce — asserting them here locks the template
+/// wording to the parser's expectations (REQ-013 / SPEC-0034).
+#[test]
+fn chk019_speccy_tasks_template_documents_output_shape() {
+    let body = require_module("phases/speccy-tasks.md");
+
+    assert!(
+        body.contains("# Tasks: SPEC-"),
+        "`resources/modules/phases/speccy-tasks.md` Step 2 must contain a \
+         concrete example fragment with the literal substring `# Tasks: SPEC-` \
+         to document the required level-1 heading shape (REQ-013 / CHK-019)",
+    );
+
+    assert!(
+        body.contains(r#"covers="REQ-001 REQ-002""#),
+        "`resources/modules/phases/speccy-tasks.md` Step 2 must contain a \
+         concrete example fragment with the literal substring \
+         `covers=\"REQ-001 REQ-002\"` to demonstrate the space-separated \
+         multi-REQ form (REQ-013 / CHK-019)",
+    );
 }
 
 // ---------------------------------------------------------------------------

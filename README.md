@@ -38,7 +38,7 @@ content:
 | `speccy verify`  | In CI, as the gate.                                                       |
 | `speccy next`    | Mostly invoked by the shipped skills to resolve the next actionable task. |
 | `speccy lock`    | Invoked by `/speccy-tasks` to record the SPEC.md hash into TASKS.md after decomposition. |
-| `speccy vacancy` | Invoked by `/speccy-plan` (greenfield path) to allocate the next free `SPEC-NNNN`. |
+| `speccy vacancy` | Invoked by `/speccy-plan` to allocate the next free `SPEC-NNNN`. |
 
 Phase prompts (`plan`, `tasks`, `implement`, `review`, `report`) are
 not CLI commands. They live as skill bodies in the host pack and
@@ -145,17 +145,17 @@ and that file carries two things side by side:
 The `speccy-init` skill handles three cases without ever overwriting
 existing content:
 
-- **Greenfield (`AGENTS.md` missing entirely).** The skill walks
+- **State A — `AGENTS.md` missing entirely.** The skill walks
   through a short Q&A (what, who for, v1 outcome, quality bar, known
   unknowns, and non-goals) and writes a fresh `AGENTS.md` whose
   first section is `## Product north star`.
-- **Brownfield without a north star (`AGENTS.md` exists, but no
-  `## Product north star` section).** The skill runs a narrower Q&A
-  and **appends** a `## Product north star` section without touching
-  what is already there.
-- **Brownfield with a north star already present.** The skill leaves
-  `AGENTS.md` alone, and you simply confirm that the existing
-  content is current before moving on.
+- **State B — `AGENTS.md` exists, but no `## Product north star`
+  section.** The skill runs a narrower Q&A and **appends** a
+  `## Product north star` section without touching what is already
+  there.
+- **State C — `AGENTS.md` already has a product north star.** The
+  skill leaves `AGENTS.md` alone, and you simply confirm that the
+  existing content is current before moving on.
 
 If you are not on a host the `speccy-init` skill ships for, you
 populate `AGENTS.md` by hand; this repo's own `AGENTS.md` is a

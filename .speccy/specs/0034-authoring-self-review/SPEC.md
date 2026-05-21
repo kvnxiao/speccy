@@ -2,7 +2,7 @@
 id: SPEC-0034
 slug: authoring-self-review
 title: Self-review pass in authoring-phase skills (plan, amend, brainstorm)
-status: in-progress
+status: implemented
 created: 2026-05-19
 supersedes: []
 ---
@@ -186,7 +186,7 @@ of this slice.
   format makes the reference cheap and unambiguous; the 26-cap
   signals when I have over-scoped the session and need to
   decompose before continuing.
-- As an AI agent finishing `/speccy-plan` greenfield, I want to
+- As an AI agent finishing `/speccy-plan`, I want to
   catch translation drift between the user-approved brainstorm
   framing and the SPEC.md I just wrote — silent placeholder
   leakage, requirements I un-atomized while expanding into prose,
@@ -250,7 +250,7 @@ artifacts internally and before presenting them in chat.
 </done-when>
 
 <behavior>
-- Given `/speccy-plan` greenfield has just written SPEC.md to
+- Given `/speccy-plan` has just written SPEC.md to
   `.speccy/specs/NNNN-slug/SPEC.md`, when the agent reads the next
   step in the skill body, then it sees the self-review pass before
   the `/speccy-tasks` handoff line.
@@ -348,8 +348,9 @@ narrow to the stated intent shift, no cascading edits beyond it).
   description defining what passing looks like, parallel in
   style to the six shared properties.
 - The skill body explains that the diff-shape check fires only
-  on amendments (greenfield plan has no diff baseline); skipping
-  the check on greenfield is the correct behavior, not a defect.
+  in the amend self-review surface; `/speccy-plan` writes new
+  SPEC.md content rather than a diff, so the check does not
+  apply to the plan self-review surface.
 </done-when>
 
 <behavior>
@@ -678,7 +679,7 @@ with `## Open Questions` rendered by `/speccy-plan` and edits to
 </done-when>
 
 <behavior>
-- Given `/speccy-plan` greenfield writing a SPEC.md with three
+- Given `/speccy-plan` writing a SPEC.md with three
   open questions, when the agent renders `## Open Questions`,
   then the section body uses `- [ ] a.`, `- [ ] b.`, `- [ ] c.`
   ordinals.
@@ -785,6 +786,202 @@ when the file body is searched for the symmetric expansion
 guidance,
 then the file contains a line or paragraph that mirrors the
 brainstorm side (MAY expand or keep grouped, agent discretion).
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-011">
+### REQ-011: `/speccy-plan` skill template no longer carries an amendment branch
+
+The `resources/modules/skills/speccy-plan.md` skill template drops
+its amendment branch entirely. All amendment traffic routes through
+`/speccy-amend`. The change auto-propagates to ejected
+`.claude/skills/speccy-plan/SKILL.md` and
+`.agents/skills/speccy-plan/SKILL.md` via SPEC-0033's eject
+pipeline.
+
+<done-when>
+- `resources/modules/skills/speccy-plan.md`'s lede paragraph no
+  longer references "or amends an existing one when intent
+  shifts" or the SPEC-NNNN argument amendment branch.
+- The "When to use" section no longer carries an "Amendment form
+  (`/speccy-plan SPEC-NNNN`)" bullet.
+- The "Steps" section's step 1 no longer carries the
+  identify-amendment-vs-new-spec branch; step 2 no longer carries
+  the `**Amendment**:` sub-branch. The remaining steps describe
+  new-spec authoring only.
+- The skill template's frontmatter `description:` line drops the
+  "or amend an existing one when intent shifts" trigger phrase
+  and the "asks to amend an existing spec by ID" trigger phrase.
+- The ejected `.claude/skills/speccy-plan/SKILL.md` and
+  `.agents/skills/speccy-plan/SKILL.md` reflect the upstream
+  changes after the next `speccy init` run; no manual edits land
+  on the ejected files.
+- No `// removed for SPEC-NNNN` comments, no "now sole amendment
+  path" callouts in other skill templates. The retirement is
+  documented by omission.
+</done-when>
+
+<behavior>
+- Given the post-amendment source tree, when a contributor opens
+  `resources/modules/skills/speccy-plan.md`, then the file
+  contains no amendment-branch prose in lede, "When to use", or
+  "Steps".
+- Given a freshly initialized workspace
+  (`speccy init --host claude-code` run after this amendment
+  lands), when `.claude/skills/speccy-plan/SKILL.md` is read,
+  then the ejected body matches the upstream new-spec-only
+  template.
+- Given a user invokes `/speccy-plan SPEC-0007` (an
+  amendment-form invocation), when the skill template is
+  rendered to the agent, then the agent reads no amendment-branch
+  guidance — `/speccy-brainstorm`'s routing list already names
+  `/speccy-amend` as the amendment surface, so the agent routes
+  the user accordingly.
+</behavior>
+
+<scenario id="CHK-015">
+Given the post-amendment `resources/modules/skills/speccy-plan.md`,
+when its body is searched for the literal substrings
+"Amendment", "amend an existing", or "SPEC-NNNN argument",
+then no matches appear in the lede, "When to use", or "Steps"
+sections.
+</scenario>
+
+<scenario id="CHK-016">
+Given the post-amendment ejected `.claude/skills/speccy-plan/SKILL.md`
+and `.agents/skills/speccy-plan/SKILL.md`,
+when each file's body is searched for "Amendment" or
+"amend an existing",
+then no matches appear in the body (matching the upstream
+source).
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-012">
+### REQ-012: "Greenfield" terminology removed from live workflow surfaces
+
+The term "greenfield" is removed from live workflow surfaces
+across the repo. Speccy works identically whether the project is
+new or has existing code; the term carries no special meaning in
+the workflow. Prose that explicitly explains Speccy's agnostic
+behavior across new and existing repos may keep the term —
+because the term is being denied, not claimed.
+
+<done-when>
+- `AGENTS.md`, `README.md`, `.speccy/ARCHITECTURE.md`,
+  `resources/modules/phases/speccy-init.md`,
+  `resources/modules/skills/speccy-plan.md`, and
+  `speccy-cli/tests/skill_body_discovery.rs` no longer use the
+  term "greenfield" as a mode, path, persona qualifier, or
+  workflow descriptor.
+- Prose that explicitly explains Speccy's no-distinction
+  behavior — examples: the `README.md` "Speccy works identically
+  whether the project is greenfield (no code yet) or brownfield"
+  line, `.speccy/ARCHITECTURE.md`'s "no greenfield/brownfield
+  mode toggle" callout, `AGENTS.md`'s "no greenfield/brownfield
+  distinction" callout — retains the term; removing it would
+  lose the explicit denial.
+- Frozen historical SPECs, TASKS.md, REPORT.md, and evidence
+  files under `.speccy/specs/NNNN-*/` are NOT edited
+  (going-forward only, matching REQ-009's "no retroactive
+  re-formatting" precedent).
+- The `chk015_speccy_plan_uses_vacancy_not_status_for_greenfield_id`
+  test in `speccy-cli/tests/skill_body_discovery.rs` is renamed
+  and restructured. The current implementation partitions
+  `speccy-plan.md`'s body on `body.find("**Amendment**")` to
+  isolate a "greenfield section"; that anchor disappears under
+  REQ-011's retirement of the amendment branch. The simplified
+  test asserts `speccy vacancy --json` appears in the file and
+  `speccy status --json` does not appear in the file — no
+  partitioning needed.
+- Ejected `.claude/skills/speccy-init/SKILL.md` and
+  `.agents/skills/speccy-init/SKILL.md` reflect the upstream
+  changes after the next `speccy init` run; no manual edits
+  land on the ejected files.
+</done-when>
+
+<behavior>
+- Given the post-amendment source tree, when each listed live
+  workflow surface is searched for the literal substring
+  "greenfield", then matches (if any) appear only in prose that
+  explicitly denies the greenfield/brownfield distinction.
+- Given `cargo test --workspace` runs against the post-amendment
+  tree, when the `skill_body_discovery` test module runs, then
+  the renamed test (from `chk015_*greenfield*`) passes against
+  the post-REQ-011 `speccy-plan.md` body.
+- Given `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` (a
+  frozen historical record), when the file is read post-
+  amendment, then its body still contains its original uses of
+  "greenfield" — historical records are not edited.
+</behavior>
+
+<scenario id="CHK-017">
+Given the post-amendment `AGENTS.md`, `README.md`,
+`.speccy/ARCHITECTURE.md`, `resources/modules/phases/speccy-init.md`,
+and `resources/modules/skills/speccy-plan.md`,
+when each file's body is searched for the literal substring
+"greenfield",
+then matches (if any) appear only in prose that explicitly
+denies the greenfield/brownfield distinction.
+</scenario>
+
+<scenario id="CHK-018">
+Given the post-amendment `speccy-cli/tests/skill_body_discovery.rs`,
+when the file body is searched for the literal substring
+"greenfield",
+then no matches appear in test function names, test bodies, or
+comments. The renamed test asserts the same `speccy vacancy --json`
+present / `speccy status --json` absent properties without
+partitioning on an "Amendment" anchor.
+</scenario>
+
+</requirement>
+
+<requirement id="REQ-013">
+### REQ-013: Document the TASKS.md output shape inside the speccy-tasks skill template
+
+`resources/modules/phases/speccy-tasks.md` Step 2 currently describes
+the `<tasks>` element but omits the three structural elements that the
+TASKS.md parser requires: the YAML frontmatter block, the level-1
+heading, and the space-separated (not comma-separated) `covers`
+attribute form for multi-requirement tasks. Agents generating TASKS.md
+from this template infer these elements from sibling files or guess —
+producing TSK-004 parse errors (`InvalidCoversFormat`, missing heading)
+on the resulting output. Step 2 must show a concrete example fragment
+that makes all three required elements unambiguous.
+
+<done-when>
+- `resources/modules/phases/speccy-tasks.md` Step 2 contains a concrete
+  example fragment that shows, at minimum:
+  - Frontmatter with the keys `spec:`, `spec_hash_at_generation:`, and
+    `generated_at:` (the three keys the parser requires).
+  - The `# Tasks: SPEC-NNNN <title>` level-1 heading on the line
+    immediately after the closing `---` of the frontmatter.
+  - At least one `<task ... covers="REQ-001 REQ-002">` line demonstrating
+    the multi-REQ form with single ASCII spaces (not commas) between REQ IDs.
+- The example fragment appears in Step 2 (the write-TASKS.md step), not
+  in a separate section or appendix — agents read the step body as the
+  authoritative template.
+</done-when>
+
+<behavior>
+- Given `resources/modules/phases/speccy-tasks.md` after the amendment,
+  when an agent reads Step 2 while generating TASKS.md for a SPEC with
+  two requirements, then the example fragment shows the agent exactly
+  where the frontmatter goes, how to format the heading, and that
+  `covers` uses spaces, not commas.
+- Given a TASKS.md generated from the amended template,
+  when `speccy check SPEC-NNNN` parses the file,
+  then no TSK-004 (`InvalidCoversFormat`) lint error fires.
+</behavior>
+
+<scenario id="CHK-019">
+Given `resources/modules/phases/speccy-tasks.md` after the amendment,
+when the file body is searched for the literal substrings
+`# Tasks: SPEC-` and `covers="REQ-001 REQ-002"`,
+then both substrings appear inside the example fragment in Step 2.
 </scenario>
 
 </requirement>
@@ -979,11 +1176,11 @@ direction is one-way.
   diff, fuzzy ask → atomized artifacts); `/speccy-review` catches
   implementation drift (SPEC.md → code). The two are
   complementary, not overlapping.
-- Post-SPEC-0033, the SPEC.md PRD shape is encoded in the
-  `/speccy-plan` skill body itself — there is no separate
-  PRD-template surface to update for the alpha-prefix format
-  change. All three skill templates carry their own copies of the
-  format guidance, lock-step.
+- The three skill templates are the authoritative workflow
+  surface for the `## Open Questions` format guidance and carry
+  their own copies of the alpha-prefix rule lock-step. No surface
+  outside the three skill templates carries authoritative format
+  guidance for this slice.
 - Each surfacing path carries a literal template string in its
   skill template, not freeform agent prose. This makes
   surfacings recognizable to downstream reviewers and consistent
@@ -1019,6 +1216,8 @@ direction is one-way.
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-19 | human/kevin | Initial draft. Adds a self-review pass to the three authoring-phase skills (`/speccy-plan` greenfield, `/speccy-amend`, `/speccy-brainstorm`) inside their MiniJinja templates post-SPEC-0033. Mechanical issues (string-matchable: `TBD`, missing `## Changelog`, "and"/"also" inside `<requirement>`, untouched `<...>` placeholders) fix inline without surfacing; semantic issues (LLM-judged) surface via literal template strings — `- [ ] x. **Self-review caught:** {issue}` rows in `## Open Questions` for plan/amend, fixed-format chat preamble for brainstorm. Plan self-review verifies six properties (routing fidelity, atomization, scope-traces, internal consistency, no placeholder leakage, no ambiguity); amend additionally verifies Changelog row presence and surgical-diff shape; brainstorm pre-check verifies four artifact properties (atomized restated requirements, structurally distinct framings, load-bearing assumptions, shape-changing open questions). Two supporting changes ride alongside: `## Open Questions` format becomes `- [ ] a.` ... `- [ ] z.` alpha-prefix lock-step across all three skill templates (26-cap doubles as brainstorm-scope smell detector); a collapse-parallels heuristic is added to `/speccy-brainstorm` (agent discretion to group N parallel requirements differing by one noun under one requirement with sub-bullets), with symmetric expansion discretion at `/speccy-plan`. Hard-sequenced after SPEC-0033 (eject-prompt-bodies); SPEC-0032 transitive predecessor. No CLI surface change; all changes land in MiniJinja templates under `resources/modules/skills/`. obra/superpowers' brainstorming skill is the upstream inspiration for the self-review checkpoint; the speccy variant splits failure handling by mechanical/semantic to honor "Surface unknowns; never invent". |
+| 2026-05-20 | human/kevin + Claude | Amendment. Three concerns. (1) Corrected the `<assumptions>` block: the false claim "PRD shape is encoded in `/speccy-plan` skill body itself" is reframed accurately — the three skill templates are the authoritative workflow surface for the `## Open Questions` alpha-prefix format guidance and carry it lock-step; no surface outside the three skill templates is named as authoritative. (2) Added REQ-011: `/speccy-plan` skill template no longer carries an amendment branch — lede, "When to use", "Steps", and frontmatter `description:` drop amendment references; all amendment traffic routes through `/speccy-amend`. The retirement is documented by omission per stay-small (no `// removed` comments, no "sole amendment path" callouts elsewhere). Auto-propagates to ejected `.claude/skills/speccy-plan/SKILL.md` and `.agents/skills/speccy-plan/SKILL.md` via SPEC-0033's eject pipeline. (3) Added REQ-012: "greenfield" terminology removed from live workflow surfaces (`AGENTS.md`, `README.md`, `.speccy/ARCHITECTURE.md`, `resources/modules/phases/speccy-init.md`, `resources/modules/skills/speccy-plan.md`, `speccy-cli/tests/skill_body_discovery.rs`), with an explicit carve-out for prose that denies the greenfield/brownfield distinction (the term may stay where it is being denied, not claimed). Frozen historical SPECs under `.speccy/specs/NNNN-*/` are explicitly out of scope (going-forward only, per REQ-009's precedent). The `chk015_*greenfield*` test gets renamed and simplified since its `**Amendment**` partition anchor disappears under REQ-011. Editorial cleanup also drops "greenfield" qualifiers from SPEC-0034's own user-stories and REQ prose where they no longer disambiguate against a non-existent non-greenfield mode. REQ-009's lock-step surface count stays at 3 (the three skill templates). |
+| 2026-05-20 | human/kevin + Claude | Amendment. Added REQ-013: document the TASKS.md output shape inside the `speccy-tasks` skill template. Root cause of the amendment: during the SPEC-0034 implementation loop, `/speccy-tasks` consistently produced malformed TASKS.md output — the required `# Tasks: SPEC-NNNN <title>` level-1 heading was omitted (TSK-004 parse error), `covers` attributes used commas instead of the required single ASCII spaces (`InvalidCoversFormat`), and the frontmatter keys (`spec:`, `spec_hash_at_generation:`, `generated_at:`) were absent. Root cause traced to Step 2 of `resources/modules/phases/speccy-tasks.md` which only named the `<tasks>` element without a concrete example fragment showing all three required elements. REQ-013 requires Step 2 to contain a concrete example fragment covering frontmatter, the level-1 heading, and the space-separated multi-REQ `covers` form. CHK-019 asserts both literal substrings `# Tasks: SPEC-` and `covers="REQ-001 REQ-002"` appear in Step 2 post-amendment. CHK-020 (ejected SKILL.md same property post-reinit) deferred to implementation. |
 </changelog>
 
 ## Open Questions
@@ -1045,3 +1244,8 @@ direction is one-way.
   every brainstorm invocation regardless of downstream path; the
   amendment-via-brainstorm case is just one more invocation.
   Decompose-time confirmation.
+- [ ] d. Whether the `speccy-amend` recipe should become
+  single-pass (retire the `### Loop exit criteria` shape and hand
+  off hash recording to `/speccy-tasks` exclusively). Identified
+  during T-002 review as out of scope for SPEC-0034; defer to a
+  follow-up SPEC or amendment if dogfooding surfaces the need.

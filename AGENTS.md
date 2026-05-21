@@ -9,7 +9,7 @@
 > This is the project-wide product context — what we're building, who
 > for, what "done enough to ship v1" looks like. The `speccy-init`
 > skill writes (or updates) this section when bootstrapping a
-> greenfield repo. Speccy itself has no separate `VISION.md`; the
+> new repo. Speccy itself has no separate `VISION.md`; the
 > always-loaded `AGENTS.md` carries this content for every prompt.
 >
 > The word "Mission" is reserved for the Speccy noun (a focus-area
@@ -37,7 +37,7 @@ intent at every step.
 
 ### Users
 
-- Solo developers bootstrapping greenfield projects with AI assistance
+- Solo developers bootstrapping new projects with AI assistance
   who want drift detection without orchestration overhead.
 - AI coding agents driven by host skill packs (Claude Code, Codex)
   through a Plan → Tasks → Impl → Review → Report loop.
@@ -61,7 +61,7 @@ intent at every step.
 
 ### Quality bar
 
-"Useful for my next greenfield" is the bar. Features justified only
+"Useful for my next project" is the bar. Features justified only
 by hypothetical broader audiences are out of scope for v1.
 
 - A solo developer can run `speccy init` in a fresh repo and reach

@@ -75,6 +75,16 @@ own judgment.
       runs next, each bullet here typically becomes a `<requirement>`
       block in SPEC.md.
 
+      **Collapse-parallels heuristic.** When N restated-ask
+      requirements differ only by one noun, you MAY express them as one
+      requirement with an enumerated sub-list to reduce reader cognitive
+      load. For example, if R1-R6 all read "the X self-review verifies
+      Y" (differing only in X), collapse to a single requirement with
+      six sub-bullets a-f rather than repeating the identical sentence
+      structure six times. This is agent discretion — there is no
+      enforced threshold. If collapsing does not improve readability,
+      keep the requirements atomic.
+
    2. **2-3 alternative framings.** List 2-3 alternative framings of
       the ask, with trade-offs. The `2-3` is soft guidance — scale
       to the ask's complexity. A trivial ask may surface zero
@@ -91,22 +101,86 @@ own judgment.
       project is true but useless).
 
    4. **Open questions.** List the open questions whose answers
-      would change the SPEC shape. Use the `- [ ]` checkbox format
-      that matches the PRD template's `## Open Questions` section,
-      so the output is copy-pasteable into the eventual SPEC.md.
+      would change the SPEC shape. Use the alpha-prefix format:
+      `- [ ] a.`, `- [ ] b.`, ..., `- [ ] z.`, assigning the next
+      free letter to each question. This format matches the PRD
+      template's `## Open Questions` section so the output is
+      copy-pasteable into the eventual SPEC.md without reformatting.
+      Reaching `z.` signals an over-scoped session — 26 open
+      questions is a scope smell, not a format limitation. This
+      format applies going forward only; sessions begun before this
+      format was adopted may use unordered `- [ ]` bullets.
 
-4. **Stop and wait.** After presenting the four artifacts, **stop
+4. **Pre-check pass.** Before presenting the four artifacts to the
+   user, run this internal review pass exactly once. Do not re-check
+   after the artifacts are presented.
+
+   This pre-check fires on every brainstorm invocation — including
+   when brainstorm is used as a front-end to amendment flows (since
+   amendments routed through brainstorm are still brainstorm sessions).
+
+   <!-- Note: the brainstorm pre-check below is an independent copy.
+        The parallel copies for plan and amend live in speccy-plan.md
+        and speccy-amend.md respectively (per DEC-001 / OQ-b: two
+        independent copies, no shared partial). -->
+
+   **Mechanical/semantic split.** Mechanical issues are
+   string-matchable from the draft artifacts: `TBD`/`TODO` strings,
+   "and"/"also" inside a single restated requirement, untouched
+   `<...>` template placeholders, missing alpha-prefix ordinals in
+   the open questions list. Fix mechanical issues inline by revising
+   the draft artifacts before presenting them — do not mention the
+   fix in chat. If judging requires reading semantics, it is semantic.
+
+   Semantic issues surface in chat as a preamble block immediately
+   before the four artifacts, using this fixed-format template:
+
+   Opening line (verbatim, unchanged):
+   `**Self-review caught the following before presenting artifacts:**`
+
+   Then one bullet per semantic issue:
+   `- {issue}` (one-line description)
+
+   Closing line (verbatim, unchanged):
+   `Proceeding with the four artifacts below.`
+
+   If the pre-check finds no issues, omit the preamble block entirely
+   and present the four artifacts directly.
+
+   **The four check properties:**
+
+   - **Atomized restated requirements.** Each restated-ask
+     requirement describes one observable outcome and no single
+     requirement contains "and"/"also" multi-outcome wording.
+     Mechanical fix: split before presenting.
+
+   - **Structurally distinct framings.** The alternative framings in
+     artifact 2 are genuinely distinct framings — not paraphrases of
+     the same choice. Two framings that differ only in wording, not
+     in structural consequence, should be merged or replaced.
+
+   - **Load-bearing assumptions.** Each silent assumption in artifact
+     3 would, if wrong, change the SPEC shape. Assumptions that are
+     trivially true given the project context (e.g., "the project
+     uses Rust" on a Rust project) are filler — remove them.
+
+   - **Shape-changing open questions.** Each open question in artifact
+     4 must be answerable in a way that changes the SPEC shape. A
+     question whose answer doesn't affect the requirements, summary,
+     or assumptions is not load-bearing and should be dropped.
+
+5. **Stop and wait.** After presenting the four artifacts, **stop
    and wait** for the user to confirm, redirect, or answer the open
    questions. Do not move on. Do not write SPEC.md. Do not invoke
    `speccy-plan`. The hard gate above applies until
    the user has responded with explicit approval.
 
-5. **Iterate if needed.** If the user redirects or answers an open
+6. **Iterate if needed.** If the user redirects or answers an open
    question, fold the response back into the four artifacts and
    re-present. Continue until the user explicitly approves the
    framing.
 
-6. **Invoke the writing skill.** Once the user has approved, invoke
+7. **Invoke the writing skill.** Once the user has approved, invoke
    the right skill for the path:
 
    - For a **new SPEC**, invoke `speccy-plan`, which
@@ -121,7 +195,7 @@ own judgment.
      drop the reconciliation steps and produce hash drift.
 
    The brainstorm chat is ephemeral — nothing was written to disk
-   during steps 1-5. The salient outputs flow into SPEC.md via the
+   during steps 1-6. The salient outputs flow into SPEC.md via the
    routing list below when the writing prompt runs.
 
 ## Routing brainstorm outputs into SPEC.md
@@ -137,7 +211,8 @@ not invent a new SPEC.md section for brainstorm output:
 - The **silent assumptions** land in the `<assumptions>` element
   block under `## Assumptions`.
 - The **open questions** land under `## Open Questions` in the same
-  `- [ ]` checkbox format the brainstorm produced.
+  `- [ ] a.` alpha-prefix format the brainstorm produced — copy-paste
+  directly without reformatting.
 - The **rejected alternative framings** land under `## Notes`. When
   a trade-off is load-bearing enough to deserve a durable decision
   record, promote it to a `<decision>` element block under

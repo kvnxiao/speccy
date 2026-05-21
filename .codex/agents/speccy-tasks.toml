@@ -35,6 +35,40 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    block per task. Each `<task>` body contains a `<task-scenarios>`
    element with slice-level Given/When/Then prose and an optional
    `Suggested files:` bullet.
+
+   The file must open with a YAML frontmatter block followed immediately
+   by a level-1 heading. Example fragment showing all required structural
+   elements:
+
+   ```markdown
+   ---
+   spec: SPEC-0007
+   spec_hash_at_generation: <hash from speccy lock output>
+   generated_at: <ISO-8601 timestamp>
+   ---
+
+   # Tasks: SPEC-0007 My feature title
+
+   <tasks spec="SPEC-0007">
+
+   <task id="T-001" state="pending" covers="REQ-001">
+   ...
+   </task>
+
+   <task id="T-002" state="pending" covers="REQ-001 REQ-002">
+   ...
+   </task>
+
+   </tasks>
+   ```
+
+   Key constraints:
+   - The `# Tasks: SPEC-` heading must appear on the line immediately
+     after the closing `---` of the frontmatter block (no blank line
+     between them).
+   - Multiple requirements in `covers=` are separated by single ASCII
+     spaces — `covers="REQ-001 REQ-002"` — never by commas. The parser
+     rejects comma-separated values with a `TSK-004` lint error.
 3. After writing, record the current spec hash:
 
    ```bash

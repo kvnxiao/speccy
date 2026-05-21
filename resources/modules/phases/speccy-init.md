@@ -40,7 +40,7 @@ files in `.agents/skills/` are left alone.{% endif %}
    simply not enumerated.
 
 3. **Inspect `AGENTS.md` at the repo root.** Decide which of the
-   three greenfield states applies:
+   three states applies:
 
    - **State A — AGENTS.md is missing entirely.** Run the full
      Q&A (see below) and write a new `AGENTS.md` whose first
@@ -57,7 +57,7 @@ files in `.agents/skills/` are left alone.{% endif %}
    In all three states, never overwrite existing AGENTS.md
    content. The skill appends or stops.
 
-4. **Greenfield Q&A (states A and B).** Ask the user, one
+4. **Q&A (states A and B).** Ask the user, one
    question at a time, capturing the answers as bullet lists or
    short paragraphs. Suggested questions, in order:
 
@@ -87,6 +87,6 @@ files in `.agents/skills/` are left alone.{% endif %}
 6. **Suggest the next step.** `{{ cmd_prefix }}speccy-plan` to draft the first
    SPEC slice from the now-populated north star.
 
-This recipe does not loop. The greenfield bootstrap runs once;
-subsequent re-runs of `speccy init --force` only refresh the
+This recipe does not loop. The bootstrap runs once; subsequent
+re-runs of `speccy init --force` only refresh the
 shipped skill files and do not touch `AGENTS.md`.
