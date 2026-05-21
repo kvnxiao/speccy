@@ -140,18 +140,26 @@ fn phase_worker_agent_has_model_and_effort_frontmatter() -> TestResult {
     let fx = make_fixture("t009-agent-frontmatter")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    // Each phase has its own model/effort pin.
+    let phase_pins: &[(&str, &str, &str)] = &[
+        ("speccy-work", "opus[1m]", "low"),
+        ("speccy-tasks", "sonnet[1m]", "medium"),
+        ("speccy-ship", "sonnet[1m]", "medium"),
+    ];
+    for (phase, expected_model, expected_effort) in phase_pins {
         let rel = format!(".claude/agents/{phase}.md");
         let body = read_file(&fx.root, &rel)?;
         let fm = extract_frontmatter(&body)
             .ok_or_else(|| format!("{rel} must have YAML frontmatter"))?;
         assert!(
-            fm.lines().any(|l| l.trim() == "model: sonnet[1m]"),
-            "T-009: {rel} frontmatter must contain `model: sonnet[1m]`; got:\n{fm}",
+            fm.lines()
+                .any(|l| l.trim() == format!("model: {expected_model}")),
+            "T-009: {rel} frontmatter must contain `model: {expected_model}`; got:\n{fm}",
         );
         assert!(
-            fm.lines().any(|l| l.trim() == "effort: medium"),
-            "T-009: {rel} frontmatter must contain `effort: medium`; got:\n{fm}",
+            fm.lines()
+                .any(|l| l.trim() == format!("effort: {expected_effort}")),
+            "T-009: {rel} frontmatter must contain `effort: {expected_effort}`; got:\n{fm}",
         );
     }
     Ok(())

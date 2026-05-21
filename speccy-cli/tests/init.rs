@@ -1540,7 +1540,13 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    for phase in CLAUDE_PINNED_PHASES {
+    // Each phase has its own pin; check them individually.
+    let claude_phase_pins: &[(&str, &str, &str)] = &[
+        ("tasks", "sonnet[1m]", "medium"),
+        ("work", "opus[1m]", "low"),
+        ("ship", "sonnet[1m]", "medium"),
+    ];
+    for (phase, expected_model, expected_effort) in claude_phase_pins {
         let rel = format!(".claude/agents/speccy-{phase}.md");
         let fm = parse_claude_pins(&fx.root, &rel)?;
         assert_eq!(
@@ -1550,14 +1556,14 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         );
         assert_eq!(
             fm.model.as_deref(),
-            Some("sonnet[1m]"),
-            "rendered {rel} must carry `model: sonnet[1m]`; got {:?}",
+            Some(*expected_model),
+            "rendered {rel} must carry `model: {expected_model}`; got {:?}",
             fm.model,
         );
         assert_eq!(
             fm.effort.as_deref(),
-            Some("medium"),
-            "rendered {rel} must carry `effort: medium`; got {:?}",
+            Some(*expected_effort),
+            "rendered {rel} must carry `effort: {expected_effort}`; got {:?}",
             fm.effort,
         );
     }

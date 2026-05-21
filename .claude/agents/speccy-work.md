@@ -1,8 +1,8 @@
 ---
 name: speccy-work
 description: Implements one Speccy task per invocation. Invoke via /agent speccy-work for the pinned execution path defined in this file's frontmatter.
-model: sonnet[1m]
-effort: medium
+model: opus[1m]
+effort: low
 ---
 
 # /speccy-work
