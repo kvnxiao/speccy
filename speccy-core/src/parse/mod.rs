@@ -15,6 +15,7 @@
 
 pub mod cross_ref;
 pub mod frontmatter;
+pub(crate) mod fs;
 pub mod journal_xml;
 pub mod markdown;
 pub mod report_xml;
@@ -22,7 +23,6 @@ pub mod spec_md;
 pub mod spec_xml;
 pub mod supersession;
 pub mod task_xml;
-pub mod toml_files;
 pub mod xml_scanner;
 
 pub use cross_ref::CrossRef;
@@ -58,6 +58,3 @@ pub use task_xml::TaskState;
 pub use task_xml::TasksDoc;
 pub use task_xml::parse as parse_task_xml;
 pub use task_xml::render as render_task_xml;
-pub use toml_files::ProjectConfig;
-pub use toml_files::SpeccyConfig;
-pub use toml_files::speccy_toml;

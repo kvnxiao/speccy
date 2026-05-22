@@ -80,7 +80,7 @@ fn every_in_tree_spec_md_parses_with_xml_parser() {
 }
 
 #[test]
-fn no_spec_toml_files_remain_under_speccy_specs() {
+fn no_stray_spec_toml_remains_under_speccy_specs() {
     let root = workspace_root();
     let dirs = spec_dirs(&root);
     let mut stray: Vec<Utf8PathBuf> = Vec::new();

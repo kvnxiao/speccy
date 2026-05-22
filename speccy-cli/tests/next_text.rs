@@ -52,7 +52,7 @@ fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
 
 #[test]
 fn one_line_per_active_spec() -> TestResult {
-    // implement: pending task.
+    // work: pending task.
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-001", "pending");
     write_spec(
@@ -65,8 +65,8 @@ fn one_line_per_active_spec() -> TestResult {
     assert_eq!(text.lines().count(), 1, "expected 1 line: {text:?}");
     let first_line = text.lines().next().expect("checked count above");
     assert!(
-        first_line.contains("SPEC-0001") && first_line.contains("implement"),
-        "line must contain SPEC-0001 and implement: {text:?}",
+        first_line.contains("SPEC-0001") && first_line.contains("work"),
+        "line must contain SPEC-0001 and work: {text:?}",
     );
     assert!(
         first_line.contains("T-001"),
@@ -143,7 +143,7 @@ fn one_line_per_active_spec() -> TestResult {
 
 #[test]
 fn exit_code_is_zero_for_all_kinds() -> TestResult {
-    // implement.
+    // work.
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-001", "pending");
     write_spec(
@@ -157,7 +157,7 @@ fn exit_code_is_zero_for_all_kinds() -> TestResult {
         .current_dir(ws.root.as_std_path())
         .assert()
         .success()
-        .stdout(contains("implement"));
+        .stdout(contains("work"));
 
     // Empty workspace still exits 0 (no active specs → empty output).
     let ws_empty = Workspace::new()?;
@@ -172,7 +172,7 @@ fn exit_code_is_zero_for_all_kinds() -> TestResult {
 
 #[test]
 fn per_spec_form_text_output() -> TestResult {
-    // pending → "implement T-001".
+    // pending → "work T-001".
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-001", "pending");
     write_spec(
@@ -187,7 +187,7 @@ fn per_spec_form_text_output() -> TestResult {
         .assert()
         .success()
         .stdout(contains("SPEC-0001"))
-        .stdout(contains("implement"))
+        .stdout(contains("work"))
         .stdout(contains("T-001"));
 
     // no TASKS.md → "decompose".

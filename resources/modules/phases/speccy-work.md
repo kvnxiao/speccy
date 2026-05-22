@@ -46,7 +46,7 @@ spec hash must have been committed before this skill runs.
      speccy next --json
      ```
 
-     If the result has no entry with `next_action.kind == "implement"`,
+     If the result has no entry with `next_action.kind == "work"`,
      exit and report that no implementable tasks remain. Otherwise,
      construct the disambiguated `<spec>/<task>` form from the JSON's
      `spec_id` and `next_action.task_id` fields (the bare task ID is

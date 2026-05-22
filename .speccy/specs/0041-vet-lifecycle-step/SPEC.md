@@ -206,6 +206,7 @@ matches the current TASKS.md byte contents, and REPORT.md is absent,
 then the JSON entry for that spec contains
 `"next_action": {"kind": "ship"}`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -275,6 +276,7 @@ TASKS.md whose SHA-256 is `cafef00d`,
 when `compute_for_spec` runs,
 then the returned `NextAction` is `Vet` (stale-hash branch).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -351,6 +353,7 @@ when `sha256sum <spec-dir>/TASKS.md` is compared against the
 VET.md,
 then the values are byte-equal.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -447,6 +450,7 @@ Given the same checkout,
 when `ls .claude/skills/speccy-vet/SKILL.md` and `ls .agents/skills/speccy-vet/SKILL.md` run,
 then both files exist and contain non-empty bodies; and `ls .claude/skills/speccy-holistic-gate/ 2>&1` exits non-zero (directory absent).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -572,6 +576,7 @@ Given the same checkout,
 when `rg -n 'code-simplifier' resources/modules/skills/speccy-vet.md .claude/skills/speccy-vet/SKILL.md .agents/skills/speccy-vet/SKILL.md` runs,
 then it prints zero matches.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -646,6 +651,7 @@ Given the same checkout,
 when `rg -n '/speccy-ship SPEC-NNNN' resources/modules/skills/speccy-vet.md` runs,
 then it prints at least one match (the post-pass chain to ship).
 </scenario>
+
 </requirement>
 
 ## Decisions
@@ -750,3 +756,11 @@ in `speccy next`'s contract and in every shipped skill body.
 ## Open Questions
 
 (None.)
+
+## Changelog
+
+<changelog>
+| Date       | Reason                                                   | Author     |
+|------------|----------------------------------------------------------|------------|
+| 2026-05-22 | Initial draft. Add a `vet` lifecycle step between completed tasks and ship, driven by a renamed `/speccy-vet` skill (formerly `/speccy-holistic-gate`). Introduces `NextAction::Vet` and `kind = "vet"`; renames the journal artifact to `VET.md`; renames the speccy-owned sub-agents to `vet-reviewer` / `vet-implementer` and adds a new speccy-owned `vet-simplifier` persona so Phase 2 no longer depends on the external Claude-only `code-simplifier` plugin. Gate writes a `<gate verdict="passed\|failed" tasks_hash="...">` block to `VET.md`; resolver uses `tasks_hash` against current TASKS.md as the freshness signal. Skill-suggestion lines in `/speccy-review` and `/speccy-work` route to `/speccy-vet` instead of `/speccy-ship`. Pre-v1; atomic rename, no transitional alias. | Kevin Xiao |
+</changelog>

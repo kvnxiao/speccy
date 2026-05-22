@@ -489,7 +489,7 @@ pub fn extract_frontmatter_field(yaml: &str, field: &str) -> Option<String> {
 /// [`crate::error::ParseError::LegacyMarker`] with a diagnostic that
 /// names the equivalent raw XML element form.
 fn parse_spec_doc(spec_md_path: &Utf8Path) -> ParseResult<SpecDoc> {
-    let source = crate::parse::toml_files::read_to_string(spec_md_path)?;
+    let source = crate::parse::fs::read_to_string(spec_md_path)?;
     spec_xml::parse(&source, spec_md_path)
 }
 
@@ -576,12 +576,12 @@ pub fn parse_one_spec_xml_artifacts(spec_dir: &Utf8Path) -> SpecXmlArtifacts {
 }
 
 fn parse_one_tasks_xml(path: &Utf8Path) -> ParseResult<TasksDoc> {
-    let source = crate::parse::toml_files::read_to_string(path)?;
+    let source = crate::parse::fs::read_to_string(path)?;
     task_xml::parse(&source, path)
 }
 
 fn parse_one_report_xml(path: &Utf8Path) -> ParseResult<ReportDoc> {
-    let source = crate::parse::toml_files::read_to_string(path)?;
+    let source = crate::parse::fs::read_to_string(path)?;
     report_xml::parse(&source, path)
 }
 

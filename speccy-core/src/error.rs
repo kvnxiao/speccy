@@ -54,17 +54,6 @@ pub enum ParseError {
         message: String,
     },
 
-    /// `schema_version` declared in a TOML config is not a supported value.
-    #[error(
-        "{path} declares unsupported schema_version = {value}; speccy supports schema_version = 1"
-    )]
-    UnsupportedSchemaVersion {
-        /// Path of the offending file.
-        path: Utf8PathBuf,
-        /// Value found in the file.
-        value: i64,
-    },
-
     /// A required field was missing from a parsed payload.
     #[error("missing required field `{field}` in {context}")]
     MissingField {

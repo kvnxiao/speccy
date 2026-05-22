@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0040
-spec_hash_at_generation: 8b4103c3c01e11560b6bcf85c22e93ed1299e9bd845d218af104c428588b440d
-generated_at: 2026-05-22T22:34:49Z
+spec_hash_at_generation: 521caca0dd64a61db79fc1ca0c6444c197b92ff70a0029e52430857c9c96451f
+generated_at: 2026-05-22T23:15:34Z
 ---
 # Tasks: SPEC-0040 Retire `speccy.toml` — drop scaffolding, parser, dependency, and TOML-side `schema_version`
 
-<task id="T-001" state="pending" covers="REQ-002 REQ-003 REQ-005">
+<task id="T-001" state="completed" covers="REQ-002 REQ-003 REQ-005">
 ## Delete `speccy-core::parse::toml_files` and relocate the shared `read_to_string` helper
 
 Delete `speccy-core/src/parse/toml_files.rs` in full: the
@@ -88,7 +88,7 @@ sites),
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-006">
+<task id="T-002" state="completed" covers="REQ-006">
 ## Drop explicit `toml` dependency from `speccy-core/Cargo.toml` and migrate dev-time consumers
 
 Remove the `toml = { workspace = true }` line from
@@ -163,7 +163,7 @@ line),
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001 REQ-004 REQ-005">
+<task id="T-003" state="completed" covers="REQ-001 REQ-004 REQ-005">
 ## Switch `speccy init` from `.speccy/speccy.toml` to `.speccy/.gitkeep` and rewrite affected tests
 
 In `speccy-cli/src/init.rs`:
@@ -270,7 +270,7 @@ sub-case, add `scaffold_gitkeep`).
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-007">
+<task id="T-004" state="completed" covers="REQ-007">
 ## Strip `speccy.toml` references and the `## Schema version` story from `README.md` and `.speccy/ARCHITECTURE.md`
 
 In `README.md`:
@@ -366,5 +366,128 @@ Suggested files:
 `speccy-core/src/lint/rules/spc.rs` (read-only — consult
 to derive the corrected SPC-001 row description; do not
 modify per Non-goals).
+</task-scenarios>
+</task>
+
+<task id="T-005" state="completed" covers="REQ-008">
+## Rename `NextAction::Implement` → `Work` and flip the `next_action.kind` JSON/text discriminator
+
+In `speccy-core/src/next.rs`:
+
+- Rename the `NextAction::Implement { task_id }` variant to
+  `NextAction::Work { task_id }`. Update the matching
+  arm in `compute_for_spec` accordingly.
+- Update the priority-rule module doc-comment (lines ~13–19)
+  so the `state="pending"` branch line reads
+  `kind = "work"` instead of `kind = "implement"`. Update the
+  Rust-doc enumeration in the doc-comment for
+  `compute_for_spec` (the `# Priority` block) the same way:
+  `Implement` becomes `Work` in the listed step.
+
+In `speccy-cli/src/next_output.rs`:
+
+- In `to_json_action`, change the `NextAction::Implement`
+  match arm to `NextAction::Work` and flip the literal `kind`
+  string from `"implement"` to `"work"`.
+- In `render_text_per_spec`, change the `NextAction::Implement`
+  match arm to `NextAction::Work` and flip the rendered token
+  in the format string from `implement` to `work`.
+- In `render_text_workspace` (and any other text renderer that
+  matches on the enum), do the equivalent rename + keyword
+  flip.
+- Update the two unit-test helpers near the bottom of
+  `next_output.rs` (`NextAction::Implement { ... }`
+  construction at lines ~230 and ~273) to construct
+  `NextAction::Work { ... }`.
+
+In `speccy-cli/tests/`:
+
+- `next_json.rs`: update every assertion that matched on
+  `"kind": "implement"` (or the unquoted JSON-tag form) so
+  it asserts on `"work"` instead. The `kind must be implement`
+  failure-message strings should also be updated for
+  legibility.
+- `next_derived.rs`: the `--kind implement → clap error` test
+  (around line 285) stays — `--kind` was removed and any
+  string still produces a clap error — but update the test
+  name + message strings if they reference "implement" by
+  word; the actual `--kind implement` invocation is fine as
+  a probe since clap rejects it on the absence of the
+  argument, not on the value.
+- `next_text.rs`: update text-rendering assertions that match
+  on the `implement` keyword to match `work`.
+- `verify.rs`: only update if it asserts on the discriminator
+  (which the orchestrator did not see in this scan; verify
+  via ripgrep before editing).
+
+In shipped skill and agent material under
+`.claude/`, `.codex/`, and `resources/modules/`:
+
+- `.claude/agents/speccy-work.md`, `.codex/agents/speccy-work.toml`,
+  `resources/modules/phases/speccy-work.md`: any line that
+  quotes `next_action.kind == "implement"` flips to
+  `next_action.kind == "work"`.
+- `resources/modules/skills/speccy-orchestrate.md`: this body
+  was already speaking `work` terminology; cross-check that
+  it does not also reference `"implement"` and update if so.
+- Any other body returned by a ripgrep for
+  `next_action.kind` (or `kind = "implement"`) across
+  `.claude/`, `.codex/`, and `resources/modules/` gets the
+  same treatment.
+
+In `.speccy/ARCHITECTURE.md`:
+
+- Find every place that documents `speccy next`'s priority
+  rule using the literal token `"implement"` (or
+  `kind = "implement"`) as the JSON discriminator and flip
+  the token to `"work"`. Leave the English verb
+  "implement" alone where it appears in prose about the
+  implementer phase.
+
+Historical SPEC artifacts under `.speccy/specs/0007/`,
+`/0023/`, `/0032/`, `/0033/` and their journal/evidence files
+are **read-only**: do not retroactively rewrite them. They
+describe what was true at the time and are part of the
+project's history.
+
+Hygiene gate before flipping the task to `in-review`:
+`cargo test --workspace`, `cargo clippy --workspace
+--all-targets --all-features -- -D warnings`, `cargo +nightly
+fmt --all --check`, `cargo deny check`. All four must pass.
+
+<task-scenarios>
+Given the speccy workspace at HEAD after this task,
+when ripgrep searches `speccy-core/src/` and `speccy-cli/src/`
+(case-sensitive) for the literal `"implement"`,
+then the search returns zero matches (covers CHK-014).
+
+Given the speccy workspace at HEAD after this task,
+when `cargo test --workspace --all-features` runs,
+then it exits 0 (covers CHK-015).
+
+Given a built `speccy` binary at HEAD after this task,
+when `speccy next --json` runs in a workspace with a spec
+whose first pending task is `T-NNN`,
+then the emitted JSON contains the substring `"kind":"work"`
+(or `"kind": "work"` after pretty-printing) and does not
+contain `"kind":"implement"` (covers CHK-016).
+
+Given the speccy workspace at HEAD after this task,
+when ripgrep searches `.claude/agents/`, `.codex/agents/`,
+and `resources/modules/` (case-sensitive) for the substring
+`next_action.kind == "implement"`,
+then the search returns zero matches.
+
+Suggested files:
+`speccy-core/src/next.rs`,
+`speccy-cli/src/next_output.rs`,
+`speccy-cli/tests/next_json.rs`,
+`speccy-cli/tests/next_text.rs`,
+`speccy-cli/tests/next_derived.rs`,
+`.claude/agents/speccy-work.md`,
+`.codex/agents/speccy-work.toml`,
+`resources/modules/phases/speccy-work.md`,
+`resources/modules/skills/speccy-orchestrate.md`,
+`.speccy/ARCHITECTURE.md`.
 </task-scenarios>
 </task>

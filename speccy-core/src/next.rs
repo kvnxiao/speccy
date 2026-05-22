@@ -13,7 +13,7 @@
 //! Priority rule (see SPEC-0033 REQ-004):
 //! > if TASKS.md is absent → kind = `"decompose"`
 //! > else if any task is `state="in-review"` → kind = `"review"` (first one)
-//! > else if any task is `state="pending"` → kind = `"implement"` (first one)
+//! > else if any task is `state="pending"` → kind = `"work"` (first one)
 //! > else if all tasks `state="completed"` and REPORT.md absent → kind =
 //! > `"ship"`
 //! > else → spec is omitted (all done + REPORT.md present)
@@ -36,7 +36,7 @@ pub enum NextAction {
         personas: &'static [&'static str],
     },
     /// A task is ready to implement.
-    Implement {
+    Work {
         /// Task identifier (`T-NNN`) of the first pending task.
         task_id: String,
     },
@@ -62,7 +62,7 @@ pub struct SpecNextEntry {
 ///
 /// 1. TASKS.md absent → `Decompose`
 /// 2. Any task `state="in-review"` → `Review` (first matching task)
-/// 3. Any task `state="pending"` → `Implement` (first matching task)
+/// 3. Any task `state="pending"` → `Work` (first matching task)
 /// 4. All tasks `state="completed"` and REPORT.md absent → `Ship`
 /// 5. All done + REPORT.md present → `None` (omit)
 #[must_use = "the derived action names the next step for the spec"]
@@ -80,7 +80,7 @@ pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
     }
 
     if let Some(task) = first_task_with_state(&tasks.tasks, TaskState::Pending) {
-        return Some(NextAction::Implement {
+        return Some(NextAction::Work {
             task_id: task.id.clone(),
         });
     }

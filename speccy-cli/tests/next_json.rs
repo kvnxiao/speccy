@@ -109,10 +109,10 @@ fn per_spec_json_envelope_shape_review() -> TestResult {
     Ok(())
 }
 
-// -- CHK-007: per-spec JSON envelope shape (implement) -----------------------
+// -- CHK-007: per-spec JSON envelope shape (work) ----------------------------
 
 #[test]
-fn per_spec_json_envelope_shape_implement() -> TestResult {
+fn per_spec_json_envelope_shape_work() -> TestResult {
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-003", "pending");
     write_spec(
@@ -128,8 +128,8 @@ fn per_spec_json_envelope_shape_implement() -> TestResult {
         .expect("next_action must be present");
     assert_eq!(
         next_action.get("kind"),
-        Some(&serde_json::json!("implement")),
-        "kind must be implement: {parsed}",
+        Some(&serde_json::json!("work")),
+        "kind must be work: {parsed}",
     );
     assert_eq!(
         next_action.get("task_id"),
@@ -171,7 +171,7 @@ fn workspace_json_envelope_shape() -> TestResult {
     let next_action = entry.get("next_action").expect("next_action in entry");
     assert_eq!(
         next_action.get("kind"),
-        Some(&serde_json::json!("implement")),
+        Some(&serde_json::json!("work")),
         "kind in entry: {entry}",
     );
     Ok(())

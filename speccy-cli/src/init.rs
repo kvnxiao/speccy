@@ -20,8 +20,6 @@ use speccy_core::personas::ALL as PERSONAS_ALL;
 use std::io::Write;
 use thiserror::Error;
 
-const SPECCY_TOML_TEMPLATE: &str = include_str!("templates/speccy.toml.tmpl");
-
 /// CLI-level error returned by [`run`].
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -211,15 +209,18 @@ struct Outcome {
 fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>, InitError> {
     let mut plan: Vec<PlanItem> = Vec::new();
 
-    let speccy_toml_path = project_root.join(".speccy").join("speccy.toml");
-    let project_name = project_name_from(project_root);
-    let speccy_toml_body = render_speccy_toml(&project_name);
-    let content = speccy_toml_body.into_bytes();
-    let speccy_toml_action = classify_content(&speccy_toml_path, &content);
+    // SPEC-0040 REQ-001: `speccy init` scaffolds an empty
+    // `.speccy/.gitkeep` placeholder so `workspace::find_root` keeps
+    // locating `.speccy/` between init and the first spec. The file
+    // content is empty bytes — stable across runs so the three-way
+    // classifier reports `Unchanged` on byte-identical re-runs.
+    let gitkeep_path = project_root.join(".speccy").join(".gitkeep");
+    let gitkeep_content: Vec<u8> = Vec::new();
+    let gitkeep_action = classify_content(&gitkeep_path, &gitkeep_content);
     plan.push(PlanItem {
-        destination: speccy_toml_path,
-        content,
-        action: speccy_toml_action,
+        destination: gitkeep_path,
+        content: gitkeep_content,
+        action: gitkeep_action,
     });
 
     append_host_pack_items(project_root, host, &mut plan)?;
@@ -322,18 +323,6 @@ fn classify_content(dest: &Utf8Path, planned: &[u8]) -> Action {
     }
 }
 
-fn project_name_from(project_root: &Utf8Path) -> String {
-    project_root.file_name().map_or_else(
-        || "speccy-project".to_owned(),
-        std::borrow::ToOwned::to_owned,
-    )
-}
-
-fn render_speccy_toml(project_name: &str) -> String {
-    let escaped = project_name.replace('\\', "\\\\").replace('"', "\\\"");
-    SPECCY_TOML_TEMPLATE.replace("{{name}}", &escaped)
-}
-
 fn print_plan(
     plan: &[PlanItem],
     project_root: &Utf8Path,
@@ -385,40 +374,4 @@ fn write_item(item: &PlanItem) -> Result<(), InitError> {
     }
     fs_err::write(item.destination.as_std_path(), &item.content)?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::project_name_from;
-    use super::render_speccy_toml;
-    use camino::Utf8PathBuf;
-
-    #[test]
-    fn project_name_uses_parent_directory() {
-        let root = Utf8PathBuf::from("/foo/bar");
-        assert_eq!(project_name_from(&root), "bar");
-    }
-
-    #[test]
-    fn project_name_falls_back_on_empty() {
-        let root = Utf8PathBuf::from("/");
-        let name = project_name_from(&root);
-        assert!(!name.is_empty());
-    }
-
-    #[test]
-    fn render_speccy_toml_substitutes_name() {
-        let body = render_speccy_toml("acme");
-        assert!(body.contains("name = \"acme\""));
-        assert!(body.contains("schema_version = 1"));
-    }
-
-    #[test]
-    fn render_speccy_toml_escapes_quotes() {
-        let body = render_speccy_toml("foo\"bar");
-        assert!(
-            body.contains(r#"name = "foo\"bar""#),
-            "embedded quote should be backslash-escaped, got: {body}",
-        );
-    }
 }

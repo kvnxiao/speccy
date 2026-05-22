@@ -66,9 +66,9 @@ pub struct JsonWorkspaceEntry {
 /// The `next_action` object inside JSON envelopes.
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonNextAction {
-    /// Kind string: `"decompose"`, `"review"`, `"implement"`, or `"ship"`.
+    /// Kind string: `"decompose"`, `"review"`, `"work"`, or `"ship"`.
     pub kind: &'static str,
-    /// Task identifier; present for `review` and `implement`, absent for
+    /// Task identifier; present for `review` and `work`, absent for
     /// `decompose` and `ship`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -149,8 +149,8 @@ fn to_json_action(action: &NextAction) -> JsonNextAction {
             kind: "review",
             task_id: Some(task_id.clone()),
         },
-        NextAction::Implement { task_id } => JsonNextAction {
-            kind: "implement",
+        NextAction::Work { task_id } => JsonNextAction {
+            kind: "work",
             task_id: Some(task_id.clone()),
         },
         NextAction::Ship => JsonNextAction {
@@ -175,8 +175,8 @@ pub fn render_text_per_spec(spec_id: &str, action: Option<&NextAction>) -> Strin
         Some(NextAction::Review { task_id, .. }) => {
             format!("{spec_id}: review {task_id}\n")
         }
-        Some(NextAction::Implement { task_id }) => {
-            format!("{spec_id}: implement {task_id}\n")
+        Some(NextAction::Work { task_id }) => {
+            format!("{spec_id}: work {task_id}\n")
         }
         Some(NextAction::Ship) => format!("{spec_id}: ship\n"),
     }
@@ -226,13 +226,13 @@ mod tests {
     }
 
     #[test]
-    fn text_per_spec_implement() {
-        let action = NextAction::Implement {
+    fn text_per_spec_work() {
+        let action = NextAction::Work {
             task_id: "T-003".to_owned(),
         };
         assert_eq!(
             render_text_per_spec("SPEC-0001", Some(&action)),
-            "SPEC-0001: implement T-003\n",
+            "SPEC-0001: work T-003\n",
         );
     }
 
@@ -270,7 +270,7 @@ mod tests {
             (
                 SpecNextEntry {
                     spec_id: "SPEC-0002".to_owned(),
-                    action: NextAction::Implement {
+                    action: NextAction::Work {
                         task_id: "T-001".to_owned(),
                     },
                 },
@@ -289,7 +289,7 @@ mod tests {
         assert!(first.contains("SPEC-0001"));
         assert!(first.contains("decompose"));
         assert!(second.contains("SPEC-0002"));
-        assert!(second.contains("implement"));
+        assert!(second.contains("work"));
         assert!(second.contains("T-001"));
     }
 }

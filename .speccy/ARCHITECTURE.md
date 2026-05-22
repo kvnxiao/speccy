@@ -152,7 +152,7 @@ speccy next [SPEC-ID]             Next actionable per spec, derived from state.
                                     no arg:        every active spec with next_action
                                     SPEC-ID:       one spec or {next_action: null, reason}
                                     --json:        schema_version=1 envelope
-                                  Action kind is derived (review > implement > ship,
+                                  Action kind is derived (review > work > ship,
                                   with `decompose` when TASKS.md is absent); spec
                                   state fully determines the kind, so there is no
                                   caller-supplied `--kind` filter.
@@ -208,7 +208,6 @@ AGENTS.md                Project-wide product north star + agent conventions
                          (root, not inside .speccy/)
 
 .speccy/
-  speccy.toml
   specs/
     0001-user-signup/                Ungrouped spec (no mission folder)
       SPEC.md            Frontmatter + PRD prose + nested XML element tree
@@ -389,7 +388,7 @@ body at `.claude/agents/speccy-work.md` (pinned `model: sonnet[1m]`,
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
 that specific task. Without an argument the session calls
-`speccy next --json` and filters for `next_action.kind == "implement"`
+`speccy next --json` and filters for `next_action.kind == "work"`
 to resolve the next implementable task. In either case the session:
 
 - flips `state="pending"` to `state="in-progress"` on the target
@@ -752,24 +751,6 @@ populate it. The skill detects three states:
 The skill never overwrites: always append, or stop. The CLI's
 `speccy init` only scaffolds `.speccy/` and copies the host skill
 pack; it never edits `AGENTS.md`.
-
-## speccy.toml
-
-```toml
-schema_version = 1
-
-[project]
-name = "taskify"
-```
-
-That is the complete configuration. There is no `[policy]` block,
-no `[env]` block, no review identity setting, no `[[global_checks]]`
-array, no `root` field — the project root is the directory containing
-`.speccy/` (found by `find_root` walking up). Project-level conventions
-and toolchain context belong in `AGENTS.md`, which every skill prompt
-already loads. If the CLI ever needs structured access to environment
-metadata, the block will come back with a real purpose; until then,
-it isn't here.
 
 ## SPEC.md (PRD-shaped template)
 
@@ -2031,7 +2012,7 @@ its derived `next_action`:
 Per-spec form (positional `SPEC-NNNN`) — one entry, or
 `{ next_action: null, reason }` when the spec is `completed` or
 `superseded`. Action kind is derived from spec state via the
-priority rule `review > implement > ship`, with `decompose` when
+priority rule `review > work > ship`, with `decompose` when
 TASKS.md is absent. There is no `--kind` flag: spec state fully
 determines the kind, so caller-supplied filtering would be
 redundant. Skills that want only one kind read the envelope and
@@ -2088,9 +2069,9 @@ The canonical, append-only list lives in
 mirrors the registry.
 
 ```text
-SPC-001  Stray per-spec spec.toml file present in spec directory
-         (the only TOML carried at spec level today is the workspace
-         `.speccy/speccy.toml`; a per-spec spec.toml is a stale file)
+SPC-001  SPEC.md could not be read or its element tree failed to
+         parse (Level::Error). Catch-all surface for I/O and
+         element-tree parse errors against `SPEC.md`.
 SPC-002  SPEC.md element tree malformed: heading declares an ID but
          no matching `<requirement>` element exists
 SPC-003  SPEC.md element tree malformed: `<requirement>` element
@@ -2400,13 +2381,6 @@ Spec folders: `NNNN-slug-with-hyphens`. Slug is lowercase ASCII
 only. Lint warns on uppercase or non-ASCII. Mismatch between
 `frontmatter.slug` and the actual folder name is a lint error.
 
-## Schema version
-
-`.speccy/speccy.toml` requires `schema_version = 1`. SPEC.md /
-TASKS.md / REPORT.md frontmatter implicitly target schema version
-1; no declaration needed. The CLI rejects unknown `schema_version`
-values with a clear error.
-
 ## `speccy verify` exit code
 
 Binary. `0` if proof shape is intact (specs parse, every requirement
@@ -2422,7 +2396,7 @@ structured failure info.
 ## `speccy next` priority
 
 Per-spec, the derived `next_action.kind` follows
-`review > implement > ship`, with `decompose` when TASKS.md is
+`review > work > ship`, with `decompose` when TASKS.md is
 absent. Drift visibility favours short feedback
 loops; bugs caught in the piecewise (implement → review → implement
 → review) workflow are cheap, while bugs caught after multiple
@@ -2461,10 +2435,10 @@ CLI is not in this loop; it does not invoke git.
 Speccy was built in this order, and the current binary reflects the
 end state:
 
-1. Artifact parser: `speccy.toml`, SPEC.md (YAML frontmatter + XML
-   element tree via `speccy-core::parse::spec_xml` + Changelog
-   table), TASKS.md (YAML frontmatter + `task_xml` element tree),
-   REPORT.md (YAML frontmatter + `report_xml` element tree).
+1. Artifact parser: SPEC.md (YAML frontmatter + XML element tree
+   via `speccy-core::parse::spec_xml` + Changelog table), TASKS.md
+   (YAML frontmatter + `task_xml` element tree), REPORT.md (YAML
+   frontmatter + `report_xml` element tree).
 2. `speccy init` — scaffold + host skill copy with three-way
    per-file classification.
 3. Lint engine with the codes listed in "Lint Codes".

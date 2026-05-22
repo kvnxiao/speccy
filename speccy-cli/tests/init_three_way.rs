@@ -240,11 +240,11 @@ fn chk020_atomic_refuse_no_other_file_written() -> TestResult {
     // but differs from what the renderer would produce.
     run_init(&fx.root, &[]).failure();
 
-    // The .speccy/speccy.toml file must NOT have been created — atomic
+    // The .speccy/.gitkeep file must NOT have been created — atomic
     // refuse means no other planned target is written.
     assert!(
-        !fx.root.join(".speccy/speccy.toml").exists(),
-        "CHK-020: atomic batch refuse must leave .speccy/speccy.toml uncreated when one planned file conflicts",
+        !fx.root.join(".speccy/.gitkeep").exists(),
+        "CHK-020: atomic batch refuse must leave .speccy/.gitkeep uncreated when one planned file conflicts",
     );
     // The speccy-init SKILL.md must also not be created.
     assert!(

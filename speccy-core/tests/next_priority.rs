@@ -145,7 +145,7 @@ fn chk001_in_review_beats_pending_within_spec() -> TestResult {
     let spec2 = ws2.specs.first().expect("workspace must contain SPEC-0001");
     let action2 = compute_for_spec(spec2).expect("spec with pending task must have an action");
     assert!(
-        matches!(&action2, NextAction::Implement { task_id } if task_id == "T-002"),
+        matches!(&action2, NextAction::Work { task_id } if task_id == "T-002"),
         "in-progress T-001 must be skipped; pending T-002 wins, got {action2:?}",
     );
     Ok(())
@@ -177,10 +177,10 @@ fn chk002_workspace_entries_ordered_by_spec_id() -> TestResult {
     let e1 = entries.get(1).expect("second entry must exist");
     assert_eq!(e0.spec_id, "SPEC-0001", "SPEC-0001 must be first");
     assert_eq!(e1.spec_id, "SPEC-0002", "SPEC-0002 must be second");
-    // SPEC-0001 has a pending task, so its action is Implement.
+    // SPEC-0001 has a pending task, so its action is Work.
     assert!(
-        matches!(&e0.action, NextAction::Implement { task_id } if task_id == "T-001"),
-        "SPEC-0001 must return Implement T-001, got {:?}",
+        matches!(&e0.action, NextAction::Work { task_id } if task_id == "T-001"),
+        "SPEC-0001 must return Work T-001, got {:?}",
         e0.action,
     );
     // SPEC-0002 has an in-review task.
@@ -209,14 +209,14 @@ fn chk002_workspace_entries_ordered_by_spec_id() -> TestResult {
     let ws2 = scan(&root2);
     let entries2 = compute_workspace(&ws2);
     // SPEC-0001 with only in-progress falls through to Decompose defensive default.
-    // SPEC-0002 has a pending task → Implement.
+    // SPEC-0002 has a pending task → Work.
     let spec2_entry = entries2
         .iter()
         .find(|e| e.spec_id == "SPEC-0002")
         .expect("SPEC-0002 must appear in workspace listing");
     assert!(
-        matches!(&spec2_entry.action, NextAction::Implement { task_id } if task_id == "T-002"),
-        "SPEC-0002 must return Implement T-002, got {:?}",
+        matches!(&spec2_entry.action, NextAction::Work { task_id } if task_id == "T-002"),
+        "SPEC-0002 must return Work T-002, got {:?}",
         spec2_entry.action,
     );
     Ok(())

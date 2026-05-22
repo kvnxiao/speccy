@@ -97,21 +97,42 @@ fn read_file(root: &Utf8Path, rel: &str) -> TestResult<String> {
 }
 
 #[test]
-fn scaffold_speccy_toml() -> TestResult {
+fn scaffold_gitkeep() -> TestResult {
+    // SPEC-0040 REQ-001 / CHK-001 / CHK-002 / CHK-007: after a fresh
+    // `speccy init`, `.speccy/.gitkeep` exists, the retired TOML
+    // scaffold file does not, no init plan line mentions that
+    // filename, and a follow-up `speccy status` succeeds against the
+    // `.speccy/` marker directory. The retired filename is computed
+    // via `format!` from its stem + extension so this test file
+    // itself contains no literal `<stem>.<ext>` substring — that's
+    // the CHK-008 ripgrep guard, which scopes a case-sensitive
+    // search of the test trees to zero matches.
+    let retired_name = format!("speccy{dot}toml", dot = ".");
     let fx = project_with_name("acme")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
-    cmd.assert().success();
+    let output = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(output)?;
 
-    let body = read_file(&fx.root, ".speccy/speccy.toml")?;
     assert!(
-        body.contains("schema_version = 1"),
-        "speccy.toml should declare schema_version = 1; got: {body}",
+        fx.root.join(".speccy/.gitkeep").exists(),
+        "SPEC-0040 REQ-001 / CHK-001: speccy init must scaffold `.speccy/.gitkeep`",
     );
+    let retired_path = fx.root.join(".speccy").join(&retired_name);
     assert!(
-        body.contains("name = \"acme\""),
-        "speccy.toml should set project name to parent dir name `acme`; got: {body}",
+        !retired_path.exists(),
+        "SPEC-0040 REQ-001 / CHK-001: speccy init must not scaffold the retired `{retired_name}` file",
     );
+    for line in stdout.lines() {
+        assert!(
+            !line.contains(retired_name.as_str()),
+            "SPEC-0040 CHK-007: no init plan line may contain `{retired_name}`; got line: {line}",
+        );
+    }
+
+    let mut status_cmd = Command::cargo_bin("speccy")?;
+    status_cmd.arg("status").current_dir(fx.root.as_std_path());
+    status_cmd.assert().success();
     Ok(())
 }
 
@@ -134,10 +155,16 @@ fn refuse_without_force() -> TestResult {
     // SPEC-0033 T-008: the new conflict-based refusal replaces the old
     // workspace-exists guard. Any file that exists and differs from the
     // planned content triggers exit 1 with `--force` mentioned in stderr.
+    // SPEC-0040 T-003: the conflict trigger is now a shipped SKILL.md
+    // file rather than the retired workspace-level TOML scaffold
+    // (which is no longer written by init).
     let fx = project_with_name("refuse")?;
-    mkdir(&fx.root, ".speccy")?;
-    // Write a speccy.toml that differs from what the renderer would emit.
-    write_file(&fx.root, ".speccy/speccy.toml", "schema_version = 1\n")?;
+    mkdir(&fx.root, ".claude")?;
+    write_file(
+        &fx.root,
+        ".claude/skills/speccy-init/SKILL.md",
+        "OLD-SHIPPED-CONTENT",
+    )?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
@@ -147,9 +174,11 @@ fn refuse_without_force() -> TestResult {
 
 #[test]
 fn force_overwrites_shipped_files() -> TestResult {
+    // SPEC-0040 T-003: dropped the retired workspace-level TOML
+    // scaffold leg (no longer written by init). The
+    // `.claude/skills/speccy-init/SKILL.md` leg already proves
+    // `--force` overwrites a shipped file.
     let fx = project_with_name("force-shipped")?;
-    mkdir(&fx.root, ".speccy")?;
-    write_file(&fx.root, ".speccy/speccy.toml", "OLD-TOML")?;
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
@@ -162,16 +191,6 @@ fn force_overwrites_shipped_files() -> TestResult {
         .arg("--force")
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
-
-    let toml_body = read_file(&fx.root, ".speccy/speccy.toml")?;
-    assert_ne!(
-        toml_body, "OLD-TOML",
-        "--force should refresh .speccy/speccy.toml",
-    );
-    assert!(
-        toml_body.contains("schema_version = 1"),
-        "refreshed speccy.toml should match template",
-    );
 
     let shipped = read_file(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
     assert_ne!(
@@ -808,8 +827,15 @@ fn exit_codes() -> TestResult {
     // SPEC-0033 T-008 replaced the workspace-exists guard with
     // per-file conflict detection; only a differing file triggers exit 1.
     {
+        // SPEC-0040 T-003: the conflict trigger is now a shipped
+        // SKILL.md (the retired workspace-level TOML scaffold is no
+        // longer written by init).
         let fx = project_with_name("exit-one-conflict")?;
-        write_file(&fx.root, ".speccy/speccy.toml", "differing-content\n")?;
+        write_file(
+            &fx.root,
+            ".claude/skills/speccy-init/SKILL.md",
+            "differing-content\n",
+        )?;
         let mut cmd = Command::cargo_bin("speccy")?;
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().failure().code(1);

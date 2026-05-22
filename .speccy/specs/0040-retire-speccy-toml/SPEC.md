@@ -2,7 +2,7 @@
 id: SPEC-0040
 slug: retire-speccy-toml
 title: "Retire speccy.toml: drop scaffolding, parser, dependency, and TOML-side schema_version"
-status: in-progress
+status: implemented
 created: 2026-05-22
 supersedes: []
 ---
@@ -55,6 +55,10 @@ to a follow-up SPEC.
 - README.md and `.speccy/ARCHITECTURE.md` contain no surviving
   `speccy.toml` references and no surviving `## Schema version`
   section after this SPEC ships.
+- `speccy next` emits `next_action.kind = "work"` (not `"implement"`)
+  in JSON and `"work"` in text output, aligning the CLI's vocabulary
+  with the shipped orchestration skills' work/review/ship/decompose
+  terminology.
 - The standard hygiene suite (`cargo test --workspace`, clippy,
   `cargo +nightly fmt --all --check`, `cargo deny check`) passes
   after the deletion.
@@ -170,6 +174,7 @@ when `speccy status` runs from that directory,
 then the command exits 0 (workspace discovery via `find_root`
 succeeds against the `.speccy/` marker directory).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -223,6 +228,7 @@ when ripgrep searches `*.rs` files for any of `toml_files`,
 `UnsupportedSchemaVersion` (case-sensitive),
 then the search returns zero matching lines.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -264,6 +270,7 @@ when `cargo test --workspace` runs,
 then it exits 0 (the SPEC.md and TASKS.md / REPORT.md parse paths
 both function via the relocated helper).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -312,6 +319,7 @@ plan is captured,
 then no line in the plan output contains the substring
 `speccy.toml`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -369,6 +377,7 @@ Given the speccy workspace at HEAD,
 when `cargo test --workspace --all-features` runs,
 then it exits 0.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -408,6 +417,7 @@ Given the speccy workspace at HEAD,
 when `cargo build --workspace` runs,
 then it exits 0.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -482,6 +492,89 @@ when ripgrep searches `.speccy/ARCHITECTURE.md` for the literal
 heading strings `## speccy.toml` and `## Schema version`,
 then the search returns zero matches.
 </scenario>
+
+</requirement>
+
+<requirement id="REQ-008">
+### REQ-008: `speccy next` emits `kind = "work"` instead of `kind = "implement"`
+
+The `NextAction::Implement` enum variant in
+`speccy-core::next` is renamed to `NextAction::Work`. The CLI's
+JSON discriminator string in `speccy-cli::next_output::to_json_action`
+flips from `"implement"` to `"work"`, and the text renderer in
+`render_text_per_spec` / `render_text_workspace` flips its
+keyword the same way. Every first-party test assertion that
+matched on `"implement"` (as a JSON `kind` field, as the
+per-spec text token, or as a workspace-row token) is updated to
+match `"work"` instead. Every shipped skill body, agent
+definition, and prompt module under `.claude/`, `.codex/`, and
+`resources/modules/` that quotes `next_action.kind == "implement"`
+is updated to quote `"work"`. The shipped lint catalogue in
+`.speccy/ARCHITECTURE.md` is updated only where it quotes the
+JSON discriminator literally; surrounding prose that uses the
+English word "implement" as a verb stays untouched. Historical
+SPEC artifacts (prior `SPEC.md`, `TASKS.md`, `REPORT.md`,
+journal, and evidence files under `.speccy/specs/00**`) are
+left as written — they describe what was true at the time and
+are not retroactively rewritten.
+
+<done-when>
+- `NextAction::Work { task_id }` is declared in
+  `speccy-core/src/next.rs`; `NextAction::Implement` does not
+  exist.
+- `speccy next --json` emits `"kind": "work"` for a pending-task
+  spec; it never emits `"kind": "implement"`.
+- `speccy next` (text form) emits the token `work` (per-spec
+  form: `SPEC-NNNN: work T-NNN`; workspace form: the same token
+  in the per-row output).
+- A ripgrep for `"implement"` (case-sensitive, scoped to
+  `speccy-core/src/`, `speccy-cli/src/`, and `speccy-cli/tests/`)
+  returns zero hits as a JSON-literal or text-keyword token.
+- A ripgrep for `next_action.kind == "implement"` (or the
+  unquoted JSON-tag form `kind: implement` / `"implement"` as a
+  next-action discriminator) across `.claude/`, `.codex/`, and
+  `resources/modules/` returns zero hits.
+- The full hygiene suite (`cargo test --workspace`, clippy,
+  `cargo +nightly fmt --all --check`, `cargo deny check`)
+  passes.
+</done-when>
+
+<behavior>
+- Given the speccy workspace at HEAD after this SPEC lands, when
+  `speccy next --json` runs against a spec with a pending task,
+  then the emitted JSON contains
+  `"next_action": { "kind": "work", "task_id": "T-NNN" }`.
+- Given the same workspace, when `speccy next SPEC-NNNN` (text
+  form) runs against a spec with a pending task, then the
+  emitted line ends with the token `work T-NNN`.
+- Given a shipped orchestration skill body that dispatches on
+  `next_action.kind`, when a maintainer searches it for the
+  string `"implement"`, then the only hit (if any) is the
+  English verb in prose, not a discriminator quote.
+</behavior>
+
+<scenario id="CHK-014">
+Given the speccy workspace at HEAD,
+when ripgrep searches `speccy-core/src/` and `speccy-cli/src/`
+(case-sensitive) for the literal `"implement"`,
+then the search returns zero matches.
+</scenario>
+
+<scenario id="CHK-015">
+Given the speccy workspace at HEAD,
+when `cargo test --workspace --all-features` runs,
+then it exits 0 (all renamed-keyword assertions pass).
+</scenario>
+
+<scenario id="CHK-016">
+Given a built `speccy` binary at HEAD and a workspace with a
+spec whose next pending task is `T-NNN`,
+when `speccy next --json` runs,
+then the emitted JSON contains the literal substring
+`"kind":"work"` (or `"kind": "work"` after pretty-printing) and
+does not contain `"kind":"implement"`.
+</scenario>
+
 </requirement>
 
 ## Decisions
@@ -564,4 +657,5 @@ no migration ceremony; transitive `toml` is acceptable.)
 | Date       | Reason                                                   | Author     |
 |------------|----------------------------------------------------------|------------|
 | 2026-05-22 | Initial draft. Retire `.speccy/speccy.toml`: drop the scaffolded file from `speccy init` (replacing it with `.speccy/.gitkeep` to preserve workspace-discovery), delete the `speccy-core::parse::toml_files` module in full (parser, types, `SUPPORTED_SCHEMA_VERSION`, `guard_schema_version`, `ParseError::UnsupportedSchemaVersion`, re-exports), relocate the shared `read_to_string` helper, delete the CLI template file and rendering code, rewrite every test that references `.speccy/speccy.toml`, drop the explicit `toml` dependency from `speccy-core/Cargo.toml`, and remove every `speccy.toml` reference and the TOML-side `## Schema version` story from `README.md` and `.speccy/ARCHITECTURE.md`. SPC-001 the lint rule and the CLI `--json` envelope `schema_version: 1` contract are unchanged. Broader `.speccy/ARCHITECTURE.md` restructure is deferred to a follow-up SPEC. Pre-v1; no migration shim. | Kevin Xiao |
+| 2026-05-22 | Add REQ-008 mid-loop: rename `next_action.kind` from `"implement"` to `"work"` in the CLI's JSON and text output (with matching `NextAction::Work` enum rename), and update every first-party test, shipped skill body, agent definition, and ARCHITECTURE.md quote that referenced the old discriminator. Folded into SPEC-0040 because the orchestrator skill already speaks the work/review/ship/decompose vocabulary; the CLI's `"implement"` tag was the odd one out, and shipping the rename alongside the `speccy.toml` retirement keeps the "drop dead vocabulary" theme coherent. Historical SPEC artifacts are not retroactively edited. Pre-v1; no JSON-envelope schema bump. | Kevin Xiao |
 </changelog>

@@ -76,9 +76,9 @@ fn chk007_per_spec_json_in_review_priority() -> TestResult {
     Ok(())
 }
 
-/// After the in-review task transitions to completed, kind becomes "implement".
+/// After the in-review task transitions to completed, kind becomes "work".
 #[test]
-fn chk007_per_spec_json_implement_after_review_done() -> TestResult {
+fn chk007_per_spec_json_work_after_review_done() -> TestResult {
     let ws = Workspace::new()?;
     let tasks_xml = format!(
         "{}{}",
@@ -106,8 +106,8 @@ fn chk007_per_spec_json_implement_after_review_done() -> TestResult {
         .expect("next_action must be present");
     assert_eq!(
         next_action.get("kind"),
-        Some(&serde_json::json!("implement")),
-        "expected kind=implement but got: {parsed}",
+        Some(&serde_json::json!("work")),
+        "expected kind=work but got: {parsed}",
     );
     assert_eq!(
         next_action.get("task_id"),
@@ -282,12 +282,12 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
 
 // -- --kind flag is removed ---------------------------------------------------
 
-/// CHK-007 scenario 5: `speccy next --kind implement` → clap error.
+/// CHK-007 scenario 5: `speccy next --kind work` → clap error.
 #[test]
 fn kind_flag_is_rejected() -> TestResult {
     let ws = Workspace::new()?;
     Command::cargo_bin("speccy")?
-        .args(["next", "--kind", "implement"])
+        .args(["next", "--kind", "work"])
         .current_dir(ws.root.as_std_path())
         .assert()
         .failure()
@@ -397,8 +397,8 @@ fn workspace_json_active_specs_listed() -> TestResult {
     let next_action = entry.get("next_action").expect("next_action in entry");
     assert_eq!(
         next_action.get("kind"),
-        Some(&serde_json::json!("implement")),
-        "expected kind=implement in entry: {entry}",
+        Some(&serde_json::json!("work")),
+        "expected kind=work in entry: {entry}",
     );
     Ok(())
 }

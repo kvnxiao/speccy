@@ -225,28 +225,6 @@ fn duplicate_chk_ids_surface_as_duplicate_marker_id_via_spc_001() -> TestResult 
     Ok(())
 }
 
-/// Bullet 4: workspace-level `speccy.toml` still parses cleanly via
-/// the surviving `ProjectConfig` parser.
-#[test]
-fn workspace_speccy_toml_still_parses() -> TestResult {
-    use speccy_core::parse::speccy_toml;
-    let tmp = tempfile::tempdir()?;
-    let root = utf8(&tmp)?;
-    let path = root.join("speccy.toml");
-    fs_err::write(
-        path.as_std_path(),
-        indoc! {r#"
-            schema_version = 1
-
-            [project]
-            name = "demo"
-        "#},
-    )?;
-    let parsed = speccy_toml(&path).expect("workspace speccy.toml must still parse");
-    assert_eq!(parsed.project.name, "demo");
-    Ok(())
-}
-
 /// Bullet 5: a requirement marker with two nested scenarios surfaces
 /// as a requirement proved by two scenarios in the loader output.
 #[test]

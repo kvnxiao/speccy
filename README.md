@@ -114,7 +114,7 @@ This command:
   refresh the shipped files in place after a `speccy` upgrade.
 - Detects the host harness from `.claude/` or `.codex/` on disk.
   Pass `--host claude-code` or `--host codex` to override detection.
-- Scaffolds `.speccy/speccy.toml` and the `.speccy/specs/` skeleton.
+- Scaffolds the `.speccy/` directory and the `.speccy/specs/` skeleton.
 - Copies the host skill pack into the host-native location:
   - Claude Code: `.claude/skills/speccy-*/` and `.claude/agents/`
   - Codex: `.agents/skills/speccy-*/` and `.codex/agents/`
@@ -213,7 +213,6 @@ AGENTS.md                       Product north star + conventions (root)
 CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
 
 .speccy/
-  speccy.toml                   Minimal project config (just schema_version + name)
   specs/
     NNNN-slug/                  One spec, flat layout
       SPEC.md                   Frontmatter + PRD prose + nested <requirement>/<scenario>/<decision> elements + Changelog
@@ -243,8 +242,7 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
 ```
 
 The requirement-to-scenario graph lives in-band as XML element tags
-inside `SPEC.md`; there is no per-spec `spec.toml`. The only TOML
-left in the layout is the workspace-level `.speccy/speccy.toml`.
+inside `SPEC.md`; there is no per-spec `spec.toml`.
 
 Specs may additionally be grouped under an optional **mission
 folder** (`.speccy/specs/[focus]/MISSION.md` plus one folder per
