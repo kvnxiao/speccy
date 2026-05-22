@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0039
-spec_hash_at_generation: 9d09b01a13c5a8de26fce4a4b65de01646b3bfc367ec733b7251c1ddbb6bee98
+spec_hash_at_generation: 168f69a88535da4cdda603f24e6c488daaa5bead0b69f82f15238c9f33cc01dc
 generated_at: 2026-05-22T06:58:12Z
 ---
 # Tasks: SPEC-0039 Cross-harness orchestration port — orchestrator and holistic-gate skills ship from shared modules with thin per-host adapters in both packs
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Factor the orchestrator pilot into `resources/modules/skills/speccy-orchestrate.md`
 
 Lift the host-neutral body of the orchestrator pilot at
@@ -65,7 +65,7 @@ Suggested files: `resources/modules/skills/speccy-orchestrate.md` (new), `.claud
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001">
+<task id="T-002" state="completed" covers="REQ-001">
 ## Factor the holistic-review pilot into `resources/modules/skills/speccy-holistic-gate.md`
 
 Lift the host-neutral body of the holistic-review pilot at
@@ -118,7 +118,7 @@ Suggested files: `resources/modules/skills/speccy-holistic-gate.md` (new), `.cla
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001">
+<task id="T-003" state="completed" covers="REQ-001">
 ## Factor the two holistic-loop sub-agent pilots into `resources/modules/personas/`
 
 Lift the host-neutral bodies of the two holistic-loop sub-agent
@@ -164,7 +164,7 @@ Suggested files: `resources/modules/personas/holistic-reviewer.md` (new), `resou
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-002 REQ-003">
+<task id="T-004" state="completed" covers="REQ-002 REQ-003">
 ## Author Codex grant module + per-host wrappers + per-host agent templates; regenerate; delete legacy pilots
 
 Compose the per-host adapters for the orchestration loop on top of
@@ -243,7 +243,7 @@ Suggested files: `resources/modules/skills/speccy-orchestrate-codex-grant.md` (n
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-005">
+<task id="T-005" state="completed" covers="REQ-005">
 ## Retire the legacy Codex prose-spawn idiom in `speccy-review.md` and update pinning test assertions
 
 Rewrite the Codex `{% else %}` branch of
@@ -298,7 +298,7 @@ Suggested files: `resources/modules/skills/speccy-review.md`, `speccy-cli/tests/
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-004">
+<task id="T-006" state="completed" covers="REQ-004">
 ## Strip the `ARCHITECTURE.md` reference from `speccy-core/src/prompt/id_alloc.rs`
 
 Rewrite the doc comment at `speccy-core/src/prompt/id_alloc.rs:3` to
@@ -341,7 +341,7 @@ Suggested files: `speccy-core/src/prompt/id_alloc.rs`.
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-006">
+<task id="T-007" state="completed" covers="REQ-006">
 ## Reposition multi-agent orchestration as a shipped v1.0 artifact across `README.md`, `.speccy/ARCHITECTURE.md`, and `AGENTS.md`
 
 Rewrite the three project-local doc surfaces that frame Speccy's
@@ -420,7 +420,7 @@ when `rg -n '\(Future\) multi-agent' AGENTS.md` runs,
 then it prints zero matches; and when `rg -nU 'Long-term, speccy is the substrate underneath multi-agent harnesses' AGENTS.md` runs, then it prints zero matches.
 
 Given the same checkout,
-when `rg -n '^- \*\*Feedback, not enforcement\.\*\*' AGENTS.md` and `rg -nU 'Stay small\.' AGENTS.md` run,
+when `rg -n '^\d+\. \*\*Feedback, not enforcement\.\*\*' AGENTS.md` and `rg -nU 'Stay small\.' AGENTS.md` run,
 then each prints at least one match — proving the six durable principles in `## Core principles` survived the rewrite verbatim.
 
 Given the same checkout,

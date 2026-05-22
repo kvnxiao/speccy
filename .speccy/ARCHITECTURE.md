@@ -1724,6 +1724,8 @@ resources/
       speccy-plan.md
       speccy-amend.md
       speccy-review.md       Orchestrator (dispatches the six reviewer sub-agents)
+      speccy-orchestrate.md  Drives the per-task work + review loop across one SPEC
+      speccy-holistic-gate.md Pre-ship SPEC-vs-impl drift review + autonomous fix loop
     phases/                  Full-body sources for the pinned phase workers
       speccy-init.md         Used by speccy-init's interactive SKILL.md too
       speccy-tasks.md        Decompose one SPEC into TASKS.md
@@ -1846,6 +1848,8 @@ the parent session.
 - `/speccy-review` -- Phase 4 (review one task; orchestrator)
 - `/speccy-amend` -- Mid-loop SPEC + TASKS reconciliation
 - `/speccy-ship` -- Phase 5 (REPORT.md + PR)
+- `/speccy-orchestrate` -- Chains `/speccy-work` + `/speccy-review` across every task in one SPEC, hands off to `/speccy-holistic-gate` before the ship boundary
+- `/speccy-holistic-gate` -- Pre-ship SPEC-vs-implementation drift review with an autonomous fix-retry loop; invoked by the orchestrator and runnable on its own
 
 A typical full session in Claude Code looks like:
 
@@ -2517,7 +2521,11 @@ hope."
 # Long-Term Vision
 
 Speccy aims to become the **deterministic feedback substrate** that
-multi-agent harnesses can build on. Future layers (not v1):
+multi-agent harnesses can build on. The in-pack implementation +
+review orchestration loop now ships as part of the skill layer
+(`/speccy-orchestrate` chained with `/speccy-holistic-gate`), so
+single-host end-to-end execution is no longer a future layer. The
+following remain future layers (not v1):
 
 - Concurrent task pickup with file-locking or task queues
 - Worktree orchestration per task

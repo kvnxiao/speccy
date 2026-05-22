@@ -156,6 +156,8 @@ const SKILL_NAMES: &[&str] = &[
     "speccy-ship",
     "speccy-amend",
     "speccy-brainstorm",
+    "speccy-orchestrate",
+    "speccy-holistic-gate",
 ];
 
 /// Per-host install root for the SKILL.md wrappers under
@@ -645,9 +647,9 @@ fn t002_resources_modules_personas_is_non_empty() {
 // `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
 // triple so the rendered `/speccy-review` skill picks the host-native
 // subagent primitive (Claude Code's `Task` tool with `subagent_type`;
-// Codex's prose-spawn by name). Both rendered outputs additionally
-// carry an explicit `speccy review T-NNN --persona X` fallback for
-// harnesses that don't recognise the subagent type.
+// Codex's native sub-agent-spawn primitive against each registered
+// `reviewer-<persona>` sub-agent). SPEC-0039 REQ-005 retired the
+// legacy Codex prose-spawn idiom in favor of the native primitive.
 // --------------------------------------------------------------------
 
 /// Embedded copy of the `speccy-review` module body, used by the
@@ -706,11 +708,14 @@ fn speccy_review_skill_prefers_native_subagents() {
             "rendered Claude Code `speccy-review` SKILL.md must name persona `{persona}` as `{needle}`; got:\n{claude_body}",
         );
     }
-    // Negative: the Codex prose-spawn wording must not leak into the
-    // Claude Code render.
+    // SPEC-0039 REQ-005: the legacy Codex prose-spawn wording must
+    // not leak into either render. The retirement is repo-wide and
+    // covered structurally by the `prose.?spawn` zero-match grep
+    // scenario; pin it at the rendered-output layer too so a future
+    // edit that reintroduces the phrase fails this test first.
     assert!(
-        !claude_body.contains("Prose-spawn the four reviewer subagents"),
-        "rendered Claude Code `speccy-review` SKILL.md must not contain the Codex prose-spawn wording; got:\n{claude_body}",
+        !claude_body.to_lowercase().contains("prose-spawn"),
+        "rendered Claude Code `speccy-review` SKILL.md must not contain the legacy Codex prose-spawn wording (SPEC-0039 REQ-005); got:\n{claude_body}",
     );
 
     let codex =
@@ -718,17 +723,27 @@ fn speccy_review_skill_prefers_native_subagents() {
     let codex_body = find_rendered_skill(&codex, ".agents", "speccy-review");
 
     // Codex branch: step 4 must not mention `subagent_type:` (a
-    // Claude-Code-specific key), and must instead reference the four
-    // default reviewer subagents by name in prose.
+    // Claude-Code-specific key), must reference each default reviewer
+    // subagent by name, and must invoke Codex's native sub-agent-spawn
+    // primitive rather than the legacy prose-spawn idiom
+    // (SPEC-0039 REQ-005).
     assert!(
         !codex_body.contains("subagent_type:"),
         "rendered Codex `speccy-review` SKILL.md must not contain `subagent_type:` (Claude-Code-only key); got:\n{codex_body}",
+    );
+    assert!(
+        !codex_body.to_lowercase().contains("prose-spawn"),
+        "rendered Codex `speccy-review` SKILL.md must not contain the legacy prose-spawn wording (SPEC-0039 REQ-005); got:\n{codex_body}",
+    );
+    assert!(
+        codex_body.contains("Codex's native sub-agent-spawn primitive"),
+        "rendered Codex `speccy-review` SKILL.md must invoke `Codex's native sub-agent-spawn primitive` in step 4 (SPEC-0039 REQ-005); got:\n{codex_body}",
     );
     for persona in DEFAULT_REVIEWER_PERSONAS {
         let needle = format!("`reviewer-{persona}`");
         assert!(
             codex_body.contains(&needle),
-            "rendered Codex `speccy-review` SKILL.md must name persona `{persona}` in prose as `{needle}`; got:\n{codex_body}",
+            "rendered Codex `speccy-review` SKILL.md must name persona `{persona}` as `{needle}`; got:\n{codex_body}",
         );
     }
 
@@ -799,7 +814,7 @@ fn t005_claude_skills_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t005_claude_code_skill_wrappers_exactly_seven() {
+fn t005_claude_code_skill_wrappers_match_skill_names() {
     let dir = t005_claude_skills_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -825,7 +840,7 @@ fn t005_claude_code_skill_wrappers_exactly_seven() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly seven Claude Code SKILL.md.tmpl wrappers must exist, one per shipped verb",
+        "the Claude Code SKILL.md.tmpl wrappers must match SKILL_NAMES exactly, one per shipped verb",
     );
 }
 
@@ -940,7 +955,7 @@ fn t006_codex_skills_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t006_codex_skill_wrappers_exactly_seven() {
+fn t006_codex_skill_wrappers_match_skill_names() {
     let dir = t006_codex_skills_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -966,7 +981,7 @@ fn t006_codex_skill_wrappers_exactly_seven() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly seven Codex SKILL.md.tmpl wrappers must exist, one per shipped verb",
+        "the Codex SKILL.md.tmpl wrappers must match SKILL_NAMES exactly, one per shipped verb",
     );
 }
 
@@ -1017,6 +1032,9 @@ fn t006_codex_wrapper_shape_and_body() {
         // stub bodies instead of a single `{% include %}` directive.
         // `speccy-init` keeps its full body but now includes from
         // `modules/phases/` rather than `modules/skills/`.
+        // SPEC-0039 (REQ-003 / DEC-001 mechanism B): the Codex
+        // `speccy-orchestrate` wrapper carries the host-neutral body
+        // include plus a Codex-only permission-grant module include.
         // All other skills retain the original single-include shape.
         if PINNED_STUB_PHASES.contains(verb) {
             // Stub body: must reference `/agent speccy-<verb>` and the
@@ -1040,6 +1058,20 @@ fn t006_codex_wrapper_shape_and_body() {
                 body.trim(),
                 expected_body,
                 "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (T-009 path rename)",
+                path.display(),
+            );
+        } else if *verb == "speccy-orchestrate" {
+            // SPEC-0039 REQ-003: the Codex orchestrate wrapper includes
+            // the host-neutral body AND the Codex-only permission-grant
+            // module via DEC-001 mechanism B (additive selective-include).
+            assert!(
+                body.contains("{% include \"modules/skills/speccy-orchestrate.md\" %}"),
+                "wrapper `{}` body must include the host-neutral orchestrate body",
+                path.display(),
+            );
+            assert!(
+                body.contains("{% include \"modules/skills/speccy-orchestrate-codex-grant.md\" %}"),
+                "wrapper `{}` body must include the Codex permission-grant module (SPEC-0039 REQ-003)",
                 path.display(),
             );
         } else {

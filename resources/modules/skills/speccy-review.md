@@ -92,7 +92,8 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
    Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name.
    Each subagent resolves to its markdown file at
    `.claude/agents/reviewer-<persona>.md`, so the persona body is
-   already loaded for the sub-agent.{% else %}Prose-spawn the four reviewer subagents by name in parallel:
+   already loaded for the sub-agent.{% else %}Invoke Codex's native sub-agent-spawn primitive four times in
+   parallel, once per persona, against the registered Codex sub-agents
    `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
    `reviewer-style`. The prompt for each spawn is:
 

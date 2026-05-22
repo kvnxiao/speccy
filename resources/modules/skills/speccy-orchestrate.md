@@ -1,9 +1,5 @@
----
-name: speccy-orchestrate
-description: 'Drive the Speccy implementation + review loop for one SPEC end-to-end by chaining speccy-work, speccy-review, and speccy-holistic-gate until the spec is ready to ship. Use when the user says "orchestrate SPEC-NNNN", "speccy-orchestrate SPEC-NNNN", "run the full loop on SPEC-NNNN", "autopilot SPEC-NNNN", or wants to drive a spec from current state to ready-to-ship without chaining single-task skills by hand. Requires: an existing SPEC-NNNN with TASKS.md. Stops one step before shipping (calling speccy-ship is irreversible — it opens a PR) and asks the user before continuing. Do NOT trigger for ad-hoc "implement one task" or "review one task" asks — prefer speccy-work or speccy-review for single-task primitives.'
----
 
-# /speccy-orchestrate
+# {{ cmd_prefix }}speccy-orchestrate
 
 Thin composition layer over the Speccy single-task primitives.
 Queries `speccy next --json`, dispatches each step to a sub-agent,
@@ -14,13 +10,13 @@ heavy work happens in sub-agent contexts that exit when done.
 ## When to use
 
 - The user wants to drive `SPEC-NNNN` from its current state to
-  ready-to-ship without chaining `/speccy-work`,
-  `/speccy-review`, and
-  `/speccy-holistic-gate` by hand.
+  ready-to-ship without chaining `{{ cmd_prefix }}speccy-work`,
+  `{{ cmd_prefix }}speccy-review`, and
+  `{{ cmd_prefix }}speccy-holistic-gate` by hand.
 - The SPEC already has a `TASKS.md` — this orchestrator dispatches
   against existing tasks; it does not plan or decompose.
 
-Stops one step before invoking `/speccy-ship`
+Stops one step before invoking `{{ cmd_prefix }}speccy-ship`
 (ship opens a PR — irreversible — and is always confirmed by the
 user). Do not invoke this skill for ad-hoc "implement one task" or
 "review one task" asks; prefer the single-task primitives.
@@ -28,7 +24,7 @@ user). Do not invoke this skill for ad-hoc "implement one task" or
 ## Argument
 
 ```
-/speccy-orchestrate SPEC-NNNN
+{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN
 ```
 
 The `SPEC-NNNN` argument is required. If missing, ask the user
@@ -95,7 +91,7 @@ to catch state left by a crashed prior session.
 
    ```
    SPEC-NNNN/T-NNN is at state="in-progress" — likely a crashed
-   prior session. Resolve before re-running /speccy-orchestrate:
+   prior session. Resolve before re-running {{ cmd_prefix }}speccy-orchestrate:
 
    - To discard the prior attempt: edit TASKS.md and flip the
      task's state from "in-progress" back to "pending".
@@ -138,9 +134,11 @@ Repeat until a stop condition fires:
 
      Substitute the resolved `task_id` from `next_action.task_id`.
 
-     Invoke the `Task` tool with `subagent_type: "speccy-work"`.
+     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "speccy-work"`.
      The sub-agent definition at `.claude/agents/speccy-work.md`
-     carries the host-native dispatch metadata.
+     carries the host-native dispatch metadata.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+     registered `speccy-work` sub-agent at
+     `.codex/agents/speccy-work.toml`.{% endif %}
 
    - **`review`** — spawn a sub-agent that runs the `speccy-review`
      primitive for the resolved task. Prompt:
@@ -157,9 +155,11 @@ Repeat until a stop condition fires:
      fan-out chatter and journal write logic out of this
      orchestrator's context.
 
-     Invoke the `Task` tool with `subagent_type: "general-purpose"`
+     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "general-purpose"`
      and the prompt above, instructing the sub-agent to read
-     `.claude/skills/speccy-review/SKILL.md` and follow it.
+     `.claude/skills/speccy-review/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
+     sub-agent that loads and follows
+     `.agents/skills/speccy-review/SKILL.md` with the prompt above.{% endif %}
 
    - **`ship`** — spawn a sub-agent that runs the
      `speccy-holistic-gate` primitive for the spec. Prompt:
@@ -170,24 +170,27 @@ Repeat until a stop condition fires:
      > Return only the final `<orchestrator-verdict>` block as
      > your final message.
 
-     Invoke the `Task` tool with `subagent_type: "general-purpose"`,
+     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "general-purpose"`,
      instructing the sub-agent to read
-     `.claude/skills/speccy-holistic-gate/SKILL.md` and follow it.
+     `.claude/skills/speccy-holistic-gate/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
+     sub-agent that loads and follows
+     `.agents/skills/speccy-holistic-gate/SKILL.md` with the
+     prompt above.{% endif %}
 
      When the sub-agent returns, parse the verdict block:
 
      - `verdict="pass"` → surface the one-line summary plus the
        round and simplifier counters, then **ask the user** whether
-       to invoke `/speccy-ship`. Only after explicit
+       to invoke `{{ cmd_prefix }}speccy-ship`. Only after explicit
        confirmation, spawn a `speccy-ship` sub-agent. Ship opens a
        PR; never auto-ship.
      - `verdict="fail"` → surface the drift summary and suggested
        next step from the verdict. Stop the loop. The user decides
-       how to address it (`/speccy-amend`, manual
+       how to address it (`{{ cmd_prefix }}speccy-amend`, manual
        edits, etc.).
 
    - **`decompose`** — STOP. Tell the user to run
-     `/speccy-tasks` first; the orchestrator cannot
+     `{{ cmd_prefix }}speccy-tasks` first; the orchestrator cannot
      loop on a spec without a task list.
 
    - **anything else** (unknown kind, missing field, `done`,
@@ -206,7 +209,7 @@ Repeat until a stop condition fires:
   task. Surface the journal path
   (`.speccy/specs/NNNN-slug/journal/T-NNN.md`) so the user can
   read the blockers and decide whether to decompose
-  (`/speccy-amend` + `/speccy-tasks`),
+  (`{{ cmd_prefix }}speccy-amend` + `{{ cmd_prefix }}speccy-tasks`),
   pick a different model, or intervene by hand. Track per-task
   retry counts in memory across loop iterations; the budget of 5
   is the orchestrator's only per-task retry bound.
@@ -237,10 +240,10 @@ in the status line.
 ## Non-goals
 
 - This skill does not run `speccy verify`, write `REPORT.md`, or
-  open a PR. Those belong to `/speccy-ship`, invoked
+  open a PR. Those belong to `{{ cmd_prefix }}speccy-ship`, invoked
   after confirmation.
 - This skill does not own the drift-fix loop or the simplifier
-  polish — those live in `/speccy-holistic-gate`.
+  polish — those live in `{{ cmd_prefix }}speccy-holistic-gate`.
   Bugs in those loops get fixed there, not here.
 - This skill does not pick a different persona fan-out for review,
   retry blocked tasks with a different model, or split tasks

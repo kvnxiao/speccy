@@ -31,9 +31,12 @@ between intent and shipped behavior **visible**, so drift is loud the
 moment it happens. Speccy is a feedback engine, not an enforcement
 system.
 
-Long-term, speccy is the substrate underneath multi-agent harnesses
-that move projects toward completion without humans re-explaining
-intent at every step.
+Speccy's shipped skill packs already drive the per-task work + review
+loop and the pre-ship drift gate end-to-end on a single host (via
+`/speccy-orchestrate` and `/speccy-holistic-gate`). Beyond that, speccy
+aims to be the substrate underneath cross-host and cross-repository
+harnesses that move projects toward completion without humans
+re-explaining intent at every step.
 
 ### Users
 
@@ -41,18 +44,23 @@ intent at every step.
   who want drift detection without orchestration overhead.
 - AI coding agents driven by host skill packs (Claude Code, Codex)
   through a Plan → Tasks → Impl → Review → Report loop.
-- (Future) multi-agent harnesses building on Speccy's deterministic
-  feedback substrate.
+- Multi-agent harnesses building on Speccy's deterministic feedback
+  substrate — the in-pack orchestration loop ships in v1; cross-host
+  and cross-repository harnesses remain future work.
 
 ### V1.0 outcome
 
 - Seven-command Rust CLI implementing the surface in
-  `.speccy/ARCHITECTURE.md`: `init`, `status`, `next`, `check`,
-  `verify`, `lock`, `vacancy`. Phase prompts (plan / tasks /
-  implement / review / report) live in the shipped skill bodies,
-  not in the CLI; the binary never renders natural-text prompts.
+  `.speccy/ARCHITECTURE.md`: `init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`.
+  Phase prompts (plan / tasks / implement / review / report) live in
+  the shipped skill bodies, not in the CLI; the binary never renders
+  natural-text prompts.
 - Shipped skill packs for Claude Code and Codex driving the full
   development loop end-to-end without humans chaining commands.
+- A shipped orchestration loop in both skill packs
+  (`/speccy-orchestrate` chained with `/speccy-holistic-gate`) that
+  drives one SPEC from first-task implementation through pre-ship
+  drift review without humans chaining per-task commands.
 - Speccy's own implementation tracked in `.speccy/specs/` — by the
   time the CLI is real, its history is the proof that it works.
 - `speccy verify` runs as a CI gate that fails on broken proof shape

@@ -174,6 +174,19 @@ golden path consists of five recipes:
 /speccy-ship      Phase 5: write REPORT.md, open the PR
 ```
 
+If you would rather not chain the per-task recipes by hand, the
+shipped orchestrator drives the full loop end-to-end:
+
+```text
+/speccy-orchestrate   Chain /speccy-work and /speccy-review across every
+                      task in one SPEC, then hand off to /speccy-holistic-gate
+                      for the pre-ship drift check before stopping at the
+                      ship boundary.
+/speccy-holistic-gate Pre-ship SPEC-vs-implementation drift review with an
+                      autonomous fix-retry loop; invoked by the orchestrator
+                      and also runnable on its own.
+```
+
 In addition, for mid-loop scope changes, there is one more recipe:
 
 ```text
@@ -208,20 +221,25 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
       REPORT.md                 Frontmatter (outcome) + <report>/<coverage> elements (end of loop)
 
 .claude/                        (if host is Claude Code)
-  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship}/
-                                Eight workflow recipes. The five interactive skills
-                                (init, brainstorm, plan, review, amend) eject as
-                                full-body SKILL.md; the three pinned phase workers
-                                (tasks, work, ship) eject as thin SKILL.md stubs
-                                pointing at the matching agent file.
+  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship,orchestrate,holistic-gate}/
+                                Ten workflow recipes. The interactive skills
+                                (init, brainstorm, plan, review, amend, orchestrate,
+                                holistic-gate) eject as full-body SKILL.md; the three
+                                pinned phase workers (tasks, work, ship) eject as thin
+                                SKILL.md stubs pointing at the matching agent file.
   agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents (full body)
   agents/reviewer-*.md                 Six reviewer persona sub-agents
+  agents/holistic-{reviewer,implementer}.md
+                                Two holistic-loop sub-agents driven by
+                                /speccy-holistic-gate (drift review + drift fix)
 
 .agents/                        (if host is Codex)
-  skills/speccy-*/                     Eight Codex skill SKILL.md files
+  skills/speccy-*/                     Ten Codex skill SKILL.md files
 .codex/
   agents/speccy-{tasks,work,ship}.toml Pinned phase-worker sub-agents
   agents/reviewer-*.toml               Six reviewer persona sub-agents
+  agents/holistic-{reviewer,implementer}.toml
+                                Codex twins of the two holistic-loop sub-agents
 ```
 
 The requirement-to-scenario graph lives in-band as XML element tags

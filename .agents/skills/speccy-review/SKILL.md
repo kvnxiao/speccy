@@ -75,7 +75,8 @@ flipped there by `speccy-work`).
    `<review>` block is ever appended to the `<task>` body in
    TASKS.md — TSK-006 rejects journal elements there.
 
-   Prose-spawn the four reviewer subagents by name in parallel:
+   Invoke Codex's native sub-agent-spawn primitive four times in
+   parallel, once per persona, against the registered Codex sub-agents
    `reviewer-business`, `reviewer-tests`, `reviewer-security`, and
    `reviewer-style`. The prompt for each spawn is:
 

@@ -2,7 +2,7 @@
 id: SPEC-0039
 slug: cross-harness-orchestration-port
 title: Cross-harness orchestration port — orchestrator and holistic-gate skills ship from shared modules with thin per-host adapters in both packs
-status: in-progress
+status: implemented
 created: 2026-05-22
 supersedes: []
 ---
@@ -326,6 +326,7 @@ is captured after, then `git status` outputs zero lines — proving
 that `.claude/`, `.agents/`, and `.codex/` are regenerated
 byte-for-byte from `resources/` and contain no hand-edited content.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -407,6 +408,7 @@ runs, then it prints zero matches — proving no shipped template
 references the legacy lifecycle skill name or the legacy sub-agent
 names.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -473,6 +475,7 @@ each run, then the Codex render reports at least one match and the
 Claude render reports zero matches in any line referencing the
 sub-agent-spawn grant.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -526,6 +529,7 @@ runs, then it reports at least one match (the project-local
 before); and `rg -l 'ARCHITECTURE\.md' .speccy/specs/` prints at
 least one path (existing SPEC history is preserved).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -582,6 +586,7 @@ runs, then it exits 0 — the previously prose-spawn-pinned
 assertions in `speccy-cli/tests/skill_packs.rs` have been updated
 to match the new native-primitive rendered output.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -662,6 +667,7 @@ Given the same checkout, when
 runs, then it prints zero matches — proving the legacy "downstream
 harnesses build on top of Speccy" framing has been rewritten.
 </scenario>
+
 </requirement>
 
 ## Decisions

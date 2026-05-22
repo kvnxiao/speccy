@@ -1,0 +1,5 @@
+---
+name: speccy-holistic-gate
+description: 'Run a holistic SPEC-vs-implementation review with an autonomous drift-fix retry loop and a simplifier polish pass, for one Speccy SPEC at the pre-ship boundary. Use when the user says "holistic gate SPEC-NNNN", "speccy-holistic-gate SPEC-NNNN", "check for drift before shipping", "run the final defense on SPEC-NNNN", or when speccy-orchestrate reaches the ship boundary and delegates here. Fans out a SPEC drift reviewer and (after drift clears) a simplifier candidate scan, dispatches implementer sub-agents to fix any drift, and returns a single verdict block to its caller. Requires: a SPEC-NNNN whose tasks are all state="completed". Do NOT trigger for per-task review — prefer speccy-review for single-task review.'
+---
+{% include "modules/skills/speccy-holistic-gate.md" %}

@@ -1,8 +1,8 @@
 //! Spec ID allocator (`max + 1`; no gap recycling).
 //!
-//! Per SPEC-0005 DEC-005 and `.speccy/ARCHITECTURE.md` "Spec ID allocation":
-//! gaps left by dropped specs are not recycled so historical SPEC IDs
-//! retain unambiguous meaning in commits and PR descriptions.
+//! Per SPEC-0005 DEC-005 ("Spec ID allocation"): gaps left by dropped
+//! specs are not recycled so historical SPEC IDs retain unambiguous
+//! meaning in commits and PR descriptions.
 //!
 //! Walks `specs_dir` recursively so flat specs (`specs/NNNN-slug/`) and
 //! mission-grouped specs (`specs/[focus]/NNNN-slug/`) share one ID

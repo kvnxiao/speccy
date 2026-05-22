@@ -310,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn render_host_pack_claude_code_emits_eight_skills() {
+    fn render_host_pack_claude_code_emits_ten_skills() {
         let out = render_host_pack(HostChoice::ClaudeCode)
             .expect("render_host_pack(claude-code) should succeed");
         let skill_md_count = out
@@ -321,13 +321,13 @@ mod tests {
             })
             .count();
         assert_eq!(
-            skill_md_count, 8,
-            "claude-code host pack should render eight SKILL.md files; got {skill_md_count}",
+            skill_md_count, 10,
+            "claude-code host pack should render ten SKILL.md files; got {skill_md_count}",
         );
     }
 
     #[test]
-    fn render_host_pack_codex_emits_eight_skills_under_dot_agents() {
+    fn render_host_pack_codex_emits_ten_skills_under_dot_agents() {
         let out =
             render_host_pack(HostChoice::Codex).expect("render_host_pack(codex) should succeed");
         let skill_md_count = out
@@ -338,8 +338,8 @@ mod tests {
             })
             .count();
         assert_eq!(
-            skill_md_count, 8,
-            "codex host pack should render eight .agents/skills/.../SKILL.md files; got {skill_md_count}",
+            skill_md_count, 10,
+            "codex host pack should render ten .agents/skills/.../SKILL.md files; got {skill_md_count}",
         );
     }
 

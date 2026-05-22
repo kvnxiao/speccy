@@ -1,9 +1,5 @@
----
-name: speccy-holistic-review
-description: 'Run a holistic SPEC-vs-implementation review with an autonomous drift-fix retry loop and a simplifier polish pass, for one Speccy SPEC at the pre-ship boundary. Use when the user says "holistic review SPEC-NNNN", "/speccy-holistic-review SPEC-NNNN", "check for drift before shipping", "run the final defense on SPEC-NNNN", or when /speccy-orchestrate reaches the ship boundary and delegates here. Fans out a SPEC drift reviewer and (after drift clears) a simplifier candidate scan, dispatches implementer subagents to fix any drift, and returns a single verdict block to its caller. Requires: a SPEC-NNNN whose tasks are all state="completed". Do NOT trigger for per-task review — prefer /speccy-review for single-task review.'
----
 
-# /speccy-holistic-review
+# {{ cmd_prefix }}speccy-holistic-gate
 
 Final defense mechanism against SPEC drift at the pre-ship boundary.
 
@@ -15,16 +11,32 @@ code that doesn't add up to the SPEC as a unit. This skill is the
 final check before the PR opens.
 
 This skill is **autonomous up to the ship point**. It fans out
-review and implementer subagents, loops on drift, applies a
+review and implementer sub-agents, loops on drift, applies a
 simplifier polish pass, and returns a single short verdict to its
-caller. The caller (typically `/speccy-orchestrate` at the `ship`
-boundary, but a human can invoke this directly) is the one that
-gates the actual PR opening.
+caller. The caller (typically `{{ cmd_prefix }}speccy-orchestrate`
+at the `ship` boundary, but a human can invoke this directly) is
+the one that gates the actual PR opening.
+
+## When to use
+
+- Every task in `SPEC-NNNN` is at `state="completed"` and the next
+  step is to confirm the diff matches the SPEC as a unit before
+  invoking `{{ cmd_prefix }}speccy-ship`.
+- A SPEC was amended mid-implementation and the human wants a final
+  defense pass against drift before opening the PR.
+- The `{{ cmd_prefix }}speccy-orchestrate` outer loop reaches the
+  `ship` boundary and delegates here.
+
+Do not invoke this skill for per-task review (use
+`{{ cmd_prefix }}speccy-review`) or while tasks remain at
+`pending` / `in-progress` / `in-review` (the skill returns `fail`
+immediately if any task is non-completed — this is a pre-ship gate,
+not a mid-loop check).
 
 ## Argument
 
 ```
-/speccy-holistic-review SPEC-NNNN
+{{ cmd_prefix }}speccy-holistic-gate SPEC-NNNN
 ```
 
 The `SPEC-NNNN` argument is required. The SPEC's tasks must all be
@@ -32,25 +44,26 @@ at `state="completed"` — this is a pre-ship gate, not a mid-loop
 check. If any task is not completed, return a `fail` verdict
 immediately with that as the reason.
 
-## Why this lives in a subagent
+## Why this lives in a sub-agent
 
-The drift-fix loop fans out additional subagents over multiple
+The drift-fix loop fans out additional sub-agents over multiple
 rounds. Running inline would bloat the caller's context with every
-reviewer / fixer prompt and verdict. Hosting this loop in a single
-subagent invocation means the caller sees only the final
+reviewer / implementer prompt and verdict. Hosting this loop in a
+single sub-agent invocation means the caller sees only the final
 `<orchestrator-verdict>` block; everything else stays in this
 skill's session and exits with it.
 
 ## What this skill writes and commits
 
-This skill writes to HOLISTIC.md and lets fixer / simplifier
-subagents modify the working tree. It **does not commit
-anything**. Per Speccy's atomic-landing convention, `/speccy-ship`
-is the committer — it bundles all uncommitted changes from the
-loop (per-task journal updates, holistic changes, SPEC.md status
-flip, REPORT.md) into one commit at PR time. HOLISTIC.md, being
-under `.speccy/specs/<spec-dir>/journal/`, ships alongside the
-per-task journal files.
+This skill writes to HOLISTIC.md and lets implementer / simplifier
+sub-agents modify the working tree. It **does not commit
+anything**. Per Speccy's atomic-landing convention,
+`{{ cmd_prefix }}speccy-ship` is the committer — it bundles all
+uncommitted changes from the loop (per-task journal updates,
+holistic changes, SPEC.md status flip, REPORT.md) into one commit
+at PR time. HOLISTIC.md, being under
+`.speccy/specs/<spec-dir>/journal/`, ships alongside the per-task
+journal files.
 
 If a human invokes this skill directly (outside the orchestrator),
 they will see uncommitted changes in `git status` after exit and
@@ -64,19 +77,19 @@ Phase 0 below). The journal is the **persistent state** of the
 holistic loop:
 
 1. **Round-to-round communication** — round N's reviewer reads it
-   to walk round N-1's findings and verify the fixer's claims
+   to walk round N-1's findings and verify the implementer's claims
    against the current diff. Without it, every round re-derives
    from scratch and wastes the round budget.
 2. **Audit trail** — after the skill exits, the human (or
-   `/speccy-ship`) can read it to see what the loop caught and
-   how.
+   `{{ cmd_prefix }}speccy-ship`) can read it to see what the loop
+   caught and how.
 
-### Single-writer rule (DEC-008)
+### Single-writer rule
 
 This skill's session is the **only writer** to HOLISTIC.md.
-Reviewer and fixer subagents never write to it — they return
+Reviewer and implementer sub-agents never write to it — they return
 verdict blocks via their final message; this skill transcribes
-them. Subagents writing in parallel would race; single-writer
+them. Sub-agents writing in parallel would race; single-writer
 prevents that.
 
 ### File format
@@ -124,12 +137,12 @@ clean with its own section.
 
 Round budget: **3 rounds per invocation** for drift fixing. Each
 round is expensive (full SPEC re-read + diff re-analysis +
-implementer pass), so the budget is intentionally tighter than the
-per-task implementer retry budget.
+implementer pass), so the budget of 3 is intentionally tighter than
+the per-task implementer retry budget.
 
 ### Phase 0 — bootstrap
 
-Resolve the three values that subagent prompts need, then open a
+Resolve the three values that sub-agent prompts need, then open a
 new invocation section in HOLISTIC.md.
 
 1. **Spec directory.** Run:
@@ -158,11 +171,11 @@ new invocation section in HOLISTIC.md.
    ```
 
    Use the output as `<base-ref>`. If empty (no remote, detached
-   HEAD), fall back to `main`. Subagent prompts will pass this in
+   HEAD), fall back to `main`. Sub-agent prompts will pass this in
    for `git diff <base-ref>` — that command compares the **working
    tree** against the ref, including uncommitted changes, which is
-   essential because the drift-fixer leaves changes uncommitted
-   between rounds.
+   essential because the drift-implementer leaves changes
+   uncommitted between rounds.
 
 3. **Journal bootstrap and new invocation section.** The journal
    is at `<spec-dir>/journal/HOLISTIC.md`.
@@ -187,7 +200,7 @@ new invocation section in HOLISTIC.md.
 
 Repeat for up to 3 rounds per invocation. This skill's session
 owns the round counter, the working-tree snapshots, and the
-HOLISTIC.md writes; subagents own the substantive review and fix
+HOLISTIC.md writes; sub-agents own the substantive review and fix
 work.
 
 **Defer-write pattern.** Hold returned verdict blocks in memory
@@ -197,9 +210,7 @@ HOLISTIC.md changes inside the snapshot, and a stuck-revert would
 erase the audit trail. The journal is the durable record of *what
 the loop did*; it must survive any rollback the loop performs.
 
-1. **Spawn the drift reviewer subagent** via the `Task` tool with
-   `subagent_type: "speccy-holistic-reviewer"` (pinned to
-   `opus[1m]` / `high` effort via its frontmatter). Prompt:
+1. **Spawn the drift reviewer sub-agent.** Prompt:
 
    > Holistic drift review for `SPEC-NNNN`, invocation `N`, round
    > `R`.
@@ -210,7 +221,7 @@ the loop did*; it must survive any rollback the loop performs.
    >   `<spec-dir>/journal/HOLISTIC.md`).
    > - Diff baseline: `<base-ref>` (run `git diff <base-ref>` —
    >   that captures the working tree including uncommitted
-   >   changes, which the fixer leaves between rounds).
+   >   changes, which the implementer leaves between rounds).
    >
    > Follow the focus, round-2+ scrutiny, and verdict-return
    > contract in your agent file. Return a single `<drift-review>`
@@ -219,6 +230,13 @@ the loop did*; it must survive any rollback the loop performs.
    Substitute `SPEC-NNNN`, `N`, `R`, `<spec-dir>`, and `<base-ref>`
    with the resolved values. Hold the returned `<drift-review>`
    block in memory; do not write to HOLISTIC.md yet.
+
+   {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "holistic-reviewer"`.
+   The sub-agent definition at `.claude/agents/holistic-reviewer.md`
+   carries the host-native dispatch metadata (model pin, effort
+   level).{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+   registered `holistic-reviewer` sub-agent at
+   `.codex/agents/holistic-reviewer.toml`.{% endif %}
 
 2. **If `verdict="pass"`** → append the held `<drift-review>`
    block to `<spec-dir>/journal/HOLISTIC.md` under the current
@@ -230,23 +248,21 @@ the loop did*; it must survive any rollback the loop performs.
 
 4. **Otherwise** (`verdict="blocking"` with budget remaining):
 
-   a. **Snapshot the working tree** before the fixer call, so
+   a. **Snapshot the working tree** before the implementer call, so
       this skill can revert on `stuck` without losing the
       HOLISTIC.md writes:
 
       ```bash
-      git stash push --include-untracked -m "speccy-holistic-pre-fixer-<spec>-inv<N>-r<R>"
+      git stash push --include-untracked -m "speccy-holistic-pre-implementer-<spec>-inv<N>-r<R>"
       git stash apply
       ```
 
       The `push` saves all uncommitted state and clears the working
       tree to HEAD; the `apply` restores the working tree so the
-      fixer has the current implementation to work on. The stash
-      stays available as the rollback target.
+      implementer has the current implementation to work on. The
+      stash stays available as the rollback target.
 
-   b. **Spawn the drift-fix subagent** via the `Task` tool with
-      `subagent_type: "speccy-holistic-fixer"` (pinned to
-      `opus[1m]` / `low` effort). Prompt:
+   b. **Spawn the drift-implementer sub-agent.** Prompt:
 
       > Holistic drift fix for `SPEC-NNNN`, invocation `N`, round
       > `R`.
@@ -271,9 +287,16 @@ the loop did*; it must survive any rollback the loop performs.
 
       Hold the returned `<holistic-fix>` block in memory.
 
-   c. **Resolve the snapshot based on the fixer's verdict**:
+      {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "holistic-implementer"`.
+      The sub-agent definition at
+      `.claude/agents/holistic-implementer.md` carries the
+      host-native dispatch metadata.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+      registered `holistic-implementer` sub-agent at
+      `.codex/agents/holistic-implementer.toml`.{% endif %}
 
-      - **`addressed` or `blocking`**: keep the fixer's edits.
+   c. **Resolve the snapshot based on the implementer's verdict**:
+
+      - **`addressed` or `blocking`**: keep the implementer's edits.
 
         ```bash
         git stash drop
@@ -284,10 +307,11 @@ the loop did*; it must survive any rollback the loop performs.
         current invocation section (drift-review first, then fix).
         Decrement the round counter and go back to step 1. The
         next reviewer reads the journal you just appended and
-        verifies the fixer's claims against the now-updated diff.
+        verifies the implementer's claims against the now-updated
+        diff.
 
-      - **`stuck`**: revert the fixer's edits, then preserve the
-        audit trail:
+      - **`stuck`**: revert the implementer's edits, then preserve
+        the audit trail:
 
         ```bash
         git restore .
@@ -295,18 +319,19 @@ the loop did*; it must survive any rollback the loop performs.
         git stash pop
         ```
 
-        `git restore .` undoes simplifier/fixer edits to tracked
-        files; `git clean -fd` removes any new files the fixer
-        added; `git stash pop` restores the pre-fixer snapshot.
-        Now append both held blocks to HOLISTIC.md under the
-        current invocation section — the write happens **after**
-        the revert, so it survives. Return a `fail` verdict.
+        `git restore .` undoes implementer edits to tracked files;
+        `git clean -fd` removes any new files the implementer
+        added; `git stash pop` restores the pre-implementer
+        snapshot. Now append both held blocks to HOLISTIC.md under
+        the current invocation section — the write happens
+        **after** the revert, so it survives. Return a `fail`
+        verdict.
 
-      - **Subagent error or missing/malformed `<holistic-fix>`**:
+      - **Sub-agent error or missing/malformed `<holistic-fix>`**:
         treat as `stuck`. Revert as above. Append the held
         `<drift-review>` block and a synthesized
         `<holistic-fix verdict="stuck">` block describing the
-        subagent failure. Return `fail`.
+        sub-agent failure. Return `fail`.
 
 ### Phase 2 — simplifier polish pass
 
@@ -315,15 +340,14 @@ phase does not affect the verdict (a revert still yields
 `verdict="pass"`); it only sets the `simplifier="..."` field on
 the return block.
 
-1. **Spawn the simplifier scan subagent** via the `Task` tool with
-   `subagent_type: "code-simplifier:code-simplifier"`. Prompt:
+1. **Spawn the simplifier scan sub-agent.** Prompt:
 
    > Identify simplification candidates in the diff for
    > `SPEC-NNNN`. Run `git diff <base-ref>` to see all changes
    > (working tree included). **Report only — do NOT modify
    > files.** Skip anything that would change behavior, weaken
    > invariants, or trip project conventions in `AGENTS.md` and
-   > `.claude/rules/`.
+   > project-local rule files.
    >
    > Return your verdict as your final message:
    >
@@ -333,6 +357,10 @@ the return block.
    > [optional bullets, each with file:line + proposed change]
    > </simplifier-scan>
    > ```
+
+   {% if host == "claude-code" %}Invoke the `Task` tool with
+   `subagent_type: "code-simplifier:code-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+   registered `code-simplifier` sub-agent.{% endif %}
 
    The scan makes no modifications, so no defer-write is needed
    — **append the returned `<simplifier-scan>` block to
@@ -346,7 +374,7 @@ the return block.
 3. If `verdict="candidates"`:
 
    a. **Snapshot the working tree** before the apply, so this
-      skill's session owns the rollback. The simplifier subagent
+      skill's session owns the rollback. The simplifier sub-agent
       cannot reliably roll back itself — `git checkout` doesn't
       undo new files and `git clean -fd` is dangerous if scoped
       wrong. Owning the rollback here bounds the blast radius.
@@ -362,17 +390,12 @@ the return block.
       the drift-fix changes. The stash remains as the rollback
       target.
 
-   b. **Spawn the simplifier apply subagent** via the `Task` tool
-      with `subagent_type: "code-simplifier:code-simplifier"`.
-      Prompt:
+   b. **Spawn the simplifier apply sub-agent.** Prompt:
 
       > Apply the simplification candidates listed below.
       > Preserve all functionality. After applying, run the
-      > standard hygiene suite per `AGENTS.md`:
-      > `cargo test --workspace`,
-      > `cargo clippy --workspace --all-targets --all-features --
-      > -D warnings`, `cargo +nightly fmt --all --check`,
-      > `cargo deny check`.
+      > standard hygiene suite per `AGENTS.md` (the project's
+      > four standard hygiene gates).
       >
       > **If any hygiene step fails, do NOT attempt to revert
       > yourself.** Return `verdict="blocking"` with a one-line
@@ -390,6 +413,10 @@ the return block.
       > </simplifier-apply>
       > ```
 
+      {% if host == "claude-code" %}Invoke the `Task` tool with
+      `subagent_type: "code-simplifier:code-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+      registered `code-simplifier` sub-agent.{% endif %}
+
       Hold the returned `<simplifier-apply>` block in memory; do
       not write to HOLISTIC.md yet (same defer-write pattern as
       Phase 1 — write after the revert decision so the audit
@@ -403,7 +430,7 @@ the return block.
         the current invocation section. Record
         `simplifier="applied"` for the return block.
 
-      - **`blocking`** (hygiene failed), subagent error, or
+      - **`blocking`** (hygiene failed), sub-agent error, or
         missing/malformed verdict: roll back.
 
         ```bash
@@ -418,7 +445,7 @@ the return block.
         restores the pre-simplifier snapshot. Then append the
         held `<simplifier-apply>` block to HOLISTIC.md under the
         current invocation section (synthesize a placeholder if
-        the subagent returned nothing parseable). Record
+        the sub-agent returned nothing parseable). Record
         `simplifier="reverted"`.
 
 ## Return contract
@@ -446,7 +473,7 @@ Field reference:
   run (drift never cleared).
 
 The caller consumes only this final block; the inner blocks live
-in HOLISTIC.md and the subagent contexts that produced them.
+in HOLISTIC.md and the sub-agent contexts that produced them.
 
 ## Stop conditions
 
@@ -454,21 +481,23 @@ in HOLISTIC.md and the subagent contexts that produced them.
   without a `pass` from the drift reviewer → return `fail`.
 - Drift-fix implementer returns `verdict="stuck"` → return `fail`
   immediately.
-- Any subagent errors or returns a malformed verdict → return
+- Any sub-agent errors or returns a malformed verdict → return
   `fail` with the error in the one-line summary.
 - Phase 0 finds the spec is unknown or has incomplete tasks →
   return `fail` immediately.
 
 ## When to invoke directly
 
-A human can run `/speccy-holistic-review SPEC-NNNN` by hand:
+A human can run `{{ cmd_prefix }}speccy-holistic-gate SPEC-NNNN`
+by hand:
 
-- Before ever invoking `/speccy-ship`, as a final-defense check on
-  a SPEC implemented manually.
-- After amending a SPEC and re-running `/speccy-work` on the
-  affected tasks, to confirm the patched implementation still
-  adheres to the SPEC holistically. (Each direct invocation gets
-  its own section in HOLISTIC.md.)
+- Before ever invoking `{{ cmd_prefix }}speccy-ship`, as a
+  final-defense check on a SPEC implemented manually.
+- After amending a SPEC and re-running
+  `{{ cmd_prefix }}speccy-work` on the affected tasks, to confirm
+  the patched implementation still adheres to the SPEC
+  holistically. (Each direct invocation gets its own section in
+  HOLISTIC.md.)
 
 The skill behaves identically whether invoked by the orchestrator
 or by a human — only the caller of the verdict differs.
