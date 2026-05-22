@@ -133,8 +133,6 @@ struct RecipeFrontmatter {
 }
 
 const PERSONA_FILES: &[&str] = &[
-    "planner.md",
-    "implementer.md",
     "reviewer-business.md",
     "reviewer-tests.md",
     "reviewer-security.md",
@@ -218,13 +216,6 @@ fn persona_names_match_registry() {
         assert!(
             RESOURCES.get_file(&path).is_some(),
             "personas::ALL contains `{persona}` but `{path}` is missing from the embedded RESOURCES bundle",
-        );
-    }
-    for required in ["planner.md", "implementer.md"] {
-        let path = format!("modules/personas/{required}");
-        assert!(
-            RESOURCES.get_file(&path).is_some(),
-            "`{required}` must ship under `resources/modules/personas/` alongside the reviewer personas",
         );
     }
 }
@@ -425,30 +416,6 @@ fn section_body<'a>(body: &'a str, heading: &str) -> Option<&'a str> {
     let after_heading = body.get(start.checked_add(heading.len())?..)?;
     let end = after_heading.find("\n## ").unwrap_or(after_heading.len());
     after_heading.get(..end)
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-004
-// --------------------------------------------------------------------
-
-#[test]
-fn implementer_persona_friction_reference() {
-    let body = read_persona("implementer.md");
-    let section = section_body(body, "## What to consider")
-        .expect("implementer persona must contain `## What to consider`");
-
-    assert!(
-        section.contains(FRICTION_PHRASE),
-        "`## What to consider` must contain the stable friction phrase `{FRICTION_PHRASE}`",
-    );
-    assert!(
-        section.contains("friction"),
-        "`## What to consider` must mention friction explicitly",
-    );
-    assert!(
-        section.contains("## When you hit friction"),
-        "`## What to consider` must point back to the prompt's `## When you hit friction` section",
-    );
 }
 
 // --------------------------------------------------------------------

@@ -16,6 +16,15 @@ When starting a new spec slice. If the ask is still fuzzy, run
 this skill writes SPEC.md in a single pass and assumes the framing
 is already agreed.
 
+## What to consider
+
+- Bounded scope. One SPEC must answer one product question; refuse
+  to bundle unrelated work. If the scope is too large to be tested
+  end-to-end within one PR, split it.
+- Decisions hidden inside requirement prose belong in `### Decisions`
+  instead. Keep `<requirement>` bodies focused on observable behaviour
+  and lift any architectural commitment into a `### Decisions` block.
+
 ## Steps
 
 1. Query the next available ID:
@@ -29,7 +38,11 @@ is already agreed.
    existing mission folder (`.speccy/specs/[focus]/NNNN-slug/`).
    Do not invent a new mission folder for a single spec.
 
-2. Write SPEC.md following the PRD template. If the brainstorm output
+2. Write SPEC.md following the PRD template.
+
+   Canonical SPEC.md shape: `references/spec.md`.
+
+   If the brainstorm output
    contains collapsed requirements (one requirement with an enumerated
    sub-list), you MAY expand each sub-bullet to its own atomic
    `<requirement>` block (when atomicity adds reviewer-fan-out value)

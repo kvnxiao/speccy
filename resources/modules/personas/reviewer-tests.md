@@ -41,6 +41,8 @@ orchestrating skill flips the task's `state` attribute.
 
 ## Evidence loading
 
+Canonical evidence file shape: `{{ speccy_references_path }}/evidence.md`.
+
 Every `<implementer>` element in the task's journal file
 (`.speccy/specs/NNNN-slug/journal/T-NNN.md`) carries an `Evidence:`
 field naming the path of a per-task evidence file. That file is

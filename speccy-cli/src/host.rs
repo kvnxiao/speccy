@@ -92,6 +92,13 @@ impl HostChoice {
     /// - `skill_install_path`: project-relative skill install directory
     ///   (`".claude/skills"` or `".agents/skills"`), used by `speccy-init`'s
     ///   skill body to tell users where the pack lands.
+    /// - `speccy_references_path`: project-relative host-shared references
+    ///   directory (`".claude/speccy-references"` or
+    ///   `".agents/speccy-references"`), used by consuming bodies (per
+    ///   SPEC-0038 REQ-004) to emit host-rooted pointers to cross-skill
+    ///   reference files like `evidence.md` and `journal-blockers.md`. Codex
+    ///   sub-agents under `.codex/agents/` still resolve the pointer to
+    ///   `.agents/...` (the skill-pack root), not `.codex/...`.
     #[must_use = "the template context drives every substitution in resources/agents/<host>/*.tmpl"]
     pub fn template_context(self) -> minijinja::Value {
         minijinja::Value::from_serialize(self.template_context_raw())
@@ -104,12 +111,14 @@ impl HostChoice {
                 cmd_prefix: "/",
                 host_display_name: "Claude Code",
                 skill_install_path: ".claude/skills",
+                speccy_references_path: ".claude/speccy-references",
             },
             HostChoice::Codex => TemplateContext {
                 host: "codex",
                 cmd_prefix: "",
                 host_display_name: "Codex",
                 skill_install_path: ".agents/skills",
+                speccy_references_path: ".agents/speccy-references",
             },
         }
     }
@@ -127,6 +136,7 @@ struct TemplateContext {
     cmd_prefix: &'static str,
     host_display_name: &'static str,
     skill_install_path: &'static str,
+    speccy_references_path: &'static str,
 }
 
 /// Supported `--host` values, in the order they're listed in error
@@ -300,7 +310,7 @@ mod tests {
         env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
         env.add_template(
             "probe",
-            "{{ host }}|{{ cmd_prefix }}|{{ host_display_name }}|{{ skill_install_path }}",
+            "{{ host }}|{{ cmd_prefix }}|{{ host_display_name }}|{{ skill_install_path }}|{{ speccy_references_path }}",
         )
         .expect("probe template should register cleanly");
         let tmpl = env
@@ -314,7 +324,7 @@ mod tests {
     fn template_context_claude_code_renders_expected_keys() {
         assert_eq!(
             render_probe(HostChoice::ClaudeCode),
-            "claude-code|/|Claude Code|.claude/skills",
+            "claude-code|/|Claude Code|.claude/skills|.claude/speccy-references",
         );
     }
 
@@ -322,7 +332,7 @@ mod tests {
     fn template_context_codex_renders_expected_keys() {
         assert_eq!(
             render_probe(HostChoice::Codex),
-            "codex||Codex|.agents/skills",
+            "codex||Codex|.agents/skills|.agents/speccy-references",
         );
     }
 }

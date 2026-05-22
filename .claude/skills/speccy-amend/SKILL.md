@@ -132,6 +132,8 @@ reconciliation are not forgotten.
      with the standard frontmatter (`spec`, `task`, `generated_at`)
      before appending.
 
+   Canonical journal `<blockers>` shape: `.claude/speccy-references/journal-blockers.md`.
+
    The `<blockers>` body remains an amendment-driven blocker
    directive: name what changed in SPEC and what the next
    implementer attempt must address. Only the write target and

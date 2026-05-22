@@ -30,6 +30,17 @@ terminal, the `/loop` skill, or a future orchestrator).
 `/speccy-tasks` must have written `TASKS.md` and the
 spec hash must have been committed before this skill runs.
 
+## What to consider
+
+- Re-read the task's `covers="REQ-NNN"` REQ's `<done-when>`
+  (acceptance criteria) and `<behavior>` (test selection) elements
+  before writing tests — not the surrounding prose alone.
+- The suggested-files hint in the task body is advisory and may be
+  stale; verify each path before editing.
+- Are you about to add a feature flag, abstraction layer, or
+  configurability the SPEC did not ask for? Stop and reconsider —
+  scope creep is a blocker for the reviewer round.
+
 ## Steps
 
 1. Resolve the target task.
@@ -74,24 +85,11 @@ spec hash must have been committed before this skill runs.
    File creation. If `journal/T-NNN.md` does not yet exist (round 1,
    first implementer attempt on the task), create it with YAML
    frontmatter declaring exactly three fields, then the
-   `<implementer>` block beneath:
+   `<implementer>` block beneath.
 
-   ```markdown
-   ---
-   spec: SPEC-NNNN
-   task: T-NNN
-   generated_at: 2026-05-21T18:00:00Z
-   ---
+   Canonical journal `<implementer>` shape: `references/journal-implementer.md`.
 
-   <implementer date="2026-05-21T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
-   Completed: ...
-   Undone: ...
-   Commands run: ...
-   Exit codes: ...
-   Discovered issues: ...
-   Procedural compliance: ...
-   </implementer>
-   ```
+   Canonical evidence file shape: `.claude/speccy-references/evidence.md`.
 
    `generated_at` is the ISO8601 timestamp at file creation; do not
    rewrite it on later appends. On subsequent rounds, append the new
@@ -121,8 +119,8 @@ spec hash must have been committed before this skill runs.
      values; do not reset.
 
    Body content. Use the six-field handoff template the implementer
-   prompt supplies (`Completed`, `Undone`, `Commands run`,
-   `Exit codes`, `Discovered issues`, `Procedural compliance`).
+   prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
+   `Evidence`, `Discovered issues`, `Procedural compliance`).
 
 6. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.

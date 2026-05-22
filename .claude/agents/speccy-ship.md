@@ -42,6 +42,8 @@ error, some tasks are not yet completed — pick up
    element per surviving SPEC requirement, retry counts, and any
    out-of-scope items implementers absorbed.
 
+   Canonical REPORT.md shape: `references/report.md`.
+
 3. Flip the SPEC's frontmatter status. Edit
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what

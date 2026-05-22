@@ -50,6 +50,8 @@ is not inlined into the prompt.
 
 ## Evidence loading
 
+Canonical evidence file shape: `.claude/speccy-references/evidence.md`.
+
 Every `<implementer>` element in the task's journal file
 (`.speccy/specs/NNNN-slug/journal/T-NNN.md`) carries an `Evidence:`
 field naming the path of a per-task evidence file. That file is

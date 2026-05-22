@@ -217,6 +217,15 @@ fn collect_pin_records(root: &Utf8Path) -> Vec<PinRecord> {
             if !matches_shape(&file, *shape) {
                 continue;
             }
+            // SPEC-0038: reference files under `<skill>/references/` and
+            // `speccy-references/` are plain Markdown with no YAML/TOML
+            // frontmatter (per SPEC-0038's non-goal "No YAML frontmatter
+            // on reference files"). They carry no `model:` / `effort:`
+            // pins and are out of scope for REQ-005 pin-shape checks.
+            let file_str = file.as_str().replace('\\', "/");
+            if file_str.contains("/references/") || file_str.contains("/speccy-references/") {
+                continue;
+            }
             let rel = file
                 .strip_prefix(root)
                 .map_or_else(|_| file.clone(), Utf8Path::to_path_buf);

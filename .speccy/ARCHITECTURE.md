@@ -1740,10 +1740,14 @@ resources/
       inline_note_format.md         the persona bodies above. Filename pattern
       no_tasks_md_writes.md         distinguishes snippets from body files;
       diff_fetch_command.md         no `_partials/` subdirectory exists.
-      planner.md                    Two extra bodies referenced by
-      implementer.md                /speccy-plan and /speccy-work prompts.
-    examples/                Progressive-disclosure example bodies
-      evidence.md
+    references/              Canonical worked-instance reference files,
+      spec.md                ejected into per-skill `references/` and
+      tasks.md               host-shared `speccy-references/` directories
+      report.md              under both host packs. See "Skill-pack
+      journal-implementer.md reference files" below for the seven-row
+      journal-review.md      artifact→path mapping (SPEC-0038 REQ-002 is
+      evidence.md            the source of truth).
+      journal-blockers.md
   agents/                    Per-host MiniJinja wrappers (rendered at init time)
     .claude/skills/speccy-<verb>/SKILL.md.tmpl   Eight skills total
     .claude/agents/speccy-{tasks,work,ship}.md.tmpl   Pinned phase workers
@@ -1758,6 +1762,38 @@ phase prompt body inside the CLI binary. The CLI ships
 `resources/modules/` as the single source of truth for skill
 content and `resources/agents/` as the per-host MiniJinja wrappers;
 nothing else.
+
+## Skill-pack reference files
+
+Each lintable Speccy artifact has exactly one canonical reference
+file under `resources/modules/references/`, ejected by `speccy init`
+into either a per-skill `references/` subdirectory (single-consumer)
+or a host-shared `speccy-references/` directory at host root
+(multi-consumer). The path's first component classifies the file;
+no separate manifest declares it. The mapping:
+
+| Artifact                        | Source                                              | Claude Code path                                                  | Codex path                                                       | Class       |
+|---------------------------------|-----------------------------------------------------|-------------------------------------------------------------------|------------------------------------------------------------------|-------------|
+| SPEC.md                         | `resources/modules/references/spec.md`              | `.claude/skills/speccy-plan/references/spec.md`                   | `.agents/skills/speccy-plan/references/spec.md`                  | skill-local |
+| TASKS.md                        | `resources/modules/references/tasks.md`             | `.claude/skills/speccy-tasks/references/tasks.md`                 | `.agents/skills/speccy-tasks/references/tasks.md`                | skill-local |
+| REPORT.md                       | `resources/modules/references/report.md`            | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                | skill-local |
+| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`  | `.agents/skills/speccy-work/references/journal-implementer.md`   | skill-local |
+| journal `<review>` block        | `resources/modules/references/journal-review.md`    | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`      | skill-local |
+| evidence file (`evidence/T-NNN.md`) | `resources/modules/references/evidence.md`      | `.claude/speccy-references/evidence.md`                           | `.agents/speccy-references/evidence.md`                          | host-shared |
+| journal `<blockers>` block      | `resources/modules/references/journal-blockers.md`  | `.claude/speccy-references/journal-blockers.md`                   | `.agents/speccy-references/journal-blockers.md`                  | host-shared |
+
+Host-shared rows have two consuming bodies each: `evidence.md` is
+referenced by `/speccy-work` (writes evidence) and the
+`reviewer-tests` sub-agent (reads evidence); `journal-blockers.md`
+is referenced by `/speccy-review` (writes review-induced blockers)
+and `/speccy-amend` (writes amendment-induced blockers). All other
+rows have exactly one consuming body and live skill-local.
+
+SPEC-0038 REQ-002 is the source of truth. The
+`chkNNN_no_orphan_references` test in
+`speccy-cli/tests/skill_body_discovery.rs` asserts every ejected
+reference file is reached by ≥1 path-substring pointer from a
+consuming body, and that source-to-host and cross-host bytes match.
 
 ## `speccy init` host detection
 
@@ -2435,7 +2471,7 @@ end state:
 7. `speccy verify` (proof-shape validation; `--json schema_version: 1`).
 8. `speccy lock` (record SPEC.md hash into TASKS.md frontmatter).
 9. `speccy vacancy` (next free SPEC-NNNN; `--json schema_version: 1`).
-10. Skill packs: shipped under `resources/modules/{personas,phases,skills,examples}/`
+10. Skill packs: shipped under `resources/modules/{personas,phases,skills,references}/`
     plus per-host MiniJinja wrappers under `resources/agents/`.
 11. Dogfood: Speccy's own development tracked under `.speccy/specs/`,
     with every shipped CLI verb proven by its own SPEC.

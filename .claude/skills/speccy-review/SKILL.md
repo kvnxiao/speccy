@@ -98,6 +98,10 @@ flipped there by `/speccy-work`).
    `.claude/agents/reviewer-<persona>.md`, so the persona body is
    already loaded for the sub-agent.
 
+   Canonical journal `<review>` shape: `references/journal-review.md`.
+
+   Canonical journal `<blockers>` shape: `.claude/speccy-references/journal-blockers.md`.
+
 3. After all spawned sub-agents return, **consolidate** the
    `<review>` element blocks from each reviewer's final message and
    write them to `.speccy/specs/NNNN-slug/journal/T-NNN.md`

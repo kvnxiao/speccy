@@ -96,6 +96,10 @@ flipped there by `speccy-work`).
    `.codex/agents/reviewer-<persona>.toml`, so the persona body is
    already loaded as the sub-agent's developer instructions.
 
+   Canonical journal `<review>` shape: `references/journal-review.md`.
+
+   Canonical journal `<blockers>` shape: `.agents/speccy-references/journal-blockers.md`.
+
 3. After all spawned sub-agents return, **consolidate** the
    `<review>` element blocks from each reviewer's final message and
    write them to `.speccy/specs/NNNN-slug/journal/T-NNN.md`
