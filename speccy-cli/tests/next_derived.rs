@@ -32,6 +32,25 @@ fn task_xml(id: &str, state: &str) -> String {
     )
 }
 
+fn write_fresh_pass_vet_md(spec_dir: &camino::Utf8Path, tasks_md: &str) -> TestResult {
+    use sha2::Digest as _;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(tasks_md.as_bytes());
+    let digest = hasher.finalize();
+    let mut hash = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(hash, "{byte:02x}")?;
+    }
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    let body = format!(
+        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), body)?;
+    Ok(())
+}
+
 // -- CHK-007 ------------------------------------------------------------------
 
 /// CHK-007: per-spec JSON with in-review task, `next_action.kind` == "review".
@@ -204,12 +223,16 @@ fn per_spec_json_decompose_when_no_tasks_md() -> TestResult {
 fn per_spec_json_null_when_all_done_and_report_present() -> TestResult {
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-001", "completed");
+    let tasks_md = tasks_md_xml("SPEC-0003", &tasks_xml);
     let spec_dir = write_spec(
         &ws.root,
         "0003-baz",
         &spec_md_template("SPEC-0003", "in-progress"),
-        Some(&tasks_md_xml("SPEC-0003", &tasks_xml)),
+        Some(&tasks_md),
     )?;
+    // Write a fresh-pass VET.md so the resolver advances past the vet
+    // step (SPEC-0041) and REPORT.md presence drives the omission.
+    write_fresh_pass_vet_md(&spec_dir, &tasks_md)?;
     // Write REPORT.md so kind resolution lands on "completed".
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
 
@@ -250,14 +273,16 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
         &spec_md_template("SPEC-0001", "in-progress"),
         Some(&tasks_md_xml("SPEC-0001", &tasks_xml_active)),
     )?;
-    // SPEC-0002: all done + REPORT.md (should be omitted).
+    // SPEC-0002: all done + fresh-pass VET.md + REPORT.md (should be omitted).
     let tasks_xml_done = task_xml("T-001", "completed");
+    let tasks_md_done = tasks_md_xml("SPEC-0002", &tasks_xml_done);
     let spec_dir_done = write_spec(
         &ws.root,
         "0002-bar",
         &spec_md_template("SPEC-0002", "in-progress"),
-        Some(&tasks_md_xml("SPEC-0002", &tasks_xml_done)),
+        Some(&tasks_md_done),
     )?;
+    write_fresh_pass_vet_md(&spec_dir_done, &tasks_md_done)?;
     fs_err::write(spec_dir_done.join("REPORT.md").as_std_path(), "# Report\n")?;
 
     let output = Command::cargo_bin("speccy")?
@@ -301,12 +326,16 @@ fn kind_flag_is_rejected() -> TestResult {
 fn per_spec_json_ship_when_all_done_no_report() -> TestResult {
     let ws = Workspace::new()?;
     let tasks_xml = task_xml("T-001", "completed");
-    write_spec(
+    let tasks_md = tasks_md_xml("SPEC-0001", &tasks_xml);
+    let spec_dir = write_spec(
         &ws.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+        Some(&tasks_md),
     )?;
+    // Write a fresh-pass VET.md so the resolver advances past the new
+    // vet step to ship (SPEC-0041).
+    write_fresh_pass_vet_md(&spec_dir, &tasks_md)?;
     // No REPORT.md → kind should be "ship".
     let output = Command::cargo_bin("speccy")?
         .args(["next", "SPEC-0001", "--json"])

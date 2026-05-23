@@ -12,7 +12,7 @@ heavy work happens in sub-agent contexts that exit when done.
 - The user wants to drive `SPEC-NNNN` from its current state to
   ready-to-ship without chaining `{{ cmd_prefix }}speccy-work`,
   `{{ cmd_prefix }}speccy-review`, and
-  `{{ cmd_prefix }}speccy-holistic-gate` by hand.
+  `{{ cmd_prefix }}speccy-vet` by hand.
 - The SPEC already has a `TASKS.md` — this orchestrator dispatches
   against existing tasks; it does not plan or decompose.
 
@@ -39,14 +39,14 @@ outer:    speccy-orchestrate dispatch loop  ← this skill
                   ├── review → spawn sub-agent that runs speccy-review
                   │              (inner: 4 reviewer personas fan out)
                   └── ship   → spawn sub-agent that runs
-                               speccy-holistic-gate
+                               speccy-vet
                                  (inner: drift-fix loop + simplifier
                                   polish, up to 3 rounds)
 inner-1:  per-task retry — same task_id flipping pending after review
             (bounded here in the orchestrator: 5 rounds, then stop)
-inner-2:  holistic drift fix — owned by speccy-holistic-gate
+inner-2:  holistic drift fix — owned by speccy-vet
             (bounded there: 3 rounds, then return fail)
-inner-3:  simplifier polish — owned by speccy-holistic-gate
+inner-3:  simplifier polish — owned by speccy-vet
             (no loop: one scan + one apply with hygiene gate)
 ```
 
@@ -162,9 +162,9 @@ Repeat until a stop condition fires:
      `.agents/skills/speccy-review/SKILL.md` with the prompt above.{% endif %}
 
    - **`ship`** — spawn a sub-agent that runs the
-     `speccy-holistic-gate` primitive for the spec. Prompt:
+     `speccy-vet` primitive for the spec. Prompt:
 
-     > Follow the `speccy-holistic-gate` skill for `SPEC-NNNN`.
+     > Follow the `speccy-vet` skill for `SPEC-NNNN`.
      > The skill runs an autonomous drift-review + retry loop and
      > applies any simplifier candidates with a hygiene gate.
      > Return only the final `<orchestrator-verdict>` block as
@@ -172,9 +172,9 @@ Repeat until a stop condition fires:
 
      {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "general-purpose"`,
      instructing the sub-agent to read
-     `.claude/skills/speccy-holistic-gate/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
+     `.claude/skills/speccy-vet/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
      sub-agent that loads and follows
-     `.agents/skills/speccy-holistic-gate/SKILL.md` with the
+     `.agents/skills/speccy-vet/SKILL.md` with the
      prompt above.{% endif %}
 
      When the sub-agent returns, parse the verdict block:
@@ -234,8 +234,9 @@ SPEC-NNNN → ready to ship — confirm before proceeding?
 Round numbers, per-persona verdicts, holistic drift findings, and
 simplifier candidate details live inside sub-agent contexts and in
 the per-task journals at
-`.speccy/specs/NNNN-slug/journal/T-NNN.md`. Don't duplicate them
-in the status line.
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` (and, for the holistic
+gate, in `.speccy/specs/NNNN-slug/journal/VET.md`). Don't duplicate
+them in the status line.
 
 ## Non-goals
 
@@ -243,7 +244,7 @@ in the status line.
   open a PR. Those belong to `{{ cmd_prefix }}speccy-ship`, invoked
   after confirmation.
 - This skill does not own the drift-fix loop or the simplifier
-  polish — those live in `{{ cmd_prefix }}speccy-holistic-gate`.
+  polish — those live in `{{ cmd_prefix }}speccy-vet`.
   Bugs in those loops get fixed there, not here.
 - This skill does not pick a different persona fan-out for review,
   retry blocked tasks with a different model, or split tasks

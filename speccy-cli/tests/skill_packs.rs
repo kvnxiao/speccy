@@ -157,7 +157,7 @@ const SKILL_NAMES: &[&str] = &[
     "speccy-amend",
     "speccy-brainstorm",
     "speccy-orchestrate",
-    "speccy-holistic-gate",
+    "speccy-vet",
 ];
 
 /// Per-host install root for the SKILL.md wrappers under

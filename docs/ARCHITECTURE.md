@@ -673,6 +673,60 @@ next round to address. The implementer then flips `state` back to
 `round` value, does the work, flips `state` to `in-review`, and
 exits.
 
+## VET.md per-SPEC journal
+
+Pre-ship drift review (the `/speccy-vet` skill) maintains a
+single per-SPEC journal at `.speccy/specs/NNNN-slug/journal/VET.md`,
+sibling to `SPEC.md`, `TASKS.md`, and the per-task `T-NNN.md`
+journal files. The skill body is the **only writer**; sub-agents
+return verdict blocks via their final message and the skill
+transcribes them.
+
+The file opens with YAML frontmatter (`spec`, `generated_at`),
+then one `## Invocation N — <ISO8601>` section per skill
+invocation. Each section may carry, in order of appearance:
+
+- `<drift-review>` — output of one drift-reviewer sub-agent round.
+- `<holistic-fix>` — output of one drift-implementer sub-agent
+  round. Pairs with the preceding `<drift-review>`.
+- `<simplifier-scan>` — output of the Phase 2 candidate scan
+  (read-only).
+- `<simplifier-apply>` — output of the Phase 2 apply round, when
+  candidates were applied.
+- `<gate>` — **terminal** block for the section. Exactly one per
+  invocation, written by every exit path before the skill returns
+  its `<orchestrator-verdict>` to its caller.
+
+The `<gate>` block carries the durable signal `speccy next` reads
+to decide whether the SPEC is freshly vetted. Shape:
+
+```
+<gate verdict="passed|failed" tasks_hash="<lowercase-hex-sha256>" date="<ISO8601>">
+<one-line human-readable summary>
+</gate>
+```
+
+Attributes:
+
+- `verdict` — `passed` when the skill's `<orchestrator-verdict>`
+  will carry `verdict="pass"`; `failed` otherwise (including every
+  Phase 0 early-exit path).
+- `tasks_hash` — lowercase hex SHA-256 of `<spec-dir>/TASKS.md`
+  bytes, read immediately before appending the block. Anchors the
+  gate verdict to a specific TASKS.md revision so an amendment
+  after the gate passed forces a re-vet on the next
+  `speccy next` resolution.
+- `date` — ISO8601 datetime with seconds and timezone designator.
+
+The resolver in `speccy-core/src/next.rs` reads the **last**
+`<gate>` block in the file. A SPEC with all tasks
+`state="completed"` and either no VET.md, a trailing
+`verdict="failed"` block, or a `verdict="passed"` block whose
+`tasks_hash` does not match the on-disk TASKS.md SHA-256 resolves
+to `NextAction::Vet`. Only a trailing `verdict="passed"` block
+whose `tasks_hash` matches advances the resolver past the vet
+step.
+
 ## Concurrent pickup
 
 `state="in-progress"` with a session marker is enough for
@@ -1706,7 +1760,7 @@ resources/
       speccy-amend.md
       speccy-review.md       Orchestrator (dispatches the six reviewer sub-agents)
       speccy-orchestrate.md  Drives the per-task work + review loop across one SPEC
-      speccy-holistic-gate.md Pre-ship SPEC-vs-impl drift review + autonomous fix loop
+      speccy-vet.md Pre-ship SPEC-vs-impl drift review + autonomous fix loop
     phases/                  Full-body sources for the pinned phase workers
       speccy-init.md         Used by speccy-init's interactive SKILL.md too
       speccy-tasks.md        Decompose one SPEC into TASKS.md
@@ -1829,8 +1883,8 @@ the parent session.
 - `/speccy-review` -- Phase 4 (review one task; orchestrator)
 - `/speccy-amend` -- Mid-loop SPEC + TASKS reconciliation
 - `/speccy-ship` -- Phase 5 (REPORT.md + PR)
-- `/speccy-orchestrate` -- Chains `/speccy-work` + `/speccy-review` across every task in one SPEC, hands off to `/speccy-holistic-gate` before the ship boundary
-- `/speccy-holistic-gate` -- Pre-ship SPEC-vs-implementation drift review with an autonomous fix-retry loop; invoked by the orchestrator and runnable on its own
+- `/speccy-orchestrate` -- Chains `/speccy-work` + `/speccy-review` across every task in one SPEC, hands off to `/speccy-vet` before the ship boundary
+- `/speccy-vet` -- Pre-ship SPEC-vs-implementation drift review with an autonomous fix-retry loop; invoked by the orchestrator and runnable on its own
 
 A typical full session in Claude Code looks like:
 
@@ -2497,7 +2551,7 @@ hope."
 Speccy aims to become the **deterministic feedback substrate** that
 multi-agent harnesses can build on. The in-pack implementation +
 review orchestration loop now ships as part of the skill layer
-(`/speccy-orchestrate` chained with `/speccy-holistic-gate`), so
+(`/speccy-orchestrate` chained with `/speccy-vet`), so
 single-host end-to-end execution is no longer a future layer. The
 following remain future layers (not v1):
 

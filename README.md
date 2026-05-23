@@ -179,10 +179,10 @@ shipped orchestrator drives the full loop end-to-end:
 
 ```text
 /speccy-orchestrate   Chain /speccy-work and /speccy-review across every
-                      task in one SPEC, then hand off to /speccy-holistic-gate
+                      task in one SPEC, then hand off to /speccy-vet
                       for the pre-ship drift check before stopping at the
                       ship boundary.
-/speccy-holistic-gate Pre-ship SPEC-vs-implementation drift review with an
+/speccy-vet Pre-ship SPEC-vs-implementation drift review with an
                       autonomous fix-retry loop; invoked by the orchestrator
                       and also runnable on its own.
 ```
@@ -230,7 +230,7 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
   agents/reviewer-*.md                 Six reviewer persona sub-agents
   agents/holistic-{reviewer,implementer}.md
                                 Two holistic-loop sub-agents driven by
-                                /speccy-holistic-gate (drift review + drift fix)
+                                /speccy-vet (drift review + drift fix)
 
 .agents/                        (if host is Codex)
   skills/speccy-*/                     Ten Codex skill SKILL.md files

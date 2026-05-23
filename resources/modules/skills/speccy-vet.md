@@ -1,5 +1,5 @@
 
-# {{ cmd_prefix }}speccy-holistic-gate
+# {{ cmd_prefix }}speccy-vet
 
 Final defense mechanism against SPEC drift at the pre-ship boundary.
 
@@ -36,7 +36,7 @@ not a mid-loop check).
 ## Argument
 
 ```
-{{ cmd_prefix }}speccy-holistic-gate SPEC-NNNN
+{{ cmd_prefix }}speccy-vet SPEC-NNNN
 ```
 
 The `SPEC-NNNN` argument is required. The SPEC's tasks must all be
@@ -55,13 +55,13 @@ skill's session and exits with it.
 
 ## What this skill writes and commits
 
-This skill writes to HOLISTIC.md and lets implementer / simplifier
+This skill writes to VET.md and lets implementer / simplifier
 sub-agents modify the working tree. It **does not commit
 anything**. Per Speccy's atomic-landing convention,
 `{{ cmd_prefix }}speccy-ship` is the committer — it bundles all
 uncommitted changes from the loop (per-task journal updates,
 holistic changes, SPEC.md status flip, REPORT.md) into one commit
-at PR time. HOLISTIC.md, being under
+at PR time. VET.md, being under
 `.speccy/specs/<spec-dir>/journal/`, ships alongside the per-task
 journal files.
 
@@ -72,7 +72,7 @@ can decide whether to commit, revert, or continue editing.
 ## Holistic journal
 
 This skill maintains a single per-SPEC journal file at
-`<spec-dir>/journal/HOLISTIC.md` (`<spec-dir>` is resolved in
+`<spec-dir>/journal/VET.md` (`<spec-dir>` is resolved in
 Phase 0 below). The journal is the **persistent state** of the
 holistic loop:
 
@@ -86,7 +86,7 @@ holistic loop:
 
 ### Single-writer rule
 
-This skill's session is the **only writer** to HOLISTIC.md.
+This skill's session is the **only writer** to VET.md.
 Reviewer and implementer sub-agents never write to it — they return
 verdict blocks via their final message; this skill transcribes
 them. Sub-agents writing in parallel would race; single-writer
@@ -143,7 +143,7 @@ the per-task implementer retry budget.
 ### Phase 0 — bootstrap
 
 Resolve the three values that sub-agent prompts need, then open a
-new invocation section in HOLISTIC.md.
+new invocation section in VET.md.
 
 1. **Spec directory.** Run:
 
@@ -178,7 +178,7 @@ new invocation section in HOLISTIC.md.
    uncommitted between rounds.
 
 3. **Journal bootstrap and new invocation section.** The journal
-   is at `<spec-dir>/journal/HOLISTIC.md`.
+   is at `<spec-dir>/journal/VET.md`.
 
    - If the file does not exist, create it with the YAML
      frontmatter above (`spec` and `generated_at`).
@@ -200,13 +200,13 @@ new invocation section in HOLISTIC.md.
 
 Repeat for up to 3 rounds per invocation. This skill's session
 owns the round counter, the working-tree snapshots, and the
-HOLISTIC.md writes; sub-agents own the substantive review and fix
+VET.md writes; sub-agents own the substantive review and fix
 work.
 
 **Defer-write pattern.** Hold returned verdict blocks in memory
-across each round and write to HOLISTIC.md only **after** the
+across each round and write to VET.md only **after** the
 snapshot-keep-vs-revert decision. Writing earlier would put
-HOLISTIC.md changes inside the snapshot, and a stuck-revert would
+VET.md changes inside the snapshot, and a stuck-revert would
 erase the audit trail. The journal is the durable record of *what
 the loop did*; it must survive any rollback the loop performs.
 
@@ -218,7 +218,7 @@ the loop did*; it must survive any rollback the loop performs.
    > Resolved paths:
    > - Spec directory: `<spec-dir>` (use this for `SPEC.md`,
    >   `TASKS.md`, mission file if any, and the journal at
-   >   `<spec-dir>/journal/HOLISTIC.md`).
+   >   `<spec-dir>/journal/VET.md`).
    > - Diff baseline: `<base-ref>` (run `git diff <base-ref>` —
    >   that captures the working tree including uncommitted
    >   changes, which the implementer leaves between rounds).
@@ -229,28 +229,28 @@ the loop did*; it must survive any rollback the loop performs.
 
    Substitute `SPEC-NNNN`, `N`, `R`, `<spec-dir>`, and `<base-ref>`
    with the resolved values. Hold the returned `<drift-review>`
-   block in memory; do not write to HOLISTIC.md yet.
+   block in memory; do not write to VET.md yet.
 
-   {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "holistic-reviewer"`.
-   The sub-agent definition at `.claude/agents/holistic-reviewer.md`
+   {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "vet-reviewer"`.
+   The sub-agent definition at `.claude/agents/vet-reviewer.md`
    carries the host-native dispatch metadata (model pin, effort
    level).{% else %}Invoke Codex's native sub-agent-spawn primitive against the
-   registered `holistic-reviewer` sub-agent at
-   `.codex/agents/holistic-reviewer.toml`.{% endif %}
+   registered `vet-reviewer` sub-agent at
+   `.codex/agents/vet-reviewer.toml`.{% endif %}
 
 2. **If `verdict="pass"`** → append the held `<drift-review>`
-   block to `<spec-dir>/journal/HOLISTIC.md` under the current
+   block to `<spec-dir>/journal/VET.md` under the current
    invocation section. Exit the loop and go to Phase 2.
 
 3. **If `verdict="blocking"` and no rounds remain** → append the
-   held `<drift-review>` block to HOLISTIC.md (so the trail is
+   held `<drift-review>` block to VET.md (so the trail is
    complete) and return a `fail` verdict.
 
 4. **Otherwise** (`verdict="blocking"` with budget remaining):
 
    a. **Snapshot the working tree** before the implementer call, so
       this skill can revert on `stuck` without losing the
-      HOLISTIC.md writes:
+      VET.md writes:
 
       ```bash
       git stash push --include-untracked -m "speccy-holistic-pre-implementer-<spec>-inv<N>-r<R>"
@@ -287,12 +287,12 @@ the loop did*; it must survive any rollback the loop performs.
 
       Hold the returned `<holistic-fix>` block in memory.
 
-      {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "holistic-implementer"`.
+      {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "vet-implementer"`.
       The sub-agent definition at
-      `.claude/agents/holistic-implementer.md` carries the
+      `.claude/agents/vet-implementer.md` carries the
       host-native dispatch metadata.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
-      registered `holistic-implementer` sub-agent at
-      `.codex/agents/holistic-implementer.toml`.{% endif %}
+      registered `vet-implementer` sub-agent at
+      `.codex/agents/vet-implementer.toml`.{% endif %}
 
    c. **Resolve the snapshot based on the implementer's verdict**:
 
@@ -303,7 +303,7 @@ the loop did*; it must survive any rollback the loop performs.
         ```
 
         Then append **both** the held `<drift-review>` block and
-        the held `<holistic-fix>` block to HOLISTIC.md under the
+        the held `<holistic-fix>` block to VET.md under the
         current invocation section (drift-review first, then fix).
         Decrement the round counter and go back to step 1. The
         next reviewer reads the journal you just appended and
@@ -322,7 +322,7 @@ the loop did*; it must survive any rollback the loop performs.
         `git restore .` undoes implementer edits to tracked files;
         `git clean -fd` removes any new files the implementer
         added; `git stash pop` restores the pre-implementer
-        snapshot. Now append both held blocks to HOLISTIC.md under
+        snapshot. Now append both held blocks to VET.md under
         the current invocation section — the write happens
         **after** the revert, so it survives. Return a `fail`
         verdict.
@@ -359,12 +359,13 @@ the return block.
    > ```
 
    {% if host == "claude-code" %}Invoke the `Task` tool with
-   `subagent_type: "code-simplifier:code-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
-   registered `code-simplifier` sub-agent.{% endif %}
+   `subagent_type: "vet-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+   registered `vet-simplifier` sub-agent at
+   `.codex/agents/vet-simplifier.toml`.{% endif %}
 
    The scan makes no modifications, so no defer-write is needed
    — **append the returned `<simplifier-scan>` block to
-   HOLISTIC.md immediately** (under the current invocation
+   VET.md immediately** (under the current invocation
    section). The block is part of the audit trail whether or not
    an apply step follows.
 
@@ -414,11 +415,12 @@ the return block.
       > ```
 
       {% if host == "claude-code" %}Invoke the `Task` tool with
-      `subagent_type: "code-simplifier:code-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
-      registered `code-simplifier` sub-agent.{% endif %}
+      `subagent_type: "vet-simplifier"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+      registered `vet-simplifier` sub-agent at
+      `.codex/agents/vet-simplifier.toml`.{% endif %}
 
       Hold the returned `<simplifier-apply>` block in memory; do
-      not write to HOLISTIC.md yet (same defer-write pattern as
+      not write to VET.md yet (same defer-write pattern as
       Phase 1 — write after the revert decision so the audit
       trail survives any rollback).
 
@@ -426,7 +428,7 @@ the return block.
 
       - **`applied`** (hygiene green): `git stash drop` —
         discard the snapshot, keep the simplifications. Append
-        the held `<simplifier-apply>` block to HOLISTIC.md under
+        the held `<simplifier-apply>` block to VET.md under
         the current invocation section. Record
         `simplifier="applied"` for the return block.
 
@@ -443,10 +445,72 @@ the return block.
         files. `git clean -fd` removes untracked files (including
         any new files the simplifier created). `git stash pop`
         restores the pre-simplifier snapshot. Then append the
-        held `<simplifier-apply>` block to HOLISTIC.md under the
+        held `<simplifier-apply>` block to VET.md under the
         current invocation section (synthesize a placeholder if
         the sub-agent returned nothing parseable). Record
         `simplifier="reverted"`.
+
+### Phase 3 — write `<gate>` block
+
+**Every** exit path from this skill — Phase 0 integrity failures,
+Phase 1 round-budget exhaustion, Phase 1 `stuck` reverts, Phase 2
+completion (pass or revert), and the success path — appends exactly
+one `<gate>` block to `<spec-dir>/journal/VET.md` under the current
+`## Invocation N` section, **before** returning the
+`<orchestrator-verdict>` block to the caller.
+
+If Phase 0 failed before opening the invocation section (for
+example, the spec is unknown so `<spec-dir>` was never resolved or
+the journal file does not exist yet), bootstrap the file and
+section per Phase 0 step 3, then append the `<gate>` block. The
+on-disk gate record exists regardless of where the early exit
+fired.
+
+The `<gate>` block is appended **after** any `<drift-review>`,
+`<holistic-fix>`, `<simplifier-scan>`, and `<simplifier-apply>`
+blocks already written for the current invocation. It is the
+**last** element in the section.
+
+Block shape:
+
+```
+<gate verdict="passed|failed" tasks_hash="<lowercase-hex-sha256>" date="<ISO8601>">
+<one-line human-readable summary of the invocation outcome>
+</gate>
+```
+
+Attribute rules:
+
+- `verdict` — `passed` when the upcoming `<orchestrator-verdict>`
+  will carry `verdict="pass"`; `failed` when it will carry
+  `verdict="fail"` (including every Phase 0 early-exit path).
+- `tasks_hash` — lowercase hex SHA-256 of the byte contents of
+  `<spec-dir>/TASKS.md` read **immediately before** appending this
+  block. Compute via:
+
+  ```bash
+  sha256sum <spec-dir>/TASKS.md | awk '{print $1}'
+  ```
+
+  PowerShell equivalent on Windows:
+
+  ```powershell
+  (Get-FileHash -Algorithm SHA256 <spec-dir>/TASKS.md).Hash.ToLower()
+  ```
+
+- `date` — ISO8601 datetime with seconds and timezone designator,
+  e.g. `2026-05-22T14:30:00Z`.
+
+The block body is a single line summarising what happened
+(examples: `"Drift cleared on round 2; simplifier applied; clean."`,
+`"Phase 0 integrity check failed: task T-003 not completed."`,
+`"Drift round budget exhausted at round 3 without a pass."`).
+
+`speccy next` reads the most recent `<gate>` block's `verdict` and
+`tasks_hash` to decide whether the SPEC is freshly vetted; a
+`passed` gate whose `tasks_hash` no longer matches the on-disk
+TASKS.md forces a re-vet. That is the contract this block exists
+to satisfy.
 
 ## Return contract
 
@@ -465,7 +529,7 @@ Field reference:
 - `verdict` — `pass` if drift cleared within budget; `fail`
   otherwise.
 - `invocation` — the invocation number for this run, matching the
-  HOLISTIC.md section header.
+  VET.md section header.
 - `rounds` — how many drift-fix rounds were consumed (0 to 3).
 - `simplifier` — `clean` if no candidates were found; `applied` if
   candidates applied + hygiene green; `reverted` if applied but
@@ -473,7 +537,7 @@ Field reference:
   run (drift never cleared).
 
 The caller consumes only this final block; the inner blocks live
-in HOLISTIC.md and the sub-agent contexts that produced them.
+in VET.md and the sub-agent contexts that produced them.
 
 ## Stop conditions
 
@@ -488,7 +552,7 @@ in HOLISTIC.md and the sub-agent contexts that produced them.
 
 ## When to invoke directly
 
-A human can run `{{ cmd_prefix }}speccy-holistic-gate SPEC-NNNN`
+A human can run `{{ cmd_prefix }}speccy-vet SPEC-NNNN`
 by hand:
 
 - Before ever invoking `{{ cmd_prefix }}speccy-ship`, as a
@@ -497,7 +561,17 @@ by hand:
   `{{ cmd_prefix }}speccy-work` on the affected tasks, to confirm
   the patched implementation still adheres to the SPEC
   holistically. (Each direct invocation gets its own section in
-  HOLISTIC.md.)
+  VET.md.)
 
 The skill behaves identically whether invoked by the orchestrator
 or by a human — only the caller of the verdict differs.
+
+## Next step after exit
+
+When the gate returns `verdict="pass"` and REPORT.md is absent for
+the SPEC, suggest `/speccy-ship SPEC-NNNN` (rendered as
+`{{ cmd_prefix }}speccy-ship SPEC-NNNN` in the shared body) as the
+next reasonable step — the SPEC is freshly vetted and ready to be
+committed and PR'd. When the gate returns `verdict="fail"`, the
+final block's one-line suggested next step takes precedence over
+ship.

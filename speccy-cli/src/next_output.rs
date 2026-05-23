@@ -66,10 +66,11 @@ pub struct JsonWorkspaceEntry {
 /// The `next_action` object inside JSON envelopes.
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonNextAction {
-    /// Kind string: `"decompose"`, `"review"`, `"work"`, or `"ship"`.
+    /// Kind string: `"decompose"`, `"review"`, `"work"`, `"vet"`, or
+    /// `"ship"`.
     pub kind: &'static str,
     /// Task identifier; present for `review` and `work`, absent for
-    /// `decompose` and `ship`.
+    /// `decompose`, `vet`, and `ship`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
 }
@@ -153,6 +154,10 @@ fn to_json_action(action: &NextAction) -> JsonNextAction {
             kind: "work",
             task_id: Some(task_id.clone()),
         },
+        NextAction::Vet => JsonNextAction {
+            kind: "vet",
+            task_id: None,
+        },
         NextAction::Ship => JsonNextAction {
             kind: "ship",
             task_id: None,
@@ -178,6 +183,7 @@ pub fn render_text_per_spec(spec_id: &str, action: Option<&NextAction>) -> Strin
         Some(NextAction::Work { task_id }) => {
             format!("{spec_id}: work {task_id}\n")
         }
+        Some(NextAction::Vet) => format!("{spec_id}: vet\n"),
         Some(NextAction::Ship) => format!("{spec_id}: ship\n"),
     }
 }
@@ -233,6 +239,14 @@ mod tests {
         assert_eq!(
             render_text_per_spec("SPEC-0001", Some(&action)),
             "SPEC-0001: work T-003\n",
+        );
+    }
+
+    #[test]
+    fn text_per_spec_vet() {
+        assert_eq!(
+            render_text_per_spec("SPEC-0001", Some(&NextAction::Vet)),
+            "SPEC-0001: vet\n",
         );
     }
 

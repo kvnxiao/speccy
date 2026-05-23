@@ -35,6 +35,21 @@ fn task_xml(id: &str, state: &str) -> String {
     )
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        if write!(out, "{byte:02x}").is_err() {
+            break;
+        }
+    }
+    out
+}
+
 fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
     run(
@@ -106,7 +121,8 @@ fn one_line_per_active_spec() -> TestResult {
         "line must contain SPEC-0001 and decompose: {text3:?}",
     );
 
-    // ship: all done + no REPORT.md.
+    // vet: all done + no VET.md (the new lifecycle step between
+    // completed tasks and ship — SPEC-0041 REQ-001/REQ-002).
     let ws4 = Workspace::new()?;
     let tasks_xml4 = task_xml("T-001", "completed");
     write_spec(
@@ -119,19 +135,29 @@ fn one_line_per_active_spec() -> TestResult {
     assert_eq!(text4.lines().count(), 1, "expected 1 line: {text4:?}");
     let line4 = text4.lines().next().expect("checked count above");
     assert!(
-        line4.contains("SPEC-0001") && line4.contains("ship"),
-        "line must contain SPEC-0001 and ship: {text4:?}",
+        line4.contains("SPEC-0001") && line4.contains("vet"),
+        "line must contain SPEC-0001 and vet (all-completed + no VET.md): {text4:?}",
     );
 
-    // completed: all done + REPORT.md → omitted (zero lines).
+    // completed: all done + fresh-pass VET.md + REPORT.md → omitted
+    // (zero lines).
     let ws5 = Workspace::new()?;
     let tasks_xml5 = task_xml("T-001", "completed");
+    let tasks_md5 = tasks_md_xml("SPEC-0001", &tasks_xml5);
     let spec_dir = write_spec(
         &ws5.root,
         "0001-foo",
         &spec_md_template("SPEC-0001", "in-progress"),
-        Some(&tasks_md_xml("SPEC-0001", &tasks_xml5)),
+        Some(&tasks_md5),
     )?;
+    // Compute SHA-256 of TASKS.md for the gate freshness signal.
+    let hash = sha256_hex(tasks_md5.as_bytes());
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    let vet = format!(
+        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), vet)?;
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
     let text5 = render_text(&ws5)?;
     assert!(

@@ -163,4 +163,4 @@ any task is `state="pending"` (a retry), suggest
 `speccy-work SPEC-NNNN`. If any remain
 `state="in-review"`, suggest `speccy-review SPEC-NNNN`
 again. If all tasks are `state="completed"`, suggest
-`speccy-ship SPEC-NNNN`.
+`speccy-vet SPEC-NNNN`.

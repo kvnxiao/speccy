@@ -177,6 +177,90 @@ fn workspace_json_envelope_shape() -> TestResult {
     Ok(())
 }
 
+// -- SPEC-0041 REQ-001/REQ-002: vet kind in JSON -----------------------------
+
+fn sha256_hex_of(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        if write!(out, "{byte:02x}").is_err() {
+            break;
+        }
+    }
+    out
+}
+
+#[test]
+fn workspace_json_emits_vet_when_all_completed_and_no_vet_md() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "completed");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    let text = render_workspace(&ws)?;
+    let parsed: serde_json::Value = serde_json::from_str(&text)?;
+    let specs = parsed
+        .get("specs")
+        .expect("specs array")
+        .as_array()
+        .expect("array");
+    let entry = specs.first().expect("one entry");
+    let next_action = entry.get("next_action").expect("next_action present");
+    assert_eq!(
+        next_action.get("kind"),
+        Some(&serde_json::json!("vet")),
+        "kind must be vet: {entry}",
+    );
+    // No task_id field when kind is vet.
+    assert!(
+        next_action.get("task_id").is_none(),
+        "task_id must be absent when kind=vet: {entry}",
+    );
+    Ok(())
+}
+
+#[test]
+fn workspace_json_emits_ship_when_vet_passes_fresh() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "completed");
+    let tasks_md = tasks_md_xml("SPEC-0001", &tasks_xml);
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md),
+    )?;
+    let hash = sha256_hex_of(tasks_md.as_bytes());
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    let vet_body = format!(
+        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), vet_body)?;
+    let text = render_workspace(&ws)?;
+    let parsed: serde_json::Value = serde_json::from_str(&text)?;
+    let specs = parsed
+        .get("specs")
+        .expect("specs")
+        .as_array()
+        .expect("array");
+    let entry = specs.first().expect("one entry");
+    let next_action = entry.get("next_action").expect("next_action");
+    assert_eq!(
+        next_action.get("kind"),
+        Some(&serde_json::json!("ship")),
+        "kind must be ship when VET.md passes fresh: {entry}",
+    );
+    Ok(())
+}
+
 // -- determinism -------------------------------------------------------------
 
 #[test]

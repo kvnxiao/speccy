@@ -55,7 +55,7 @@ re-explaining intent at every step.
 - Shipped skill packs for Claude Code and Codex driving the full
   development loop end-to-end without humans chaining commands.
 - A shipped orchestration loop in both skill packs
-  (`/speccy-orchestrate` chained with `/speccy-holistic-gate`) that
+  (`/speccy-orchestrate` chained with `/speccy-vet`) that
   drives one SPEC from first-task implementation through pre-ship
   drift review without humans chaining per-task commands.
 - Speccy's own implementation tracked in `.speccy/specs/` — by the

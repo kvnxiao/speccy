@@ -222,11 +222,37 @@ fn chk002_workspace_entries_ordered_by_spec_id() -> TestResult {
     Ok(())
 }
 
-// -- CHK-005 ----------------------------------------------------------------
-// All tasks completed + no REPORT.md → Ship; + REPORT.md → omit from listing.
+// Helper: write a VET.md ending with the given gate block to the spec's
+// journal directory.
+fn write_vet_md(spec_dir: &Utf8Path, verdict: &str, tasks_hash: &str) -> TestResult<()> {
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    let body = format!(
+        "## Invocation 1\n\n<gate verdict=\"{verdict}\" tasks_hash=\"{tasks_hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), body)?;
+    Ok(())
+}
+
+fn sha256_hex_of_file(path: &Utf8Path) -> TestResult<String> {
+    use sha2::Digest as _;
+    let bytes = fs_err::read(path.as_std_path())?;
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(out, "{byte:02x}")?;
+    }
+    Ok(out)
+}
+
+// -- SPEC-0041 REQ-001/REQ-002 ----------------------------------------------
+// All tasks completed + no VET.md → Vet.
 
 #[test]
-fn chk005_ship_when_all_done_no_report() -> TestResult {
+fn vet_when_all_done_no_vet_md() -> TestResult {
     let tmp = tempfile::tempdir()?;
     let root = utf8(&tmp)?;
     write_spec(
@@ -237,10 +263,161 @@ fn chk005_ship_when_all_done_no_report() -> TestResult {
     )?;
     let ws = scan(&root);
     let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("all-done spec must have an action");
+    assert!(
+        matches!(action, NextAction::Vet),
+        "all-completed + no VET.md must return Vet, got {action:?}",
+    );
+    Ok(())
+}
+
+// All tasks completed + VET.md ending with verdict="failed" → Vet.
+
+#[test]
+fn vet_when_vet_md_ends_with_failed_verdict() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    write_vet_md(&spec_dir, "failed", "deadbeef")?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(action, NextAction::Vet),
+        "VET.md with failed verdict must return Vet, got {action:?}",
+    );
+    Ok(())
+}
+
+// All tasks completed + VET.md ending with passed but stale tasks_hash → Vet.
+
+#[test]
+fn vet_when_passed_but_tasks_hash_is_stale() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    write_vet_md(
+        &spec_dir,
+        "passed",
+        "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(action, NextAction::Vet),
+        "stale tasks_hash must force re-vet, got {action:?}",
+    );
+    Ok(())
+}
+
+// All tasks completed + passing-fresh VET.md + REPORT.md absent → Ship.
+
+#[test]
+fn ship_when_vet_passes_fresh_and_no_report() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    let hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    write_vet_md(&spec_dir, "passed", &hash)?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(action, NextAction::Ship),
+        "fresh passing gate without REPORT.md must return Ship, got {action:?}",
+    );
+    Ok(())
+}
+
+// All tasks completed + passing-fresh VET.md + REPORT.md present → None.
+
+#[test]
+fn none_when_vet_passes_fresh_and_report_present() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    let hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    write_vet_md(&spec_dir, "passed", &hash)?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "---\nspec: SPEC-0001\n---\n",
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    assert!(
+        compute_for_spec(spec).is_none(),
+        "fresh-pass + REPORT.md must return None",
+    );
+    Ok(())
+}
+
+// Priority: in-review task always wins over a fresh-pass VET.md.
+
+#[test]
+fn review_wins_over_fresh_pass_vet() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('?', "T-001", "awaiting review")]),
+    )?;
+    let hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    write_vet_md(&spec_dir, "passed", &hash)?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(&action, NextAction::Review { task_id, .. } if task_id == "T-001"),
+        "in-review task must win over any VET.md state, got {action:?}",
+    );
+    Ok(())
+}
+
+// -- CHK-005 ----------------------------------------------------------------
+// All tasks completed + fresh-pass VET.md + no REPORT.md → Ship; + REPORT.md
+// → omit from listing.
+
+#[test]
+fn chk005_ship_when_all_done_no_report() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    let hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    write_vet_md(&spec_dir, "passed", &hash)?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
     let action = compute_for_spec(spec).expect("all-done spec without REPORT.md must have Ship");
     assert!(
         matches!(action, NextAction::Ship),
-        "all-[x] spec without REPORT.md must return Ship, got {action:?}",
+        "all-[x] spec with fresh-pass VET.md and no REPORT.md must return Ship, got {action:?}",
     );
 
     // Two all-done specs; SPEC-0001 has REPORT.md, SPEC-0002 does not.
@@ -253,16 +430,20 @@ fn chk005_ship_when_all_done_no_report() -> TestResult {
         "SPEC-0001",
         Some(&[('x', "T-001", "done")]),
     )?;
+    let hash1 = sha256_hex_of_file(&dir1.join("TASKS.md"))?;
+    write_vet_md(&dir1, "passed", &hash1)?;
     fs_err::write(
         dir1.join("REPORT.md").as_std_path(),
         "---\nspec: SPEC-0001\n---\n",
     )?;
-    write_spec(
+    let dir2 = write_spec(
         &root2,
         "0002-bar",
         "SPEC-0002",
         Some(&[('x', "T-002", "done")]),
     )?;
+    let hash2 = sha256_hex_of_file(&dir2.join("TASKS.md"))?;
+    write_vet_md(&dir2, "passed", &hash2)?;
     let ws2 = scan(&root2);
     let entries = compute_workspace(&ws2);
     assert_eq!(

@@ -128,4 +128,4 @@ spec hash must have been committed before this skill runs.
 After exit, the next reasonable step depends on TASKS.md state: if
 any task is `state="in-review"`, suggest
 `/speccy-review SPEC-NNNN`. If all tasks are
-`state="completed"`, suggest `/speccy-ship SPEC-NNNN`.
+`state="completed"`, suggest `/speccy-vet SPEC-NNNN`.

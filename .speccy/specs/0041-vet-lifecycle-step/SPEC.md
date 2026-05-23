@@ -2,7 +2,7 @@
 id: SPEC-0041
 slug: vet-lifecycle-step
 title: Vet lifecycle step — `speccy next` returns `kind="vet"` between completed tasks and ship, driven by a renamed `/speccy-vet` skill
-status: in-progress
+status: implemented
 created: 2026-05-22
 supersedes: []
 ---
@@ -11,7 +11,7 @@ supersedes: []
 
 ## Summary
 
-The shipped lifecycle today is plan → tasks → implement → review → ship.
+The shipped lifecycle today is plan → tasks → work → review → ship.
 SPEC-0039 added a `/speccy-holistic-gate` skill that runs a holistic
 SPEC-vs-implementation drift review with a budgeted fix loop and a
 simplifier polish pass at the pre-ship boundary, but the CLI's
@@ -79,14 +79,21 @@ the lifecycle step that produces it.
   `orchestrator-verdict verdict="fail"`. `tasks_hash` is the
   lowercase hex SHA-256 of the working tree's TASKS.md bytes at the
   moment the gate block is appended.
-- The suggestion lines at the end of `/speccy-review` and
-  `/speccy-work` skill bodies (both `resources/modules/skills/*.md`
-  and the ejected `.claude/skills/*/SKILL.md` and
-  `.agents/skills/*/SKILL.md` copies) change from
-  `/speccy-ship SPEC-NNNN` to `/speccy-vet SPEC-NNNN` for the
-  "all tasks completed" case. The `/speccy-vet` body's own closing
+- The closing suggestion line at the end of `/speccy-review` (shared
+  body at `resources/modules/skills/speccy-review.md`, ejected to
+  `.claude/skills/speccy-review/SKILL.md` and
+  `.agents/skills/speccy-review/SKILL.md`) and the closing suggestion
+  line at the end of `/speccy-work` (shared body at
+  `resources/modules/phases/speccy-work.md`, ejected to
+  `.claude/agents/speccy-work.md` and `.codex/agents/speccy-work.toml`)
+  change from `/speccy-ship SPEC-NNNN` to `/speccy-vet SPEC-NNNN` for
+  the "all tasks completed" case. The `/speccy-vet` body's own closing
   suggestion line names `/speccy-ship SPEC-NNNN` after a passing
-  gate verdict.
+  gate verdict. (`/speccy-work` is a pinned-stub phase per SPEC-0023:
+  its ejected `.claude/skills/speccy-work/SKILL.md` and
+  `.agents/skills/speccy-work/SKILL.md` are pointer-only and carry no
+  suggestion line; the real suggestion lives in the phase body and
+  agent files.)
 </goals>
 
 ## Non-goals
@@ -152,7 +159,7 @@ the lifecycle step that produces it.
 ### REQ-001: `NextAction` enum gains a `Vet` variant; JSON emits `kind="vet"`
 
 The `speccy_core::next::NextAction` enum gains a new variant `Vet`
-sitting between `Implement` and `Ship` in the priority order. The
+sitting between `Work` and `Ship` in the priority order. The
 JSON serialization layer emits `"kind": "vet"` for that variant in
 the `speccy next --json` output. No fields beyond the discriminant
 are required on `Vet` — the caller already has the spec ID, and the
@@ -167,7 +174,7 @@ out the round/invocation number.
   no other fields under `next_action`.
 - The plain-text `speccy next` output for the same spec prints a
   human-readable "vet" verb (matching the formatting style of the
-  existing `ship`, `review`, `implement` verbs).
+  existing `ship`, `review`, `work` verbs).
 - A unit test in `speccy-core/src/next.rs` constructs a parsed spec
   fixture with all tasks completed and no VET.md, calls
   `compute_for_spec`, and asserts the result is `Some(NextAction::Vet)`.
@@ -210,14 +217,14 @@ then the JSON entry for that spec contains
 </requirement>
 
 <requirement id="REQ-002">
-### REQ-002: Resolver priority slots `Vet` between `Implement` and `Ship`
+### REQ-002: Resolver priority slots `Vet` between `Work` and `Ship`
 
 The priority rule in `speccy_core::next::compute_for_spec` is updated
 to:
 
 1. TASKS.md absent → `Decompose`
 2. Any task `state="in-review"` → `Review`
-3. Any task `state="pending"` → `Implement`
+3. Any task `state="pending"` → `Work`
 4. All tasks `state="completed"`, gate-pass artifact missing or
    stale → `Vet`
 5. All tasks `state="completed"`, gate-pass artifact present and
@@ -240,7 +247,7 @@ and `X` equals the lowercase hex SHA-256 of the current
 - A spec with `state="in-review"` tasks still returns `Review`
   regardless of any VET.md presence (the gate-pass artifact
   is checked only when all tasks are completed).
-- A spec with `state="pending"` tasks still returns `Implement`
+- A spec with `state="pending"` tasks still returns `Work`
   regardless of any VET.md presence.
 </done-when>
 
@@ -582,12 +589,25 @@ then it prints zero matches.
 <requirement id="REQ-006">
 ### REQ-006: Skill-suggestion lines route through `/speccy-vet` instead of `/speccy-ship`
 
-The closing suggestion lines in `/speccy-review` and `/speccy-work`
-skill bodies — both the shared modules under
-`resources/modules/skills/` and the ejected per-host copies under
-`.claude/skills/` and `.agents/skills/` — update so that the
-"all tasks `state="completed"`" branch suggests
+The closing suggestion line in `/speccy-review` — shared body at
+`resources/modules/skills/speccy-review.md`, ejected to
+`.claude/skills/speccy-review/SKILL.md` and
+`.agents/skills/speccy-review/SKILL.md` — and the closing suggestion
+line in `/speccy-work` — shared body at
+`resources/modules/phases/speccy-work.md`, ejected to
+`.claude/agents/speccy-work.md` and `.codex/agents/speccy-work.toml` —
+update so that the "all tasks `state="completed"`" branch suggests
 `/speccy-vet SPEC-NNNN` instead of `/speccy-ship SPEC-NNNN`.
+
+`/speccy-work` is a pinned-stub phase per SPEC-0023; the ejected
+`.claude/skills/speccy-work/SKILL.md` and
+`.agents/skills/speccy-work/SKILL.md` are pointer-only bodies that
+delegate to the agent file and therefore carry no suggestion line to
+edit. The host-pack templates at
+`resources/agents/.claude/agents/speccy-work.md.tmpl` and
+`resources/agents/.codex/agents/speccy-work.toml.tmpl` already
+`{% include %}` the renamed phase body and need no edit beyond the
+shared-body change.
 
 The renamed `/speccy-vet` skill body's own closing suggestion line
 names `/speccy-ship SPEC-NNNN` when the gate verdict is `passed` and
@@ -603,19 +623,21 @@ renames as part of the global rename).
 
 <done-when>
 - `rg -n '/speccy-ship' resources/modules/skills/speccy-review.md
-  resources/modules/skills/speccy-work.md`
+  resources/modules/phases/speccy-work.md`
   no longer prints the "all tasks completed → /speccy-ship"
   suggestion. The string `/speccy-ship` survives in
   `resources/modules/skills/speccy-vet.md` (its own
   closing-after-pass suggestion).
-- `rg -n '/speccy-vet' resources/modules/skills/speccy-review.md
-  resources/modules/skills/speccy-work.md` prints at least one
-  match in each file.
-- The ejected `.claude/skills/speccy-review/SKILL.md`,
-  `.claude/skills/speccy-work/SKILL.md`,
-  `.agents/skills/speccy-review/SKILL.md`, and
-  `.agents/skills/speccy-work/SKILL.md` all carry the same
-  `/speccy-vet` suggestion lines.
+- `rg -n 'speccy-vet' resources/modules/skills/speccy-review.md
+  resources/modules/phases/speccy-work.md` prints at least one
+  match in each file. (The phase body addresses the verb as
+  `{{ cmd_prefix }}speccy-vet`, so the pattern omits the leading
+  slash to match both call sites.)
+- The ejected `.claude/skills/speccy-review/SKILL.md` and
+  `.agents/skills/speccy-review/SKILL.md` carry the `/speccy-vet`
+  suggestion line, and the ejected `.claude/agents/speccy-work.md`
+  and `.codex/agents/speccy-work.toml` carry the `/speccy-vet`
+  suggestion line.
 </done-when>
 
 <behavior>
@@ -636,13 +658,13 @@ renames as part of the global rename).
 
 <scenario id="CHK-012">
 Given the source tree at HEAD,
-when `rg -n '/speccy-ship SPEC-NNNN' resources/modules/skills/speccy-review.md resources/modules/skills/speccy-work.md` runs,
+when `rg -n '/speccy-ship SPEC-NNNN' resources/modules/skills/speccy-review.md resources/modules/phases/speccy-work.md` runs,
 then it prints zero matches.
 </scenario>
 
 <scenario id="CHK-013">
 Given the same checkout,
-when `rg -n '/speccy-vet SPEC-NNNN' resources/modules/skills/speccy-review.md resources/modules/skills/speccy-work.md` runs,
+when `rg -n 'speccy-vet SPEC-NNNN' resources/modules/skills/speccy-review.md resources/modules/phases/speccy-work.md` runs,
 then it prints at least one match in each file.
 </scenario>
 
@@ -763,4 +785,5 @@ in `speccy next`'s contract and in every shipped skill body.
 | Date       | Reason                                                   | Author     |
 |------------|----------------------------------------------------------|------------|
 | 2026-05-22 | Initial draft. Add a `vet` lifecycle step between completed tasks and ship, driven by a renamed `/speccy-vet` skill (formerly `/speccy-holistic-gate`). Introduces `NextAction::Vet` and `kind = "vet"`; renames the journal artifact to `VET.md`; renames the speccy-owned sub-agents to `vet-reviewer` / `vet-implementer` and adds a new speccy-owned `vet-simplifier` persona so Phase 2 no longer depends on the external Claude-only `code-simplifier` plugin. Gate writes a `<gate verdict="passed\|failed" tasks_hash="...">` block to `VET.md`; resolver uses `tasks_hash` against current TASKS.md as the freshness signal. Skill-suggestion lines in `/speccy-review` and `/speccy-work` route to `/speccy-vet` instead of `/speccy-ship`. Pre-v1; atomic rename, no transitional alias. | Kevin Xiao |
+| 2026-05-22 | Pre-decomposition correction. Reconcile lifecycle-verb terminology with SPEC-0040, which renamed `NextAction::Implement` → `NextAction::Work` and JSON `kind="implement"` → `kind="work"`: update REQ-001 / REQ-002 prose, priority-rule list, and human-readable verb examples accordingly. Correct REQ-006 and the matching goal line to point at the real shared-body locations for `/speccy-work`: the pinned-stub phase body lives at `resources/modules/phases/speccy-work.md` (not under `resources/modules/skills/`) and ejects to `.claude/agents/speccy-work.md` + `.codex/agents/speccy-work.toml`, not the pointer-only `.claude/skills/speccy-work/SKILL.md` / `.agents/skills/speccy-work/SKILL.md` shims. Updates CHK-012 / CHK-013 paths to match. | Kevin Xiao |
 </changelog>

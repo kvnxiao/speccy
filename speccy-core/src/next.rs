@@ -10,18 +10,27 @@
 //!   are fully completed and have REPORT.md). Used by `speccy next` (workspace
 //!   form).
 //!
-//! Priority rule (see SPEC-0033 REQ-004):
-//! > if TASKS.md is absent → kind = `"decompose"`
-//! > else if any task is `state="in-review"` → kind = `"review"` (first one)
-//! > else if any task is `state="pending"` → kind = `"work"` (first one)
-//! > else if all tasks `state="completed"` and REPORT.md absent → kind =
-//! > `"ship"`
-//! > else → spec is omitted (all done + REPORT.md present)
+//! Priority rule (see SPEC-0033 REQ-004 and SPEC-0041 REQ-002):
+//! > 1. TASKS.md is absent → kind = `"decompose"`
+//! > 2. Any task is `state="in-review"` → kind = `"review"` (first one)
+//! > 3. Any task is `state="pending"` → kind = `"work"` (first one)
+//! > 4. All tasks `state="completed"`, gate-pass artifact (VET.md) missing
+//! > or stale → kind = `"vet"`
+//! > 5. All tasks `state="completed"`, gate-pass artifact present and
+//! > fresh, REPORT.md absent → kind = `"ship"`
+//! > 6. Else → spec is omitted (all done + REPORT.md present)
+//!
+//! "Gate-pass artifact fresh" means: `<spec-dir>/journal/VET.md` exists,
+//! its final non-whitespace `<gate ...>` block has `verdict="passed"`,
+//! and its `tasks_hash="X"` attribute equals the lowercase hex SHA-256
+//! of the current `<spec-dir>/TASKS.md` byte contents.
 
 use crate::lint::ParsedSpec;
 use crate::parse::TaskState;
 use crate::personas;
 use crate::workspace::Workspace;
+use sha2::Digest as _;
+use sha2::Sha256;
 
 /// The derived action kind for a single spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +49,14 @@ pub enum NextAction {
         /// Task identifier (`T-NNN`) of the first pending task.
         task_id: String,
     },
-    /// All tasks are completed and REPORT.md is absent.
+    /// All tasks are completed but the pre-ship vet gate has not yet
+    /// produced a fresh passing artifact (`<spec-dir>/journal/VET.md`
+    /// is absent, ends with a failing `<gate>` block, or ends with a
+    /// passing `<gate>` block whose `tasks_hash` does not match the
+    /// current TASKS.md SHA-256).
+    Vet,
+    /// All tasks are completed, a fresh passing vet-gate artifact
+    /// exists, and REPORT.md is absent.
     Ship,
 }
 
@@ -63,8 +79,11 @@ pub struct SpecNextEntry {
 /// 1. TASKS.md absent → `Decompose`
 /// 2. Any task `state="in-review"` → `Review` (first matching task)
 /// 3. Any task `state="pending"` → `Work` (first matching task)
-/// 4. All tasks `state="completed"` and REPORT.md absent → `Ship`
-/// 5. All done + REPORT.md present → `None` (omit)
+/// 4. All tasks `state="completed"`, gate-pass artifact missing or stale →
+///    `Vet`
+/// 5. All tasks `state="completed"`, gate-pass artifact present and fresh,
+///    REPORT.md absent → `Ship`
+/// 6. All done + REPORT.md present → `None` (omit)
 #[must_use = "the derived action names the next step for the spec"]
 pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
     let Some(tasks) = spec.tasks_md_ok() else {
@@ -85,8 +104,11 @@ pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
         });
     }
 
-    // All tasks are completed (or empty). Check REPORT.md.
+    // All tasks are completed (or empty). Check vet gate, then REPORT.md.
     if tasks.tasks.iter().all(|t| t.state == TaskState::Completed) {
+        if !vet_gate_is_fresh_pass(spec) {
+            return Some(NextAction::Vet);
+        }
         if report_md_exists(spec) {
             // Fully done — omit from workspace listing.
             return None;
@@ -129,6 +151,109 @@ fn report_md_exists(spec: &ParsedSpec) -> bool {
     fs_err::metadata(path.as_std_path()).is_ok_and(|m| m.is_file())
 }
 
+/// Returns true when `<spec-dir>/journal/VET.md` exists, its final
+/// non-whitespace `<gate ...>` element block has `verdict="passed"`,
+/// and its `tasks_hash="X"` attribute equals the lowercase hex SHA-256
+/// of the current `<spec-dir>/TASKS.md` byte contents.
+///
+/// Returns false on any other shape (file absent, no `<gate>` block,
+/// failed verdict, stale hash, parse failure, or read error). Treating
+/// parse failures as "not fresh" is deliberate: re-vetting is safer
+/// than shipping on a malformed artifact.
+fn vet_gate_is_fresh_pass(spec: &ParsedSpec) -> bool {
+    let vet_path = spec.dir.join("journal").join("VET.md");
+    let Ok(vet_bytes) = fs_err::read(vet_path.as_std_path()) else {
+        return false;
+    };
+    let Ok(vet_text) = std::str::from_utf8(&vet_bytes) else {
+        return false;
+    };
+    let Some(gate) = last_gate_block(vet_text) else {
+        return false;
+    };
+    if gate.verdict != "passed" {
+        return false;
+    }
+    let tasks_path = spec.dir.join("TASKS.md");
+    let Ok(tasks_bytes) = fs_err::read(tasks_path.as_std_path()) else {
+        return false;
+    };
+    let actual_hash = sha256_hex(&tasks_bytes);
+    gate.tasks_hash.eq_ignore_ascii_case(&actual_hash)
+}
+
+/// Lowercase hex SHA-256 of the given bytes.
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        // `String::write_fmt` is infallible in practice; the trait
+        // signature returns `Result`. Mirror `workspace::hex_of_sha256`
+        // and absorb the result without `unwrap` / `expect`.
+        if write!(out, "{byte:02x}").is_err() {
+            break;
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone)]
+struct GateBlock {
+    verdict: String,
+    tasks_hash: String,
+}
+
+/// Scan the VET.md text for the final `<gate ...>` opening tag and
+/// extract its `verdict` and `tasks_hash` attributes. Returns `None`
+/// when no `<gate ...>` tag is present or the required attributes are
+/// missing.
+///
+/// This is a deliberately small, tolerant parser: the `<gate>` block
+/// grammar is owned by the skill layer (SPEC-0041 REQ-003), and a
+/// strict XML parse would couple this resolver to that grammar's
+/// whitespace and ordering. The resolver only needs the two
+/// attributes off the most recent opening tag.
+fn last_gate_block(text: &str) -> Option<GateBlock> {
+    let mut last: Option<GateBlock> = None;
+    let mut cursor = text;
+    while let Some(open_idx) = cursor.find("<gate") {
+        let after_open = cursor.get(open_idx..)?;
+        // Require the next char after "<gate" to be whitespace or '>',
+        // so we do not match a hypothetical `<gateway>` tag.
+        let following = after_open.get("<gate".len()..)?;
+        let first_char = following.chars().next();
+        if !matches!(first_char, Some(c) if c.is_whitespace() || c == '>' || c == '/') {
+            // Advance past this `<gate` literal and keep scanning.
+            cursor = following;
+            continue;
+        }
+        let close_idx = following.find('>')?;
+        let attrs = following.get(..close_idx)?;
+        let verdict = attribute_value(attrs, "verdict")?;
+        let tasks_hash = attribute_value(attrs, "tasks_hash")?;
+        last = Some(GateBlock {
+            verdict,
+            tasks_hash,
+        });
+        cursor = following.get(close_idx..)?;
+    }
+    last
+}
+
+/// Extract a double-quoted attribute value from an opening-tag attribute
+/// string, e.g. `verdict` from ` verdict="passed" tasks_hash="..."`.
+fn attribute_value(attrs: &str, name: &str) -> Option<String> {
+    let needle = format!("{name}=\"");
+    let start = attrs.find(&needle)?;
+    let value_start = start.checked_add(needle.len())?;
+    let rest = attrs.get(value_start..)?;
+    let end = rest.find('"')?;
+    Some(rest.get(..end)?.to_owned())
+}
+
 fn first_task_with_state(
     tasks: &[crate::parse::Task],
     state: TaskState,
@@ -150,7 +275,15 @@ pub fn default_personas() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::expect_used,
+        reason = "test code may .expect() with descriptive messages"
+    )]
+
+    use super::attribute_value;
     use super::default_personas;
+    use super::last_gate_block;
+    use super::sha256_hex;
 
     #[test]
     fn default_personas_is_the_first_four_of_all() {
@@ -158,5 +291,61 @@ mod tests {
             default_personas(),
             &["business", "tests", "security", "style"],
         );
+    }
+
+    #[test]
+    fn sha256_hex_matches_known_vector() {
+        // SHA-256 of the empty string.
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
+    }
+
+    #[test]
+    fn attribute_value_extracts_simple() {
+        assert_eq!(
+            attribute_value(" verdict=\"passed\" tasks_hash=\"abc123\"", "verdict")
+                .expect("present"),
+            "passed",
+        );
+        assert_eq!(
+            attribute_value(" verdict=\"passed\" tasks_hash=\"abc123\"", "tasks_hash")
+                .expect("present"),
+            "abc123",
+        );
+        assert!(attribute_value(" verdict=\"passed\"", "missing").is_none());
+    }
+
+    #[test]
+    fn last_gate_block_picks_final_block() {
+        let text = r#"
+## Invocation 1
+
+<gate verdict="failed" tasks_hash="deadbeef" date="2026-01-01T00:00:00Z">
+First attempt failed.
+</gate>
+
+## Invocation 2
+
+<gate verdict="passed" tasks_hash="cafef00d" date="2026-01-02T00:00:00Z">
+Second attempt passed.
+</gate>
+"#;
+        let block = last_gate_block(text).expect("two gate blocks present");
+        assert_eq!(block.verdict, "passed");
+        assert_eq!(block.tasks_hash, "cafef00d");
+    }
+
+    #[test]
+    fn last_gate_block_returns_none_when_no_gate_tag() {
+        assert!(last_gate_block("# VET\n\nno gate here.\n").is_none());
+    }
+
+    #[test]
+    fn last_gate_block_ignores_unrelated_prefixes() {
+        // A made-up `<gateway>` tag must not be treated as a `<gate>`.
+        let text = "<gateway verdict=\"passed\" tasks_hash=\"x\">body</gateway>\n";
+        assert!(last_gate_block(text).is_none());
     }
 }

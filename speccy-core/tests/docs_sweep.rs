@@ -6,8 +6,8 @@
 //! Docs sweep integration tests.
 //!
 //! Asserts that:
-//! - `docs/ARCHITECTURE.md` documents the raw XML element grammar by
-//!   containing the canonical element names currently in the whitelist.
+//! - `docs/ARCHITECTURE.md` documents the raw XML element grammar by containing
+//!   the canonical element names currently in the whitelist.
 //! - `docs/ARCHITECTURE.md` pins the no-public-`speccy fmt` contract so the
 //!   "What We Deliberately Don't Do" row cannot quietly vanish.
 
@@ -26,7 +26,7 @@ fn workspace_root() -> Utf8PathBuf {
 #[test]
 fn architecture_md_documents_xml_element_grammar() {
     let root = workspace_root();
-    let arch = root.join(".speccy").join("ARCHITECTURE.md");
+    let arch = root.join("docs").join("ARCHITECTURE.md");
     let body = fs_err::read_to_string(arch.as_std_path()).expect("read docs/ARCHITECTURE.md");
 
     // ARCHITECTURE.md must teach the raw XML element grammar: every
@@ -51,7 +51,7 @@ fn architecture_md_documents_xml_element_grammar() {
 #[test]
 fn architecture_md_pins_no_public_speccy_fmt() {
     let root = workspace_root();
-    let arch = root.join(".speccy").join("ARCHITECTURE.md");
+    let arch = root.join("docs").join("ARCHITECTURE.md");
     let body = fs_err::read_to_string(arch.as_std_path()).expect("read docs/ARCHITECTURE.md");
 
     let has_pinning_line = body.lines().any(|line| line.contains("speccy fmt"));

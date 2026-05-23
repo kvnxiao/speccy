@@ -1,6 +1,6 @@
 ---
 name: speccy-orchestrate
-description: 'Drive the Speccy implementation + review loop for one SPEC end-to-end by chaining speccy-work, speccy-review, and speccy-holistic-gate until the spec is ready to ship. Use when the user says "orchestrate SPEC-NNNN", "speccy-orchestrate SPEC-NNNN", "run the full loop on SPEC-NNNN", "autopilot SPEC-NNNN", or wants to drive a spec from current state to ready-to-ship without chaining single-task skills by hand. Requires: an existing SPEC-NNNN with TASKS.md. Stops one step before shipping (calling speccy-ship is irreversible — it opens a PR) and asks the user before continuing. Do NOT trigger for ad-hoc "implement one task" or "review one task" asks — prefer speccy-work or speccy-review for single-task primitives.'
+description: 'Drive the Speccy implementation + review loop for one SPEC end-to-end by chaining speccy-work, speccy-review, and speccy-vet until the spec is ready to ship. Use when the user says "orchestrate SPEC-NNNN", "speccy-orchestrate SPEC-NNNN", "run the full loop on SPEC-NNNN", "autopilot SPEC-NNNN", or wants to drive a spec from current state to ready-to-ship without chaining single-task skills by hand. Requires: an existing SPEC-NNNN with TASKS.md. Stops one step before shipping (calling speccy-ship is irreversible — it opens a PR) and asks the user before continuing. Do NOT trigger for ad-hoc "implement one task" or "review one task" asks — prefer speccy-work or speccy-review for single-task primitives.'
 ---
 
 # /speccy-orchestrate
@@ -16,7 +16,7 @@ heavy work happens in sub-agent contexts that exit when done.
 - The user wants to drive `SPEC-NNNN` from its current state to
   ready-to-ship without chaining `/speccy-work`,
   `/speccy-review`, and
-  `/speccy-holistic-gate` by hand.
+  `/speccy-vet` by hand.
 - The SPEC already has a `TASKS.md` — this orchestrator dispatches
   against existing tasks; it does not plan or decompose.
 
@@ -43,14 +43,14 @@ outer:    speccy-orchestrate dispatch loop  ← this skill
                   ├── review → spawn sub-agent that runs speccy-review
                   │              (inner: 4 reviewer personas fan out)
                   └── ship   → spawn sub-agent that runs
-                               speccy-holistic-gate
+                               speccy-vet
                                  (inner: drift-fix loop + simplifier
                                   polish, up to 3 rounds)
 inner-1:  per-task retry — same task_id flipping pending after review
             (bounded here in the orchestrator: 5 rounds, then stop)
-inner-2:  holistic drift fix — owned by speccy-holistic-gate
+inner-2:  holistic drift fix — owned by speccy-vet
             (bounded there: 3 rounds, then return fail)
-inner-3:  simplifier polish — owned by speccy-holistic-gate
+inner-3:  simplifier polish — owned by speccy-vet
             (no loop: one scan + one apply with hygiene gate)
 ```
 
@@ -162,9 +162,9 @@ Repeat until a stop condition fires:
      `.claude/skills/speccy-review/SKILL.md` and follow it.
 
    - **`ship`** — spawn a sub-agent that runs the
-     `speccy-holistic-gate` primitive for the spec. Prompt:
+     `speccy-vet` primitive for the spec. Prompt:
 
-     > Follow the `speccy-holistic-gate` skill for `SPEC-NNNN`.
+     > Follow the `speccy-vet` skill for `SPEC-NNNN`.
      > The skill runs an autonomous drift-review + retry loop and
      > applies any simplifier candidates with a hygiene gate.
      > Return only the final `<orchestrator-verdict>` block as
@@ -172,7 +172,7 @@ Repeat until a stop condition fires:
 
      Invoke the `Task` tool with `subagent_type: "general-purpose"`,
      instructing the sub-agent to read
-     `.claude/skills/speccy-holistic-gate/SKILL.md` and follow it.
+     `.claude/skills/speccy-vet/SKILL.md` and follow it.
 
      When the sub-agent returns, parse the verdict block:
 
@@ -231,8 +231,9 @@ SPEC-NNNN → ready to ship — confirm before proceeding?
 Round numbers, per-persona verdicts, holistic drift findings, and
 simplifier candidate details live inside sub-agent contexts and in
 the per-task journals at
-`.speccy/specs/NNNN-slug/journal/T-NNN.md`. Don't duplicate them
-in the status line.
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` (and, for the holistic
+gate, in `.speccy/specs/NNNN-slug/journal/VET.md`). Don't duplicate
+them in the status line.
 
 ## Non-goals
 
@@ -240,7 +241,7 @@ in the status line.
   open a PR. Those belong to `/speccy-ship`, invoked
   after confirmation.
 - This skill does not own the drift-fix loop or the simplifier
-  polish — those live in `/speccy-holistic-gate`.
+  polish — those live in `/speccy-vet`.
   Bugs in those loops get fixed there, not here.
 - This skill does not pick a different persona fan-out for review,
   retry blocked tasks with a different model, or split tasks

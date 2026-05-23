@@ -180,4 +180,4 @@ any task is `state="pending"` (a retry), suggest
 `{{ cmd_prefix }}speccy-work SPEC-NNNN`. If any remain
 `state="in-review"`, suggest `{{ cmd_prefix }}speccy-review SPEC-NNNN`
 again. If all tasks are `state="completed"`, suggest
-`{{ cmd_prefix }}speccy-ship SPEC-NNNN`.
+`{{ cmd_prefix }}speccy-vet SPEC-NNNN`.
