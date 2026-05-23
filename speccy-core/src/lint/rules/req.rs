@@ -1,12 +1,11 @@
 //! REQ-* rules: requirement-to-scenario coverage graph.
 //!
-//! After SPEC-0020 the requirement-to-scenario graph is carried by the
-//! SPEC.md raw XML element tree (scenarios are nested inside their
-//! parent `<requirement>` element). The element parser already rejects
-//! orphan scenarios at parse time, so REQ-002 and REQ-003 (which
-//! guarded against dangling references in the old TOML graph) are no
-//! longer reachable. Only REQ-001 (requirements with zero covering
-//! scenarios) remains as an element-tree-derived diagnostic.
+//! The requirement-to-scenario graph is carried by the SPEC.md raw XML
+//! element tree (scenarios are nested inside their parent
+//! `<requirement>` element). The element parser already rejects orphan
+//! scenarios at parse time, so the only element-tree-derived
+//! diagnostic here is REQ-001 (requirements with zero covering
+//! scenarios).
 
 use crate::lint::types::Diagnostic;
 use crate::lint::types::Level;

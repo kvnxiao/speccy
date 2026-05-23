@@ -15,15 +15,10 @@
 //! the persona body at render time, so on disk the persona body lands
 //! at `.claude/agents/reviewer-<name>.md` (or the Codex equivalent).
 //! The host loads that file as the sub-agent's system context when
-//! `speccy-review` spawns it. SPEC-0027 retired the project-local
-//! override directory (`.speccy/skills/personas/`) and the
-//! resolver-chain helpers that consulted it (`resolve_file`,
-//! `resolve_file_with_warn`, `persona_file_name`, the speccy-core-side
-//! `PERSONAS` static, the `PersonaError` type): host-native files are
-//! now the sole canonical persona surface.
+//! `speccy-review` spawns it. Host-native files are the sole canonical
+//! persona surface.
 //!
-//! See `.speccy/specs/0009-review-command/SPEC.md` REQ-001 / REQ-002
-//! and `.speccy/specs/0027-host-native-personas/SPEC.md`.
+//! See `.speccy/specs/0009-review-command/SPEC.md` REQ-001 / REQ-002.
 
 /// All reviewer personas shipped with Speccy, in declared order.
 ///

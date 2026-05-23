@@ -131,8 +131,8 @@ pub struct Workspace<'a> {
 /// needs to render diagnostics.
 ///
 /// `spec_md`, `spec_doc`, and `tasks_md` are stored as `Result` so the
-/// lint engine can emit diagnostics for parse failures (e.g. SPC-001 for
-/// a malformed SPEC.md element tree, or a SPEC-0019 stray `spec.toml`).
+/// lint engine can emit diagnostics for parse failures (e.g. SPC-001
+/// for a malformed SPEC.md element tree).
 #[derive(Debug)]
 pub struct ParsedSpec {
     /// Stable `SPEC-NNNN` id pulled from the SPEC.md frontmatter when
@@ -151,15 +151,12 @@ pub struct ParsedSpec {
     pub mission_md_path: Option<Utf8PathBuf>,
     /// Parsed SPEC.md frontmatter / heading view (or the parse error).
     pub spec_md: ParseResult<SpecMd>,
-    /// Parsed SPEC.md element tree (or the parse error). After
-    /// SPEC-0020 this carries the canonical requirement-to-scenario
-    /// graph derived from `<requirement>` / `<scenario>` elements;
-    /// the stray `spec.toml` lint also surfaces here as a parse
-    /// failure.
+    /// Parsed SPEC.md element tree (or the parse error). Carries the
+    /// canonical requirement-to-scenario graph derived from
+    /// `<requirement>` / `<scenario>` elements.
     pub spec_doc: ParseResult<SpecDoc>,
     /// Parsed TASKS.md typed XML model (or the parse error), if a
-    /// TASKS.md exists. SPEC-0022 retired the heuristic checkbox-list
-    /// parser; this is now the only TASKS.md representation.
+    /// TASKS.md exists.
     pub tasks_md: Option<ParseResult<TasksDoc>>,
     /// Parsed REPORT.md typed XML model (or the parse error), if a
     /// REPORT.md exists.

@@ -8,11 +8,8 @@
 )]
 //! Integration tests for `speccy check`.
 //!
-//! SPEC-0018 REQ-002: `speccy check` renders English validation
-//! scenarios. It must not spawn child processes — even when a legacy
-//! `command` field is present during the SPEC-0018 bridge period.
-//!
-//! Selector behavior (SPEC-0017) is preserved: no selector, `SPEC-NNNN`,
+//! `speccy check` renders English validation scenarios and must not
+//! spawn child processes. Selectors accepted: no selector, `SPEC-NNNN`,
 //! `SPEC-NNNN/CHK-NNN`, `CHK-NNN`, `SPEC-NNNN/T-NNN`, `T-NNN`.
 
 mod common;
@@ -31,13 +28,10 @@ use speccy_cli::check::run;
 use speccy_cli::check_selector::SelectorError;
 
 // ---------------------------------------------------------------------------
-// Fixture helpers — all use the SPEC-0018 new-shape `scenario` field. A
-// dedicated "legacy bridge" fixture lives further down for the
-// no-subprocess-on-legacy-row test.
+// Fixture helpers.
 // ---------------------------------------------------------------------------
 
-/// Marker-structured SPEC.md (SPEC-0019) with two scenarios under
-/// REQ-001 to match the legacy `spec_toml_two_scenarios` shape.
+/// Element-tree SPEC.md with two scenarios under REQ-001.
 fn marker_spec_md_two_scenarios(spec_id: &str, status: &str) -> String {
     let template = indoc! {r#"
         ---
@@ -94,8 +88,8 @@ fn marker_spec_md_two_scenarios(spec_id: &str, status: &str) -> String {
         .replace("__STATUS__", status)
 }
 
-/// Marker SPEC.md with three scenarios labelled "first/second/third in <spec>"
-/// matching the legacy `spec_toml_three_scenarios` shape.
+/// Element-tree SPEC.md with three scenarios labelled
+/// "first/second/third in <spec>".
 fn marker_spec_md_three_scenarios(spec_id: &str) -> String {
     let template = indoc! {r#"
         ---
@@ -253,11 +247,11 @@ fn tasks_md_fixture(spec_id: &str, tasks: &[(&str, &str)]) -> String {
     out
 }
 
-fn assert_no_legacy_footers(out: &str) {
+fn assert_no_execution_footers(out: &str) {
     for forbidden in &["<-- CHK", "PASS", "FAIL", "IN-FLIGHT", "MANUAL"] {
         assert!(
             !out.contains(forbidden),
-            "legacy execution footer `{forbidden}` must be absent in render-only output:\n{out}",
+            "execution footer `{forbidden}` must be absent in render-only output:\n{out}",
         );
     }
 }
@@ -315,7 +309,7 @@ fn no_selector_renders_all_scenarios_with_count_summary() -> TestResult {
         out.contains("9 scenarios rendered across 3 specs"),
         "count summary missing or wrong; out:\n{out}",
     );
-    assert_no_legacy_footers(&out);
+    assert_no_execution_footers(&out);
     Ok(())
 }
 
@@ -349,7 +343,7 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
         "final continuation must be indented; out:\n{out}",
     );
     assert!(out.contains("1 scenarios rendered across 1 specs"));
-    assert_no_legacy_footers(&out);
+    assert_no_execution_footers(&out);
     Ok(())
 }
 
@@ -586,12 +580,12 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
 
 #[test]
 fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestResult {
-    // After SPEC-0019 a scenario is owned by exactly one requirement
-    // (marker containment), so the legacy "two REQs reference the same
-    // CHK" scenario can't be constructed at the marker level. The test
-    // is preserved as a regression guard for first-occurrence ordering
-    // across requirements covered by one task; the dedup-on-overlap
-    // assertion below still holds vacuously.
+    // A scenario is owned by exactly one requirement (element
+    // containment), so the "two REQs reference the same CHK" scenario
+    // can't be constructed at the element-tree level. This test acts as
+    // a regression guard for first-occurrence ordering across
+    // requirements covered by one task; the dedup-on-overlap assertion
+    // below still holds vacuously.
     let ws = Workspace::new()?;
     let spec_md = indoc! {r#"
         ---
@@ -949,17 +943,13 @@ fn binary_spec_9999_preserves_no_matching_spec_wording() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0018 T-006 retry / REQ-002 regression guard: `speccy check
-// SPEC-0018` must render scenarios without spawning child processes.
-//
-// Two assertions paired in one test because they cover the same
-// contract from complementary angles:
+// `speccy check SPEC-NNNN` renders scenarios without spawning child
+// processes. Two assertions paired in one test because they cover the
+// same contract from complementary angles:
 //
 //   1. Run `speccy check SPEC-0018` against this very repo and assert it exits
-//      zero and prints the summary line. SPEC-0018's `spec.toml` declares five
-//      CHK entries today; we assert the summary count rather than each header
-//      so reordering / additional checks within SPEC-0018 don't break the
-//      guard.
+//      zero and prints the summary line. We assert the summary text rather than
+//      each header so additional checks within SPEC-0018 don't break the guard.
 //   2. Static grep over `speccy-cli/src/check.rs` to assert no `Command::new`,
 //      `process::Command`, or `.spawn(` reference survives in the production
 //      check path. This is the load-bearing assertion: it fails the suite if a
@@ -981,7 +971,7 @@ fn check_spec_0018_renders_scenarios_without_spawning_processes() -> TestResult 
         assert!(
             !CHECK_SOURCE.contains(needle),
             "speccy-cli/src/check.rs must not contain `{needle}` \
-             (SPEC-0018 REQ-002: `speccy check` renders only, never spawns)",
+             (`speccy check` renders only, never spawns)",
         );
     }
 
@@ -1004,8 +994,8 @@ fn check_spec_0018_renders_scenarios_without_spawning_processes() -> TestResult 
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0019 T-006: `speccy check` reads scenario text from SPEC.md marker
-// bodies (byte-exact, not via a stale TOML mirror).
+// `speccy check` reads scenario text from SPEC.md element bodies
+// byte-exact.
 // ---------------------------------------------------------------------------
 
 #[test]

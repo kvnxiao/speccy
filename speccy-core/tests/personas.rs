@@ -2,16 +2,10 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Persona registry tests (SPEC-0009 CHK-001/CHK-002).
-//!
-//! SPEC-0027 retired the project-local override resolver chain
-//! (`resolve_file`, `resolve_file_with_warn`, `persona_file_name`,
-//! `PersonaError`, the speccy-core-side `PERSONAS` static); host-native
-//! files (`.claude/agents/reviewer-<persona>.md` and the Codex
-//! equivalent) are now the sole canonical persona surface. The seven
-//! resolver-chain tests this file used to host have been deleted along
-//! with the resolver itself. What remains is the persona-name registry
-//! — the only public surface of `speccy_core::personas` that survives.
+//! Persona-name registry tests. Host-native files
+//! (`.claude/agents/reviewer-<persona>.md` and the Codex equivalent)
+//! are the canonical persona surface; this test pins the registry
+//! contents that the renderer derives those files from.
 
 use speccy_core::personas::ALL;
 

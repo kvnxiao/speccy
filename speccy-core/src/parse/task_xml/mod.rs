@@ -1,13 +1,11 @@
 //! Raw-XML-element-structured TASKS.md parser and renderer.
 //!
-//! After SPEC-0037 T-001, TASKS.md parses as bare `<task>` children
-//! directly under the level-1 `# Tasks: ...` heading (no `<tasks>`
-//! wrapper). The closed XML element set TASKS.md recognises is
-//! `task`, `task-scenarios`, `implementer`, `review`, `blockers` —
-//! the latter three are accepted as `RawTag`s so the lint engine can
-//! report them as misplaced (their canonical home is
-//! `journal/T-NNN.md` per SPEC-0037 REQ-006), but they do not assemble
-//! into typed `Task` body fields.
+//! TASKS.md is a YAML frontmatter, a level-1 `# Tasks: ...` heading, and
+//! a sequence of bare `<task>` children. The closed element set is
+//! `task`, `task-scenarios`, `implementer`, `review`, `blockers`; the
+//! latter three are accepted as `RawTag`s so the lint engine can flag
+//! them as misplaced (their canonical home is `journal/T-NNN.md`), but
+//! they do not assemble into typed `Task` body fields.
 //!
 //! The `spec` binding for a TASKS.md comes from three sources, all
 //! redundant by design: the parent directory name (`NNNN-slug`), the
@@ -30,7 +28,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 /// Closed whitelist of Speccy structure element names recognised inside
-/// TASKS.md after SPEC-0037 T-001.
+/// TASKS.md.
 ///
 /// Five names: `task` and `task-scenarios` are the structural carriers.
 /// `implementer`, `review`, and `blockers` are accepted so the
@@ -43,26 +41,6 @@ pub const TASKS_ELEMENT_NAMES: &[&str] = &[
     "implementer",
     "review",
     "blockers",
-];
-
-/// Legacy element names retired by SPEC-0037 T-001. The parser scans
-/// for them so it can emit a precise `UnknownMarkerName` diagnostic
-/// pointing at the rename (`implementer-note` → `implementer`,
-/// `retry` → `blockers`) and the wrapper drop (`tasks` removed).
-const RETIRED_ELEMENT_NAMES: &[&str] = &["tasks", "implementer-note", "retry"];
-
-/// Combined set fed to the xml scanner so it surfaces both the live
-/// element set and the retired names. Retired names trip an
-/// `UnknownMarkerName` error in [`validate_tag_shape`].
-const SCANNER_ELEMENT_NAMES: &[&str] = &[
-    "task",
-    "task-scenarios",
-    "implementer",
-    "review",
-    "blockers",
-    "tasks",
-    "implementer-note",
-    "retry",
 ];
 
 /// Names of activity-prose elements that, when they appear inside a
@@ -241,8 +219,8 @@ fn scan_task_tags(
 ) -> ParseResult<Vec<RawTag>> {
     let code_fence_ranges = collect_code_fence_byte_ranges(source);
     let cfg = ScanConfig {
-        whitelist: SCANNER_ELEMENT_NAMES,
-        structure_shaped_names: SCANNER_ELEMENT_NAMES,
+        whitelist: TASKS_ELEMENT_NAMES,
+        structure_shaped_names: TASKS_ELEMENT_NAMES,
     };
     scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)
 }
@@ -735,13 +713,6 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<
 }
 
 fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
-    if RETIRED_ELEMENT_NAMES.contains(&t.name.as_str()) {
-        return Err(Box::new(ParseError::UnknownMarkerName {
-            path: path.to_path_buf(),
-            marker_name: t.name.clone(),
-            offset: t.span.start,
-        }));
-    }
     if !TASKS_ELEMENT_NAMES.contains(&t.name.as_str()) {
         return Err(Box::new(ParseError::UnknownMarkerName {
             path: path.to_path_buf(),
@@ -895,71 +866,6 @@ mod tests {
         assert_eq!(t2.id, "T-002");
         assert_eq!(t2.state, TaskState::InProgress);
         assert!(doc.misplaced_journal_elements.is_empty());
-    }
-
-    #[test]
-    fn legacy_tasks_wrapper_is_rejected() {
-        let src = make(indoc! {r#"
-            <tasks spec="SPEC-0037">
-            <task id="T-001" state="pending" covers="REQ-001">
-            <task-scenarios>
-            text.
-            </task-scenarios>
-            </task>
-            </tasks>
-        "#});
-        let err = parse(&src, path()).expect_err("legacy <tasks> wrapper must fail");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "tasks"
-            ),
-            "got: {err:?}",
-        );
-    }
-
-    #[test]
-    fn legacy_implementer_note_is_rejected() {
-        let src = make(indoc! {r#"
-            <task id="T-001" state="completed" covers="REQ-001">
-            <task-scenarios>
-            text.
-            </task-scenarios>
-            <implementer-note session="legacy">
-            body
-            </implementer-note>
-            </task>
-        "#});
-        let err = parse(&src, path()).expect_err("legacy <implementer-note> must fail");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "implementer-note"
-            ),
-            "got: {err:?}",
-        );
-    }
-
-    #[test]
-    fn legacy_retry_is_rejected() {
-        let src = make(indoc! {r#"
-            <task id="T-001" state="completed" covers="REQ-001">
-            <task-scenarios>
-            text.
-            </task-scenarios>
-            <retry>
-            body
-            </retry>
-            </task>
-        "#});
-        let err = parse(&src, path()).expect_err("legacy <retry> must fail");
-        assert!(
-            matches!(
-                err.as_ref(),
-                ParseError::UnknownMarkerName { marker_name, .. } if marker_name == "retry"
-            ),
-            "got: {err:?}",
-        );
     }
 
     #[test]

@@ -2,38 +2,20 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Skill-pack content tests for SPEC-0013, SPEC-0014, and SPEC-0015.
+//! Skill-pack content tests.
 //!
-//! SPEC-0013 checks (`.speccy/specs/0013-skill-packs/spec.toml`):
-//!
-//! - CHK-001: [`persona_files_present`]
-//! - CHK-002: [`persona_names_match_registry`]
-//! - CHK-005: [`claude_code_recipes`]
-//! - CHK-006: [`codex_recipes`]
-//! - CHK-007: [`persona_content_shape`]
-//! - CHK-008: [`recipe_content_shape`]
-//!
-//! SPEC-0033 T-001 retired the CLI prompt-rendering surface; the prior
-//! SPEC-0013 CHK-003 / CHK-004 (prompt-template presence / placeholder
-//! shape) and the SPEC-0014 CHK-001 / CHK-002 / CHK-003 / CHK-006
-//! (implementer + report prompt body shape) no longer have a body to
-//! test and were dropped here.
-//!
-//! SPEC-0014 checks
-//! (`.speccy/specs/0014-handoff-and-friction-conventions/spec.toml`):
-//!
-//! - CHK-004: [`implementer_persona_friction_reference`]
-//! - CHK-005: [`agents_md_friction_paragraph`]
-//!
-//! SPEC-0015 checks
-//! (`.speccy/specs/0015-host-skill-layout/spec.toml`):
-//!
-//! - CHK-001: [`bundle_layout_has_skill_md_per_host`]
-//! - CHK-002: [`bundle_legacy_flat_layout_absent`]
-//! - CHK-005: [`shipped_skill_md_frontmatter_shape`]
-//! - CHK-006: [`shipped_descriptions_natural_language_triggers`]
-//! - (CHK-003, CHK-004 live in `tests/init.rs`:
-//!   `copy_claude_code_pack_skill_md`, `copy_codex_pack_skill_md`.)
+//! - [`persona_files_present`], [`persona_names_match_registry`],
+//!   [`persona_content_shape`]: reviewer persona files match the registry and
+//!   carry the expected frontmatter / body shape.
+//! - [`claude_code_recipes`], [`codex_recipes`], [`recipe_content_shape`]:
+//!   shipped recipes exist for both hosts and follow the recipe schema.
+//! - [`implementer_persona_friction_reference`],
+//!   [`agents_md_friction_paragraph`]: the implementer persona and AGENTS.md
+//!   both reference the friction-to-skill-update convention.
+//! - [`bundle_layout_has_skill_md_per_host`],
+//!   [`shipped_skill_md_frontmatter_shape`],
+//!   [`shipped_descriptions_natural_language_triggers`]: per-host wrapper
+//!   templates exist with valid frontmatter and natural-language descriptions.
 
 use serde::Deserialize;
 use speccy_cli::embedded::RESOURCES;
@@ -48,10 +30,8 @@ use std::path::Path;
 
 /// Read a host SKILL.md wrapper template body from the workspace
 /// filesystem at `resources/agents/<install_root>/skills/<verb>/SKILL.md.tmpl`.
-/// The wrapper templates carry the same `name` / `description`
-/// frontmatter that the legacy per-host `skills/<host>/<verb>/SKILL.md`
-/// files used to expose; SPEC-0016 T-008 retargeted the SPEC-0013 /
-/// SPEC-0015 frontmatter-shape checks to read here directly.
+/// The wrapper templates carry the `name` / `description` frontmatter
+/// the shipped SKILL.md files render to.
 fn read_wrapper_template(install_root: &str, verb: &str) -> String {
     let path = workspace_root()
         .join("resources")
@@ -80,24 +60,19 @@ fn find_rendered_skill<'a>(
         .iter()
         .find(|f| f.rel_path.as_str() == needle)
         .unwrap_or_else(|| {
-            panic_with_test_message(&format!(
-                "rendered host pack must contain `{needle}` (T-008 SPEC-0013 retarget)"
-            ))
+            panic_with_test_message(&format!("rendered host pack must contain `{needle}`"))
         });
     file.contents.as_str()
 }
 
 /// Read a persona body out of the embedded `RESOURCES` bundle by
-/// leaf file name (e.g. `"reviewer-security.md"`). SPEC-0027 retired
-/// the speccy-core-side `PERSONAS` static; persona bodies are still
-/// shipped at `resources/modules/personas/<file>` and remain
-/// reachable through `speccy_cli::embedded::RESOURCES`.
+/// leaf file name (e.g. `"reviewer-security.md"`). Persona bodies are
+/// shipped at `resources/modules/personas/<file>` and are reachable
+/// through `speccy_cli::embedded::RESOURCES`.
 fn read_persona(name: &str) -> &'static str {
     let path = format!("modules/personas/{name}");
     let entry = RESOURCES.get_file(&path).unwrap_or_else(|| {
-        panic_with_test_message(&format!(
-            "RESOURCES bundle should contain `{path}` (SPEC-0027 retargeting)"
-        ))
+        panic_with_test_message(&format!("RESOURCES bundle should contain `{path}`"))
     });
     entry
         .contents_utf8()
@@ -176,11 +151,9 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 /// explicitly excludes it from the stub transformation).
 const PINNED_STUB_PHASES: &[&str] = &["speccy-tasks", "speccy-work", "speccy-ship"];
 
-// The current seven-verb CLI surface (SPEC-0033 T-001 deleted `plan`,
-// `tasks`, `implement`, `review`, `report`; T-002 added `lock`; T-003
-// added `vacancy`). This list is used as a substring matcher inside
-// SKILL.md code fences to determine whether a rendered skill carries a
-// speccy command. T-007 tightened the list from the pre-eject set.
+// The current seven-verb CLI surface. This list is used as a substring
+// matcher inside SKILL.md code fences to determine whether a rendered
+// skill carries a speccy command.
 const SPECCY_COMMANDS: &[&str] = &[
     "speccy init",
     "speccy status",
@@ -334,19 +307,17 @@ fn contains_speccy_command_in_code_fence(body: &str) -> bool {
 
 #[test]
 fn recipe_content_shape() {
-    // SPEC-0016 T-008: the per-host rendered output is the new
-    // "shipped recipe" surface. We render once per host through the
-    // SPEC-0016 renderer and check the rendered SKILL.md body against
-    // the same content-shape invariants the legacy per-host files used
-    // to satisfy.
+    // The per-host rendered output is the shipped recipe surface. We
+    // render once per host and check the rendered SKILL.md body
+    // against the content-shape invariants.
     //
-    // T-009 (REQ-010) introduced an exception: the three pinned
-    // phase-worker skills (`speccy-tasks`, `speccy-work`, `speccy-ship`)
-    // now have thin stub bodies. Stubs are pointer-only: they name the
-    // matching agent file and `/agent speccy-<phase>` invocation and
-    // explicitly do NOT carry `## When to use`, `## Steps`, or a full
-    // speccy command in a code fence. The full content-shape checks are
-    // skipped for these three verbs.
+    // Exception: the three pinned phase-worker skills (`speccy-tasks`,
+    // `speccy-work`, `speccy-ship`) have thin stub bodies. Stubs are
+    // pointer-only: they name the matching agent file and
+    // `/agent speccy-<phase>` invocation and explicitly do NOT carry
+    // `## When to use`, `## Steps`, or a full speccy command in a code
+    // fence. The full content-shape checks are skipped for these three
+    // verbs.
     for (host, install_root) in [
         (HostChoice::ClaudeCode, ".claude"),
         (HostChoice::Codex, ".agents"),
@@ -406,8 +377,7 @@ fn recipe_content_shape() {
 
 /// Stable phrase the friction-to-skill-update pattern reuses across
 /// the implementer persona and AGENTS.md. Changing it is a
-/// coordinated edit across both files. SPEC-0033 T-001 retired the
-/// implementer prompt; the persona is the surviving anchor.
+/// coordinated edit across both files.
 const FRICTION_PHRASE: &str = "update the relevant skill file under `skills/`";
 
 /// Returns the slice of `body` belonging to the H2 section opened by
@@ -445,23 +415,21 @@ fn agents_md_friction_paragraph() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0015 CHK-001: bundle layout (per-host SKILL.md directories)
+// Bundle layout: per-host SKILL.md.tmpl wrappers.
 // --------------------------------------------------------------------
 
 #[test]
 fn bundle_layout_has_skill_md_per_host() {
-    // SPEC-0016 T-008: the per-host SKILL.md surface now lives as
-    // wrapper templates under `resources/agents/<install_root>/skills/`.
-    // Claude Code → `.claude/skills/`, Codex → `.agents/skills/`.
+    // Per-host SKILL.md surface lives as wrapper templates under
+    // `resources/agents/<install_root>/skills/`. Claude Code →
+    // `.claude/skills/`, Codex → `.agents/skills/`.
     let root = workspace_root();
     for (_host, install_root) in HOST_SKILL_ROOTS {
         for skill in SKILL_NAMES {
             let rel = format!("resources/agents/{install_root}/skills/{skill}/SKILL.md.tmpl");
             let path = root.join(&rel);
             let body = fs_err::read_to_string(&path).unwrap_or_else(|err| {
-                panic_with_test_message(&format!(
-                    "workspace must contain `{rel}` (SPEC-0015 REQ-001 + CHK-001, retargeted by SPEC-0016 T-008): {err}"
-                ))
+                panic_with_test_message(&format!("workspace must contain `{rel}`: {err}"))
             });
             assert!(!body.trim().is_empty(), "wrapper `{rel}` must be non-empty");
         }
@@ -469,34 +437,14 @@ fn bundle_layout_has_skill_md_per_host() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0015 CHK-002: legacy `skills/` tree removed from the workspace
-// (post-SPEC-0016 T-008 the entire legacy tree is gone, not just its
-// flat sub-layout).
-// --------------------------------------------------------------------
-
-#[test]
-fn bundle_legacy_flat_layout_absent() {
-    let root = workspace_root();
-    let path = root.join("skills");
-    assert!(
-        !path.exists(),
-        "legacy `skills/` tree must be gone from the workspace (SPEC-0016 T-008); per-host wrappers now live under `resources/agents/<install_root>/skills/`",
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0015 CHK-005: SKILL.md frontmatter shape (name matches dir,
-// description is a single line)
+// SKILL.md frontmatter shape (name matches dir, description is a
+// single line).
 // --------------------------------------------------------------------
 
 #[test]
 fn shipped_skill_md_frontmatter_shape() {
-    // SPEC-0016 T-008: the SKILL.md frontmatter now lives in the
-    // per-host wrapper templates at
+    // SKILL.md frontmatter lives in the per-host wrapper templates at
     // `resources/agents/<install_root>/skills/<verb>/SKILL.md.tmpl`.
-    // Frontmatter content is byte-identical between the wrapper and
-    // the (now-deleted) legacy per-host SKILL.md file, so the
-    // SPEC-0015 REQ-003 shape assertions transfer over unchanged.
     for (_host, install_root) in HOST_SKILL_ROOTS {
         for skill in SKILL_NAMES {
             let body = read_wrapper_template(install_root, skill);
@@ -581,10 +529,6 @@ fn shipped_descriptions_natural_language_triggers() {
     }
 }
 
-// --------------------------------------------------------------------
-// SPEC-0016 T-002: legacy `skills/shared/` is gone from the workspace.
-// --------------------------------------------------------------------
-
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
 /// crate dir) by walking one level up.
 fn workspace_root() -> std::path::PathBuf {
@@ -595,31 +539,7 @@ fn workspace_root() -> std::path::PathBuf {
 }
 
 #[test]
-fn t002_workspace_has_no_skills_shared_personas_or_prompts() {
-    let root = workspace_root();
-    let personas_dir = root.join("skills").join("shared").join("personas");
-    let prompts_dir = root.join("skills").join("shared").join("prompts");
-    assert!(
-        !personas_dir.exists(),
-        "after T-002, `skills/shared/personas/` must not exist on disk \
-         (personas now live under `resources/modules/personas/`); \
-         found at {}",
-        personas_dir.display(),
-    );
-    assert!(
-        !prompts_dir.exists(),
-        "after T-002, `skills/shared/prompts/` must not exist on disk \
-         (prompts now live under `resources/modules/prompts/`); found \
-         at {}",
-        prompts_dir.display(),
-    );
-}
-
-#[test]
-fn t002_resources_modules_personas_is_non_empty() {
-    // SPEC-0033 T-001 deleted `resources/modules/prompts/`; the
-    // surviving SPEC-0016 T-002 surface contract is the personas
-    // directory.
+fn resources_modules_personas_is_non_empty() {
     let root = workspace_root();
     let personas_dir = root.join("resources").join("modules").join("personas");
     let persona_count = fs_err::read_dir(&personas_dir)
@@ -632,7 +552,7 @@ fn t002_resources_modules_personas_is_non_empty() {
                 })
                 .count()
         })
-        .expect("resources/modules/personas/ must exist after T-002");
+        .expect("resources/modules/personas/ must exist");
     assert!(
         persona_count >= 1,
         "resources/modules/personas/ must contain at least one .md file; got {persona_count}",
@@ -640,16 +560,14 @@ fn t002_resources_modules_personas_is_non_empty() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-011 / CHK-007: divergence-block guard and rendered-output
-// shape for `speccy-review`.
+// Divergence-block guard and rendered-output shape for `speccy-review`.
 //
 // Step 4 of the speccy-review module body lives on a
 // `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
 // triple so the rendered `/speccy-review` skill picks the host-native
 // subagent primitive (Claude Code's `Task` tool with `subagent_type`;
 // Codex's native sub-agent-spawn primitive against each registered
-// `reviewer-<persona>` sub-agent). SPEC-0039 REQ-005 retired the
-// legacy Codex prose-spawn idiom in favor of the native primitive.
+// `reviewer-<persona>` sub-agent).
 // --------------------------------------------------------------------
 
 /// Embedded copy of the `speccy-review` module body, used by the
@@ -665,7 +583,7 @@ const SPECCY_REVIEW_MODULE_BODY: &str =
 const DEFAULT_REVIEWER_PERSONAS: &[&str] = &["business", "tests", "security", "style"];
 
 #[test]
-fn t011_speccy_review_module_has_host_divergence_block() {
+fn speccy_review_module_has_host_divergence_block() {
     // Source-shape guard: the module body must carry the canonical
     // `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
     // triple so the renderer (and any future contributor reading the
@@ -673,23 +591,23 @@ fn t011_speccy_review_module_has_host_divergence_block() {
     let body = SPECCY_REVIEW_MODULE_BODY;
     assert!(
         body.contains("{% if host == \"claude-code\" %}"),
-        "`speccy-review.md` must contain a `{{% if host == \"claude-code\" %}}` block (T-011)",
+        "`speccy-review.md` must contain a `{{% if host == \"claude-code\" %}}` block",
     );
     assert!(
         body.contains("{% else %}"),
-        "`speccy-review.md` must contain an `{{% else %}}` branch (T-011)",
+        "`speccy-review.md` must contain an `{{% else %}}` branch",
     );
     assert!(
         body.contains("{% endif %}"),
-        "`speccy-review.md` must close the divergence block with `{{% endif %}}` (T-011)",
+        "`speccy-review.md` must close the divergence block with `{{% endif %}}`",
     );
 }
 
 #[test]
 fn speccy_review_skill_prefers_native_subagents() {
-    // CHK-007: render once per host, then assert step 4 picks the
-    // host-native subagent primitive and that both rendered outputs
-    // carry the explicit `speccy review ... --persona X` fallback.
+    // Render once per host, then assert step 4 picks the host-native
+    // subagent primitive and that both rendered outputs carry the
+    // explicit `speccy review ... --persona X` fallback.
 
     let claude = render_host_pack(HostChoice::ClaudeCode)
         .expect("render_host_pack(claude-code) should succeed");
@@ -708,14 +626,12 @@ fn speccy_review_skill_prefers_native_subagents() {
             "rendered Claude Code `speccy-review` SKILL.md must name persona `{persona}` as `{needle}`; got:\n{claude_body}",
         );
     }
-    // SPEC-0039 REQ-005: the legacy Codex prose-spawn wording must
-    // not leak into either render. The retirement is repo-wide and
-    // covered structurally by the `prose.?spawn` zero-match grep
-    // scenario; pin it at the rendered-output layer too so a future
-    // edit that reintroduces the phrase fails this test first.
+    // The `prose-spawn` wording must not leak into either render.
+    // Pin it at the rendered-output layer so a future edit that
+    // reintroduces the phrase fails this test first.
     assert!(
         !claude_body.to_lowercase().contains("prose-spawn"),
-        "rendered Claude Code `speccy-review` SKILL.md must not contain the legacy Codex prose-spawn wording (SPEC-0039 REQ-005); got:\n{claude_body}",
+        "rendered Claude Code `speccy-review` SKILL.md must not contain `prose-spawn` wording; got:\n{claude_body}",
     );
 
     let codex =
@@ -725,19 +641,18 @@ fn speccy_review_skill_prefers_native_subagents() {
     // Codex branch: step 4 must not mention `subagent_type:` (a
     // Claude-Code-specific key), must reference each default reviewer
     // subagent by name, and must invoke Codex's native sub-agent-spawn
-    // primitive rather than the legacy prose-spawn idiom
-    // (SPEC-0039 REQ-005).
+    // primitive.
     assert!(
         !codex_body.contains("subagent_type:"),
         "rendered Codex `speccy-review` SKILL.md must not contain `subagent_type:` (Claude-Code-only key); got:\n{codex_body}",
     );
     assert!(
         !codex_body.to_lowercase().contains("prose-spawn"),
-        "rendered Codex `speccy-review` SKILL.md must not contain the legacy prose-spawn wording (SPEC-0039 REQ-005); got:\n{codex_body}",
+        "rendered Codex `speccy-review` SKILL.md must not contain `prose-spawn` wording; got:\n{codex_body}",
     );
     assert!(
         codex_body.contains("Codex's native sub-agent-spawn primitive"),
-        "rendered Codex `speccy-review` SKILL.md must invoke `Codex's native sub-agent-spawn primitive` in step 4 (SPEC-0039 REQ-005); got:\n{codex_body}",
+        "rendered Codex `speccy-review` SKILL.md must invoke `Codex's native sub-agent-spawn primitive` in step 4; got:\n{codex_body}",
     );
     for persona in DEFAULT_REVIEWER_PERSONAS {
         let needle = format!("`reviewer-{persona}`");
@@ -749,9 +664,8 @@ fn speccy_review_skill_prefers_native_subagents() {
 
     // Both rendered outputs must carry a spawn-prompt that references
     // the task selector (`SPEC-NNNN/T-NNN`) so the sub-agent knows
-    // which task to review. `speccy review` was deleted in SPEC-0033
-    // T-001; the spawn prompt now asks the sub-agent to review the
-    // task directly without invoking a CLI command.
+    // which task to review. The spawn prompt asks the sub-agent to
+    // review the task directly without invoking a CLI command.
     for (label, body) in [
         (
             "claude-code .claude/skills/speccy-review/SKILL.md",
@@ -773,39 +687,19 @@ fn speccy_review_skill_prefers_native_subagents() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-008: the legacy `skills/` tree has been deleted; this
-// guard makes its absence loud.
-// --------------------------------------------------------------------
-
-#[test]
-fn t008_legacy_skills_tree_is_gone() {
-    let root = workspace_root();
-    let legacy = root.join("skills");
-    assert!(
-        !legacy.exists(),
-        "after T-008, the legacy `skills/` tree must not exist on disk \
-         (per-host wrappers now live under `resources/agents/<install_root>/skills/`); \
-         found at {}",
-        legacy.display(),
-    );
-}
-
-// --------------------------------------------------------------------
-// SPEC-0016 T-005: Claude Code SKILL.md wrappers under
+// Claude Code SKILL.md wrappers under
 // `resources/agents/.claude/skills/speccy-<verb>/SKILL.md.tmpl`.
 //
 // These wrappers are thin: a YAML frontmatter block (`name`,
 // `description`) followed by exactly one
 // `{% raw %}{% include "modules/skills/speccy-<verb>.md" %}{% endraw %}`
-// directive. The renderer-wiring task (T-007) materialises them via
-// MiniJinja; here we only validate the on-disk shape since the
-// `RESOURCES`-backed embed doesn't exist yet.
+// directive.
 // --------------------------------------------------------------------
 
 /// Directory under the workspace root that holds the Claude Code
 /// SKILL.md wrappers. Resolved via `CARGO_MANIFEST_DIR` so the test
 /// is hermetic.
-fn t005_claude_skills_dir() -> std::path::PathBuf {
+fn claude_skills_dir() -> std::path::PathBuf {
     workspace_root()
         .join("resources")
         .join("agents")
@@ -814,8 +708,8 @@ fn t005_claude_skills_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t005_claude_code_skill_wrappers_match_skill_names() {
-    let dir = t005_claude_skills_dir();
+fn claude_code_skill_wrappers_match_skill_names() {
+    let dir = claude_skills_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
         fs_err::read_dir(&dir).expect("resources/agents/.claude/skills/ must exist after T-005");
@@ -844,12 +738,12 @@ fn t005_claude_code_skill_wrappers_match_skill_names() {
     );
 }
 
-/// `RecipeFrontmatter` is the existing serde-saphyr target for legacy
-/// SKILL.md files. T-005 reuses it; the YAML shape (`name`,
-/// `description`) is identical.
+/// Claude Code wrapper templates parse against `RecipeFrontmatter`
+/// (the shared `name` / `description` serde-saphyr target) and embed
+/// the matching module body via `{% include %}`.
 #[test]
-fn t005_claude_code_wrapper_shape_and_body() {
-    let dir = t005_claude_skills_dir();
+fn claude_code_wrapper_shape_and_body() {
+    let dir = claude_skills_dir();
     for verb in SKILL_NAMES {
         let path = dir.join(verb).join("SKILL.md.tmpl");
         let contents = fs_err::read_to_string(&path).unwrap_or_else(|err| {
@@ -889,12 +783,12 @@ fn t005_claude_code_wrapper_shape_and_body() {
             path.display(),
         );
 
-        // T-009 (REQ-010): the three pinned phase-worker skills
-        // (`speccy-tasks`, `speccy-work`, `speccy-ship`) now have thin
-        // stub bodies instead of a single `{% include %}` directive.
-        // `speccy-init` keeps its full body but now includes from
-        // `modules/phases/` rather than `modules/skills/`.
-        // All other skills retain the original single-include shape.
+        // The three pinned phase-worker skills (`speccy-tasks`,
+        // `speccy-work`, `speccy-ship`) have thin stub bodies instead
+        // of a single `{% include %}` directive. `speccy-init` keeps
+        // its full body but includes from `modules/phases/` rather
+        // than `modules/skills/`.
+        // All other skills follow the single-include shape.
         if PINNED_STUB_PHASES.contains(verb) {
             // Stub body: must reference `/agent speccy-<verb>` and the
             // matching agent file path. Must NOT be a single include
@@ -1027,15 +921,15 @@ fn t006_codex_wrapper_shape_and_body() {
             path.display(),
         );
 
-        // T-009 (REQ-010): the three pinned phase-worker skills
-        // (`speccy-tasks`, `speccy-work`, `speccy-ship`) now have thin
-        // stub bodies instead of a single `{% include %}` directive.
-        // `speccy-init` keeps its full body but now includes from
-        // `modules/phases/` rather than `modules/skills/`.
+        // The three pinned phase-worker skills (`speccy-tasks`,
+        // `speccy-work`, `speccy-ship`) have thin stub bodies instead
+        // of a single `{% include %}` directive. `speccy-init` keeps
+        // its full body but includes from `modules/phases/` rather
+        // than `modules/skills/`.
         // SPEC-0039 (REQ-003 / DEC-001 mechanism B): the Codex
         // `speccy-orchestrate` wrapper carries the host-neutral body
         // include plus a Codex-only permission-grant module include.
-        // All other skills retain the original single-include shape.
+        // All other skills follow the single-include shape.
         if PINNED_STUB_PHASES.contains(verb) {
             // Stub body: must reference `/agent speccy-<verb>` and the
             // matching agent file path. Must NOT be a single include
@@ -1553,8 +1447,7 @@ fn t010_persona_bodies_have_no_toml_triple_quote() {
         .join("resources")
         .join("modules")
         .join("personas");
-    let entries = fs_err::read_dir(&dir)
-        .expect("resources/modules/personas/ must exist (SPEC-0016 T-002 layout)");
+    let entries = fs_err::read_dir(&dir).expect("resources/modules/personas/ must exist");
     let mut checked = 0_u32;
     for entry in entries {
         let entry = entry.expect("read_dir entry should be readable");
@@ -1888,10 +1781,8 @@ fn reviewer_tests_persona_loads_evidence() {
 #[test]
 fn non_tests_reviewer_files_carry_no_evidence_instruction() {
     // The asymmetry is the design: only the `tests` persona names
-    // evidence loading. The other five must continue to anchor on
-    // diff + SPEC + `<task-scenarios>` alone. SPEC-0031 REQ-005
-    // done-when items 5 and 6, scoped to the surviving persona
-    // surface after SPEC-0033 T-001 retired the rendered prompts.
+    // evidence loading. The other five anchor on diff + SPEC +
+    // `<task-scenarios>` alone.
     for persona in NON_TESTS_REVIEWER_PERSONAS {
         let file = format!("reviewer-{persona}.md");
         let body = read_persona(&file);

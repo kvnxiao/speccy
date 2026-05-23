@@ -279,9 +279,9 @@ fn run_task(
     let spec = resolve_spec(&ws, &location.spec_id)?;
 
     let Ok(spec_doc) = spec.spec_doc.as_ref() else {
-        // Parent SPEC.md marker tree failed to parse (or a stray
-        // spec.toml is present); surface via collect_for_spec (one-shot
-        // warning) and return an empty render set.
+        // Parent SPEC.md element tree failed to parse; surface via
+        // collect_for_spec (one-shot warning) and return an empty
+        // render set.
         let label = spec.display_label();
         let (_checks, malformed) = collect_for_spec(spec, &label, err)?;
         writeln!(out, "No checks defined.")?;
@@ -291,10 +291,9 @@ fn run_task(
     let label = spec.display_label();
 
     // Accumulate scenarios in declared requirement order, deduplicating
-    // on first occurrence so a scenario nested under multiple covered
-    // REQs (impossible today since scenarios are owned by exactly one
-    // requirement, but kept for symmetry with the pre-SPEC-0019 path)
-    // renders exactly once.
+    // on first occurrence. Scenarios are owned by exactly one
+    // requirement today, so the dedup is defensive symmetry rather than
+    // a load-bearing constraint.
     let mut collected: Vec<CollectedCheck> = Vec::new();
     let mut seen_ids: Vec<String> = Vec::new();
     for req_id in &location.task.covers {

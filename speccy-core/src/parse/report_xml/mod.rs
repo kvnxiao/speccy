@@ -29,10 +29,10 @@ use std::sync::OnceLock;
 /// REPORT.md.
 pub const REPORT_ELEMENT_NAMES: &[&str] = &["report", "coverage"];
 
-/// Closed set of valid `<coverage result="...">` values, in their on-disk
-/// form. The legacy `dropped` value is intentionally absent — SPEC-0022
-/// requires dropped requirements to be removed from SPEC.md via amendment
-/// rather than carried as a coverage row.
+/// Closed set of valid `<coverage result="...">` values, in their
+/// on-disk form. Dropped requirements are removed from SPEC.md via
+/// amendment rather than carried as a coverage row, so no `dropped`
+/// value exists.
 pub const ALLOWED_COVERAGE_RESULTS: &[&str] = &["satisfied", "partial", "deferred"];
 
 /// Parsed raw-XML-structured REPORT.md.
@@ -792,7 +792,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_dropped_result_is_rejected() {
+    fn dropped_coverage_result_is_rejected() {
         let src = make(indoc! {r#"
             <report spec="SPEC-0022">
 

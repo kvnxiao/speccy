@@ -1160,10 +1160,7 @@ inside a TASKS.md body. The closed XML element set across all
 Speccy artifacts is five element names total — `task`,
 `task-scenarios`, `implementer`, `review`, `blockers` — with the
 last three only ever appearing inside `journal/T-NNN.md` (never in
-TASKS.md). The legacy `<tasks spec="...">` wrapper, the legacy
-`<implementer-note session="...">` element, and the legacy
-`<retry>` element are no longer in the allow-list; the parser
-rejects any of them as unknown elements.
+TASKS.md).
 
 Valid `state` attribute values are exactly `pending`, `in-progress`,
 `in-review`, `completed`. The `covers` attribute is one or more

@@ -6,10 +6,6 @@
 //!
 //! Treats git unavailability as a non-fatal lookup: shell-out failures
 //! degrade to the empty string rather than propagating an error.
-//!
-//! SPEC-0023 REQ-003 retired the reviewer-prompt diff helper: the
-//! rendered prompt now instructs the reviewer agent to run `git diff`
-//! itself, so the CLI no longer computes a diff.
 
 use camino::Utf8Path;
 use std::process::Command;

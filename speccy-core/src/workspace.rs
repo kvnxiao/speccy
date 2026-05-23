@@ -473,11 +473,6 @@ pub fn extract_frontmatter_field(yaml: &str, field: &str) -> Option<String> {
 /// Parse the typed `SpecDoc` from a SPEC.md path, propagating I/O and
 /// parser errors through the existing [`crate::error::ParseError`]
 /// channel.
-///
-/// After SPEC-0020 the carrier is raw XML element tags; the SPEC-0019
-/// HTML-comment marker form is rejected via
-/// [`crate::error::ParseError::LegacyMarker`] with a diagnostic that
-/// names the equivalent raw XML element form.
 fn parse_spec_doc(spec_md_path: &Utf8Path) -> ParseResult<SpecDoc> {
     let source = crate::parse::fs::read_to_string(spec_md_path)?;
     spec_xml::parse(&source, spec_md_path)
@@ -486,9 +481,6 @@ fn parse_spec_doc(spec_md_path: &Utf8Path) -> ParseResult<SpecDoc> {
 /// Inputs to [`validate_workspace_xml`] — the typed XML models for one
 /// spec folder and the paths they came from. Paths are used for
 /// diagnostics only; this function does no filesystem IO.
-///
-/// The shape mirrors the seam T-007 will switch the real loader over to
-/// once the in-tree corpus has been migrated by T-005 / T-006.
 #[derive(Debug)]
 pub struct XmlValidationInput<'a> {
     /// Parsed SPEC.md element tree for the spec under validation.
@@ -506,20 +498,15 @@ pub struct XmlValidationInput<'a> {
     pub report_path: Option<&'a Utf8Path>,
 }
 
-/// SPEC-0022 cross-reference validation entry point reachable from the
-/// workspace layer.
+/// Cross-reference validation entry point reachable from the workspace
+/// layer.
 ///
 /// Thin wrapper over [`crate::parse::cross_ref::validate_workspace_xml`]
-/// that lets `workspace.rs` own the call site for the seam T-007 will
-/// flip on. The wrapper itself does no work beyond forwarding the
-/// inputs — the validation logic lives in `cross_ref.rs` so the
-/// `ParseError` variants and the SPEC ↔ TASKS / REPORT graph stay
-/// adjacent to the existing SPEC-internal cross-ref helper.
-///
-/// **History:** SPEC-0022 / T-007 flipped the loader over to drive
-/// `task_xml::parse` and `report_xml::parse` directly. The legacy
-/// heuristic `tasks_md` / `report_md` parsers are gone; this is the
-/// only TASKS.md / REPORT.md path through the workspace today.
+/// that lets `workspace.rs` own the call site. The wrapper itself does
+/// no work beyond forwarding the inputs — the validation logic lives in
+/// `cross_ref.rs` so the `ParseError` variants and the SPEC ↔ TASKS /
+/// REPORT graph stay adjacent to the existing SPEC-internal cross-ref
+/// helper.
 #[must_use = "the returned diagnostics are the entire purpose of this call"]
 pub fn validate_workspace_xml(input: &XmlValidationInput<'_>) -> Vec<ParseError> {
     cross_ref_validate_workspace_xml(

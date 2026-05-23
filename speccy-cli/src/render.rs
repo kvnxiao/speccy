@@ -171,16 +171,14 @@ pub fn render_host_pack(host: HostChoice) -> Result<Vec<RenderedFile>, RenderErr
 fn build_environment() -> Environment<'static> {
     let mut env = Environment::new();
     env.set_undefined_behavior(UndefinedBehavior::Strict);
-    // T-003 discovery: the module body files start with a leading `\n`
-    // and end with a trailing `\n`, matching the body slice that
-    // `split_frontmatter` returns for the pre-SPEC-0016 per-host
-    // SKILL.md files. The wrappers (`agents/.<host>/skills/.../SKILL.md.tmpl`)
-    // are intentionally authored WITHOUT a trailing newline so the
-    // module body's leading and trailing newlines are the only blank
-    // lines straddling the include site, leaving the rendered output
-    // byte-identical to the legacy SKILL.md files. `keep_trailing_newline
-    // = true` preserves the absence of a trailing newline on the wrapper
-    // and the presence of one on the module body.
+    // The module body files start with a leading `\n` and end with a
+    // trailing `\n`. The wrappers
+    // (`agents/.<host>/skills/.../SKILL.md.tmpl`) are intentionally
+    // authored WITHOUT a trailing newline so the module body's leading
+    // and trailing newlines are the only blank lines straddling the
+    // include site. `keep_trailing_newline = true` preserves the
+    // absence of a trailing newline on the wrapper and the presence of
+    // one on the module body.
     env.set_keep_trailing_newline(true);
     env.set_loader(load_from_resources);
     env

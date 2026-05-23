@@ -87,8 +87,8 @@ pub enum CommitError {
 /// disagreement, [`CommitError::IdTripleMismatch`] is returned and the
 /// file is not opened for writing. The check is skipped when any of the
 /// three observations is unobtainable (no parent folder match, no
-/// frontmatter, no `spec:` line). The legacy CLI-arg vs TASKS.md.spec
-/// check still fires after; if both would fire, the 3-way error takes
+/// frontmatter, no `spec:` line). The CLI-arg vs TASKS.md.spec check
+/// still fires after; if both would fire, the 3-way error takes
 /// precedence (it is a superset signal).
 ///
 /// The file's body bytes (everything after the closing `---` fence) are

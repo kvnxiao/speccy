@@ -73,14 +73,14 @@ pub struct TaskLocation<'a> {
     /// for the matched spec (e.g.
     /// `<project_root>/.speccy/specs/0022-xml-canonical-tasks-report`).
     /// Callers strip `project_root` to compute the repo-relative path
-    /// surfaced in rendered prompts after SPEC-0023 REQ-006.
+    /// surfaced in rendered prompts.
     pub spec_dir: &'a Utf8Path,
     /// Parsed SPEC.md for the containing spec.
     pub spec_md: &'a SpecMd,
-    /// Parsed SPEC.md marker tree (after SPEC-0019) for the containing
-    /// spec, when the marker tree parsed successfully. `None` when the
-    /// marker tree failed to parse — callers that need it must surface
-    /// that as an error themselves.
+    /// Parsed SPEC.md element tree for the containing spec, when the
+    /// element tree parsed successfully. `None` when the element tree
+    /// failed to parse — callers that need it must surface that as an
+    /// error themselves.
     pub spec_doc: Option<&'a SpecDoc>,
     /// Parsed TASKS.md for the containing spec.
     pub tasks_md: &'a TasksDoc,

@@ -10,10 +10,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! T-005 acceptance tests: the workspace loader speaks `SpecDoc`, not
-//! the deleted per-spec `spec.toml` shape.
-//!
-//! Bullets mirrored from `.speccy/specs/0019-xml-canonical-spec-md/TASKS.md`.
+//! Workspace loader acceptance tests against the `SpecDoc` element tree.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;

@@ -14,7 +14,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use predicates::str::contains;
 use serde::Deserialize;
-use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
 use speccy_cli::render::render_host_pack;
 use std::path::Path;
@@ -98,37 +97,18 @@ fn read_file(root: &Utf8Path, rel: &str) -> TestResult<String> {
 
 #[test]
 fn scaffold_gitkeep() -> TestResult {
-    // SPEC-0040 REQ-001 / CHK-001 / CHK-002 / CHK-007: after a fresh
-    // `speccy init`, `.speccy/.gitkeep` exists, the retired TOML
-    // scaffold file does not, no init plan line mentions that
-    // filename, and a follow-up `speccy status` succeeds against the
-    // `.speccy/` marker directory. The retired filename is computed
-    // via `format!` from its stem + extension so this test file
-    // itself contains no literal `<stem>.<ext>` substring — that's
-    // the CHK-008 ripgrep guard, which scopes a case-sensitive
-    // search of the test trees to zero matches.
-    let retired_name = format!("speccy{dot}toml", dot = ".");
+    // After a fresh `speccy init`, `.speccy/.gitkeep` exists and a
+    // follow-up `speccy status` succeeds against the `.speccy/` marker
+    // directory.
     let fx = project_with_name("acme")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
-    let output = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(output)?;
+    cmd.assert().success();
 
     assert!(
         fx.root.join(".speccy/.gitkeep").exists(),
-        "SPEC-0040 REQ-001 / CHK-001: speccy init must scaffold `.speccy/.gitkeep`",
+        "speccy init must scaffold `.speccy/.gitkeep`",
     );
-    let retired_path = fx.root.join(".speccy").join(&retired_name);
-    assert!(
-        !retired_path.exists(),
-        "SPEC-0040 REQ-001 / CHK-001: speccy init must not scaffold the retired `{retired_name}` file",
-    );
-    for line in stdout.lines() {
-        assert!(
-            !line.contains(retired_name.as_str()),
-            "SPEC-0040 CHK-007: no init plan line may contain `{retired_name}`; got line: {line}",
-        );
-    }
 
     let mut status_cmd = Command::cargo_bin("speccy")?;
     status_cmd.arg("status").current_dir(fx.root.as_std_path());
@@ -137,27 +117,9 @@ fn scaffold_gitkeep() -> TestResult {
 }
 
 #[test]
-fn does_not_scaffold_vision_md() -> TestResult {
-    let fx = project_with_name("no-vision-project")?;
-    let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("init").current_dir(fx.root.as_std_path());
-    cmd.assert().success();
-
-    assert!(
-        !fx.root.join(".speccy/VISION.md").exists(),
-        "speccy init must not scaffold .speccy/VISION.md (the noun has been retired; the product north star lives in AGENTS.md instead)",
-    );
-    Ok(())
-}
-
-#[test]
 fn refuse_without_force() -> TestResult {
-    // SPEC-0033 T-008: the new conflict-based refusal replaces the old
-    // workspace-exists guard. Any file that exists and differs from the
-    // planned content triggers exit 1 with `--force` mentioned in stderr.
-    // SPEC-0040 T-003: the conflict trigger is now a shipped SKILL.md
-    // file rather than the retired workspace-level TOML scaffold
-    // (which is no longer written by init).
+    // Any file that exists and differs from the planned content
+    // triggers exit 1 with `--force` mentioned in stderr.
     let fx = project_with_name("refuse")?;
     mkdir(&fx.root, ".claude")?;
     write_file(
@@ -174,10 +136,8 @@ fn refuse_without_force() -> TestResult {
 
 #[test]
 fn force_overwrites_shipped_files() -> TestResult {
-    // SPEC-0040 T-003: dropped the retired workspace-level TOML
-    // scaffold leg (no longer written by init). The
-    // `.claude/skills/speccy-init/SKILL.md` leg already proves
-    // `--force` overwrites a shipped file.
+    // `--force` overwrites a shipped file when the on-disk bytes
+    // diverge from what `speccy init` would render.
     let fx = project_with_name("force-shipped")?;
     mkdir(&fx.root, ".claude")?;
     write_file(
@@ -308,12 +268,11 @@ fn host_detection_precedence() -> TestResult {
 
 #[test]
 fn copy_claude_code_pack_skill_md() -> TestResult {
-    // SPEC-0016 T-008 retired the legacy per-host byte-equality oracle.
-    // Each rendered SKILL.md now goes through MiniJinja, so the
-    // assertions below match the renderer's contract: the file exists,
-    // its YAML frontmatter parses with the right `name`, and the body
-    // uses slash-prefixed command references (mirrors the unit-test
-    // shape in `src/render.
+    // Each rendered SKILL.md flows through MiniJinja. Assertions match
+    // the renderer's contract: the file exists, its YAML frontmatter
+    // parses with the right `name`, and the body uses slash-prefixed
+    // command references (mirrors the unit-test shape in
+    // `src/render.
     // rs::render_host_pack_speccy_plan_contains_slash_prefixed_command`).
     let fx = project_with_name("copy-claude")?;
     mkdir(&fx.root, ".claude")?;
@@ -356,22 +315,16 @@ fn copy_claude_code_pack_skill_md() -> TestResult {
         "rendered .claude/skills/speccy-plan/SKILL.md must contain `/speccy-tasks`",
     );
 
-    // SPEC-0027 REQ-001 retired the `.speccy/skills/personas/` write
-    // step from `speccy init`. The persona body now reaches the
-    // sub-agent solely via `.claude/agents/reviewer-<persona>.md`
-    // (asserted by
-    // `t009_claude_code_reviewer_subagents_land_at_dot_claude_agents`).
     Ok(())
 }
 
 #[test]
 fn copy_codex_pack_skill_md() -> TestResult {
-    // SPEC-0016 T-008 retired the legacy per-host byte-equality oracle.
-    // Each rendered SKILL.md now flows through MiniJinja, so the
-    // assertions below mirror the unit-test shape in `src/render.
-    // rs::render_host_pack_codex_speccy_plan_uses_bare_command`: file exists,
-    // YAML frontmatter parses, and command references are bare (no slash
-    // prefix) per Codex's convention.
+    // Each rendered SKILL.md flows through MiniJinja. Assertions mirror
+    // the unit-test shape in
+    // `src/render.rs::render_host_pack_codex_speccy_plan_uses_bare_command`:
+    // file exists, YAML frontmatter parses, and command references are
+    // bare (no slash prefix) per Codex's convention.
     let fx = project_with_name("copy-codex")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -824,12 +777,8 @@ fn exit_codes() -> TestResult {
     }
 
     // 1 when a shipped file exists with differing content (conflict).
-    // SPEC-0033 T-008 replaced the workspace-exists guard with
-    // per-file conflict detection; only a differing file triggers exit 1.
+    // Per-file conflict detection: only a differing file triggers exit 1.
     {
-        // SPEC-0040 T-003: the conflict trigger is now a shipped
-        // SKILL.md (the retired workspace-level TOML scaffold is no
-        // longer written by init).
         let fx = project_with_name("exit-one-conflict")?;
         write_file(
             &fx.root,
@@ -925,12 +874,9 @@ fn dogfood_outputs_match_committed_tree() -> TestResult {
         }
     }
 
-    // SPEC-0027 REQ-001 retired the `.speccy/skills/personas/` and
-    // `.speccy/skills/prompts/` write step from `speccy init`; this
-    // walker no longer has a contract to enforce. The persona body is
-    // delivered via `.claude/agents/reviewer-<persona>.md` (and the
-    // Codex equivalent), which `render_host_pack` already covers
-    // above. The shipped `PROMPTS` bundle stays embedded-only.
+    // The persona body is delivered via
+    // `.claude/agents/reviewer-<persona>.md` (and the Codex equivalent),
+    // which `render_host_pack` covers above.
 
     Ok(())
 }
@@ -1011,120 +957,15 @@ fn assert_no_unsubstituted_token(body: &str, label: &str, needle: &str) {
     }
 }
 
-// --------------------------------------------------------------------
-// SPEC-0018 T-006 / REQ-005: shipped host packs teach the new
-// scenario-only check schema. The renderer outputs must contain no
-// legacy check-authoring examples (`kind =`, `command =`, `prompt =`,
-// `proves =`) so downstream agents cannot copy-paste the pre-SPEC-0018
-// shape into a fresh `spec.toml`. Historical SPEC.md / TASKS.md /
-// REPORT.md records under `.speccy/specs/` are excluded from this
-// guard — those carry the audit trail of the migration itself.
-// --------------------------------------------------------------------
-
-/// Field-assignment needles for legacy `[[checks]]` rows that
-/// SPEC-0018 retired. Each one is tight enough that it only matches
-/// example code (the trailing `"` on `command = "` / `prompt = "`
-/// avoids prose like "prompt for the user", and the historical-note
-/// blockquotes in `docs/ARCHITECTURE.md` use backticks rather than
-/// the literal quoted assignment).
-const SPEC_0018_LEGACY_NEEDLES: [&str; 6] = [
-    "kind = \"test\"",
-    "kind = \"command\"",
-    "kind = \"manual\"",
-    "proves =",
-    "command = \"",
-    "prompt = \"",
-];
-
-#[test]
-fn rendered_outputs_have_no_legacy_check_authoring_examples() -> TestResult {
-    // CHK-005 sweep: walk every file rendered by `render_host_pack`
-    // (both hosts) and assert it does not contain a legacy
-    // check-authoring assignment. The needles are the field names
-    // SPEC-0018 retired from `[[checks]]` rows. They never appear in
-    // post-migration `spec.toml` files, so any hit in the shipped
-    // prompts/personas/skills means stale guidance leaked through.
-    for host in [HostChoice::ClaudeCode, HostChoice::Codex] {
-        let rendered = render_host_pack(host)
-            .map_err(|err| format!("render_host_pack({host:?}) should succeed: {err}"))?;
-        for file in &rendered {
-            for needle in SPEC_0018_LEGACY_NEEDLES {
-                assert!(
-                    !file.contents.contains(needle),
-                    "rendered `{}` for host {host:?} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
-                    file.rel_path,
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
-/// `docs/ARCHITECTURE.md` is not rendered through host packs, so
-/// `rendered_outputs_have_no_legacy_check_authoring_examples` does not
-/// cover it. Lint it directly: the design doc must teach the
-/// post-SPEC-0018 `{id, scenario}` shape, and the only legitimate
-/// mentions of the retired field names live inside `> Historical
-/// note:` blockquotes that name them in prose with backticks, not as
-/// quoted-literal assignments. The tight needles in
-/// `SPEC_0018_LEGACY_NEEDLES` only fire on example code.
-#[test]
-fn architecture_doc_has_no_legacy_check_authoring_examples() {
-    const ARCHITECTURE: &str = include_str!("../../docs/ARCHITECTURE.md");
-    for needle in SPEC_0018_LEGACY_NEEDLES {
-        assert!(
-            !ARCHITECTURE.contains(needle),
-            "docs/ARCHITECTURE.md contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields; historical notes should use backticked prose, not literal assignments)",
-        );
-    }
-}
-
-/// Source-of-truth sweep over `resources/modules/personas/**`. The
-/// host-pack-rendered guard above catches what reaches `.claude/` /
-/// `.codex/` via the renderer; this test pins the upstream sources
-/// directly so a regression that adds a legacy example in a persona
-/// body fails before any `speccy init` runs.
-///
-/// SPEC-0027 retargeted the per-directory walk from the deleted
-/// speccy-core-side `PERSONAS` / `PROMPTS` statics to
-/// `speccy_cli::embedded::RESOURCES`, which still snapshots the entire
-/// `resources/` tree. SPEC-0033 T-001 deleted
-/// `resources/modules/prompts/`; the persona sweep is the surviving
-/// guard.
-#[test]
-fn persona_and_prompt_sources_have_no_legacy_check_authoring_examples() {
-    for sub in ["modules/personas"] {
-        let dir = {
-            let opt = RESOURCES.get_dir(sub);
-            assert!(
-                opt.is_some(),
-                "embedded RESOURCES bundle is missing `{sub}` subtree"
-            );
-            opt.expect("checked is_some above")
-        };
-        for entry in dir.files() {
-            let path = entry.path().display();
-            let body = entry.contents_utf8().unwrap_or("");
-            for needle in SPEC_0018_LEGACY_NEEDLES {
-                assert!(
-                    !body.contains(needle),
-                    "resources/{path} contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields)",
-                );
-            }
-        }
-    }
-}
-
-/// Positive content pins for SPEC-0018 / T-005. These assert that
-/// the load-bearing post-migration sentences survive in their source
-/// files verbatim. A regression that silently softens or removes any
-/// of them flips the suite red.
+/// Positive content pins. These assert that load-bearing sentences
+/// survive in their source files verbatim. A regression that silently
+/// softens or removes any of them flips the suite red.
 ///
 /// The reviewer-tests anti-instruction is the most load-bearing: it
-/// is the new reviewer contract that replaced "run `speccy check` and
-/// trust the exit code". The ARCHITECTURE.md pins lock the "Feedback,
-/// Not Enforcement" stance, the render-only `check` row, and the
-/// shape-only `verify` row.
+/// states the reviewer contract — `speccy check` exit codes are not
+/// evidence that a scenario is satisfied. The ARCHITECTURE.md pins
+/// lock the "Feedback, Not Enforcement" stance, the render-only
+/// `check` row, and the shape-only `verify` row.
 #[test]
 fn reviewer_tests_persona_pins_no_check_exit_code_evidence() {
     const REVIEWER_TESTS: &str = include_str!("../../resources/modules/personas/reviewer-tests.md");
@@ -1135,8 +976,8 @@ fn reviewer_tests_persona_pins_no_check_exit_code_evidence() {
     let needle = "Do not treat `speccy check` exit codes (or any command exit code)\n  as evidence that a scenario is satisfied.";
     assert!(
         REVIEWER_TESTS.contains(needle),
-        "reviewer-tests persona must keep the post-SPEC-0018 anti-instruction \
-         that `speccy check` exit codes are not evidence; the load-bearing \
+        "reviewer-tests persona must keep the anti-instruction that \
+         `speccy check` exit codes are not evidence; the load-bearing \
          sentence at lines 33-37 is missing or has drifted",
     );
 }

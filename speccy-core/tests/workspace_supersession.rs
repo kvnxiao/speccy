@@ -11,23 +11,10 @@
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use indoc::indoc;
 use speccy_core::workspace::scan;
 use tempfile::TempDir;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
-
-const SPEC_TOML: &str = indoc! {r#"
-    schema_version = 1
-
-    [[requirements]]
-    id = "REQ-001"
-    checks = ["CHK-001"]
-
-    [[checks]]
-    id = "CHK-001"
-    scenario = "covers REQ-001"
-"#};
 
 fn utf8(dir: &TempDir) -> TestResult<Utf8PathBuf> {
     Utf8PathBuf::from_path_buf(dir.path().to_path_buf())
@@ -56,7 +43,6 @@ fn write_spec_with_frontmatter(
         "---\nid: {id}\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\nsupersedes: {supersedes_yaml}\n---\n\n# {id}\n\n### REQ-001: First\n",
     );
     fs_err::write(dir.join("SPEC.md").as_std_path(), spec_md)?;
-    fs_err::write(dir.join("spec.toml").as_std_path(), SPEC_TOML)?;
     Ok(())
 }
 
@@ -99,7 +85,6 @@ fn parse_failures_excluded_from_supersession_input() -> TestResult {
     let dir1 = root.join(".speccy").join("specs").join("0001-broken");
     fs_err::create_dir_all(dir1.as_std_path())?;
     fs_err::write(dir1.join("SPEC.md").as_std_path(), "# malformed\n")?;
-    fs_err::write(dir1.join("spec.toml").as_std_path(), SPEC_TOML)?;
 
     write_spec_with_frontmatter(&root, "0002-newer", "SPEC-0002", &["SPEC-0001"])?;
 

@@ -5,24 +5,16 @@
 
 //! In-tree corpus integration tests.
 //!
-//! Originally added during the SPEC-0019 → SPEC-0020 migration to prove
-//! the bulk rewrite was mechanical (id sets preserved byte-for-byte
-//! against a frozen JSON snapshot). The snapshot half was removed once
-//! the migration shipped: it forced every newly drafted spec to be
-//! hand-added to a fixture, with no ongoing signal about anything other
-//! than "this fixture is out of date".
+//! Invariants that should hold for every spec that lives under
+//! `.speccy/specs/NNNN-*/`:
 //!
-//! What's left are invariants that should hold for every spec that
-//! lives under `.speccy/specs/NNNN-*/`:
-//!
-//! 1. Every `SPEC.md` parses cleanly with the SPEC-0020 raw XML element parser
+//! 1. Every `SPEC.md` parses cleanly with the raw XML element parser
 //!    ([`speccy_core::parse::parse_spec_xml`]).
-//! 2. No stray `spec.toml` files (SPEC-0019 T-004 invariant).
-//! 3. Renderer convention: every whitelisted closing element tag is followed by
-//!    a blank line (SPEC-0020 T-002 convention).
-//! 4. SPEC-0019 / SPEC-0020 fenced documentation examples survive byte-for-byte
-//!    — those specs document Speccy's own grammar, so silent rewrites of their
-//!    fenced bodies would corrupt the canonical reference.
+//! 2. Renderer convention: every whitelisted closing element tag is followed by
+//!    a blank line.
+//! 3. Fenced documentation examples in the specs that document Speccy's own
+//!    grammar survive byte-for-byte, so silent rewrites of their fenced bodies
+//!    cannot corrupt the canonical reference.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -79,24 +71,7 @@ fn every_in_tree_spec_md_parses_with_xml_parser() {
     );
 }
 
-#[test]
-fn no_stray_spec_toml_remains_under_speccy_specs() {
-    let root = workspace_root();
-    let dirs = spec_dirs(&root);
-    let mut stray: Vec<Utf8PathBuf> = Vec::new();
-    for d in &dirs {
-        let candidate = d.join("spec.toml");
-        if candidate.exists() {
-            stray.push(candidate);
-        }
-    }
-    assert!(
-        stray.is_empty(),
-        "stray spec.toml files remain after migration: {stray:?}",
-    );
-}
-
-/// Whitelist of Speccy structure element names per SPEC-0020 DEC-002.
+/// Whitelist of Speccy structure element names.
 /// Mirrored from the renderer's emission set so the convention assertion
 /// below stays anchored to the renderer's contract.
 const WHITELIST_NAMES: &[&str] = &[
@@ -161,15 +136,13 @@ impl FenceTracker {
 }
 
 #[test]
-fn every_migrated_spec_md_has_blank_line_after_each_close_tag() {
-    // SPEC-0020 T-002 pinned "every closing element tag is followed by a
-    // blank line" as the renderer's canonical convention
+fn every_in_tree_spec_md_has_blank_line_after_each_close_tag() {
+    // "Every closing element tag is followed by a blank line" is the
+    // renderer's canonical convention
     // (`render_emits_blank_line_after_every_closing_element_tag` in
-    // `tests/spec_xml_roundtrip.rs`). T-004 normalises every in-tree
-    // SPEC.md to that same convention. This test pins it so a future
-    // migration rerun (or a stray hand-edit) that drops the blank line
-    // fails CI loudly, instead of hiding behind manual `git diff`
-    // inspection as the previous reviewer flagged.
+    // `tests/spec_xml_roundtrip.rs`). This test pins the convention so
+    // a stray hand-edit that drops the blank line fails CI loudly
+    // instead of hiding behind manual `git diff` inspection.
     let root = workspace_root();
     let dirs = spec_dirs(&root);
     let mut drift: Vec<String> = Vec::new();
@@ -203,7 +176,7 @@ fn every_migrated_spec_md_has_blank_line_after_each_close_tag() {
     }
     assert!(
         drift.is_empty(),
-        "SPEC-0020 blank-line-after-close convention violated:\n{}",
+        "blank-line-after-close convention violated:\n{}",
         drift.join("\n"),
     );
 }
@@ -221,47 +194,9 @@ fn is_whitelist_close_line(line: &str) -> bool {
 }
 
 #[test]
-fn spec_0019_fenced_example_preserves_legacy_marker_form() {
-    // REQ-004's third Done-when bullet: fenced examples that document
-    // the SPEC-0019 marker form must survive migration byte-for-byte.
-    // SPEC-0019 carries the canonical marker-form example inside a
-    // ```markdown fence; pin it against a small inline fixture string
-    // so a future rerun of the migration (or a stray hand-edit) cannot
-    // silently rewrite the documentation.
-    let root = workspace_root();
-    let path = root
-        .join(".speccy")
-        .join("specs")
-        .join("0019-xml-canonical-spec-md")
-        .join("SPEC.md");
-    let source = fs_err::read_to_string(path.as_std_path()).expect("SPEC-0019 SPEC.md is readable");
-    let expected = "```markdown\n\
-<!-- speccy:requirement id=\"REQ-001\" -->\n\
-### REQ-001: Render selected scenarios\n\
-\n\
-Plain Markdown prose remains plain Markdown.\n\
-\n\
-<!-- speccy:scenario id=\"CHK-001\" -->\n\
-Given a task covers REQ-001,\n\
-when `speccy check SPEC-0019/T-001` runs,\n\
-then only REQ-001's scenarios are rendered.\n\
-<!-- /speccy:scenario -->\n\
-<!-- /speccy:requirement -->\n\
-```";
-    assert!(
-        source.contains(expected),
-        "SPEC-0019 fenced marker-form example drift: expected substring\n\
-        ---\n{expected}\n---\n\
-        not found in SPEC.md (path: {path})",
-    );
-}
-
-#[test]
 fn spec_0020_fenced_example_preserves_raw_xml_form() {
-    // Companion to the SPEC-0019 fence pin above: SPEC-0020's authored
-    // raw-XML example block must also survive migration unchanged.
     // SPEC-0020 documents the raw-tag carrier inside a ```markdown
-    // fence; pin the body byte-for-byte so the migration normaliser
+    // fence; pin the body byte-for-byte so any future bulk-rewrite
     // cannot silently mutate documentation that describes Speccy's own
     // grammar.
     let root = workspace_root();

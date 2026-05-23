@@ -354,11 +354,11 @@ fn missing_managed_field_appended_when_others_present() {
     );
 }
 
-/// SPEC-0024 REQ-003: place a TASKS.md inside a `NNNN-slug` subfolder so
+/// Place a TASKS.md inside a `NNNN-slug` subfolder so
 /// `derive_spec_id_from_dir` resolves a folder-derived ID; the 3-way
 /// guard inside `commit_frontmatter` skips when the parent folder name
 /// does not match `^\d{4}-`, so the bare `write_tmp` fixture exercises
-/// the legacy 2-way path. Use this helper to exercise the 3-way path.
+/// the 2-way path. Use this helper to exercise the 3-way path.
 fn write_in_folder(folder_name: &str, content: &str) -> Fixture {
     let dir = tempfile::tempdir().expect("tempdir creation should succeed");
     let sub = dir.path().join(folder_name);
@@ -488,8 +488,8 @@ fn id_triple_mismatch_display_contains_all_three_observed_values() {
 fn three_way_guard_skips_when_folder_id_unobtainable() {
     // Bare tempdir name does not match `^\d{4}-`, so folder_id is None
     // and the 3-way check skips. With spec_md_id disagreeing from
-    // folder/TASKS.md, the legacy 2-way path is the only one that can
-    // fire — and here it does not, because CLI arg equals TASKS.md.spec.
+    // folder/TASKS.md, the 2-way path is the only one that can fire —
+    // and here it does not, because CLI arg equals TASKS.md.spec.
     let src = indoc! {r"
         ---
         spec: SPEC-0001

@@ -323,9 +323,9 @@ pub enum ParseError {
     },
 
     /// A `<coverage>` `result` attribute value was outside the closed set
-    /// (`satisfied | partial | deferred`). SPEC-0022 REQ-002. The legacy
-    /// `dropped` value is intentionally rejected — dropped requirements
-    /// are removed from SPEC.md via amendment.
+    /// (`satisfied | partial | deferred`). Dropped requirements are
+    /// removed from SPEC.md via amendment rather than carried as a
+    /// coverage row, so no `dropped` value exists.
     #[error(
         "coverage for `{req}` in {path} has invalid result `{value}`: must be one of {allowed}"
     )]

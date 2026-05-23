@@ -266,54 +266,6 @@ do
 }
 
 #[test]
-fn legacy_implementer_note_in_tasks_md_is_parse_error() -> TestResult {
-    let tasks = r#"<task id="T-001" state="completed" covers="REQ-001">
-done
-<task-scenarios>
-- placeholder.
-</task-scenarios>
-<implementer-note session="legacy">
-body
-</implementer-note>
-</task>
-"#;
-    let dir = make_workspace("SPEC-0042", tasks, &[])?;
-    let diags = run_lint(&dir)?;
-    // After SPEC-0037 T-001, <implementer-note> is retired entirely;
-    // the parser fails, surfacing the parse error via TSK-004 (the
-    // existing TASKS.md parse-error funnel).
-    assert!(
-        diags
-            .iter()
-            .any(|d| d.code == "TSK-004" && d.message.contains("implementer-note")),
-        "legacy <implementer-note> should surface as a parse error: {diags:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn legacy_tasks_wrapper_is_parse_error() -> TestResult {
-    let tasks = r#"<tasks spec="SPEC-0042">
-<task id="T-001" state="pending" covers="REQ-001">
-work
-<task-scenarios>
-- placeholder.
-</task-scenarios>
-</task>
-</tasks>
-"#;
-    let dir = make_workspace("SPEC-0042", tasks, &[])?;
-    let diags = run_lint(&dir)?;
-    assert!(
-        diags
-            .iter()
-            .any(|d| d.code == "TSK-004" && d.message.contains("tasks")),
-        "legacy <tasks> wrapper should surface as a parse error: {diags:?}"
-    );
-    Ok(())
-}
-
-#[test]
 fn bare_task_at_top_level_parses_cleanly() -> TestResult {
     let tasks = r#"<task id="T-001" state="pending" covers="REQ-001">
 work

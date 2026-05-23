@@ -1,26 +1,21 @@
 //! Symmetric REQ-ID diff between SPEC.md headings and SPEC.md element tree.
 //!
-//! Before SPEC-0019 this compared SPEC.md against per-spec `spec.toml`.
-//! After SPEC-0020 the requirement graph lives in the SPEC.md raw XML
-//! element tree (see [`crate::parse::spec_xml`]); the heading view from
-//! [`SpecMd`] and the element view from [`SpecDoc`] should agree on the
-//! same REQ-ID set.
+//! The requirement graph lives in the SPEC.md raw XML element tree
+//! (see [`crate::parse::spec_xml`]); the heading view from [`SpecMd`]
+//! and the element view from [`SpecDoc`] should agree on the same
+//! REQ-ID set.
 //!
 //! Pure, deterministic, idempotent. See
 //! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-006.
 //!
-//! # SPEC-0022 workspace-load cross-reference validation
+//! # Workspace-load cross-reference validation
 //!
 //! [`validate_workspace_xml`] is the second public entry point in this
 //! module: it ties the typed [`crate::parse::TasksDoc`] and
 //! [`crate::parse::ReportDoc`] models against their parent
-//! [`SpecDoc`], surfacing dangling REQ ids, dangling CHK ids, and missing
-//! coverage as diagnostics. It is reachable from the workspace loader
-//! through [`crate::workspace::validate_workspace_xml`], the seam T-007
-//! flips on after the corpus migration in T-005 / T-006 — until then,
-//! the in-tree TASKS.md / REPORT.md files still use the legacy
-//! checkbox/Markdown form, and the loader does **not** route them
-//! through this validator.
+//! [`SpecDoc`], surfacing dangling REQ ids, dangling CHK ids, and
+//! missing coverage as diagnostics. It is reachable from the workspace
+//! loader through [`crate::workspace::validate_workspace_xml`].
 
 use crate::error::ParseError;
 use crate::parse::ReportDoc;

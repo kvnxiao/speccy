@@ -71,10 +71,7 @@ pub struct InitArgs {
     pub force: bool,
 }
 
-/// Three-way per-file classification used by the T-008 init redesign.
-///
-/// SPEC-0033 T-008 replaced the old binary Create/Overwrite/Skip scheme
-/// with this three-way model:
+/// Three-way per-file classification.
 ///
 /// 1. [`Action::Create`] — destination absent; file will be written.
 /// 2. [`Action::Unchanged`] — destination exists and is byte-identical to the
@@ -84,9 +81,9 @@ pub struct InitArgs {
 ///    `--force`, the file is overwritten.
 ///
 /// Host-native reviewer files (`.claude/agents/reviewer-<persona>.md`
-/// and `.codex/agents/reviewer-<persona>.toml`) retain their
-/// Skip-on-exists semantic from SPEC-0027 REQ-002: they are classified
-/// [`Action::Unchanged`] when they already exist (regardless of
+/// and `.codex/agents/reviewer-<persona>.toml`) are user-customisable
+/// and classified [`Action::Unchanged`] when they already exist
+/// (regardless of
 /// byte equality), so user edits to the persona body survive a re-init
 /// or `--force` run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,13 +203,10 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 
     append_host_pack_items(project_root, host, &mut plan)?;
 
-    // SPEC-0027 REQ-001: `.speccy/skills/` is no longer written by
-    // `init`. The host-native reviewer files under `.claude/agents/`
-    // / `.codex/agents/` are now the sole canonical persona surface
-    // (classified Skip-on-exists by `append_host_pack_items`); the
-    // CLI-rendered reviewer prompt no longer carries `{{persona_content}}`
-    // (SPEC-0027 REQ-003); the legacy `.speccy/skills/prompts/`
-    // override directory had no consumer in `speccy_core::prompt`.
+    // `.speccy/skills/` is not written by `init`. The host-native
+    // reviewer files under `.claude/agents/` and `.codex/agents/` are
+    // the sole canonical persona surface and are classified
+    // Skip-on-exists by `append_host_pack_items`.
 
     Ok(plan)
 }
@@ -220,14 +214,12 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 /// Materialise the host-templated wrapper pack via [`render_host_pack`]
 /// and append one [`PlanItem`] per rendered file to `plan`.
 ///
-/// SPEC-0016 T-007 replaced the previous per-host SKILL.md filesystem
-/// walk: wrappers under `resources/agents/.<install_root>/` are now
-/// rendered through `MiniJinja` with the host's template context (see
+/// Wrappers under `resources/agents/.<install_root>/` are rendered
+/// through `MiniJinja` with the host's template context (see
 /// [`HostChoice::template_context`]), `.tmpl` suffixes are stripped,
 /// and the resulting `rel_path` is joined onto `project_root` to give
-/// the absolute destination. The three-way classification from
-/// SPEC-0033 T-008 applies: absent → Create, byte-identical → Unchanged,
-/// differs → Conflict.
+/// the absolute destination. The three-way classification applies:
+/// absent → Create, byte-identical → Unchanged, differs → Conflict.
 fn append_host_pack_items(
     project_root: &Utf8Path,
     host: HostChoice,

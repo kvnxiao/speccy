@@ -576,13 +576,13 @@ mod tests {
     }
 
     #[test]
-    fn legacy_session_attribute_is_rejected() {
+    fn unknown_implementer_attribute_is_rejected() {
         let src = make(indoc! {r#"
-            <implementer date="2026-05-21T18:00:00Z" model="m" round="1" session="legacy">
+            <implementer date="2026-05-21T18:00:00Z" model="m" round="1" session="x">
             body
             </implementer>
         "#});
-        let err = parse(&src, path()).expect_err("legacy session= must fail");
+        let err = parse(&src, path()).expect_err("unknown session= must fail");
         assert!(
             matches!(err.as_ref(), ParseError::UnknownMarkerAttribute { attribute, allowed, .. } if attribute == "session" && allowed == "date, model, round"),
             "got {err:?}"
