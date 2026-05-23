@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0035
-spec_hash_at_generation: dd7398768128f99c4ab33cf1a6ae066defc8056dceece5cf1f42e79c8349fc11
-generated_at: 2026-05-21T03:11:16Z
+spec_hash_at_generation: 2668482db9d6182e7693753a13ebf401ffc44b00c856ca2fd6e8d3a7e60f0e70
+generated_at: 2026-05-23T07:36:28Z
 ---
 
 # Tasks: SPEC-0035 RPT lint family — `speccy verify` gates on REPORT.md proof shape

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0034
-spec_hash_at_generation: 739815d752fcb1ebcb550eb15d4811e34a7ddee1ff10884cbb82808dd14b3660
-generated_at: 2026-05-21T01:34:11Z
+spec_hash_at_generation: 452bd2c19fbd5f10559fc16020053c5d1697856b8174f5dcd5680a163489d858
+generated_at: 2026-05-23T07:36:28Z
 ---
 
 # Tasks: SPEC-0034 Self-review pass in authoring-phase skills (plan, amend, brainstorm)

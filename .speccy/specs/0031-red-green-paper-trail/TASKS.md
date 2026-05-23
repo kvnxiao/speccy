@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0031
-spec_hash_at_generation: ca5e06ac03783873ae44b2d365ef64605efb689ab9b2c77a8dac01d2cb4c1929
-generated_at: 2026-05-19T01:21:17Z
+spec_hash_at_generation: 67f233f704fd9a2e6ff04371a66feb1f6ab7dd346e37555a28496b9a8be975f9
+generated_at: 2026-05-23T07:36:28Z
 ---
 
 # Tasks: SPEC-0031 Red-green paper trail in task closure

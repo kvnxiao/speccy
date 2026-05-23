@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0001
-spec_hash_at_generation: 1058b377f82fd0598437f483970b85dde96c5587e608e6fbf8ea32b47b19e545
-generated_at: 2026-05-17T17:37:23Z
+spec_hash_at_generation: 850bef0aec90909b0aacd9d76ed34636304db841f0d764be73b1409b73565cfc
+generated_at: 2026-05-23T07:34:45Z
 ---
 
 # Tasks: SPEC-0001 Artifact parsers

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0040
-spec_hash_at_generation: 521caca0dd64a61db79fc1ca0c6444c197b92ff70a0029e52430857c9c96451f
-generated_at: 2026-05-22T23:15:34Z
+spec_hash_at_generation: 8eafb0125178ebfb55dba96e40f3016c540bf0fcf0249528e75d3f734ecd0dea
+generated_at: 2026-05-23T07:36:30Z
 ---
 # Tasks: SPEC-0040 Retire `speccy.toml` — drop scaffolding, parser, dependency, and TOML-side `schema_version`
 

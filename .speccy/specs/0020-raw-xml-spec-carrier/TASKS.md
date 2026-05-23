@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0020
-spec_hash_at_generation: 53f7ad702b4625bc67956765821cf8a546a8d7a59b78e4fcfc4e8bc985608d87
-generated_at: 2026-05-17T17:37:24Z
+spec_hash_at_generation: 70e273f0ce8d392347dbeaf3b71b187ce7cad1a5fae84adeeffe09f8e5b8a225
+generated_at: 2026-05-23T07:36:25Z
 ---
 
 # Tasks: SPEC-0020 Raw XML element tags for canonical SPEC.md

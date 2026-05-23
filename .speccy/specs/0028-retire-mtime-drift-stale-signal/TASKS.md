@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0028
-spec_hash_at_generation: 5d5f2c1bba0a61ef66b3565f50acd8af8a2ef3bcd5c111198951590501bc3747
-generated_at: 2026-05-18T03:43:50Z
+spec_hash_at_generation: a93e00ea261a40f8c881e1ad429fbe5807f8c5ad3ab298eb194d894ebab61adc
+generated_at: 2026-05-23T07:36:27Z
 ---
 
 # Tasks: SPEC-0028 Retire StaleReason::MtimeDrift; HashDrift is the sole semantic stale signal

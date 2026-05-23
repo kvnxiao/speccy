@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0026
-spec_hash_at_generation: 0f21b392d493c03b2df1b2d016027b4ff69a9db83438c5e935402323a815aede
-generated_at: 2026-05-20T18:49:23Z
+spec_hash_at_generation: 9782497be345665e28c15dbbe5e5373e941f75bb7d3836c08766445aef7deb30
+generated_at: 2026-05-23T07:36:27Z
 ---
 
 # Tasks: SPEC-0026 Anti-triggers in skill descriptions to reduce host-router mis-fires

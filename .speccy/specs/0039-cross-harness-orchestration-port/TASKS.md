@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0039
-spec_hash_at_generation: 168f69a88535da4cdda603f24e6c488daaa5bead0b69f82f15238c9f33cc01dc
-generated_at: 2026-05-22T06:58:12Z
+spec_hash_at_generation: 4cc9319cb863e9b104bf5dbfd79854dfd9462fbe07b7a894fb1f5bc142052e99
+generated_at: 2026-05-23T07:36:29Z
 ---
 # Tasks: SPEC-0039 Cross-harness orchestration port — orchestrator and holistic-gate skills ship from shared modules with thin per-host adapters in both packs
 

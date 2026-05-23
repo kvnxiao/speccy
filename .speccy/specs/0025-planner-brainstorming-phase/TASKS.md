@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0025
-spec_hash_at_generation: 3e9b8048097bbf7f34a4a3c24bb9cf7814487c638af818bb77c530d026be6b0d
-generated_at: 2026-05-17T19:55:40Z
+spec_hash_at_generation: b17c689c916007f142de43ceb5a733429727f4c7355fa087daff0c79d79b4428
+generated_at: 2026-05-23T07:36:27Z
 ---
 
 # Tasks: SPEC-0025 Brainstorming skill for atomizing intent before SPEC creation

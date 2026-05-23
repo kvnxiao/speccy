@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0002
-spec_hash_at_generation: 60eec6c049c8cca6522eec4bfdb3cb5aa7a8fed0decd844d31da5d77d18e4118
-generated_at: 2026-05-17T17:37:23Z
+spec_hash_at_generation: 086f5a3f57c84ade15492213d895eb5f42710a0b20b3b9fb4d17765fd6b7b48a
+generated_at: 2026-05-23T07:36:24Z
 ---
 
 # Tasks: SPEC-0002 init-command

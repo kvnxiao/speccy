@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0038
-spec_hash_at_generation: 94397441e6a46fda409777b7cc4b77a802dffe92afacb6d34cfd6c236a865675
-generated_at: 2026-05-22T00:50:54Z
+spec_hash_at_generation: 28ddb67d358a43bcf2486db34f47c36102b060f917056ce5d65f598ed8a4d188
+generated_at: 2026-05-23T07:36:29Z
 ---
 # Tasks: SPEC-0038 Skill-pack references — per-skill and host-shared reference files eject every lintable artifact's canonical shape
 

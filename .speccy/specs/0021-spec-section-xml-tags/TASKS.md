@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0021
-spec_hash_at_generation: ed831cf946d78ff21c3002a468983485865fc37d5935fc11c713271f2f0c59ae
-generated_at: 2026-05-17T17:37:24Z
+spec_hash_at_generation: bec9ae6e86bc69b38a0ae0d5db33cd4465511d6f0ffde2a17045cfb4a29ff01b
+generated_at: 2026-05-23T07:36:26Z
 ---
 
 # Tasks: SPEC-0021 Section-level XML element tags for SPEC.md

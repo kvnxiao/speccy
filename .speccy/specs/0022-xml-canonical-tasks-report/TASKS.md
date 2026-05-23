@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0022
-spec_hash_at_generation: 070fd3bc3992fe88dd6ee77bcb34824cbda5e956511f42481d82b063574891fd
-generated_at: 2026-05-17T17:37:24Z
+spec_hash_at_generation: 10655ab0bc16d60fbb3ca17fe4521669cc8dd6562a4d9e4e3e22ad8be4c790ba
+generated_at: 2026-05-23T07:36:26Z
 ---
 
 # Tasks: SPEC-0022 Raw XML element tags for TASKS.md and REPORT.md
