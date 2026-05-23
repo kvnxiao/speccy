@@ -14,6 +14,8 @@ Pre-existing tech debt (discovered during other work, blocks the hygiene gate)
 
 Tier 2 — consider, needs design pass
 
+F-5: Does `speccy check` make sense to print all checks? Checks are tied inherently to a SPEC's implementation, so to me it feels like unnecessary noise and extra, unhelpful context for an LLM. Maybe speccy check should enforce a SPEC-ID and only print checks for that SPEC. Going even further, support a specific task to print only the checks for a given task of that spec as well.
+
 F-8: Strip implementer context from reviewer prompts
 
 - Reviewer fan-out sees diff + SPEC + Checks only — not the implementer's task notes/rationale.
