@@ -208,6 +208,108 @@ machine transitions between them.
 
 ---
 
+## Lifecycle
+
+End-to-end, the workflow has three zones: a **human-led planning
+phase** at the top, an **autonomous work-and-review loop** in the
+middle driven by `/speccy-orchestrate`, and a **human-confirmed
+ship** at the bottom. Inside the autonomous zone, the orchestrator
+only stops and surfaces to you when a bounded budget is exhausted
+(5 task retries, 3 drift rounds); otherwise it drives itself.
+
+```mermaid
+flowchart TD
+    Start([Fuzzy idea]) --> Init["/speccy-init<br/>one-time bootstrap"]
+
+    subgraph Plan_zone [Human-led planning]
+      direction TB
+      Brain["/speccy-brainstorm<br/>Socratic atomization"]
+      BrainGate{{HUMAN gate<br/>approve framing}}
+      PlanCmd["/speccy-plan<br/>draft SPEC.md"]
+      TasksCmd["/speccy-tasks<br/>decompose TASKS.md"]
+      Brain --> BrainGate --> PlanCmd --> TasksCmd
+    end
+
+    Init --> Brain
+    TasksCmd --> Orch["/speccy-orchestrate"]
+
+    subgraph Auto_zone [Autonomous work-and-review loop]
+      direction TB
+      NextQ["speccy next --json<br/>(re-queried each iteration<br/>for ground truth)"]
+      Work["speccy-work sub-agent<br/>one implementer pass"]
+      ReviewFan["speccy-review fan-out (parallel):<br/>reviewer-business · reviewer-tests<br/>reviewer-security · reviewer-style"]
+      NextQ -->|kind=work| Work
+      Work --> NextQ
+      NextQ -->|kind=review| ReviewFan
+      ReviewFan -->|pass or blocking| NextQ
+    end
+
+    Orch --> NextQ
+    ReviewFan -.->|5 retries on same task| Stuck{{HUMAN surfaced<br/>stuck task}}
+    NextQ -->|kind=ship| Vet["/speccy-vet · holistic gate"]
+
+    subgraph Ship_zone [Vet, then human-confirmed ship]
+      direction TB
+      Drift["Phase 1: vet-reviewer ⇄ vet-implementer<br/>(sequential, up to 3 drift rounds)"]
+      Simp["Phase 2: vet-simplifier<br/>scan + apply"]
+      Gate["Phase 3: append gate block<br/>to VET.md"]
+      ShipGate{{HUMAN gate<br/>confirm before ship}}
+      Ship["/speccy-ship<br/>write REPORT, open PR"]
+      Drift -->|pass| Simp --> Gate --> ShipGate --> Ship
+      Drift -.->|3 rounds exhausted| DriftFail{{HUMAN surfaced<br/>drift fail}}
+    end
+
+    Vet --> Drift
+    Ship --> Done([PR opened])
+
+    Stuck -.->|optional| Amend["/speccy-amend<br/>edit SPEC, reconcile TASKS"]
+    DriftFail -.->|optional| Amend
+    Amend -.-> Orch
+
+    classDef human fill:#ffe4b5,stroke:#cc8400,stroke-width:2px,color:#000
+    class BrainGate,Stuck,DriftFail,ShipGate human
+```
+
+### Where the human steps in
+
+The autonomous loop is deliberately bookended by human judgment, not
+threaded with it. The shipped skills only stop and ask at four
+boundaries:
+
+1. **Brainstorm approval** (start) — `/speccy-brainstorm` has a
+   hard gate at the end of its Socratic exchange. The framing does
+   not flow into `/speccy-plan` until you explicitly approve it.
+2. **Stuck task** (mid-loop, surfaced) — if `/speccy-orchestrate`
+   sees the same task flip back to `pending` after review **5
+   times in a row**, the loop stops and surfaces the per-task
+   journal at `.speccy/specs/NNNN-slug/journal/T-NNN.md`. Typical
+   resolution is `/speccy-amend` to reshape the SPEC or task, then
+   resume the loop.
+3. **Drift failure** (pre-ship, surfaced) — if `/speccy-vet`'s
+   drift loop exhausts its 3-round budget without converging, the
+   loop stops and surfaces the holistic findings from
+   `.speccy/specs/NNNN-slug/journal/VET.md`. Typical resolution is
+   again `/speccy-amend` to align the SPEC with what was built, or
+   to revert and redo the offending task.
+4. **Pre-ship confirmation** (end) — even when the holistic gate
+   returns `verdict="pass"`, `/speccy-orchestrate` stops one step
+   short of `/speccy-ship` and asks you. Ship opens a PR (which is
+   irreversible), so it is never auto-invoked.
+
+The planning steps in between (`/speccy-plan` and `/speccy-tasks`)
+are also human-driven, but they do not contain explicit hard gates
+inside the skills themselves — you simply read each step's output
+and type the next slash command. If you trust the prior output, you
+can chain them back-to-back without intervention.
+
+Everything inside the autonomous zone — per-task implementer
+passes, the four-persona parallel review fan-out, the holistic
+drift-fix loop, and the simplifier polish pass — runs without
+asking. The shipped skills are tuned to be loud at the boundaries
+that matter and quiet in between.
+
+---
+
 ## Repo layout after `speccy init`
 
 ```text
