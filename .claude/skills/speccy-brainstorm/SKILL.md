@@ -1,6 +1,6 @@
 ---
 name: speccy-brainstorm
-description: 'Atomize a fuzzy ask into first-principle requirements before any SPEC.md is written. Walks the user through a Socratic exchange (one question at a time, 2-3 alternative framings with trade-offs, silent assumptions, open questions) and stops at a hard gate until the user explicitly approves the framing. Use when the user has a fuzzy idea, says "help me think about", "brainstorm with me", "I want to spec out X but I''m not sure where to start", or before invoking speccy-plan on an unclear ask. Requires: no preconditions. Do NOT trigger when the user has named the slice and the scope is clear — go straight to speccy-plan.'
+description: Atomize a fuzzy ask into first-principle requirements before any SPEC.md is written. Walks the user through a Socratic exchange (one question at a time, 2-3 alternative framings with trade-offs, silent assumptions, open questions) and stops at a hard gate until the user explicitly approves the framing. Use when the user has a fuzzy idea, says "help me brainstorm", "help me think about", "let's brainstorm", "I want to spec out X but I'm not sure where to start", or before invoking speccy-plan on an unclear ask. Requires no preconditions. Do NOT trigger when the user has named the slice and the scope is clear - go straight to speccy-plan.
 ---
 
 # /speccy-brainstorm
