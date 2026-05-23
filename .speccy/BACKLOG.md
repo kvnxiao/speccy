@@ -4,7 +4,7 @@ Grouped by priority. Each item: what / why / where it lives / cost.
 
 Tier 1 — do first (prompt/skill markdown only, no CLI surface change)
 
-F-4: Hypothesis-driven debugging branch in speccy implement
+F-1: Hypothesis-driven debugging branch in speccy implement
 
 - When a Check has previously failed in this task, the rendered prompt loads a "form hypothesis → write failing test that proves it → narrow" sub-template.
 - Why: failing Checks should drive systematic debugging, not flailing. Maps [superpowers](https://github.com/obra/superpowers)' debugging discipline onto Check-as-evidence.
@@ -14,7 +14,7 @@ Pre-existing tech debt (discovered during other work, blocks the hygiene gate)
 
 Tier 2 — consider, needs design pass
 
-F-5: Does `speccy check` make sense to print all checks? Checks are tied inherently to a SPEC's implementation, so to me it feels like unnecessary noise and extra, unhelpful context for an LLM. Maybe speccy check should enforce a SPEC-ID and only print checks for that SPEC. Going even further, support a specific task to print only the checks for a given task of that spec as well.
+F-2: `speccy next` and `speccy check` both support passing in a `SPEC-####` as an immediate argument to filter down to a specific spec. However, our skills and subagent resource templates are currently not using this with `--json`, which causes the entire spec tree to be printed out. This makes the LLM waste context by having to potentially write a script to filter down the list manually when a user calls for `/speccy-orchestrate SPEC-####` for example. We need to change our instructions to use that optional `SPEC-####` filter argument with `--json`, when passed in, so the LLM can filter down to the specific spec without wasting context. Note that `SPEC-####` is optional — if not passed in, the LLM will still print the entire spec tree. E.g. `speccy next --json` - skill will print the whole spec tree in JSON format and pick the next available spec to implement. Whereas `speccy next SPEC-#### --json` - skill will filter down to the specific spec and print it in JSON format to figure out what's next in its development lifecycle - or alternatively print some error message if the spec is already implemented (this error clause may not exist today and may need to be added).
 
 F-8: Strip implementer context from reviewer prompts
 
