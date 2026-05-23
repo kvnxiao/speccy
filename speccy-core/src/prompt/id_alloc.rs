@@ -26,7 +26,25 @@ use std::sync::OnceLock;
 /// matching directories anywhere in its tree.
 #[must_use = "the allocated ID identifies the next spec to be created"]
 pub fn allocate_next_spec_id(specs_dir: &Utf8Path) -> String {
-    let max = scan_max_prefix(specs_dir);
+    allocate_next_spec_id_across_dirs(&[specs_dir])
+}
+
+/// Walk each directory in `dirs` recursively (with the same
+/// `NNNN-slug` rules as [`allocate_next_spec_id`]), take the maximum
+/// numeric prefix across the union, and return the next available
+/// 4+ digit ID.
+///
+/// Per SPEC-0042 REQ-005: archived specs at `.speccy/archive/` still
+/// occupy their SPEC-NNNN slot, so vacancy resolution scans both
+/// `.speccy/specs/` and `.speccy/archive/` to compute the smallest
+/// unused ID. Directories that do not exist are treated as empty —
+/// the scan is robust to a missing `.speccy/archive/`.
+///
+/// Returns `"0001"` when every input directory is absent, empty, or
+/// contains no matching SPEC directories.
+#[must_use = "the allocated ID identifies the next spec to be created"]
+pub fn allocate_next_spec_id_across_dirs(dirs: &[&Utf8Path]) -> String {
+    let max = dirs.iter().filter_map(|d| scan_max_prefix(d)).max();
     let next = max.map_or(1_u64, |m| m.saturating_add(1));
     format!("{next:04}")
 }
@@ -76,6 +94,7 @@ fn dir_prefix_regex() -> &'static Regex {
 #[cfg(test)]
 mod tests {
     use super::allocate_next_spec_id;
+    use super::allocate_next_spec_id_across_dirs;
     use camino::Utf8PathBuf;
     use tempfile::TempDir;
 
@@ -174,6 +193,94 @@ mod tests {
         mkdir(&specs, "auth/0002-signup");
         mkdir(&specs, "billing/0010-invoice");
         assert_eq!(allocate_next_spec_id(&specs), "0011");
+    }
+
+    // ----- allocate_next_spec_id_across_dirs (SPEC-0042 REQ-005) -----
+
+    #[test]
+    fn across_dirs_unions_specs_and_archive() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        let archive = root.join("archive");
+        fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+        fs_err::create_dir_all(archive.as_std_path()).expect("mkdir");
+        mkdir(&specs, "0001-foo");
+        mkdir(&specs, "0003-bar");
+        mkdir(&archive, "0002-baz");
+        // Max across union is 0003 → next is 0004.
+        assert_eq!(
+            allocate_next_spec_id_across_dirs(&[specs.as_path(), archive.as_path()]),
+            "0004"
+        );
+    }
+
+    #[test]
+    fn across_dirs_archive_blocks_reuse_of_id() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        let archive = root.join("archive");
+        fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+        fs_err::create_dir_all(archive.as_std_path()).expect("mkdir");
+        // 0001..0041 contiguous in specs, archive has 0042.
+        for n in 1_u64..=41 {
+            mkdir(&specs, &format!("{n:04}-active"));
+        }
+        mkdir(&archive, "0042-shipped");
+        assert_eq!(
+            allocate_next_spec_id_across_dirs(&[specs.as_path(), archive.as_path()]),
+            "0043"
+        );
+    }
+
+    #[test]
+    fn across_dirs_missing_archive_is_treated_as_empty() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        let archive = root.join("archive"); // intentionally not created
+        fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+        mkdir(&specs, "0001-foo");
+        mkdir(&specs, "0002-bar");
+        assert_eq!(
+            allocate_next_spec_id_across_dirs(&[specs.as_path(), archive.as_path()]),
+            "0003"
+        );
+    }
+
+    #[test]
+    fn across_dirs_both_missing_returns_0001() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        let archive = root.join("archive");
+        assert_eq!(
+            allocate_next_spec_id_across_dirs(&[specs.as_path(), archive.as_path()]),
+            "0001"
+        );
+    }
+
+    #[test]
+    fn across_dirs_only_archive_populated() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        let archive = root.join("archive");
+        fs_err::create_dir_all(archive.as_std_path()).expect("mkdir");
+        mkdir(&archive, "0007-shipped");
+        assert_eq!(
+            allocate_next_spec_id_across_dirs(&[specs.as_path(), archive.as_path()]),
+            "0008"
+        );
+    }
+
+    #[test]
+    fn across_dirs_single_arg_matches_allocate_next_spec_id() {
+        let (_tmp, root) = make_tmp_root();
+        let specs = root.join("specs");
+        fs_err::create_dir_all(specs.as_std_path()).expect("mkdir");
+        mkdir(&specs, "0001-foo");
+        mkdir(&specs, "0005-bar");
+        assert_eq!(
+            allocate_next_spec_id(&specs),
+            allocate_next_spec_id_across_dirs(&[specs.as_path()]),
+        );
     }
 
     #[test]

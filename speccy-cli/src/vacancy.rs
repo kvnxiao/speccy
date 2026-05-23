@@ -1,24 +1,24 @@
 //! `speccy vacancy [--json]` command logic.
 //!
-//! Walks `.speccy/specs/` (flat slug directories plus one level of
-//! mission folders), finds the highest existing SPEC-NNNN, and returns
-//! the next available ID. Text output is the bare `SPEC-NNNN\n` string;
-//! `--json` output is `{"schema_version":1,"next_spec_id":"SPEC-NNNN"}\n`.
-//! The command performs no filesystem writes.
+//! Walks `.speccy/specs/` and `.speccy/archive/` (flat slug
+//! directories plus one level of mission folders), finds the highest
+//! existing SPEC-NNNN across both, and returns the next available ID.
+//! Text output is the bare `SPEC-NNNN\n` string; `--json` output is
+//! `{"schema_version":1,"next_spec_id":"SPEC-NNNN"}\n`. The command
+//! performs no filesystem writes.
 //!
 //! ID-walk logic is delegated to
-//! [`speccy_core::prompt::allocate_next_spec_id`] (the same function
-//! that drove ID allocation inside the now-deleted `speccy plan`
-//! command). The open question deferred from T-001 — whether to
-//! relocate `allocate_next_spec_id` out of `prompt::` — is resolved
-//! here: the function is still the right tool (pure directory scan,
-//! no prompt-rendering concern), and the `prompt::` namespace
-//! retains it unchanged. No relocation is warranted for v1.
+//! [`speccy_core::prompt::allocate_next_spec_id_across_dirs`] so the
+//! scan unions the active and archive directories per SPEC-0042
+//! REQ-005 (archived specs retain their SPEC-NNNN slots). A missing
+//! `.speccy/archive/` is treated as empty by the helper, so an
+//! absent archive directory is the no-op default.
 //!
-//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-003.
+//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-003 and
+//! `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-005.
 
 use camino::Utf8Path;
-use speccy_core::prompt::allocate_next_spec_id;
+use speccy_core::prompt::allocate_next_spec_id_across_dirs;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
 use std::io::Write;
@@ -48,9 +48,11 @@ pub struct VacancyArgs {
 
 /// Run `speccy vacancy` from `cwd`, writing to `out`.
 ///
-/// Resolves the workspace root, locates `.speccy/specs/`, delegates
-/// the ID scan to [`allocate_next_spec_id`], and writes the result to
-/// `out` in either text or JSON form.
+/// Resolves the workspace root, locates `.speccy/specs/` and
+/// `.speccy/archive/`, delegates the ID scan to
+/// [`allocate_next_spec_id_across_dirs`] (which unions both
+/// directories per SPEC-0042 REQ-005), and writes the result to `out`
+/// in either text or JSON form.
 ///
 /// # Errors
 ///
@@ -65,7 +67,14 @@ pub fn run(args: &VacancyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<()
     };
 
     let specs_dir = project_root.join(".speccy").join("specs");
-    let next_digits = allocate_next_spec_id(&specs_dir);
+    let archive_dir = project_root.join(".speccy").join("archive");
+    // Per SPEC-0042 REQ-005: archived specs retain their SPEC-NNNN
+    // slots, so the vacancy scan unions the active and archive
+    // directories. `allocate_next_spec_id_across_dirs` treats a
+    // missing directory as empty, so an absent `.speccy/archive/`
+    // is the no-op default.
+    let next_digits =
+        allocate_next_spec_id_across_dirs(&[specs_dir.as_path(), archive_dir.as_path()]);
     let next_id = format!("SPEC-{next_digits}");
 
     if args.json {

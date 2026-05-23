@@ -47,8 +47,11 @@ re-explaining intent at every step.
 
 ### V1.0 outcome
 
-- Seven-command Rust CLI implementing the surface in
-  `docs/ARCHITECTURE.md`: `init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`.
+- A lean Rust CLI implementing the surface in
+  `docs/ARCHITECTURE.md`. The surface is intentionally small — see
+  the `## Core principles` "Stay small" rule — but the exact command
+  list lives in the architecture doc, not in this north star, so
+  additions like `archive` do not require this section to churn.
   Phase prompts (plan / tasks / implement / review / report) live in
   the shipped skill bodies, not in the CLI; the binary never renders
   natural-text prompts.
@@ -121,7 +124,8 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
    their prompts. Speccy never tries to grade tests algorithmically.
 
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check),
-   seven commands, no mode toggles, no orchestration runtime. Speccy
+   a small, flat command surface (see `docs/ARCHITECTURE.md` for the
+   current list), no mode toggles, no orchestration runtime. Speccy
    works identically in any project state — there is no
    greenfield/brownfield distinction.
 

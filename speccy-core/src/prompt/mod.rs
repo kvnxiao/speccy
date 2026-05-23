@@ -8,3 +8,4 @@
 pub mod id_alloc;
 
 pub use id_alloc::allocate_next_spec_id;
+pub use id_alloc::allocate_next_spec_id_across_dirs;

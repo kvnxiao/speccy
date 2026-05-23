@@ -24,6 +24,7 @@ fn render_json(root: &camino::Utf8Path) -> TestResult<String> {
         &StatusArgs {
             selector: None,
             all: false,
+            include_archive: false,
             json: true,
         },
         root,

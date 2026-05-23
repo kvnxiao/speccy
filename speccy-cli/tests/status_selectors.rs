@@ -36,6 +36,7 @@ fn args_default() -> StatusArgs {
     StatusArgs {
         selector: None,
         all: false,
+        include_archive: false,
         json: false,
     }
 }
@@ -44,6 +45,7 @@ fn args_selector(id: &str) -> StatusArgs {
     StatusArgs {
         selector: Some(id.to_owned()),
         all: false,
+        include_archive: false,
         json: false,
     }
 }
@@ -52,6 +54,7 @@ fn args_all() -> StatusArgs {
     StatusArgs {
         selector: None,
         all: true,
+        include_archive: false,
         json: false,
     }
 }
@@ -157,6 +160,7 @@ fn positional_renders_one_spec_json() -> TestResult {
         &StatusArgs {
             selector: Some("SPEC-0002".to_owned()),
             all: false,
+            include_archive: false,
             json: true,
         },
     )?;
@@ -237,6 +241,7 @@ fn all_flag_json_matches_default_json_shape() -> TestResult {
         &StatusArgs {
             selector: None,
             all: false,
+            include_archive: false,
             json: true,
         },
     )?;
@@ -245,6 +250,7 @@ fn all_flag_json_matches_default_json_shape() -> TestResult {
         &StatusArgs {
             selector: None,
             all: true,
+            include_archive: false,
             json: true,
         },
     )?;

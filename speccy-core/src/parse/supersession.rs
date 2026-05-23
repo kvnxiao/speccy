@@ -6,8 +6,68 @@
 //! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-008.
 
 use crate::parse::SpecMd;
+use crate::parse::spec_md::SpecStatus;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+
+/// Detect supersession-chain orphan candidates triggered by archiving a
+/// spec.
+///
+/// Given the active spec set (every parsed SPEC.md still under
+/// `.speccy/specs/`, i.e. not yet relocated to `.speccy/archive/`) and
+/// the canonical ID of the spec about to be archived, return the sorted
+/// list of active specs `X` that would become orphaned by the archive
+/// move. `X` is orphaned when:
+///
+/// 1. `X` is in the active set,
+/// 2. `X`'s status is [`SpecStatus::Superseded`], and
+/// 3. `archiving` is the *only* active spec declaring `supersedes: [X]` (after
+///    the move, no active spec would explain why `X` is marked superseded, so
+///    the SPC-006 lint will fire on `X`).
+///
+/// Returns an empty `Vec` when `archiving` has an empty `supersedes`
+/// list, is absent from the active set, or no candidate matches.
+///
+/// See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-008.
+#[must_use = "the returned list drives the archive warning output"]
+pub fn orphan_candidates_on_archive(active: &[&SpecMd], archiving: &str) -> Vec<String> {
+    // Locate the archiving spec in the active set; if absent, no
+    // orphans can be inferred from this scan.
+    let Some(src) = active
+        .iter()
+        .find(|s| s.frontmatter.id == archiving)
+        .copied()
+    else {
+        return Vec::new();
+    };
+
+    if src.frontmatter.supersedes.is_empty() {
+        return Vec::new();
+    }
+
+    let mut out: BTreeSet<String> = BTreeSet::new();
+    for target in &src.frontmatter.supersedes {
+        // (a) target must be in the active set.
+        let Some(target_spec) = active.iter().find(|s| &s.frontmatter.id == target) else {
+            continue;
+        };
+        // (b) target status must be `superseded`.
+        if !matches!(target_spec.frontmatter.status, SpecStatus::Superseded) {
+            continue;
+        }
+        // (c) no other active spec besides `archiving` declares
+        //     `supersedes: [target]`.
+        let other_declarers = active.iter().any(|s| {
+            s.frontmatter.id != archiving && s.frontmatter.supersedes.iter().any(|t| t == target)
+        });
+        if other_declarers {
+            continue;
+        }
+        out.insert(target.clone());
+    }
+
+    out.into_iter().collect()
+}
 
 /// Inverse `supersedes` relation across a workspace.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +131,7 @@ pub fn supersession_index(specs: &[&SpecMd]) -> SupersessionIndex {
 
 #[cfg(test)]
 mod tests {
+    use super::orphan_candidates_on_archive;
     use super::supersession_index;
     use crate::parse::SpecMd;
     use crate::parse::spec_md::SpecFrontmatter;
@@ -78,14 +139,20 @@ mod tests {
     use jiff::civil::Date;
 
     fn fake_spec(id: &str, supersedes: &[&str]) -> SpecMd {
+        fake_spec_with_status(id, supersedes, SpecStatus::InProgress)
+    }
+
+    fn fake_spec_with_status(id: &str, supersedes: &[&str], status: SpecStatus) -> SpecMd {
         SpecMd {
             frontmatter: SpecFrontmatter {
                 id: id.to_owned(),
                 slug: "x".to_owned(),
                 title: "x".to_owned(),
-                status: SpecStatus::InProgress,
+                status,
                 created: Date::new(2026, 5, 11).expect("valid date"),
                 supersedes: supersedes.iter().map(|s| (*s).to_owned()).collect(),
+                archived_at: None,
+                archived_reason: None,
             },
             requirements: Vec::new(),
             changelog: Vec::new(),
@@ -136,5 +203,63 @@ mod tests {
         let first = supersession_index(&specs);
         let second = supersession_index(&specs);
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn orphan_warn_sole_declarer() {
+        // SPEC-0019 active, status: superseded; SPEC-0021 sole declarer.
+        let old = fake_spec_with_status("SPEC-0019", &[], SpecStatus::Superseded);
+        let new = fake_spec_with_status("SPEC-0021", &["SPEC-0019"], SpecStatus::Implemented);
+        let active = vec![&old, &new];
+        assert_eq!(
+            orphan_candidates_on_archive(&active, "SPEC-0021"),
+            vec!["SPEC-0019".to_owned()]
+        );
+    }
+
+    #[test]
+    fn orphan_natural_archive_older_returns_empty() {
+        let old = fake_spec_with_status("SPEC-0019", &[], SpecStatus::Superseded);
+        let new = fake_spec_with_status("SPEC-0021", &["SPEC-0019"], SpecStatus::Implemented);
+        let active = vec![&old, &new];
+        // Archiving SPEC-0019 (the older, superseded one): SPEC-0019
+        // has empty `supersedes`, so no orphan candidates surface.
+        assert!(orphan_candidates_on_archive(&active, "SPEC-0019").is_empty());
+    }
+
+    #[test]
+    fn orphan_multi_declarer_returns_empty() {
+        let old = fake_spec_with_status("SPEC-0019", &[], SpecStatus::Superseded);
+        let new_a = fake_spec_with_status("SPEC-0021", &["SPEC-0019"], SpecStatus::Implemented);
+        let new_b = fake_spec_with_status("SPEC-0022", &["SPEC-0019"], SpecStatus::Implemented);
+        let active = vec![&old, &new_a, &new_b];
+        // SPEC-0022 still declares supersedes: [SPEC-0019] after SPEC-0021
+        // is archived, so SPEC-0019 is not orphaned.
+        assert!(orphan_candidates_on_archive(&active, "SPEC-0021").is_empty());
+    }
+
+    #[test]
+    fn orphan_target_not_in_active_set_returns_empty() {
+        // SPEC-0019 absent from active set (already archived); SPEC-0021
+        // still declares supersedes: [SPEC-0019].
+        let new = fake_spec_with_status("SPEC-0021", &["SPEC-0019"], SpecStatus::Implemented);
+        let active = vec![&new];
+        assert!(orphan_candidates_on_archive(&active, "SPEC-0021").is_empty());
+    }
+
+    #[test]
+    fn orphan_target_not_superseded_returns_empty() {
+        // SPEC-0019 active but status: implemented (not superseded).
+        let old = fake_spec_with_status("SPEC-0019", &[], SpecStatus::Implemented);
+        let new = fake_spec_with_status("SPEC-0021", &["SPEC-0019"], SpecStatus::Implemented);
+        let active = vec![&old, &new];
+        assert!(orphan_candidates_on_archive(&active, "SPEC-0021").is_empty());
+    }
+
+    #[test]
+    fn orphan_empty_supersedes_returns_empty() {
+        let solo = fake_spec_with_status("SPEC-0030", &[], SpecStatus::Implemented);
+        let active = vec![&solo];
+        assert!(orphan_candidates_on_archive(&active, "SPEC-0030").is_empty());
     }
 }

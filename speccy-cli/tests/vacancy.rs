@@ -22,6 +22,13 @@ fn mkdir_spec(root: &camino::Utf8Path, dir_name: &str) -> TestResult {
     Ok(())
 }
 
+/// Helper that creates `.speccy/archive/<dir_name>/` inside `root`.
+fn mkdir_archive(root: &camino::Utf8Path, dir_name: &str) -> TestResult {
+    let dir = root.join(".speccy").join("archive").join(dir_name);
+    fs_err::create_dir_all(dir.as_std_path())?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // CHK-005: json output with flat + mission-folder specs
 // ---------------------------------------------------------------------------
@@ -132,8 +139,81 @@ fn vacancy_json_simple_workspace() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Additional: stdout is empty on workspace-not-found failure
+// SPEC-0042 CHK-012: vacancy unions `.speccy/specs/` and `.speccy/archive/`
 // ---------------------------------------------------------------------------
+
+#[test]
+fn vacancy_json_archive_blocks_id_reuse() -> TestResult {
+    let ws = Workspace::new()?;
+    mkdir_spec(&ws.root, "0001-foo")?;
+    mkdir_archive(&ws.root, "0002-bar")?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("vacancy")
+        .arg("--json")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert()
+        .success()
+        .stdout(contains("\"next_spec_id\":\"SPEC-0003\""));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0042 CHK-013: archiving an active spec must not change next_spec_id
+// (the archived spec still occupies its slot)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn vacancy_next_id_unchanged_when_spec_moves_from_specs_to_archive() -> TestResult {
+    let ws = Workspace::new()?;
+    mkdir_spec(&ws.root, "0001-foo")?;
+    mkdir_spec(&ws.root, "0002-bar")?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("vacancy")
+        .arg("--json")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert()
+        .success()
+        .stdout("{\"schema_version\":1,\"next_spec_id\":\"SPEC-0003\"}\n");
+
+    // Simulate `speccy archive SPEC-0001` by moving the directory
+    // from `.speccy/specs/` to `.speccy/archive/`.
+    let from = ws.root.join(".speccy").join("specs").join("0001-foo");
+    let to_parent = ws.root.join(".speccy").join("archive");
+    fs_err::create_dir_all(to_parent.as_std_path())?;
+    fs_err::rename(from.as_std_path(), to_parent.join("0001-foo").as_std_path())?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("vacancy")
+        .arg("--json")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert()
+        .success()
+        .stdout("{\"schema_version\":1,\"next_spec_id\":\"SPEC-0003\"}\n");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0042 REQ-005: absent `.speccy/archive/` is treated as empty
+// ---------------------------------------------------------------------------
+
+#[test]
+fn vacancy_with_no_archive_dir_uses_specs_only() -> TestResult {
+    let ws = Workspace::new()?;
+    mkdir_spec(&ws.root, "0001-foo")?;
+    mkdir_spec(&ws.root, "0002-bar")?;
+    // Note: no .speccy/archive/ created.
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("vacancy")
+        .arg("--json")
+        .current_dir(ws.root.as_std_path());
+    cmd.assert()
+        .success()
+        .stdout("{\"schema_version\":1,\"next_spec_id\":\"SPEC-0003\"}\n");
+    Ok(())
+}
 
 #[test]
 fn vacancy_outside_workspace_stdout_is_empty() -> TestResult {

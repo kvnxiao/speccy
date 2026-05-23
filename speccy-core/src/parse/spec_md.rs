@@ -47,10 +47,17 @@ pub struct SpecMd {
     pub changelog: Vec<ChangelogRow>,
     /// Raw file content as read from disk.
     pub raw: String,
-    /// sha256 of canonical(frontmatter \ {status}) ++ body bytes. Stable
-    /// across status flips and frontmatter cosmetics (key order, whitespace,
-    /// comments inside the fence); changes on any body byte edit or
-    /// non-`status` frontmatter field change. See SPEC-0024 REQ-001.
+    /// sha256 of canonical(frontmatter \ {`status`, `archived_at`,
+    /// `archived_reason`}) ++ body bytes. Stable across status flips,
+    /// archival metadata changes, and frontmatter cosmetics (key order,
+    /// whitespace, comments inside the fence); changes on any body byte
+    /// edit or any non-excluded frontmatter field change.
+    ///
+    /// The `archived_at` / `archived_reason` exclusion is per SPEC-0042
+    /// DEC-001: archival mutates SPEC.md frontmatter to record when and
+    /// why, but must not perturb the spec's identity hash. See
+    /// SPEC-0024 REQ-001 for the general hash semantics and SPEC-0042
+    /// REQ-004 for the archive-field exclusion rationale.
     pub sha256: [u8; 32],
 }
 
@@ -70,6 +77,13 @@ pub struct SpecFrontmatter {
     /// IDs of prior specs this one replaces; empty if the field was
     /// omitted in the source.
     pub supersedes: Vec<String>,
+    /// UTC date the spec was archived (`archived_at: YYYY-MM-DD`), or
+    /// `None` when the spec has not been archived. See SPEC-0042 REQ-003.
+    pub archived_at: Option<Date>,
+    /// Free-form reason recorded at archive time
+    /// (`archived_reason: "..."`), or `None` when `--reason` was not
+    /// passed (or the spec was never archived). See SPEC-0042 REQ-003.
+    pub archived_reason: Option<String>,
 }
 
 /// Closed set of spec lifecycle states.
@@ -129,6 +143,10 @@ struct RawFrontmatter {
     created: Date,
     #[serde(default)]
     supersedes: Vec<String>,
+    #[serde(default)]
+    archived_at: Option<Date>,
+    #[serde(default)]
+    archived_reason: Option<String>,
 }
 
 const ALLOWED_STATUSES: &[&str] = &["in-progress", "implemented", "dropped", "superseded"];
@@ -138,7 +156,7 @@ const ALLOWED_STATUSES: &[&str] = &["in-progress", "implemented", "dropped", "su
 /// Per SPEC-0024 DEC-002, the default is include-all-fields: adding a
 /// new entry here is the only way to make a frontmatter field
 /// hash-neutral, and doing so requires a SPEC amendment.
-const HASH_EXCLUDED_FRONTMATTER_FIELDS: &[&str] = &["status"];
+const HASH_EXCLUDED_FRONTMATTER_FIELDS: &[&str] = &["archived_at", "archived_reason", "status"];
 
 #[expect(
     clippy::unwrap_used,
@@ -226,6 +244,8 @@ fn parse_frontmatter(raw: &str, path: &Utf8Path) -> ParseResult<SpecFrontmatter>
         status,
         created: raw_fm.created,
         supersedes: raw_fm.supersedes,
+        archived_at: raw_fm.archived_at,
+        archived_reason: raw_fm.archived_reason,
     })
 }
 
@@ -691,12 +711,105 @@ mod tests {
             status: SpecStatus::InProgress,
             created: Date::new(2026, 5, 11).expect("valid date"),
             supersedes: vec![],
+            archived_at: None,
+            archived_reason: None,
         }
     }
 
     #[test]
-    fn hash_excluded_frontmatter_fields_contains_only_status() {
-        assert_eq!(HASH_EXCLUDED_FRONTMATTER_FIELDS, &["status"]);
+    fn hash_excluded_frontmatter_fields_set() {
+        // Order doesn't matter for the contains() check used at runtime,
+        // but the literal is asserted exactly so a future addition is a
+        // deliberate, reviewed edit.
+        assert_eq!(
+            HASH_EXCLUDED_FRONTMATTER_FIELDS,
+            &["archived_at", "archived_reason", "status"],
+        );
+    }
+
+    #[test]
+    fn sha256_invariant_under_archive_fields_addition() {
+        let without = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: implemented
+            created: 2026-05-11
+            supersedes: []
+            ---
+
+            body
+        "};
+        let with_archive = indoc! {r#"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: implemented
+            created: 2026-05-11
+            supersedes: []
+            archived_at: 2026-05-23
+            archived_reason: "test"
+            ---
+
+            body
+        "#};
+        let fx_a = write_tmp(without);
+        let fx_b = write_tmp(with_archive);
+        let a = spec_md(&fx_a.path).expect("parse without should succeed");
+        let b = spec_md(&fx_b.path).expect("parse with archive should succeed");
+        assert_eq!(
+            a.sha256, b.sha256,
+            "adding archived_at/archived_reason must not perturb SpecMd.sha256",
+        );
+    }
+
+    #[test]
+    fn archive_fields_parse_when_present() {
+        let src = indoc! {r#"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: implemented
+            created: 2026-05-11
+            supersedes: []
+            archived_at: 2026-05-23
+            archived_reason: "shipped 2025-12-15"
+            ---
+
+            body
+        "#};
+        let fx = write_tmp(src);
+        let parsed = spec_md(&fx.path).expect("parse should succeed");
+        assert_eq!(
+            parsed.frontmatter.archived_at,
+            Some(Date::new(2026, 5, 23).expect("valid date")),
+        );
+        assert_eq!(
+            parsed.frontmatter.archived_reason.as_deref(),
+            Some("shipped 2025-12-15"),
+        );
+    }
+
+    #[test]
+    fn archive_fields_absent_when_missing() {
+        let src = indoc! {r"
+            ---
+            id: SPEC-0001
+            slug: x
+            title: y
+            status: in-progress
+            created: 2026-05-11
+            ---
+
+            body
+        "};
+        let fx = write_tmp(src);
+        let parsed = spec_md(&fx.path).expect("parse should succeed");
+        assert!(parsed.frontmatter.archived_at.is_none());
+        assert!(parsed.frontmatter.archived_reason.is_none());
     }
 
     #[test]

@@ -135,7 +135,7 @@ orchestrator).
 
 # CLI Surface
 
-Seven flat commands. Each has one job. `--json` toggles
+A small set of flat commands. Each has one job. `--json` toggles
 representation, never content; there are no other mode flags, no
 state-transition verbs, no per-phase rendering verbs.
 
@@ -144,10 +144,12 @@ speccy init                       Scaffold .speccy/ + host skill pack.
                                     --host claude-code | codex (auto-detected if omitted)
                                     --force            overwrite differing shipped files
 speccy status [SELECTOR]          Workspace overview; spec subset by default.
-                                    no arg:        attention-list view
-                                    SPEC-NNNN:     one spec, unfiltered
-                                    --all:         every spec, unfiltered
-                                    --json:        schema_version=1 envelope with resolved paths
+                                    no arg:              attention-list view
+                                    SPEC-NNNN:           one spec, unfiltered
+                                    --all:               every spec, unfiltered
+                                    --include-archive:   also scan `.speccy/archive/`
+                                                         (status-only; per SPEC-0042 REQ-007)
+                                    --json:              schema_version=1 envelope with resolved paths
 speccy next [SPEC-ID]             Next actionable per spec, derived from state.
                                     no arg:        every active spec with next_action
                                     SPEC-ID:       one spec or {next_action: null, reason}
@@ -177,7 +179,20 @@ speccy vacancy                    Return the next free `SPEC-NNNN`.
                                     no arg:   bare `SPEC-NNNN\n` to stdout
                                     --json:   {schema_version: 1, next_spec_id: "SPEC-NNNN"}
                                   Used by `/speccy-plan` so the skill never
-                                  globs `.speccy/specs/` itself.
+                                  globs `.speccy/specs/` itself. The scan covers
+                                  both `.speccy/specs/` and `.speccy/archive/`
+                                  so archived IDs remain reserved
+                                  (per SPEC-0042 REQ-005).
+speccy archive SPEC-NNNN          Relocates a shipped, dropped, or superseded SPEC
+                                  from `.speccy/specs/NNNN-slug/` to
+                                  `.speccy/archive/NNNN-slug/` via `git mv`;
+                                  archived specs retain their SPEC-NNNN IDs and
+                                  are invisible to hot-path commands.
+                                    --reason "<text>": single-line note recorded
+                                                       in `archived_reason:` frontmatter
+                                    --force:           bypass the status gate (allows
+                                                       archiving an `in-progress` spec)
+                                    --json:            schema_version=1 receipt envelope
 ```
 
 Phase prose lives in skill content under `.claude/skills/...` and
@@ -1600,7 +1615,7 @@ project-configurable; v1 does not.
 
 ## Invocation
 
-The seven-command CLI has no `review` verb. Review runs through the
+The CLI has no `review` verb. Review runs through the
 `/speccy-review` skill (Phase 4 primitive). The skill resolves the
 target task (either via an explicit `SPEC-NNNN/T-NNN` selector or
 via `speccy next --json` filtered for `next_action.kind == "review"`)
@@ -1673,7 +1688,7 @@ Amendments are not a separate first-class artifact in v1. The
 amendment story is a **skill concern** built from existing CLI
 primitives. There is no `speccy amend` verb, and no longer any
 `speccy plan` / `speccy tasks` rendering verbs either; the existing
-seven-verb CLI is sufficient.
+flat CLI surface is sufficient.
 
 ## What happens when SPEC.md needs to change
 

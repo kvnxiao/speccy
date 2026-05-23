@@ -60,6 +60,16 @@ pub struct JsonSpec {
     /// `MISSION.md`, or `null` for flat specs not grouped under a mission
     /// folder.
     pub mission_md_path: Option<String>,
+    /// UTC archive date from frontmatter (`YYYY-MM-DD`). Omitted from
+    /// the JSON output when the underlying frontmatter has no
+    /// `archived_at` field — non-archived specs render byte-identically
+    /// to pre-SPEC-0042 output. See SPEC-0042 REQ-007.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
+    /// Free-form archive reason from frontmatter. Omitted when absent
+    /// in the underlying frontmatter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_reason: Option<String>,
 }
 
 /// JSON-shaped task counts. Mirrors [`speccy_core::workspace::TaskCounts`].

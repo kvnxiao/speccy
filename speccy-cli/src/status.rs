@@ -63,6 +63,12 @@ pub struct StatusArgs {
     /// When true, render every spec unfiltered. Mutually exclusive with
     /// [`Self::selector`] at the clap layer.
     pub all: bool,
+    /// When true, also scan `.speccy/archive/` and include archived
+    /// specs in the rendered output. Archived specs never participate
+    /// in the attention-list filter (their inclusion is purely opt-in
+    /// via this flag) and do not count toward the hidden-specs footer.
+    /// See SPEC-0042 REQ-007.
+    pub include_archive: bool,
     /// Emit JSON instead of the filtered text view.
     pub json: bool,
 }
@@ -101,6 +107,11 @@ pub struct SpecView<'a> {
     pub superseded_by: Vec<String>,
     /// First parse error encountered for this spec, if any.
     pub parse_error: Option<String>,
+    /// Whether the spec came from `.speccy/archive/` rather than the
+    /// active `.speccy/specs/` set. Archived specs are surfaced only
+    /// when `--include-archive` is passed (see [`StatusArgs::include_archive`])
+    /// and never appear in the default attention-list view.
+    pub archived: bool,
 }
 
 /// Full status report assembled from a [`Workspace`] and a lint pass.
@@ -125,15 +136,30 @@ const WS_DANGLING_SUPERSEDES: &str = "WS-001";
 /// pass. The lint pass is precomputed (rather than computed inside) so
 /// integration tests can swap it.
 #[must_use = "the assembled report is the input to the renderers"]
-pub fn assemble<'a>(
+pub fn assemble(
+    workspace: &Workspace,
+    diagnostics: Vec<Diagnostic>,
+    repo_sha_value: String,
+) -> StatusReport<'_> {
+    assemble_with_archive(workspace, diagnostics, repo_sha_value, &[])
+}
+
+/// Variant of [`assemble`] that appends views for archived specs from
+/// `.speccy/archive/`. Archived specs contribute no lint diagnostics
+/// (lint runs only on the active workspace) and never appear in the
+/// default text-mode attention filter; they are listed in workspace
+/// order after the active specs. See SPEC-0042 REQ-007.
+#[must_use = "the assembled report is the input to the renderers"]
+pub fn assemble_with_archive<'a>(
     workspace: &'a Workspace,
     diagnostics: Vec<Diagnostic>,
     repo_sha_value: String,
+    archive_specs: &'a [speccy_core::lint::ParsedSpec],
 ) -> StatusReport<'a> {
     let (mut per_spec, mut workspace_diagnostics) = partition_diagnostics(diagnostics);
     synthesize_workspace_diagnostics(workspace, &mut workspace_diagnostics);
 
-    let specs: Vec<SpecView<'a>> = workspace
+    let mut specs: Vec<SpecView<'a>> = workspace
         .specs
         .iter()
         .map(|parsed| {
@@ -142,9 +168,13 @@ pub fn assemble<'a>(
                 .as_ref()
                 .and_then(|id| per_spec.remove(id))
                 .unwrap_or_default();
-            build_view(workspace, parsed, diags)
+            build_view(workspace, parsed, diags, false)
         })
         .collect();
+
+    for parsed in archive_specs {
+        specs.push(build_view(workspace, parsed, Vec::new(), true));
+    }
 
     StatusReport {
         workspace,
@@ -201,6 +231,7 @@ fn build_view<'a>(
     workspace: &Workspace,
     parsed: &'a speccy_core::lint::ParsedSpec,
     diagnostics: Vec<Diagnostic>,
+    archived: bool,
 ) -> SpecView<'a> {
     let (display_id, display_title, display_status) = display_fields(parsed);
     let task_counts = parsed
@@ -228,6 +259,7 @@ fn build_view<'a>(
         open_questions,
         superseded_by,
         parse_error,
+        archived,
     }
 }
 
@@ -262,6 +294,12 @@ fn first_parse_error(parsed: &speccy_core::lint::ParsedSpec) -> Option<String> {
 /// Whether a spec should be shown in the default (filtered) text view.
 #[must_use = "filter result drives text rendering"]
 pub fn show_in_text_view(view: &SpecView<'_>) -> bool {
+    // Archived specs are never part of the attention-list view; they
+    // are surfaced solely because `--include-archive` opted them in.
+    // See SPEC-0042 REQ-007.
+    if view.archived {
+        return false;
+    }
     if view.display_status == "in-progress" {
         return true;
     }
@@ -289,7 +327,12 @@ pub fn run(
     let workspace = scan(&project_root);
     let diagnostics = lint::run(&workspace.as_lint_workspace());
     let sha = repo_sha(&project_root);
-    let report = assemble(&workspace, diagnostics, sha);
+    let archive_specs: Vec<speccy_core::lint::ParsedSpec> = if args.include_archive {
+        speccy_core::workspace::scan_archive_specs(&project_root)
+    } else {
+        Vec::new()
+    };
+    let report = assemble_with_archive(&workspace, diagnostics, sha, &archive_specs);
 
     let mode = if args.json {
         RenderMode::Json
@@ -344,13 +387,18 @@ pub fn resolve_specs<'a>(
     match mode {
         RenderMode::Json => Ok((report.specs.iter().collect(), 0)),
         RenderMode::Text => {
-            let total = report.specs.len();
+            // Archived specs are always-shown when present in the
+            // report (their presence already implies the caller passed
+            // `--include-archive`) and never count toward the hidden
+            // active-spec footer. See SPEC-0042 REQ-007.
+            let active_total = report.specs.iter().filter(|v| !v.archived).count();
             let shown: Vec<&SpecView<'_>> = report
                 .specs
                 .iter()
-                .filter(|v| show_in_text_view(v))
+                .filter(|v| v.archived || show_in_text_view(v))
                 .collect();
-            let hidden = total.saturating_sub(shown.len());
+            let active_shown = shown.iter().filter(|v| !v.archived).count();
+            let hidden = active_total.saturating_sub(active_shown);
             Ok((shown, hidden))
         }
     }
@@ -417,10 +465,21 @@ fn render_text(
 }
 
 fn render_spec_text(view: &SpecView<'_>, out: &mut dyn std::io::Write) -> Result<(), StatusError> {
+    let archive_marker = if view.archived {
+        let date = view
+            .parsed
+            .spec_md_ok()
+            .and_then(|s| s.frontmatter.archived_at.map(|d| d.to_string()))
+            .unwrap_or_else(|| "?".to_owned());
+        format!(" [archived {date}]")
+    } else {
+        String::new()
+    };
     let header = format!(
-        "{id} {status}: {title}",
+        "{id} {status}{marker}: {title}",
         id = view.display_id,
         status = view.display_status,
+        marker = archive_marker,
         title = view.display_title,
     );
     write_line(out, &header)?;
@@ -497,6 +556,14 @@ fn json_spec(view: &SpecView<'_>, project_root: &Utf8Path) -> JsonSpec {
         .spec_md_ok()
         .map(|s| s.frontmatter.supersedes.clone())
         .unwrap_or_default();
+    let archived_at = view
+        .parsed
+        .spec_md_ok()
+        .and_then(|s| s.frontmatter.archived_at.map(|d| d.to_string()));
+    let archived_reason = view
+        .parsed
+        .spec_md_ok()
+        .and_then(|s| s.frontmatter.archived_reason.clone());
     let spec_md_path = to_repo_relative(&view.parsed.spec_md_path, project_root);
     let tasks_md_path = view
         .parsed
@@ -538,6 +605,8 @@ fn json_spec(view: &SpecView<'_>, project_root: &Utf8Path) -> JsonSpec {
         spec_md_path,
         tasks_md_path,
         mission_md_path,
+        archived_at,
+        archived_reason,
     }
 }
 
@@ -636,6 +705,7 @@ mod tests {
             open_questions: 0,
             superseded_by: Vec::new(),
             parse_error: None,
+            archived: false,
         }
     }
 

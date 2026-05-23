@@ -33,16 +33,29 @@ enum Command {
         host: Option<String>,
     },
     /// Print workspace overview (text by default; `--json` for envelope).
+    ///
+    /// `--all` broadens the attention filter on non-archived specs;
+    /// `--include-archive` adds archived specs under `.speccy/archive/`
+    /// to the scan. The two flags are independent and may be combined.
     Status {
         /// `SPEC-NNNN` to render exactly one spec, unfiltered. Cannot
         /// be combined with `--all`. Omit to use the default
         /// attention-list view (or pass `--all`).
         #[arg(value_name = "SELECTOR", conflicts_with = "all")]
         selector: Option<String>,
-        /// Render every spec in workspace order, unfiltered. Cannot
-        /// be combined with a positional `SPEC-NNNN` selector.
+        /// Render every active spec in workspace order, unfiltered.
+        /// Broadens the attention filter on non-archived specs only;
+        /// pair with `--include-archive` to also surface archived
+        /// specs. Cannot be combined with a positional `SPEC-NNNN`
+        /// selector.
         #[arg(long)]
         all: bool,
+        /// Also include specs under `.speccy/archive/` in the scan.
+        /// Archived specs never participate in the attention-list
+        /// filter; they are surfaced solely because this flag opts
+        /// them in. Independent of `--all`. See SPEC-0042 REQ-007.
+        #[arg(long)]
+        include_archive: bool,
         /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]
         json: bool,
@@ -85,6 +98,22 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Relocate a shipped/dropped/superseded spec into `.speccy/archive/`.
+    Archive {
+        /// `SPEC-NNNN` identifier of the spec to archive.
+        #[arg(value_name = "SPEC-ID")]
+        spec_id: String,
+        /// Free-form reason recorded into SPEC.md frontmatter as
+        /// `archived_reason`. Newlines are rejected.
+        #[arg(long, value_name = "STRING", value_parser = speccy_cli::archive::parse_reason)]
+        reason: Option<String>,
+        /// Bypass the status gate that refuses `in-progress` specs.
+        #[arg(long)]
+        force: bool,
+        /// Emit JSON envelope (`schema_version = 1`).
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -98,13 +127,81 @@ fn dispatch(command: Command) -> u8 {
         Command::Status {
             selector,
             all,
+            include_archive,
             json,
-        } => run_status(selector, all, json),
+        } => run_status(selector, all, include_archive, json),
         Command::Next { spec_id, json } => run_next(spec_id, json),
         Command::Check { selector } => run_check(selector),
         Command::Verify { json } => run_verify(json),
         Command::Lock { spec_id } => run_lock(spec_id),
         Command::Vacancy { json } => run_vacancy(json),
+        Command::Archive {
+            spec_id,
+            reason,
+            force,
+            json,
+        } => run_archive(spec_id, reason, force, json),
+    }
+}
+
+fn run_archive(spec_id: String, reason: Option<String>, force: bool, json: bool) -> u8 {
+    use speccy_cli::archive::ArchiveError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy archive: {e}");
+            return 2;
+        }
+    };
+    let result = speccy_cli::archive::run(
+        speccy_cli::archive::ArchiveArgs {
+            spec_id,
+            reason,
+            force,
+            json,
+        },
+        &cwd,
+    );
+    match result {
+        Ok(outcome) => {
+            // Emit one warning line per orphan candidate to stderr, in
+            // both text and JSON modes. SPEC-0042 REQ-008 / CHK-020.
+            for orphan in &outcome.orphan_warnings {
+                eprintln!(
+                    "warning: archiving {archiving} will orphan {orphan} ({orphan} has status: superseded and no other active spec declares supersedes: [{orphan}]; SPC-006 will fire on {orphan} after the move).",
+                    archiving = outcome.spec_id,
+                    orphan = orphan,
+                );
+            }
+            if json {
+                let receipt = speccy_cli::archive::ArchiveReceipt::from_outcome(&outcome);
+                match serde_json::to_string(&receipt) {
+                    Ok(s) => println!("{s}"),
+                    Err(e) => {
+                        eprintln!("speccy archive: failed to serialize receipt: {e}");
+                        return 1;
+                    }
+                }
+            } else {
+                println!(
+                    "archived {id}: {from} -> {to} (archived_at: {date})",
+                    id = outcome.spec_id,
+                    from = outcome.from,
+                    to = outcome.to,
+                    date = outcome.archived_at,
+                );
+            }
+            0
+        }
+        Err(e @ ArchiveError::InvalidSpecIdFormat { .. }) => {
+            eprintln!("speccy archive: {e}");
+            2
+        }
+        Err(e) => {
+            eprintln!("speccy archive: {e}");
+            1
+        }
     }
 }
 
@@ -143,7 +240,7 @@ fn run_init(host: Option<String>, force: bool) -> u8 {
     }
 }
 
-fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
+fn run_status(selector: Option<String>, all: bool, include_archive: bool, json: bool) -> u8 {
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
@@ -156,6 +253,7 @@ fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
         &speccy_cli::status::StatusArgs {
             selector,
             all,
+            include_archive,
             json,
         },
         &cwd,

@@ -26,9 +26,10 @@ deterministically, queries workspace state, and runs checks. The
 intelligence (loops, personas, and "what to do next" decisions)
 lives in skill files alongside `.speccy/`.
 
-Consequently, the human-facing CLI surface is small. Seven flat
-commands, each with one job; `--json` toggles representation, not
-content:
+Consequently, the human-facing CLI surface is deliberately lean —
+a small set of flat commands, each with one job; `--json` toggles
+representation, not content. The current command list lives in
+`docs/ARCHITECTURE.md`; a representative sample:
 
 | Command          | When you type it                                                          |
 | ---------------- | ------------------------------------------------------------------------- |
@@ -39,10 +40,11 @@ content:
 | `speccy next`    | Mostly invoked by the shipped skills to resolve the next actionable task. |
 | `speccy lock`    | Invoked by `/speccy-tasks` to record the SPEC.md hash into TASKS.md after decomposition. |
 | `speccy vacancy` | Invoked by `/speccy-plan` to allocate the next free `SPEC-NNNN`. |
+| `speccy archive` | Relocates a shipped, dropped, or superseded SPEC into `.speccy/archive/`. |
 
 Phase prompts (`plan`, `tasks`, `implement`, `review`, `report`) are
 not CLI commands. They live as skill bodies in the host pack and
-drive the loop entirely through the seven CLI verbs above. The
+drive the loop entirely through the CLI verbs above. The
 deterministic core does state queries, hash recording, and proof-
 shape lint only; it never renders natural-text prompts.
 
@@ -404,8 +406,8 @@ Speccy commits to six durable principles:
    mechanism by which drift gets caught. Personas live as markdown
    skills.
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, and
-   Check), seven commands, and no mode toggles. `--json` toggles
-   representation, never content.
+   Check), a small flat command surface, and no mode toggles. `--json`
+   toggles representation, never content.
 6. **Surface unknowns; never invent.** An ambiguous spec means stop
    and surface the ambiguity; an inability to validate something
    means say so out loud.

@@ -7,6 +7,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod archive;
 pub mod check;
 pub mod check_selector;
 pub mod cwd;

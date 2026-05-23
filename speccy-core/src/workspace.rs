@@ -160,13 +160,19 @@ pub fn find_root(start: &Utf8Path) -> Result<Utf8PathBuf, WorkspaceError> {
 /// Infallible by design: per-spec parse failures are recorded inside
 /// the returned [`ParsedSpec`]s, and a missing or unreadable
 /// `.speccy/specs/` directory yields an empty `specs` vec.
+///
+/// This is the shared active-spec discovery helper for every hot-path
+/// command (`status` default mode, `next`, `check`, `verify`, `lock`).
+/// It deliberately excludes `.speccy/archive/`: archived specs are
+/// invisible to hot-path commands by SPEC-0042 REQ-006. The
+/// archive opt-in is the separate [`scan_archive_specs`] helper.
 #[must_use = "the returned workspace owns parsed artifacts the caller needs"]
 pub fn scan(project_root: &Utf8Path) -> Workspace {
     let specs_dir = project_root.join(".speccy").join("specs");
     let mut spec_dirs = enumerate_spec_dirs(&specs_dir);
     spec_dirs.sort();
 
-    let specs: Vec<ParsedSpec> = spec_dirs.iter().map(|d| parse_one_spec_dir(d)).collect();
+    let specs: Vec<ParsedSpec> = spec_dirs.iter().map(|d| parse_spec_dir(d)).collect();
 
     let spec_md_refs: Vec<&SpecMd> = specs
         .iter()
@@ -398,7 +404,52 @@ fn resolve_mission_md_path(dir: &Utf8Path) -> Option<Utf8PathBuf> {
     is_file.then_some(mission_path)
 }
 
-fn parse_one_spec_dir(dir: &Utf8Path) -> ParsedSpec {
+/// Scan `.speccy/archive/` under `project_root` and parse every
+/// archived spec directory whose name matches `^\d{4}-[a-z0-9-]+$`.
+///
+/// Returns an empty `Vec` when `.speccy/archive/` is absent or
+/// unreadable. Per-spec parse failures are recorded inside the
+/// returned [`ParsedSpec`]s (same shape as [`scan`] for active specs).
+/// Unlike [`scan`], this helper does not walk mission folders: the
+/// archive directory layout is flat by SPEC-0042 contract.
+///
+/// See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-007.
+#[must_use = "the returned archive specs are the entire purpose of this call"]
+pub fn scan_archive_specs(project_root: &Utf8Path) -> Vec<ParsedSpec> {
+    let archive_dir = project_root.join(".speccy").join("archive");
+    let pattern = dir_name_regex();
+    let Ok(entries) = fs_err::read_dir(archive_dir.as_std_path()) else {
+        return Vec::new();
+    };
+    let mut spec_dirs: Vec<Utf8PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let Ok(utf8) = Utf8PathBuf::from_path_buf(entry.path()) else {
+            continue;
+        };
+        let Some(name) = utf8.file_name() else {
+            continue;
+        };
+        if pattern.is_match(name) {
+            spec_dirs.push(utf8);
+        }
+    }
+    spec_dirs.sort();
+    spec_dirs.iter().map(|d| parse_spec_dir(d)).collect()
+}
+
+/// Parse one spec directory into a [`ParsedSpec`].
+///
+/// Used by [`scan`] (active specs) and [`scan_archive_specs`]
+/// (archived specs). Per-artifact parse failures are recorded inside
+/// the returned struct; this function does not return `Result`.
+#[must_use = "the parsed spec carries diagnostics callers must surface"]
+pub fn parse_spec_dir(dir: &Utf8Path) -> ParsedSpec {
     let spec_md_path = dir.join("SPEC.md");
     let tasks_md_path = dir.join("TASKS.md");
     let has_tasks = fs_err::metadata(tasks_md_path.as_std_path()).is_ok_and(|m| m.is_file());

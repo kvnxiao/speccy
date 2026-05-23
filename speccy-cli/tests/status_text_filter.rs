@@ -26,6 +26,7 @@ fn render_text(root: &camino::Utf8Path) -> TestResult<String> {
         &StatusArgs {
             selector: None,
             all: false,
+            include_archive: false,
             json: false,
         },
         root,
