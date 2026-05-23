@@ -62,12 +62,6 @@ pub enum LockError {
     /// or I/O).
     #[error(transparent)]
     Commit(#[from] CommitError),
-    /// Working directory could not be resolved.
-    #[error("failed to resolve current working directory")]
-    Cwd(#[source] std::io::Error),
-    /// Cwd path is not valid UTF-8.
-    #[error("current working directory is not valid UTF-8")]
-    CwdNotUtf8,
 }
 
 /// `speccy lock` arguments.
@@ -194,17 +188,6 @@ fn find_spec_dir_in_mission_folders(specs_dir: &Utf8Path, prefix: &str) -> Optio
 fn spec_id_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"^SPEC-\d{4,}$").unwrap())
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`LockError::Cwd`] if `std::env::current_dir` fails, or
-/// [`LockError::CwdNotUtf8`] if the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, LockError> {
-    let std_path = std::env::current_dir().map_err(LockError::Cwd)?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|_path| LockError::CwdNotUtf8)
 }
 
 #[cfg(test)]

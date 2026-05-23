@@ -71,25 +71,6 @@ pub struct InitArgs {
     pub force: bool,
 }
 
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`InitError::Io`] if `std::env::current_dir` fails or the
-/// path is not valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, InitError> {
-    let std_path = std::env::current_dir()?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|path| {
-        InitError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!(
-                "current working directory is not valid UTF-8: {}",
-                path.display()
-            ),
-        ))
-    })
-}
-
 /// Three-way per-file classification used by the T-008 init redesign.
 ///
 /// SPEC-0033 T-008 replaced the old binary Create/Overwrite/Skip scheme

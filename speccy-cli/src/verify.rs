@@ -13,7 +13,6 @@ use crate::git::repo_sha;
 use crate::verify_output::write_json;
 use crate::verify_output::write_text;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use speccy_core::lint;
 use speccy_core::lint::Diagnostic;
 use speccy_core::lint::Level;
@@ -40,12 +39,6 @@ pub enum VerifyError {
     /// I/O failure while writing the summary.
     #[error("I/O error during verify")]
     Io(#[from] std::io::Error),
-    /// Working directory could not be resolved.
-    #[error("failed to resolve current working directory")]
-    Cwd(#[source] std::io::Error),
-    /// Cwd path is not valid UTF-8.
-    #[error("current working directory is not valid UTF-8")]
-    CwdNotUtf8,
     /// JSON serialisation failed.
     #[error("failed to serialise verify JSON")]
     JsonSerialise(#[from] serde_json::Error),
@@ -142,17 +135,6 @@ pub fn run(
     }
 
     Ok(i32::from(!report.passed()))
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`VerifyError::Cwd`] if `std::env::current_dir` fails, or
-/// [`VerifyError::CwdNotUtf8`] if the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, VerifyError> {
-    let std_path = std::env::current_dir().map_err(VerifyError::Cwd)?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|_path| VerifyError::CwdNotUtf8)
 }
 
 /// Partition diagnostics into severity buckets, demoting `Level::Error`

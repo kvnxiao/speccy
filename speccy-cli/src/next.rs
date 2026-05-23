@@ -16,7 +16,6 @@ use crate::next_output::render_text_per_spec;
 use crate::next_output::render_text_workspace;
 use crate::paths::to_repo_relative;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::next::compute_for_spec;
 use speccy_core::next::compute_workspace;
@@ -36,12 +35,6 @@ pub enum NextError {
     /// I/O failure during workspace discovery.
     #[error("workspace discovery failed")]
     Workspace(#[from] WorkspaceError),
-    /// Working directory could not be resolved.
-    #[error("failed to resolve current working directory")]
-    Cwd(#[source] std::io::Error),
-    /// Cwd path is not valid UTF-8.
-    #[error("current working directory is not valid UTF-8")]
-    CwdNotUtf8,
     /// The requested SPEC-ID was not found in the workspace.
     #[error("spec `{spec_id}` not found under .speccy/specs/")]
     SpecNotFound {
@@ -155,15 +148,4 @@ fn spec_paths(spec: &ParsedSpec, project_root: &Utf8Path) -> SpecPaths {
             .as_ref()
             .map(|p| to_repo_relative(p, project_root)),
     }
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`NextError::Cwd`] if `std::env::current_dir` fails, or
-/// [`NextError::CwdNotUtf8`] if the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, NextError> {
-    let std_path = std::env::current_dir().map_err(NextError::Cwd)?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|_path| NextError::CwdNotUtf8)
 }

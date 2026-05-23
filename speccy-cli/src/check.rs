@@ -14,7 +14,6 @@ use crate::check_selector::CheckSelector;
 use crate::check_selector::SelectorError;
 use crate::check_selector::parse_selector;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::Scenario;
 use speccy_core::parse::SpecStatus;
@@ -74,25 +73,6 @@ pub struct CheckArgs {
 struct CollectedCheck {
     spec_id: String,
     entry: Scenario,
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`CheckError::Io`] if `std::env::current_dir` fails, or if
-/// the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, CheckError> {
-    let std_path = std::env::current_dir()?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|path| {
-        CheckError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!(
-                "current working directory is not valid UTF-8: {}",
-                path.display()
-            ),
-        ))
-    })
 }
 
 /// Run `speccy check` from `cwd`. Returns the intended process exit code.
@@ -186,23 +166,10 @@ fn run_spec(
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
     let ws = scan(project_root);
-    let spec = resolve_spec(&ws, spec_id)?;
-
-    let spec_status = spec.status_or_in_progress();
-
-    // When the user names a dropped / superseded spec directly, make the
-    // skip explicit (run_all silently skips them; here we surface it).
-    if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
-        writeln!(
-            out,
-            "spec {spec_id} is `{}`; no checks rendered",
-            spec_status.as_str(),
-        )?;
-        return Ok(0);
-    }
-
-    let label = spec.display_label();
-    let (checks, malformed) = collect_for_spec(spec, &label, err)?;
+    let (checks, malformed) = match prepare_spec_checks(&ws, spec_id, out, err)? {
+        SpecCheckPrep::Skip => return Ok(0),
+        SpecCheckPrep::Ready { checks, malformed } => (checks, malformed),
+    };
 
     if checks.is_empty() {
         writeln!(out, "No checks defined.")?;
@@ -220,21 +187,10 @@ fn run_qualified_check(
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
     let ws = scan(project_root);
-    let spec = resolve_spec(&ws, spec_id)?;
-
-    let spec_status = spec.status_or_in_progress();
-
-    if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
-        writeln!(
-            out,
-            "spec {spec_id} is `{}`; no checks rendered",
-            spec_status.as_str(),
-        )?;
-        return Ok(0);
-    }
-
-    let label = spec.display_label();
-    let (spec_checks, malformed) = collect_for_spec(spec, &label, err)?;
+    let (spec_checks, malformed) = match prepare_spec_checks(&ws, spec_id, out, err)? {
+        SpecCheckPrep::Skip => return Ok(0),
+        SpecCheckPrep::Ready { checks, malformed } => (checks, malformed),
+    };
 
     let matched: Vec<CollectedCheck> = spec_checks
         .into_iter()
@@ -251,6 +207,45 @@ fn run_qualified_check(
     }
 
     render_checks(&matched, out, malformed)
+}
+
+/// Outcome of the spec-resolution / status-gate / scenario-collection
+/// prelude shared by [`run_spec`] and [`run_qualified_check`].
+enum SpecCheckPrep {
+    /// Spec is dropped or superseded; the helper has already written the
+    /// "no checks rendered" skip line. Caller returns `Ok(0)`.
+    Skip,
+    /// Spec is renderable. `checks` is the per-spec scenario list;
+    /// `malformed` is the `collect_for_spec` 0-or-1 malformed count.
+    Ready {
+        checks: Vec<CollectedCheck>,
+        malformed: u32,
+    },
+}
+
+/// Resolve a spec, surface dropped/superseded as a `Skip`, otherwise
+/// collect its scenarios.
+fn prepare_spec_checks(
+    ws: &Workspace,
+    spec_id: &str,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<SpecCheckPrep, CheckError> {
+    let spec = resolve_spec(ws, spec_id)?;
+
+    let spec_status = spec.status_or_in_progress();
+    if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
+        writeln!(
+            out,
+            "spec {spec_id} is `{}`; no checks rendered",
+            spec_status.as_str(),
+        )?;
+        return Ok(SpecCheckPrep::Skip);
+    }
+
+    let label = spec.display_label();
+    let (checks, malformed) = collect_for_spec(spec, &label, err)?;
+    Ok(SpecCheckPrep::Ready { checks, malformed })
 }
 
 /// Resolve a task selector via `task_lookup::find`, then walk

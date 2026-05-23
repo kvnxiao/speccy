@@ -18,7 +18,6 @@
 //! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-003.
 
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use speccy_core::prompt::allocate_next_spec_id;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
@@ -35,12 +34,6 @@ pub enum VacancyError {
     /// I/O failure during workspace discovery.
     #[error("workspace discovery failed")]
     Workspace(#[from] WorkspaceError),
-    /// Working directory could not be resolved.
-    #[error("failed to resolve current working directory")]
-    Cwd(#[source] std::io::Error),
-    /// Cwd path is not valid UTF-8.
-    #[error("current working directory is not valid UTF-8")]
-    CwdNotUtf8,
     /// I/O failure writing to stdout.
     #[error("failed to write output: {0}")]
     Io(#[from] std::io::Error),
@@ -85,15 +78,4 @@ pub fn run(args: &VacancyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<()
     }
 
     Ok(())
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`VacancyError::Cwd`] if `std::env::current_dir` fails, or
-/// [`VacancyError::CwdNotUtf8`] if the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, VacancyError> {
-    let std_path = std::env::current_dir().map_err(VacancyError::Cwd)?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|_path| VacancyError::CwdNotUtf8)
 }

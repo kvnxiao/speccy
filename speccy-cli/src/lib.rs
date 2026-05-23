@@ -9,6 +9,7 @@
 
 pub mod check;
 pub mod check_selector;
+pub mod cwd;
 pub mod embedded;
 pub mod git;
 pub mod host;

@@ -13,7 +13,6 @@ use crate::status_output::JsonOutput;
 use crate::status_output::JsonSpec;
 use crate::status_output::JsonTaskCounts;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use speccy_core::lint;
 use speccy_core::lint::Diagnostic;
 use speccy_core::lint::Level;
@@ -35,12 +34,6 @@ pub enum StatusError {
     /// `.speccy/` not found walking up from cwd.
     #[error(transparent)]
     Workspace(#[from] WorkspaceError),
-    /// Working directory could not be resolved.
-    #[error("failed to resolve current working directory")]
-    Cwd(#[source] std::io::Error),
-    /// Cwd path is not valid UTF-8.
-    #[error("current working directory is not valid UTF-8")]
-    CwdNotUtf8,
     /// I/O failure writing to stdout.
     #[error("failed to write output")]
     Io(#[from] std::io::Error),
@@ -377,17 +370,6 @@ fn available_ids(report: &StatusReport<'_>) -> String {
 
 fn write_all(out: &mut dyn std::io::Write, bytes: &[u8]) -> Result<(), StatusError> {
     out.write_all(bytes).map_err(StatusError::Io)
-}
-
-/// Resolve current working directory as a `Utf8PathBuf`.
-///
-/// # Errors
-///
-/// Returns [`StatusError::Cwd`] if `std::env::current_dir` fails, or
-/// [`StatusError::CwdNotUtf8`] if the path isn't valid UTF-8.
-pub fn resolve_cwd() -> Result<Utf8PathBuf, StatusError> {
-    let std_path = std::env::current_dir().map_err(StatusError::Cwd)?;
-    Utf8PathBuf::from_path_buf(std_path).map_err(|_path| StatusError::CwdNotUtf8)
 }
 
 fn render_text(

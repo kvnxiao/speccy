@@ -6,7 +6,6 @@
 
 use clap::Parser;
 use clap::Subcommand;
-use std::io::Write as _;
 use std::process::ExitCode;
 
 /// Speccy CLI.
@@ -110,7 +109,7 @@ fn dispatch(command: Command) -> u8 {
 }
 
 fn run_init(host: Option<String>, force: bool) -> u8 {
-    let cwd = match speccy_cli::init::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy init: {e}");
@@ -125,12 +124,8 @@ fn run_init(host: Option<String>, force: bool) -> u8 {
         &mut stdout,
         &mut stderr,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
-    if stderr.flush().is_err() {
-        // stderr closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
+    flush_best_effort(&mut stderr);
     match result {
         Ok(()) => 0,
         Err(
@@ -149,7 +144,7 @@ fn run_init(host: Option<String>, force: bool) -> u8 {
 }
 
 fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
-    let cwd = match speccy_cli::status::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy status: {e}");
@@ -166,9 +161,7 @@ fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
         &cwd,
         &mut stdout,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -179,7 +172,7 @@ fn run_status(selector: Option<String>, all: bool, json: bool) -> u8 {
 }
 
 fn run_next(spec_id: Option<String>, json: bool) -> u8 {
-    let cwd = match speccy_cli::next::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy next: {e}");
@@ -192,9 +185,7 @@ fn run_next(spec_id: Option<String>, json: bool) -> u8 {
         &cwd,
         &mut stdout,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -208,7 +199,7 @@ fn run_check(selector: Option<String>) -> u8 {
     use speccy_cli::check::CheckError;
     use speccy_core::task_lookup::LookupError;
 
-    let cwd = match speccy_cli::check::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy check: {e}");
@@ -223,9 +214,7 @@ fn run_check(selector: Option<String>) -> u8 {
         &mut stdout,
         &mut stderr,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
     match result {
         Ok(code) => clamp_exit(code),
         Err(CheckError::TaskLookup(LookupError::InvalidFormat { arg })) => {
@@ -267,10 +256,18 @@ fn clamp_exit(code: i32) -> u8 {
     }
 }
 
+/// Flush a stdio stream, discarding errors from a closed pipe so
+/// `speccy <cmd> | head` does not crash the program.
+fn flush_best_effort<W: std::io::Write>(stream: &mut W) {
+    if stream.flush().is_err() {
+        // stream closed; nothing more to do.
+    }
+}
+
 fn run_lock(spec_id: String) -> u8 {
     use speccy_cli::lock::LockError;
 
-    let cwd = match speccy_cli::lock::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy lock: {e}");
@@ -291,7 +288,7 @@ fn run_lock(spec_id: String) -> u8 {
 }
 
 fn run_vacancy(json: bool) -> u8 {
-    let cwd = match speccy_cli::vacancy::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy vacancy: {e}");
@@ -304,9 +301,7 @@ fn run_vacancy(json: bool) -> u8 {
         &cwd,
         &mut stdout,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -317,7 +312,7 @@ fn run_vacancy(json: bool) -> u8 {
 }
 
 fn run_verify(json: bool) -> u8 {
-    let cwd = match speccy_cli::verify::resolve_cwd() {
+    let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy verify: {e}");
@@ -332,12 +327,8 @@ fn run_verify(json: bool) -> u8 {
         &mut stdout,
         &mut stderr,
     );
-    if stdout.flush().is_err() {
-        // stdout closed; nothing more to do.
-    }
-    if stderr.flush().is_err() {
-        // stderr closed; nothing more to do.
-    }
+    flush_best_effort(&mut stdout);
+    flush_best_effort(&mut stderr);
     match result {
         Ok(code) => clamp_exit(code),
         Err(e) => {
