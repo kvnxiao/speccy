@@ -208,11 +208,12 @@ fn per_spec_json_null_when_all_done_and_report_present() -> TestResult {
     // Write REPORT.md so kind resolution lands on "completed".
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
 
+    // SPEC-0043 REQ-003: terminal per-spec resolutions now exit 2.
     let output = Command::cargo_bin("speccy")?
         .args(["next", "SPEC-0003", "--json"])
         .current_dir(ws.root.as_std_path())
         .assert()
-        .success()
+        .code(2)
         .get_output()
         .stdout
         .clone();

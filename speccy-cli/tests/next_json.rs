@@ -27,6 +27,7 @@ use speccy_cli::next::run;
 
 fn render_workspace(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
     run(
         &NextArgs {
             spec_id: None,
@@ -34,12 +35,14 @@ fn render_workspace(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>
         },
         &ws.root,
         &mut buf,
+        &mut err,
     )?;
     Ok(String::from_utf8(buf)?)
 }
 
 fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
     run(
         &NextArgs {
             spec_id: Some(spec_id.to_owned()),
@@ -47,6 +50,7 @@ fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std:
         },
         &ws.root,
         &mut buf,
+        &mut err,
     )?;
     Ok(String::from_utf8(buf)?)
 }
@@ -270,5 +274,131 @@ fn determinism() -> TestResult {
         "two consecutive per-spec JSON renders must be byte-identical"
     );
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0043 REQ-003: terminal-state exit code 2 and stderr line.
+// ---------------------------------------------------------------------------
+
+fn run_per_spec_capture(
+    ws: &Workspace,
+    spec_id: &str,
+) -> Result<(i32, String, String), Box<dyn std::error::Error>> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
+    let code = run(
+        &NextArgs {
+            spec_id: Some(spec_id.to_owned()),
+            json: true,
+        },
+        &ws.root,
+        &mut out,
+        &mut err,
+    )?;
+    Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
+}
+
+#[test]
+fn per_spec_terminal_completed_exits_2_with_stderr_and_envelope() -> TestResult {
+    // All tasks completed + REPORT.md present → terminal "completed".
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "completed");
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "# Report\n\nstub.\n",
+    )?;
+
+    let (code, stdout, stderr) = run_per_spec_capture(&ws, "SPEC-0001")?;
+    assert_eq!(code, 2, "terminal completed must exit 2: stderr={stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert_eq!(parsed.get("next_action"), Some(&serde_json::Value::Null));
+    assert_eq!(
+        parsed.get("reason"),
+        Some(&serde_json::json!("completed")),
+        "reason must be `completed`: {parsed}",
+    );
+    assert!(
+        stderr.contains("SPEC-0001 is completed"),
+        "stderr must name the spec + reason: {stderr:?}",
+    );
+    assert!(
+        stderr.contains("speccy archive SPEC-0001"),
+        "stderr must include archive suggestion: {stderr:?}",
+    );
+    Ok(())
+}
+
+#[test]
+fn per_spec_terminal_dropped_exits_2_with_dropped_reason() -> TestResult {
+    let ws = Workspace::new()?;
+    // status: dropped, with a pending task — frontmatter status
+    // wins per SPEC-0043 REQ-003.
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "dropped"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+
+    let (code, stdout, stderr) = run_per_spec_capture(&ws, "SPEC-0001")?;
+    assert_eq!(code, 2, "dropped must exit 2: stderr={stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert_eq!(parsed.get("next_action"), Some(&serde_json::Value::Null));
+    assert_eq!(parsed.get("reason"), Some(&serde_json::json!("dropped")));
+    assert!(
+        stderr.contains("SPEC-0001 is dropped"),
+        "stderr must name dropped reason: {stderr:?}",
+    );
+    assert!(
+        stderr.contains("speccy archive SPEC-0001"),
+        "stderr must include archive suggestion: {stderr:?}",
+    );
+    Ok(())
+}
+
+#[test]
+fn per_spec_terminal_superseded_exits_2_with_superseded_reason() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "superseded"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+
+    let (code, stdout, _stderr) = run_per_spec_capture(&ws, "SPEC-0001")?;
+    assert_eq!(code, 2);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert_eq!(parsed.get("reason"), Some(&serde_json::json!("superseded")));
+    Ok(())
+}
+
+#[test]
+fn per_spec_non_terminal_exits_0_with_empty_stderr() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    let (code, stdout, stderr) = run_per_spec_capture(&ws, "SPEC-0001")?;
+    assert_eq!(code, 0, "non-terminal must exit 0");
+    assert!(stderr.is_empty(), "stderr must be empty: {stderr:?}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert!(
+        parsed.get("next_action").is_some_and(|v| !v.is_null()),
+        "non-terminal next_action must be non-null: {parsed}",
+    );
     Ok(())
 }

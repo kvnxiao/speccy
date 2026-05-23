@@ -10,7 +10,8 @@ effort: low
 Implements one task per invocation and exits. With an optional
 `[SPEC-NNNN/T-NNN]` selector argument, the session implements that
 specific task. Without an argument, the session resolves the next
-implementable task via `speccy next --json` and implements that one.
+implementable task via `speccy next --json` (workspace form — used here
+because no SPEC is known on the no-selector path) and implements that one.
 Task state lives in the `state` attribute on each `<task>` XML element
 in TASKS.md.
 
@@ -46,9 +47,12 @@ spec hash must have been committed before this skill runs.
 1. Resolve the target task.
 
    - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
-   - Otherwise, query the CLI:
+   - Otherwise, query the CLI in workspace form (no SPEC selector
+     is known on this no-selector invocation path — we must walk
+     the active tree to find an implementable task):
 
      ```bash
+     # workspace form: no SPEC-NNNN known yet; scan the active tree.
      speccy next --json
      ```
 
@@ -57,6 +61,12 @@ spec hash must have been committed before this skill runs.
      construct the disambiguated `<spec>/<task>` form from the JSON's
      `spec_id` and `next_action.task_id` fields (the bare task ID is
      ambiguous across specs — every spec has its own `T-001`).
+
+     Exit-code-stop contract: once SPEC-NNNN is resolved, any
+     subsequent per-spec query (`speccy next SPEC-NNNN --json`) that
+     exits non-zero means the SPEC has reached a terminal state —
+     halt and surface the stderr line. Only parse JSON when exit
+     code is 0.
 
 2. Flip the target task's `state` from `pending` to `in-progress`
    by editing TASKS.md.

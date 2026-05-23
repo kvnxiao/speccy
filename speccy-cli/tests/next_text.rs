@@ -28,6 +28,7 @@ use speccy_cli::next::run;
 
 fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
     run(
         &NextArgs {
             spec_id: None,
@@ -35,6 +36,7 @@ fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
         },
         &ws.root,
         &mut buf,
+        &mut err,
     )?;
     Ok(String::from_utf8(buf)?)
 }
@@ -208,5 +210,52 @@ fn per_spec_form_text_output() -> TestResult {
         .stdout(contains("SPEC-0001"))
         .stdout(contains("decompose"));
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-0043 REQ-003: CLI exit code 2 for terminal per-spec resolutions.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn per_spec_terminal_completed_cli_exits_2() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "completed");
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "# Report\n\nstub.\n",
+    )?;
+    Command::cargo_bin("speccy")?
+        .args(["next", "SPEC-0001", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .code(2)
+        .stderr(contains("SPEC-0001 is completed"))
+        .stderr(contains("speccy archive SPEC-0001"))
+        .stdout(contains("\"reason\":\"completed\""));
+    Ok(())
+}
+
+#[test]
+fn per_spec_non_terminal_cli_exits_0() -> TestResult {
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    Command::cargo_bin("speccy")?
+        .args(["next", "SPEC-0001", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .code(0);
     Ok(())
 }

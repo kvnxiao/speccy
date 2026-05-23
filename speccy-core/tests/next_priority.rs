@@ -364,6 +364,90 @@ fn none_when_vet_passes_fresh_and_report_present() -> TestResult {
     Ok(())
 }
 
+// -- SPEC-0043 REQ-002 ------------------------------------------------------
+// REPORT.md presence is terminal regardless of journal/VET.md state.
+
+// All tasks completed + REPORT.md present + no VET.md → None.
+
+#[test]
+fn report_md_beats_missing_vet_md() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "---\nspec: SPEC-0001\n---\n",
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    assert!(
+        compute_for_spec(spec).is_none(),
+        "REPORT.md present + no VET.md must return None (terminal)",
+    );
+    Ok(())
+}
+
+// All tasks completed + REPORT.md present + stale-hash VET.md → None.
+
+#[test]
+fn report_md_beats_stale_vet_md() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    write_vet_md(
+        &spec_dir,
+        "passed",
+        "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    )?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "---\nspec: SPEC-0001\n---\n",
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    assert!(
+        compute_for_spec(spec).is_none(),
+        "REPORT.md present + stale VET.md must return None (REPORT.md wins)",
+    );
+    Ok(())
+}
+
+// All tasks completed + REPORT.md present + failed-verdict VET.md → None.
+
+#[test]
+fn report_md_beats_failed_vet_md() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    write_vet_md(&spec_dir, "failed", "deadbeef")?;
+    fs_err::write(
+        spec_dir.join("REPORT.md").as_std_path(),
+        "---\nspec: SPEC-0001\n---\n",
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    assert!(
+        compute_for_spec(spec).is_none(),
+        "REPORT.md present + failed VET.md must return None (REPORT.md wins)",
+    );
+    Ok(())
+}
+
 // Priority: in-review task always wins over a fresh-pass VET.md.
 
 #[test]

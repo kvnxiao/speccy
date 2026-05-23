@@ -10,15 +10,17 @@
 //!   are fully completed and have REPORT.md). Used by `speccy next` (workspace
 //!   form).
 //!
-//! Priority rule (see SPEC-0033 REQ-004 and SPEC-0041 REQ-002):
+//! Priority rule (see SPEC-0033 REQ-004, SPEC-0041 REQ-002, and
+//! SPEC-0043 REQ-002):
 //! > 1. TASKS.md is absent → kind = `"decompose"`
 //! > 2. Any task is `state="in-review"` → kind = `"review"` (first one)
 //! > 3. Any task is `state="pending"` → kind = `"work"` (first one)
-//! > 4. All tasks `state="completed"`, gate-pass artifact (VET.md) missing
-//! > or stale → kind = `"vet"`
-//! > 5. All tasks `state="completed"`, gate-pass artifact present and
-//! > fresh, REPORT.md absent → kind = `"ship"`
-//! > 6. Else → spec is omitted (all done + REPORT.md present)
+//! > 4. All tasks `state="completed"`, REPORT.md present → spec is
+//! > omitted (terminal — REPORT.md is the durable shipped marker)
+//! > 5. All tasks `state="completed"`, REPORT.md absent, gate-pass
+//! > artifact (VET.md) present and fresh → kind = `"ship"`
+//! > 6. Else (all tasks completed, REPORT.md absent, gate-pass
+//! > artifact missing or stale) → kind = `"vet"`
 //!
 //! "Gate-pass artifact fresh" means: `<spec-dir>/journal/VET.md` exists,
 //! its final non-whitespace `<gate ...>` block has `verdict="passed"`,
@@ -79,11 +81,13 @@ pub struct SpecNextEntry {
 /// 1. TASKS.md absent → `Decompose`
 /// 2. Any task `state="in-review"` → `Review` (first matching task)
 /// 3. Any task `state="pending"` → `Work` (first matching task)
-/// 4. All tasks `state="completed"`, gate-pass artifact missing or stale →
-///    `Vet`
-/// 5. All tasks `state="completed"`, gate-pass artifact present and fresh,
-///    REPORT.md absent → `Ship`
-/// 6. All done + REPORT.md present → `None` (omit)
+/// 4. All tasks `state="completed"`, REPORT.md present → `None` (omit;
+///    REPORT.md is the durable shipped marker, terminal regardless of vet-gate
+///    artifact state)
+/// 5. All tasks `state="completed"`, REPORT.md absent, gate-pass artifact
+///    present and fresh → `Ship`
+/// 6. All tasks `state="completed"`, REPORT.md absent, gate-pass artifact
+///    missing or stale → `Vet`
 #[must_use = "the derived action names the next step for the spec"]
 pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
     let Some(tasks) = spec.tasks_md_ok() else {
@@ -104,16 +108,19 @@ pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
         });
     }
 
-    // All tasks are completed (or empty). Check vet gate, then REPORT.md.
+    // All tasks are completed (or empty). REPORT.md presence is the
+    // durable shipped marker and beats vet-gate state (SPEC-0043
+    // REQ-002): once REPORT.md exists, the spec is terminal regardless
+    // of whether a fresh `journal/VET.md` gate is present.
     if tasks.tasks.iter().all(|t| t.state == TaskState::Completed) {
-        if !vet_gate_is_fresh_pass(spec) {
-            return Some(NextAction::Vet);
-        }
         if report_md_exists(spec) {
             // Fully done — omit from workspace listing.
             return None;
         }
-        return Some(NextAction::Ship);
+        if vet_gate_is_fresh_pass(spec) {
+            return Some(NextAction::Ship);
+        }
+        return Some(NextAction::Vet);
     }
 
     // Only in-progress tasks remain (all "claimed"). Treat as decompose to

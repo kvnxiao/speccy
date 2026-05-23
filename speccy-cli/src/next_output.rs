@@ -26,7 +26,8 @@ pub struct JsonPerSpec {
     pub spec_id: String,
     /// Derived next action, or `null` when the spec is completed.
     pub next_action: Option<JsonNextAction>,
-    /// Present when `next_action` is `null`; `"completed"` or `"superseded"`.
+    /// Present when `next_action` is `null`; `"completed"`, `"dropped"`, or
+    /// `"superseded"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     /// Repo-relative forward-slash path to `SPEC.md`.
@@ -93,11 +94,47 @@ pub struct SpecPaths {
     pub mission_md_path: Option<String>,
 }
 
+/// Terminal-state reason for the per-spec form when `next_action` is
+/// `null` (SPEC-0043 REQ-003). Maps to the `reason` field in JSON.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalReason {
+    /// REPORT.md present — the SPEC has shipped.
+    Completed,
+    /// SPEC frontmatter `status: dropped`.
+    Dropped,
+    /// SPEC frontmatter `status: superseded`.
+    Superseded,
+}
+
+impl TerminalReason {
+    /// Stable string used in JSON `reason` and stderr messages.
+    #[must_use = "the slug is part of the public JSON contract"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TerminalReason::Completed => "completed",
+            TerminalReason::Dropped => "dropped",
+            TerminalReason::Superseded => "superseded",
+        }
+    }
+}
+
 /// Build the JSON payload for the per-spec form.
 #[must_use = "the JSON payload is the output of `speccy next SPEC-NNNN --json`"]
 pub fn render_json_per_spec(
     spec_id: &str,
     action: Option<&NextAction>,
+    paths: SpecPaths,
+) -> JsonPerSpec {
+    render_json_per_spec_with_reason(spec_id, action, TerminalReason::Completed, paths)
+}
+
+/// Build the JSON payload for the per-spec form, allowing the caller to
+/// name the terminal reason emitted when `action` is `None`.
+#[must_use = "the JSON payload is the output of `speccy next SPEC-NNNN --json`"]
+pub fn render_json_per_spec_with_reason(
+    spec_id: &str,
+    action: Option<&NextAction>,
+    reason: TerminalReason,
     paths: SpecPaths,
 ) -> JsonPerSpec {
     match action {
@@ -114,7 +151,7 @@ pub fn render_json_per_spec(
             schema_version: 1,
             spec_id: spec_id.to_owned(),
             next_action: None,
-            reason: Some("completed".to_owned()),
+            reason: Some(reason.as_str().to_owned()),
             spec_md_path: paths.spec_md_path,
             tasks_md_path: paths.tasks_md_path,
             mission_md_path: paths.mission_md_path,
@@ -174,8 +211,22 @@ fn to_json_action(action: &NextAction) -> JsonNextAction {
 /// Format: `SPEC-NNNN: <kind> [T-NNN]\n` or `SPEC-NNNN: completed\n`.
 #[must_use = "the rendered line goes to stdout"]
 pub fn render_text_per_spec(spec_id: &str, action: Option<&NextAction>) -> String {
+    render_text_per_spec_with_reason(spec_id, action, TerminalReason::Completed)
+}
+
+/// Render the per-spec text output with an explicit terminal reason.
+///
+/// Used by the dispatcher when the spec is in a dropped or superseded
+/// terminal state (SPEC-0043 REQ-003) so the text line reflects the
+/// actual reason rather than the default `completed`.
+#[must_use = "the rendered line goes to stdout"]
+pub fn render_text_per_spec_with_reason(
+    spec_id: &str,
+    action: Option<&NextAction>,
+    reason: TerminalReason,
+) -> String {
     match action {
-        None => format!("{spec_id}: completed\n"),
+        None => format!("{spec_id}: {reason}\n", reason = reason.as_str()),
         Some(NextAction::Decompose) => format!("{spec_id}: decompose\n"),
         Some(NextAction::Review { task_id, .. }) => {
             format!("{spec_id}: review {task_id}\n")

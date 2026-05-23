@@ -7,15 +7,27 @@ the pull request.
 ## When to use
 
 After `{{ cmd_prefix }}speccy-review` has flipped every task to
-`state="completed"`. Confirm the spec state first:
+`state="completed"` and `{{ cmd_prefix }}speccy-vet` has passed.
+Confirm the spec state first:
 
 ```bash
 speccy next SPEC-NNNN --json
 ```
 
-If the result's `next_action` is non-null or the JSON returns an
-error, some tasks are not yet completed — pick up
-`{{ cmd_prefix }}speccy-work` or `{{ cmd_prefix }}speccy-review` first.
+Readiness semantics:
+
+- `next_action.kind == "ship"` (exit 0) is the ship-readiness
+  signal — all tasks completed, vet gate passing, no REPORT.md
+  yet. Proceed.
+- `next_action: null` paired with **non-zero exit** is the
+  terminal-already-shipped signal — REPORT.md is present, the
+  SPEC has already shipped. Stop; do not re-ship. Run
+  `speccy archive SPEC-NNNN` if it should be moved out of the
+  active tree.
+- Any other `next_action.kind` (`work`, `review`, `vet`,
+  `decompose`) means tasks remain — pick up
+  `{{ cmd_prefix }}speccy-work`, `{{ cmd_prefix }}speccy-review`,
+  or `{{ cmd_prefix }}speccy-vet` first.
 
 ## Steps
 
@@ -27,7 +39,10 @@ error, some tasks are not yet completed — pick up
 
    The JSON's `spec_md_path` and `tasks_md_path` fields locate the
    files. Verify `speccy next SPEC-NNNN --json` returns
-   `"next_action": null` (all tasks completed, no REPORT.md yet).
+   `"next_action": {"kind": "ship", ...}` (exit 0) — that is the
+   ship-readiness signal. If instead it returns `next_action: null`
+   with a non-zero exit, REPORT.md already exists and the SPEC has
+   already shipped; do not proceed.
 
 2. Write `.speccy/specs/NNNN-slug/REPORT.md` with frontmatter
    (`spec`, `outcome`, `generated_at`), a `<report>` root element

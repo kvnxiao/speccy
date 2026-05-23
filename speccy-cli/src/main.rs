@@ -278,14 +278,17 @@ fn run_next(spec_id: Option<String>, json: bool) -> u8 {
         }
     };
     let mut stdout = std::io::stdout().lock();
+    let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::next::run(
         &speccy_cli::next::NextArgs { spec_id, json },
         &cwd,
         &mut stdout,
+        &mut stderr,
     );
     flush_best_effort(&mut stdout);
+    flush_best_effort(&mut stderr);
     match result {
-        Ok(()) => 0,
+        Ok(code) => u8::try_from(code).unwrap_or(1),
         Err(e) => {
             eprintln!("speccy next: {e}");
             1

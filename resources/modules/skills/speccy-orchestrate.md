@@ -2,7 +2,7 @@
 # {{ cmd_prefix }}speccy-orchestrate
 
 Thin composition layer over the Speccy single-task primitives.
-Queries `speccy next --json`, dispatches each step to one or more
+Queries `speccy next SPEC-NNNN --json`, dispatches each step to one or more
 sub-agents, and re-queries until the SPEC is ready to ship. This
 skill itself holds the outer dispatch loop, the per-task retry
 counter, and (for review and ship steps) the multi-persona /
@@ -92,19 +92,24 @@ messages — not the per-persona reasoning — flow back into the
 orchestrator's context.
 
 Sub-agent final messages are **status hints, not state**. The
-orchestrator always re-queries `speccy next --json` after a
+orchestrator always re-queries `speccy next SPEC-NNNN --json` after a
 dispatch settles to get ground truth.
+
+**Exit-code-stop contract.** If `speccy next SPEC-NNNN --json` exits
+non-zero, the SPEC has reached a terminal state — halt the loop and
+surface the stderr line to the caller. Only parse the JSON envelope
+when exit code is 0.
 
 ## Startup integrity check
 
 Before entering the dispatch loop, run one one-time sanity check
 to catch state left by a crashed prior session.
 
-1. Resolve the spec directory from `speccy next --json`: find the
-   entry whose `spec_id` matches `SPEC-NNNN`, take its
-   `spec_md_path` field, and strip the trailing `/SPEC.md` to get
-   `<spec-dir>`. If no entry matches, stop and report — the spec
-   is unknown.
+1. Resolve the spec directory from `speccy next SPEC-NNNN --json`:
+   take the `spec_md_path` field and strip the trailing `/SPEC.md`
+   to get `<spec-dir>`. If the command exits non-zero, surface the
+   stderr line and stop — the SPEC is in a terminal state. If the
+   command reports the spec is unknown, stop and report.
 
 2. Scan `<spec-dir>/TASKS.md` for any task at
    `state="in-progress"`:
@@ -141,12 +146,13 @@ Repeat until a stop condition fires:
 1. Query the CLI:
 
    ```bash
-   speccy next --json
+   speccy next SPEC-NNNN --json
    ```
 
-   Find the entry in `specs[]` whose `spec_id` equals the requested
-   `SPEC-NNNN`. If no entry matches, stop and report — the spec is
-   either unknown or has no actionable next step.
+   If the command exits non-zero, the SPEC has reached a terminal
+   state (completed / dropped / superseded). Surface the stderr
+   line to the caller and stop the loop. Only parse the JSON
+   envelope when exit code is 0.
 
 2. Dispatch on `next_action.kind`:
 
@@ -167,7 +173,7 @@ Repeat until a stop condition fires:
    returns; or the four reviewer-* personas have all returned and
    this orchestrator has written the journal + TASKS.md; or the
    inline vet workflow has written its `<gate>` block), re-query
-   `speccy next --json` and loop from step 1.
+   `speccy next SPEC-NNNN --json` and loop from step 1.
 
 ## Work dispatch
 
@@ -176,7 +182,7 @@ resolved task. Prompt:
 
 > Implement task `SPEC-NNNN/T-NNN` per the `speccy-work` skill.
 > Single-task primitive; do not iterate. Keep your final message
-> short — the caller reads `speccy next --json` for ground truth.
+> short — the caller reads `speccy next SPEC-NNNN --json` for ground truth.
 
 Substitute the resolved `task_id` from `next_action.task_id`.
 
@@ -200,7 +206,8 @@ body.
 
 After the write settles, increment the per-task retry counter if
 the task flipped back to `pending` (this is what feeds the
-5-round stop condition below). Then re-query `speccy next --json`.
+5-round stop condition below). Then re-query
+`speccy next SPEC-NNNN --json`.
 
 The `speccy-review` skill remains independently invocable as
 `{{ cmd_prefix }}speccy-review`; this orchestrator's review

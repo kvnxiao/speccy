@@ -12,15 +12,17 @@ new invocation section in VET.md.
 1. **Spec directory.** Run:
 
    ```bash
-   speccy next --json
+   speccy next SPEC-NNNN --json
    ```
 
-   Find the entry in `specs[]` whose `spec_id` equals the requested
-   `SPEC-NNNN`. Its `spec_md_path` field (e.g.,
+   The `spec_md_path` field (e.g.,
    `.speccy/specs/NNNN-slug/SPEC.md`) gives the absolute path to
    `SPEC.md`; strip the trailing `/SPEC.md` to get `<spec-dir>`
-   (e.g., `.speccy/specs/NNNN-slug/`). If no entry matches, return
-   `fail` immediately — the spec is unknown.
+   (e.g., `.speccy/specs/NNNN-slug/`). If the command exits
+   non-zero, the SPEC has reached a terminal state — surface the
+   stderr line and return `fail`. Only parse the JSON envelope
+   when exit code is 0. If the spec is unknown, return `fail`
+   immediately.
 
    Also verify every task in this spec is at `state="completed"`
    (read `<spec-dir>/TASKS.md`). If any task is `pending`,

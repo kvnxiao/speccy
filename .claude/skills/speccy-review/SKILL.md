@@ -8,7 +8,8 @@ description: 'Review one Speccy task per invocation and exit, running one round 
 Runs one round of adversarial review on one task per invocation and
 exits. With an optional `[SPEC-NNNN/T-NNN]` selector argument, the
 session reviews that specific task. Without an argument, the session
-resolves the next reviewable task via `speccy next --json` and reviews
+resolves the next reviewable task via `speccy next --json` (workspace
+form — used here because no SPEC is known on the no-selector path) and reviews
 that one. Task state lives in the `state` attribute on each `<task>`
 XML element in TASKS.md; review activity prose lives in the sibling
 `.speccy/specs/NNNN-slug/journal/T-NNN.md` file, never inside the
@@ -49,9 +50,12 @@ flipped there by `/speccy-work`).
 ### Resolve the target task
 
 - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
-- Otherwise, query the CLI:
+- Otherwise, query the CLI in workspace form (no SPEC selector
+  is known on this no-selector invocation path — we must walk
+  the active tree to find a reviewable task):
 
   ```bash
+  # workspace form: no SPEC-NNNN known yet; scan the active tree.
   speccy next --json
   ```
 
@@ -61,6 +65,12 @@ flipped there by `/speccy-work`).
   JSON's `spec_id` and `next_action.task_id` fields (the bare
   task ID is ambiguous across specs — every spec has its own
   `T-001`).
+
+  Exit-code-stop contract: once SPEC-NNNN is resolved, any
+  subsequent per-spec query (`speccy next SPEC-NNNN --json`) that
+  exits non-zero means the SPEC has reached a terminal state —
+  halt and surface the stderr line. Only parse JSON when exit
+  code is 0.
 
 ### Run the persona fan-out and consolidation
 
