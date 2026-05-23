@@ -1,7 +1,7 @@
 # Worked-instance reference: `TASKS.md`
 
-This file shows the canonical post-SPEC-0037 shape of a Speccy
-`TASKS.md`. The example continues the SPEC-0042 widget-render-timeout
+This file shows the canonical shape of a Speccy
+`TASKS.md`. The example continues the SPEC-NNNN widget-render-timeout
 scenario from `spec.md` in this directory.
 
 A real `TASKS.md` lives at `.speccy/specs/NNNN-slug/TASKS.md` and is
@@ -11,11 +11,11 @@ parsed by `speccy verify` against the `TSK-*` lint family.
 
 ```markdown
 ---
-spec: SPEC-0042
+spec: SPEC-NNNN
 spec_hash_at_generation: a1b2c3d4e5f60718293a4b5c6d7e8f9001122334455667788990aabbccddeeff
 generated_at: 2026-05-21T19:30:00Z
 ---
-# Tasks: SPEC-0042 Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
+# Tasks: SPEC-NNNN Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
 
 <task id="T-001" state="pending" covers="REQ-001 REQ-002">
 ## Add `--timeout-ms` flag and wire it into the render entrypoint
@@ -94,7 +94,7 @@ Suggested files: `widget-cli/src/args.rs`, `README.md`
   Markdown line after the frontmatter (the `TSK-001` "TASKS heading
   matches SPEC" rule).
 - Each `<task>` element is a direct child of the document root (no
-  outer `<tasks>` wrapper — that wrapper was retired in SPEC-0037).
+  outer `<tasks>` wrapper; the parser rejects that element).
 - Required `<task>` attributes: `id` (e.g. `T-001`), `state` (one of
   `pending`, `in-progress`, `in-review`, `completed`), `covers`
   (space-separated list of `REQ-NNN` ids — see the
@@ -104,8 +104,8 @@ Suggested files: `widget-cli/src/args.rs`, `README.md`
   prose describing the work, then a `<task-scenarios>` block with
   Given/When/Then prose and a `Suggested files:` line naming the
   files the implementer is likely to touch.
-- No `<implementer>`, `<review>`, or `<blockers>` elements appear in
-  `TASKS.md` after SPEC-0037; those live in the per-task journal
+- No `<implementer>`, `<review>`, or `<blockers>` elements appear
+  in `TASKS.md`; those live in the per-task journal
   file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the `TSK-006`
   "no journal elements in TASKS.md" rule).
 - Unresolved placeholder substrings (the conventional unfinished-draft

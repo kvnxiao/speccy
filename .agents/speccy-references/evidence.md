@@ -1,14 +1,34 @@
-# Evidence for SPEC-0042 T-001
+# Evidence for SPEC-NNNN T-001
 
-This file shows the canonical post-SPEC-0034 shape of an evidence
+This file shows the canonical shape of an evidence
 paper-trail file. A real evidence file lives at
 `.speccy/specs/NNNN-slug/evidence/T-NNN.md` (sibling of `SPEC.md`
 and `TASKS.md`) and captures the red-then-green pairs that prove
 the task's behaviour changed in the expected direction.
 
-The example continues the SPEC-0042 widget-render-timeout scenario
+The example continues the SPEC-NNNN widget-render-timeout scenario
 from `spec.md`, `tasks.md`, and `journal-implementer.md` in this
 directory.
+
+## Coverage rule
+
+The per-task journal `<implementer>` block's `Evidence:` field
+carries a CHK-by-CHK roll call (see
+`references/journal-implementer.md`); this file backs the entries
+labelled `demonstrated` there. Every `demonstrated` label must be
+backed by exactly one `### Scenario N` block in this file; cite the
+scenario heading verbatim in the journal roll call so the reviewer
+can navigate without grepping. Conversely, every scenario block
+here should be cited by a `demonstrated` label in the journal --
+orphan scenarios suggest either a stale evidence file or a missing
+journal entry.
+
+CHKs labelled `hygiene` or `judgment-only` in the journal do not
+appear as `### Scenario N` blocks in this file. The hygiene-gate
+evidence at the bottom of this file is the catch-all proof for
+`hygiene` CHKs; `judgment-only` CHKs have no execution-time
+artifact -- they live entirely in the persona-review judgment
+surface.
 
 ## Session 2026-05-21-T001-attempt-1
 

@@ -27,7 +27,7 @@ bounded to one round of four sub-agents on one task.
 
 ## When to use
 
-- With a selector (`speccy-review SPEC-0007/T-003`):
+- With a selector (`speccy-review SPEC-NNNN/T-003`):
   when the task to review is already known.
 - Without an argument: when picking up wherever `TASKS.md` left off.
   The session reviews one task and exits.

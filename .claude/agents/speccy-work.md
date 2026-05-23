@@ -20,7 +20,7 @@ terminal, the `/loop` skill, or a future orchestrator).
 
 ## When to use
 
-- With a selector (`/speccy-work SPEC-0007/T-003`):
+- With a selector (`/speccy-work SPEC-NNNN/T-003`):
   when the next task to implement is already known — e.g., a retry
   after `/speccy-review` flipped a task back to
   `state="pending"`.
@@ -64,7 +64,7 @@ spec hash must have been committed before this skill runs.
 3. Read the task scenarios to understand what must be implemented:
 
    ```bash
-   speccy check SPEC-0007/T-003
+   speccy check SPEC-NNNN/T-003
    ```
 
 4. Implement the task. Write tests first, then code. Run the
@@ -78,9 +78,9 @@ spec hash must have been committed before this skill runs.
    TASKS.md, then append one `<implementer>` block to the per-task
    journal file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (a
    sibling of `SPEC.md` and `TASKS.md`). Do NOT inline an
-   `<implementer-note>` inside the `<task>` body in TASKS.md —
-   that element is retired; the parser rejects it. The journal file
-   is the canonical home for implementer handoff prose.
+   `<implementer-note>` inside the `<task>` body in TASKS.md — the
+   parser rejects that element. The journal file is the canonical
+   home for implementer handoff prose.
 
    File creation. If `journal/T-NNN.md` does not yet exist (round 1,
    first implementer attempt on the task), create it with YAML
@@ -120,7 +120,28 @@ spec hash must have been committed before this skill runs.
 
    Body content. Use the six-field handoff template the implementer
    prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
-   `Evidence`, `Discovered issues`, `Procedural compliance`).
+   `Evidence`, `Discovered issues`, `Procedural compliance`). The
+   `Evidence` field must include a CHK-by-CHK roll call labelling
+   each CHK under the task's covered REQs as `demonstrated`,
+   `hygiene`, or `judgment-only` -- see the canonical reference for
+   the format and what each label means.
+
+   Minimal Evidence roll-call shape -- substitute real CHK ids,
+   paths, and test names; the canonical reference carries the full
+   worked example:
+
+   ```
+   - Evidence: paper trail at `.speccy/specs/NNNN-slug/evidence/T-NNN.md`.
+     Roll call for CHKs under REQ-NNN:
+     - CHK-NNN (one-line CHK description): demonstrated →
+       evidence Scenario N covers <what the red/green pair shows>.
+     - CHK-NNN (one-line CHK description): hygiene →
+       `<test_name>` in `<file:path>` covers it under the project
+       test command.
+     - CHK-NNN (one-line CHK description): judgment-only →
+       no scriptable proof; reviewer-business / reviewer-style
+       judges on the diff.
+   ```
 
 6. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.

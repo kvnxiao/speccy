@@ -114,7 +114,7 @@ The verdict element in your final message:
 ## Example
 
     <review persona="docs" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
-    SPEC-0009 DEC-002 says project-local overrides live in
+    SPEC-NNNN DEC-NNN says project-local overrides live in
     `.speccy/skills/personas/`; the renamed resolver in
     `personas.rs:120` now reads from `.speccy/personas/`. Either
     update the decision (with a Changelog row) or restore the path.

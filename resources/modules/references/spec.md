@@ -1,6 +1,6 @@
 # Worked-instance reference: `SPEC.md`
 
-This file shows the canonical post-SPEC-0034 shape of a Speccy
+This file shows the canonical shape of a Speccy
 `SPEC.md`. The example values describe a small, plausible feature
 (adding a `--timeout` flag to a hypothetical `widget render` CLI). The
 shape is what matters; the prose is illustration, not load-bearing.
@@ -13,7 +13,7 @@ families.
 
 ```markdown
 ---
-id: SPEC-0042
+id: SPEC-NNNN
 slug: widget-render-timeout
 title: Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
 status: in-progress
@@ -21,7 +21,7 @@ created: 2026-05-21
 supersedes: []
 ---
 
-# SPEC-0042: Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
+# SPEC-NNNN: Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
 
 ## Summary
 

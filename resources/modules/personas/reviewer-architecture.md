@@ -47,8 +47,8 @@ flips the task's `state` attribute.
 ## Example
 
     <review persona="architecture" verdict="blocking" model="claude-opus-4.7[1m]/high">
-    SPEC-0001 DEC-002 fixed the parser layer as the only consumer of
+    SPEC-NNNN DEC-NNN fixed the parser layer as the only consumer of
     `serde-saphyr`; this diff introduces a direct `serde-saphyr` call
     in `speccy-cli` instead of going through `speccy-core::parse`.
-    Route through the parser or amend DEC-002 explicitly.
+    Route through the parser or amend the decision explicitly.
     </review>

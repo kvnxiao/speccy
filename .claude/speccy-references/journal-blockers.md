@@ -1,6 +1,6 @@
 # Worked-instance reference: per-task journal `<blockers>` block
 
-This file shows the canonical post-SPEC-0037 shape of a `<blockers>`
+This file shows the canonical shape of a `<blockers>`
 block inside a per-task journal file. The example shows a synthesised
 blocker set that would flip a task back to `state="pending"` after
 review.
@@ -39,7 +39,7 @@ passed. Fix both before respawning the review fan-out.
    (business).** The implementer's round-1 patch writes
    `widget render: aborted after 511ms (timeout reached)` where the
    `511` is `Instant::elapsed().as_millis()` of the actual abort,
-   not the configured `budget_ms`. DEC-002 in SPEC-0042 explicitly
+   not the configured `budget_ms`. DEC-002 in SPEC-NNNN explicitly
    requires the configured-budget form so integration tests can grep
    for an exact string. The fix is to format the message from
    `self.budget.as_millis()` (the stored field), not from the

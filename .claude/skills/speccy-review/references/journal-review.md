@@ -1,8 +1,8 @@
 # Worked-instance reference: per-task journal `<review>` block
 
-This file shows the canonical post-SPEC-0037 shape of a `<review>`
+This file shows the canonical shape of a `<review>`
 block inside a per-task journal file. The example continues the
-SPEC-0042 widget-render-timeout scenario from the sibling reference
+SPEC-NNNN widget-render-timeout scenario from the sibling reference
 files in this directory.
 
 A real journal file lives at
@@ -21,7 +21,7 @@ journal file with one round of review looks like:
 
 ```markdown
 ---
-spec: SPEC-0042
+spec: SPEC-NNNN
 task: T-001
 generated_at: 2026-05-21T19:45:00Z
 ---
@@ -44,7 +44,7 @@ no retry-on-timeout behaviour leaked in.
 
 <review persona="tests" verdict="pass" model="claude-opus-4.7[1m]/low" date="2026-05-21T20:35:00Z" round="1">
 Red-then-green paper trail in
-`.speccy/specs/0042-widget-render-timeout/evidence/T-001.md`
+`.speccy/specs/NNNN-widget-render-timeout/evidence/T-001.md`
 records three scenarios with concrete pre-edit and post-edit
 command output. Pre-edit baseline for scenario 1 uses GNU
 `timeout(1)` as the external abort signal — distinguishing the

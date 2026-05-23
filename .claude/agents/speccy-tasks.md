@@ -23,7 +23,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 1. Read the spec's current state to locate SPEC.md:
 
    ```bash
-   speccy status SPEC-0007 --json
+   speccy status SPEC-NNNN --json
    ```
 
    The JSON's `spec_md_path` field names the SPEC.md to decompose.
@@ -46,10 +46,9 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    - The `# Tasks: SPEC-` heading must appear on the line immediately
      after the closing `---` of the frontmatter block (no blank line
      between them).
-   - No `<tasks spec="...">` wrapper element. SPEC-0037 retired the
-     wrapper; the parser rejects it with an `UnknownMarkerName`
-     error. Tasks are a flat sequence of `<task>` elements at the
-     top level of the document.
+   - No `<tasks spec="...">` wrapper element; the parser rejects it
+     with an `UnknownMarkerName` error. Tasks are a flat sequence of
+     `<task>` elements at the top level of the document.
    - Multiple requirements in `covers=` are separated by single ASCII
      spaces — `covers="REQ-001 REQ-002"` — never by commas. The parser
      rejects comma-separated values with a `TSK-004` lint error.
@@ -62,13 +61,13 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    the UTC timestamp:
 
    ```bash
-   speccy lock SPEC-0007
+   speccy lock SPEC-NNNN
    ```
 
    `speccy lock` edits TASKS.md's frontmatter in place; it does not
    emit a hash to stdout, and it requires TASKS.md to already exist.
 
-4. Suggest the next step: `/speccy-work SPEC-0007` to start the
+4. Suggest the next step: `/speccy-work SPEC-NNNN` to start the
    implementation loop.
 
 This recipe does not loop.

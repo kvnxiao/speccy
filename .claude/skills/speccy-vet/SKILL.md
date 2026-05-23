@@ -157,10 +157,10 @@ new invocation section in VET.md.
 
    Find the entry in `specs[]` whose `spec_id` equals the requested
    `SPEC-NNNN`. Its `spec_md_path` field (e.g.,
-   `.speccy/specs/0038-skill-pack-references/SPEC.md`) gives the
+   `.speccy/specs/NNNN-slug/SPEC.md`) gives the
    absolute path to `SPEC.md`; strip the trailing `/SPEC.md` to get
    `<spec-dir>` (e.g.,
-   `.speccy/specs/0038-skill-pack-references/`). If no entry
+   `.speccy/specs/NNNN-slug/`). If no entry
    matches, return `fail` immediately — the spec is unknown.
 
    Also verify every task in this spec is at `state="completed"`

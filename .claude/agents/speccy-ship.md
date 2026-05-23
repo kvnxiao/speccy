@@ -49,9 +49,8 @@ error, some tasks are not yet completed — pick up
    to `status: implemented`. The diff that ships in this PR is what
    makes the SPEC implemented, so the status flip belongs in the
    same PR, not in a follow-up. The status flip is hash-neutral
-   under SPEC-0024's hash function (`status` is excluded from
-   `spec_hash_at_generation`), so TASKS.md does not need a hash
-   refresh. Confirm the workspace is still clean:
+   because `status` is excluded from `spec_hash_at_generation`, so
+   TASKS.md does not need a hash refresh. Confirm the workspace is still clean:
 
    ```bash
    speccy status SPEC-NNNN --json

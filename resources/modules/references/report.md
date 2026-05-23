@@ -1,7 +1,7 @@
 # Worked-instance reference: `REPORT.md`
 
-This file shows the canonical post-SPEC-0035 shape of a Speccy
-`REPORT.md`. The example continues the SPEC-0042 widget-render-timeout
+This file shows the canonical shape of a Speccy
+`REPORT.md`. The example continues the SPEC-NNNN widget-render-timeout
 scenario from `spec.md` / `tasks.md` in this directory.
 
 A real `REPORT.md` lives at `.speccy/specs/NNNN-slug/REPORT.md` and is
@@ -11,14 +11,14 @@ parsed by `speccy verify` against the `RPT-*` lint family.
 
 ```markdown
 ---
-spec: SPEC-0042
+spec: SPEC-NNNN
 outcome: implemented
 generated_at: 2026-05-22T08:15:00Z
 ---
 
-# REPORT: SPEC-0042 Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
+# REPORT: SPEC-NNNN Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
 
-<report spec="SPEC-0042">
+<report spec="SPEC-NNNN">
 
 <coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
 T-001 added `timeout_ms: u32` to `widget-cli/src/args.rs` with a
@@ -44,7 +44,7 @@ timeout-attributable stderr output. Retry count: 0.
 </coverage>
 
 <coverage req="REQ-003" result="not-applicable" scenarios="">
-REQ-003 was removed from SPEC-0042 during the 2026-05-21 amendment
+REQ-003 was removed from SPEC-NNNN during the 2026-05-21 amendment
 (see the Changelog row in `SPEC.md`); no tasks cover it and no
 scenarios remain. Recorded here to keep the coverage table aligned
 with the historical requirement numbering.
@@ -56,7 +56,7 @@ with the historical requirement numbering.
 
 The 600000ms upper bound surfaced one design question during review:
 whether the bound should be a CLI-only guardrail or also enforced in
-`widget-core` library callers. DEC-002 in SPEC-0042 settled this as
+`widget-core` library callers. DEC-002 in SPEC-NNNN settled this as
 CLI-only; library callers continue to pass any `Duration` they want.
 The integration test suite carries one explicit library-caller test
 passing `Duration::from_secs(3600)` to confirm the library layer

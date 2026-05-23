@@ -56,7 +56,7 @@ Every `<implementer>` element in the task's journal file
 field naming the path of a per-task evidence file. That file is
 your primary input alongside the diff -- it is the implementer's
 red-then-green paper trail and the surface on which fabrication
-risk lives. Walk these four steps before forming a verdict:
+risk lives. Walk these five steps before forming a verdict:
 
 1. Locate the `Evidence:` field inside each `<implementer>` element
    body in the journal file at
@@ -70,6 +70,34 @@ risk lives. Walk these four steps before forming a verdict:
 4. Treat fabricated-looking evidence content as a
    `verdict="blocking"` review. Name the fabrication pattern you
    matched in the blocking summary.
+5. Read the Evidence field's CHK-by-CHK roll call. Every `CHK-NNN`
+   under the task's covered REQs must appear with one of three
+   labels: `demonstrated`, `hygiene`, or `judgment-only`. A missing
+   CHK is a `verdict="blocking"` review with the missing CHK named
+   in the summary -- the roll call exists to make execution
+   coverage legible, and silent omission is exactly what it must
+   surface. A CHK labelled `judgment-only` is NOT yours to block on
+   -- it is explicitly deferred to reviewer-business or
+   reviewer-style; confirm the label is plausible (the CHK
+   genuinely cannot be demonstrated by a deterministic command) and
+   move on. A CHK labelled `hygiene` must cite a specific test name
+   or file path so you can re-run the same scope; a bare
+   "test suite passes" claim without naming the specific test that
+   covers this CHK is `verdict="blocking"` for the same reason as a
+   missing entry.
+
+Shape recognition — a valid Evidence roll call looks like:
+
+```
+- Evidence: paper trail at `.speccy/specs/NNNN-slug/evidence/T-NNN.md`.
+  Roll call for CHKs under REQ-NNN:
+  - CHK-001: demonstrated → Scenario 1 covers <description>.
+  - CHK-002: hygiene → `<test_name>` in `<file:path>`.
+  - CHK-003: judgment-only → reviewer-business judges <focus>.
+```
+
+A roll call missing a CHK the task covers, or a `hygiene` label
+without a specific test cite, is `verdict="blocking"` per step 5.
 
 Scrutinise the loaded evidence for these fabrication patterns. A
 single match is enough to block; do not wait for the implementer to

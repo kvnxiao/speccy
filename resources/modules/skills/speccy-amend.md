@@ -17,7 +17,7 @@ reconciliation are not forgotten.
 1. Read the existing SPEC's current location and state:
 
    ```bash
-   speccy status SPEC-0007 --json
+   speccy status SPEC-NNNN --json
    ```
 
    The JSON's `spec_md_path` field names the SPEC.md file to edit.
@@ -130,15 +130,14 @@ reconciliation are not forgotten.
 
    Canonical journal `<blockers>` shape: `{{ speccy_references_path }}/journal-blockers.md`.
 
-   The `<blockers>` body remains an amendment-driven blocker
-   directive: name what changed in SPEC and what the next
-   implementer attempt must address. Only the write target and
-   element name change relative to the legacy flow; the
-   `completed` → `pending` state flip is unchanged.
+   The `<blockers>` body is an amendment-driven blocker directive:
+   name what changed in SPEC and what the next implementer attempt
+   must address. The `completed` → `pending` state flip on the
+   affected task is part of the same amendment turn.
 5. Record the new spec hash:
 
    ```bash
-   speccy lock SPEC-0007
+   speccy lock SPEC-NNNN
    ```
 
 6. Re-run `speccy status` to confirm `TSK-003` cleared.
@@ -148,5 +147,5 @@ reconciliation are not forgotten.
 This recipe is a single pass, not a loop -- but step 6 is the gate. If
 the lint still fires, repeat from step 1 (something was missed).
 
-Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-0007` to pick up any tasks
+Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-NNNN` to pick up any tasks
 that flipped back to `state="pending"`.

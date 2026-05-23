@@ -1,8 +1,8 @@
 # Worked-instance reference: per-task journal `<implementer>` block
 
-This file shows the canonical post-SPEC-0034 + post-SPEC-0037 shape of
+This file shows the canonical shape of
 an `<implementer>` block inside a per-task journal file. The example
-continues the SPEC-0042 widget-render-timeout scenario from `spec.md` /
+continues the SPEC-NNNN widget-render-timeout scenario from `spec.md` /
 `tasks.md` in this directory.
 
 A real journal file lives at
@@ -20,7 +20,7 @@ block beneath.
 
 ```markdown
 ---
-spec: SPEC-0042
+spec: SPEC-NNNN
 task: T-001
 generated_at: 2026-05-21T19:45:00Z
 ---
@@ -55,15 +55,24 @@ generated_at: 2026-05-21T19:45:00Z
   --check` exited 0. `cargo deny check` exited 0 (no new
   dependencies added — `Duration` and `Instant` are `std`).
 
-- Evidence: red-then-green paper trail in
-  `.speccy/specs/0042-widget-render-timeout/evidence/T-001.md`
-  records two scenarios: scenario 1 captures the pre-edit run of
-  `cargo run -- render --timeout-ms 500 fixtures/cycle.gv` hanging
-  past 60s (killed manually, no exit code) inside `<red>`, and the
-  post-edit run exiting 124 in 511ms with the expected stderr line
-  inside `<green>`. Scenario 2 captures the range-parser rejection
-  paths via `cargo run -- render --timeout-ms 0` exiting 2 with the
-  documented stderr message.
+- Evidence: red-then-green paper trail at
+  `.speccy/specs/NNNN-widget-render-timeout/evidence/T-001.md`.
+  Roll call for the four CHKs under REQ-001 / REQ-002:
+  - CHK-001 (range-parser rejection): demonstrated → evidence
+    Scenario 2 covers `--timeout-ms 0` exiting 2 with the
+    SPEC-mandated stderr message.
+  - CHK-002 (default 30000ms when flag omitted): hygiene → existing
+    `render_timeout_observed` unit test in `widget-core` runs under
+    `cargo test --workspace` and reads the effective value via the
+    `--print-config` debug flag.
+  - CHK-003 (cycle fixture aborts at budget): demonstrated →
+    evidence Scenario 1 captures the pre-edit 60s hang versus the
+    post-edit 511ms exit-124 run with the expected stderr line.
+  - CHK-004 (trivial fixture under budget): demonstrated → evidence
+    Scenario 3 confirms the happy path exits 0 with no
+    timeout-attributable stderr.
+  No CHK in T-001's scope is `judgment-only`; the timeout contract
+  is fully scriptable.
 
 - Discovered issues: The pre-existing
   `widget-core::render::cycle_detector::CycleDetector` carries an
@@ -74,15 +83,15 @@ generated_at: 2026-05-21T19:45:00Z
   touching the cycle detector sees the context.
 
 - Procedural compliance: This implementer entry lands directly in
-  `journal/T-001.md` per the post-SPEC-0037 schema. No
-  `<implementer-note>` block was written into TASKS.md (that
-  element was retired in SPEC-0037 and the parser rejects it). The
-  TASKS.md `state="..."` attribute for T-001 flips from
-  `in-progress` to `in-review` as the final step of this turn. No
-  shipped skill bodies under `skills/` required edits during this
-  task — the implementer prompt at HEAD already documents the
-  post-SPEC-0034 six-field handoff template, so no
-  friction-to-skill-update was triggered.
+  `journal/T-001.md` per the journal-file schema. No
+  `<implementer-note>` block was written into TASKS.md (the parser
+  rejects that element). The TASKS.md `state="..."` attribute for
+  T-001 flips from `in-progress` to `in-review` as the final step
+  of this turn. No shipped skill
+  bodies under `skills/` required edits during this task — the
+  implementer prompt at HEAD already documents the canonical
+  six-field handoff template, so no friction-to-skill-update was
+  triggered.
 </implementer>
 ```
 
@@ -111,11 +120,7 @@ All three are required; there are no optional attributes:
 ## Six-field handoff template
 
 The body of every `<implementer>` block uses these six fields in
-this order, each as a bullet line prefixed by `- <Field>:`. The
-field labels are the post-SPEC-0034 canonical set; the pre-SPEC-0034
-labels `Commands run` and `Exit codes` are retired as bullet-line
-prefixes and folded into the `Hygiene checks` field as narrative
-prose.
+this order, each as a bullet line prefixed by `- <Field>:`.
 
 - **Completed**: what landed in this turn, named concretely
   (files touched, behaviours observed). Past tense.
@@ -125,13 +130,27 @@ prose.
   (or the project-equivalent set) and their observed exit codes;
   any other commands the implementer ran for verification.
 - **Evidence**: pointer to the per-task `evidence/T-NNN.md` paper
-  trail; one-sentence summary of which scenarios it covers and the
-  red-then-green pattern recorded.
+  trail, then an explicit roll call accounting for every
+  `CHK-NNN` under the task's covered REQs. Each CHK is labelled
+  with how it is proved:
+  - `demonstrated`: a red-then-green scenario in the evidence file
+    proves it; cite the scenario heading.
+  - `hygiene`: a project test in the standard hygiene suite (e.g.,
+    `cargo test`, `pnpm test`) covers it; cite the test name or
+    file path so a reviewer can re-run the same scope.
+  - `judgment-only`: no scriptable demonstration is possible (e.g.,
+    "error message is clear to a user", "naming reads well in
+    context"); reviewer-business or reviewer-style judges it on
+    the diff alone.
+  A missing CHK in the roll call is blocking for reviewer-tests
+  even if the project test suite is green -- the gap is exactly
+  what the roll call exists to surface. The `judgment-only` label
+  is an honest signal, not a failure mode: it marks where
+  execution-based proof stops and persona judgment begins.
 - **Discovered issues**: pre-existing problems noticed but not
   fixed (out-of-scope); context for the next implementer.
 - **Procedural compliance**: confirms the state transition in
-  TASKS.md, confirms no retired XML elements were written, and
-  notes any shipped-skill edits made per the
+  TASKS.md and notes any shipped-skill edits made per the
   "friction-to-skill-update" convention in AGENTS.md.
 
 ## Subsequent rounds

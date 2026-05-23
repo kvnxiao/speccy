@@ -37,7 +37,7 @@ The caller (the `speccy-vet` skill)
 pre-resolves two values and passes them in your prompt:
 
 - `<spec-dir>` — the spec's directory under `.speccy/specs/` (e.g.,
-  `.speccy/specs/0038-skill-pack-references/`). Use this for
+  `.speccy/specs/NNNN-slug/`). Use this for
   `SPEC.md`, `TASKS.md`, mission files, and the journal.
 - `<base-ref>` — the diff baseline ref (default branch name like
   `main`, or `master`). Use it for `git diff <base-ref>`.
