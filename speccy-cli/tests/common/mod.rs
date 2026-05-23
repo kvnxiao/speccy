@@ -132,3 +132,41 @@ pub fn bootstrap_tasks_md(spec_id: &str) -> String {
         "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n<task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nfirst\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
     )
 }
+
+/// Lowercase hex SHA-256 of the given bytes. Mirrors the encoding the
+/// production code uses for `tasks_hash` in VET.md gate blocks.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    const_hex::encode(sha2::Sha256::digest(bytes))
+}
+
+/// Wrap a `<task>` element body in the TASKS.md frontmatter shape with
+/// a bootstrap-pending spec hash. Used by every `next_*` integration
+/// test that needs a minimum-viable TASKS.md.
+pub fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
+    format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n{tasks_xml}\n\n",
+    )
+}
+
+/// Render a single `<task>` element body covering REQ-001 with a
+/// placeholder scenarios block.
+pub fn task_xml(id: &str, state: &str) -> String {
+    format!(
+        "<task id=\"{id}\" state=\"{state}\" covers=\"REQ-001\">\ndo the thing\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+    )
+}
+
+/// Write a fresh, passing `journal/VET.md` whose `tasks_hash` matches
+/// the supplied TASKS.md bytes. Drives the SPEC-0041 fresh-pass gate
+/// branch in `speccy next`.
+pub fn write_fresh_pass_vet_md(spec_dir: &Utf8Path, tasks_md: &str) -> TestResult {
+    let hash = sha256_hex(tasks_md.as_bytes());
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    let body = format!(
+        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), body)?;
+    Ok(())
+}

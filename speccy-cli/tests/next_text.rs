@@ -17,38 +17,14 @@ mod common;
 use assert_cmd::Command;
 use common::TestResult;
 use common::Workspace;
+use common::sha256_hex;
 use common::spec_md_template;
+use common::task_xml;
+use common::tasks_md_xml;
 use common::write_spec;
 use predicates::str::contains;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
-
-fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
-    format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n{tasks_xml}\n\n",
-    )
-}
-
-fn task_xml(id: &str, state: &str) -> String {
-    format!(
-        "<task id=\"{id}\" state=\"{state}\" covers=\"REQ-001\">\ndo the thing\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
-    )
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        if write!(out, "{byte:02x}").is_err() {
-            break;
-        }
-    }
-    out
-}
 
 fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();

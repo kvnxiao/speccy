@@ -152,7 +152,13 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
     let split = split_frontmatter(source, path)?;
     let (yaml_raw, body, body_offset) = match split {
         Split::Some { yaml, body } => {
-            let offset = source.len().saturating_sub(body.len());
+            let offset = source.len().checked_sub(body.len()).ok_or_else(|| {
+                Box::new(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: 0,
+                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
+                })
+            })?;
             (yaml.to_owned(), body, offset)
         }
         Split::None => {

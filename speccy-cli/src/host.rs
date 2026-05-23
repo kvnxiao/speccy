@@ -37,27 +37,6 @@ impl HostChoice {
         }
     }
 
-    /// Project-relative skill install directory split into its two
-    /// path segments. SPEC-0015 documents the destination paths; the
-    /// bundle layout now mirrors the install destination 1:1 via
-    /// [`Self::install_roots`], so a separate sub-path constant is
-    /// redundant.
-    ///
-    /// This split form is retained for callers that classify
-    /// `--force` user-file safety: tests in `speccy-cli/tests/init.rs`
-    /// (and the SPEC-0015 invariant preserved across SPEC-0016) join
-    /// these segments onto the project root when reasoning about which
-    /// shipped files the renderer will overwrite. Claude Code:
-    /// `.claude/skills/`. Codex: `.agents/skills/` per `OpenAI`'s docs
-    /// at `developers.openai.com/codex/skills`.
-    #[must_use = "the destination path is where the copy lands on disk"]
-    pub const fn destination_segments(self) -> [&'static str; 2] {
-        match self {
-            HostChoice::ClaudeCode => [".claude", "skills"],
-            HostChoice::Codex => [".agents", "skills"],
-        }
-    }
-
     /// Project-relative install roots this host writes to.
     ///
     /// Claude Code writes only to `.claude/`. Codex writes to two

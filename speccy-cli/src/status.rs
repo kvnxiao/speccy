@@ -25,6 +25,7 @@ use speccy_core::workspace::count_open_questions;
 use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
 use speccy_core::workspace::stale_for;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// CLI-level error returned by [`run`].
@@ -40,6 +41,9 @@ pub enum StatusError {
     /// Cwd path is not valid UTF-8.
     #[error("current working directory is not valid UTF-8")]
     CwdNotUtf8,
+    /// I/O failure writing to stdout.
+    #[error("failed to write output")]
+    Io(#[from] std::io::Error),
     /// JSON serialisation failed (should be unreachable for our owned
     /// types).
     #[error("failed to serialise status JSON")]
@@ -133,7 +137,7 @@ pub fn assemble<'a>(
     diagnostics: Vec<Diagnostic>,
     repo_sha_value: String,
 ) -> StatusReport<'a> {
-    let (per_spec, mut workspace_diagnostics) = partition_diagnostics(diagnostics);
+    let (mut per_spec, mut workspace_diagnostics) = partition_diagnostics(diagnostics);
     synthesize_workspace_diagnostics(workspace, &mut workspace_diagnostics);
 
     let specs: Vec<SpecView<'a>> = workspace
@@ -143,7 +147,7 @@ pub fn assemble<'a>(
             let diags = parsed
                 .spec_id
                 .as_ref()
-                .map(|id| per_spec_for(id, &per_spec))
+                .and_then(|id| per_spec.remove(id))
                 .unwrap_or_default();
             build_view(workspace, parsed, diags)
         })
@@ -172,28 +176,14 @@ fn synthesize_workspace_diagnostics(workspace: &Workspace, out: &mut Vec<Diagnos
     }
 }
 
-fn per_spec_for(id: &str, per_spec: &[(String, Vec<Diagnostic>)]) -> Vec<Diagnostic> {
-    per_spec
-        .iter()
-        .find(|(spec_id, _)| spec_id == id)
-        .map(|(_, diags)| diags.clone())
-        .unwrap_or_default()
-}
-
 fn partition_diagnostics(
     diagnostics: Vec<Diagnostic>,
-) -> (Vec<(String, Vec<Diagnostic>)>, Vec<Diagnostic>) {
-    let mut per_spec: Vec<(String, Vec<Diagnostic>)> = Vec::new();
+) -> (BTreeMap<String, Vec<Diagnostic>>, Vec<Diagnostic>) {
+    let mut per_spec: BTreeMap<String, Vec<Diagnostic>> = BTreeMap::new();
     let mut workspace_level: Vec<Diagnostic> = Vec::new();
     for diag in diagnostics {
         match &diag.spec_id {
-            Some(id) => {
-                if let Some(existing) = per_spec.iter_mut().find(|(s, _)| s == id) {
-                    existing.1.push(diag);
-                } else {
-                    per_spec.push((id.clone(), vec![diag]));
-                }
-            }
+            Some(id) => per_spec.entry(id.clone()).or_default().push(diag),
             None => workspace_level.push(diag),
         }
     }
@@ -386,7 +376,7 @@ fn available_ids(report: &StatusReport<'_>) -> String {
 }
 
 fn write_all(out: &mut dyn std::io::Write, bytes: &[u8]) -> Result<(), StatusError> {
-    out.write_all(bytes).map_err(StatusError::Cwd)
+    out.write_all(bytes).map_err(StatusError::Io)
 }
 
 /// Resolve current working directory as a `Utf8PathBuf`.
@@ -487,9 +477,7 @@ fn render_spec_text(view: &SpecView<'_>, out: &mut dyn std::io::Write) -> Result
 }
 
 fn write_line(out: &mut dyn std::io::Write, line: &str) -> Result<(), StatusError> {
-    let mut bytes = line.as_bytes().to_vec();
-    bytes.push(b'\n');
-    out.write_all(&bytes).map_err(StatusError::Cwd)
+    writeln!(out, "{line}").map_err(StatusError::Io)
 }
 
 /// Build the JSON output payload from a `StatusReport` and a

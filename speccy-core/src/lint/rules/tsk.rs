@@ -162,9 +162,12 @@ fn tsk_003_staleness(
     tasks_md: &crate::parse::TasksDoc,
     out: &mut Vec<Diagnostic>,
 ) {
-    let stored_hash_owned =
+    let Some(stored_hash_owned) =
         extract_frontmatter_field(&tasks_md.frontmatter_raw, "spec_hash_at_generation")
-            .unwrap_or_default();
+    else {
+        // TSK-004 already reports the missing field; skip staleness check.
+        return;
+    };
     let stored_hash = stored_hash_owned.as_str();
 
     if stored_hash == BOOTSTRAP_SENTINEL {
@@ -185,7 +188,7 @@ fn tsk_003_staleness(
     }
 
     if let Some(spec_md) = spec.spec_md_ok() {
-        let current = hex_encode(&spec_md.sha256);
+        let current = const_hex::encode(spec_md.sha256);
         let expected_form = stored_hash.strip_prefix("sha256:").unwrap_or(stored_hash);
         if !expected_form.eq_ignore_ascii_case(&current) {
             out.push(Diagnostic::with_file(
@@ -194,7 +197,7 @@ fn tsk_003_staleness(
                 spec.spec_id.clone(),
                 tasks_path.to_path_buf(),
                 format!(
-                    "TASKS.md may be stale: stored `spec_hash_at_generation` = `{stored_hash}` but current SPEC.md sha256 = `{current}`. Run `/speccy:amend` to reconcile."
+                    "TASKS.md may be stale: stored `spec_hash_at_generation` = `{stored_hash}` but current SPEC.md sha256 = `{current}`. Run `/speccy-amend` to reconcile."
                 ),
             ));
         }
@@ -259,24 +262,5 @@ fn tsk_006_no_notes_in_tasks_md(
                 task_id = misplaced.task_id,
             ),
         ));
-    }
-}
-
-fn hex_encode(bytes: &[u8; 32]) -> String {
-    let mut out = String::with_capacity(64);
-    for byte in bytes {
-        let hi = (byte >> 4) & 0x0f;
-        let lo = byte & 0x0f;
-        out.push(hex_digit(hi));
-        out.push(hex_digit(lo));
-    }
-    out
-}
-
-fn hex_digit(nibble: u8) -> char {
-    match nibble {
-        0..=9 => char::from(b'0'.saturating_add(nibble)),
-        10..=15 => char::from(b'a'.saturating_add(nibble.saturating_sub(10))),
-        _ => '?',
     }
 }

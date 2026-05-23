@@ -33,6 +33,17 @@ pub fn parse_markdown<'a>(arena: &'a Arena<'a>, source: &str) -> &'a AstNode<'a>
     parse_document(arena, source, &options)
 }
 
+/// First child of `item` whose AST value is a `Paragraph`, or `None`
+/// if none. Used by markdown walkers that need the textual lede of a
+/// list item or heading.
+#[must_use = "the returned reference is the paragraph node to walk"]
+pub fn first_paragraph_child<'a>(item: &'a AstNode<'a>) -> Option<&'a AstNode<'a>> {
+    item.children().find(|c| {
+        let ast = c.data.borrow();
+        matches!(ast.value, NodeValue::Paragraph)
+    })
+}
+
 /// Concatenate the inline text content of a node and its descendants.
 ///
 /// Code spans contribute their literal payload; soft and hard line breaks
@@ -51,34 +62,4 @@ pub fn inline_text<'a>(node: &'a Node<'a, RefCell<Ast>>) -> String {
         }
     }
     out
-}
-
-/// Like [`inline_text`], but preserves code spans separately so callers
-/// can recover the original backtick-quoted segments. Each returned span
-/// is either a [`TextSpan::Plain`] (Text or whitespace) or
-/// [`TextSpan::Code`] (the literal between backticks).
-#[must_use = "the returned spans are needed to recover code-span content"]
-pub fn inline_spans<'a>(node: &'a Node<'a, RefCell<Ast>>) -> Vec<TextSpan> {
-    let mut out = Vec::new();
-    for descendant in node.descendants() {
-        let ast = descendant.data.borrow();
-        match &ast.value {
-            NodeValue::Text(t) => out.push(TextSpan::Plain(t.clone().into_owned())),
-            NodeValue::Code(c) => out.push(TextSpan::Code(c.literal.clone())),
-            NodeValue::LineBreak | NodeValue::SoftBreak => {
-                out.push(TextSpan::Plain(" ".to_owned()));
-            }
-            _ => {}
-        }
-    }
-    out
-}
-
-/// One span of inline content.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TextSpan {
-    /// Plain text (or a single space substituting for a line break).
-    Plain(String),
-    /// Literal content of a code span between backticks.
-    Code(String),
 }

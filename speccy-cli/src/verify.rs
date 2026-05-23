@@ -211,10 +211,7 @@ fn shape_totals(ws: &Workspace) -> (usize, usize) {
     let mut requirements = 0usize;
     let mut scenarios = 0usize;
     for parsed in &ws.specs {
-        let spec_status = parsed
-            .spec_md
-            .as_ref()
-            .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+        let spec_status = parsed.status_or_in_progress();
         if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
             continue;
         }

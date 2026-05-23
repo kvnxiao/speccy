@@ -242,10 +242,13 @@ resources/               Shipped with Speccy; rendered/copied by `speccy init`
     phases/              Three pinned phase-worker bodies (speccy-tasks.md,
                          speccy-work.md, speccy-ship.md); plus speccy-init.md
                          which is dual-consumed by `speccy init` itself
-    skills/              Five interactive skill bodies (speccy-brainstorm.md,
+    skills/              Six interactive skill bodies (speccy-brainstorm.md,
                          speccy-plan.md, speccy-amend.md, speccy-review.md
-                         orchestrator) — full-body SKILL.md eject targets
-    examples/            Progressive-disclosure example bodies (evidence.md)
+                         orchestrator, speccy-orchestrate.md, speccy-vet.md)
+                         — full-body SKILL.md eject targets
+    references/          Canonical worked-instance reference files
+                         (spec.md, tasks.md, report.md, journal-*.md,
+                         evidence.md) shared across skills
   agents/                Per-host wrappers (MiniJinja-templated)
     .claude/             Renders to <project>/.claude/{skills,agents}/
     .agents/             Renders to <project>/.agents/skills/ (Codex)
@@ -382,8 +385,8 @@ requirements.
 The `/speccy-work` skill is a single-task primitive. One invocation
 implements one task and exits with one state transition recorded in
 TASKS.md. The skill ships as a thin SKILL.md stub plus a full agent
-body at `.claude/agents/speccy-work.md` (pinned `model: sonnet[1m]`,
-`effort: medium`) and the Codex twin at
+body at `.claude/agents/speccy-work.md` (pinned `model: opus[1m]`,
+`effort: low`) and the Codex twin at
 `.codex/agents/speccy-work.toml`.
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
@@ -730,10 +733,11 @@ step.
 ## Concurrent pickup
 
 `state="in-progress"` with a session marker is enough for
-`speccy next --kind implement` to skip in-progress tasks. If two
-agents race to claim the same `state="pending"` task, git will
-conflict on the TASKS.md edit and one will lose. That is acceptable
-for v1.
+`speccy next` to skip in-progress tasks via the resolver's
+state-based priority (there is no `--kind` flag — see
+`speccy next` above). If two agents race to claim the same
+`state="pending"` task, git will conflict on the TASKS.md edit and
+one will lose. That is acceptable for v1.
 
 A future harness may add file-locking, ticket queues, or worktree
 isolation. Speccy v1 does not.
@@ -963,7 +967,7 @@ implemented -> superseded       A later spec declared `supersedes` pointing here
 in-progress -> superseded       Rare; replaced before completion.
 ```
 
-Skills (specifically `/speccy:ship` and `/speccy:amend`) update `status`.
+Skills (specifically `/speccy-ship` and `/speccy-amend`) update `status`.
 The CLI doesn't auto-transition state — it surfaces inconsistencies via lint
 (e.g. `status: implemented` but some tasks have `state != "completed"`).
 
@@ -984,7 +988,7 @@ changed; the Changelog summarizes *why* and is loaded into every prompt
 that reads SPEC.md.
 
 Reviewer personas read the Changelog to understand recent intent
-shifts. The skill prompt for `/speccy:amend` instructs the agent to
+shifts. The skill prompt for `/speccy-amend` instructs the agent to
 append a Changelog row whenever it edits SPEC.md.
 
 ### Lint behavior
@@ -1735,7 +1739,7 @@ If it drifts, `speccy status` reports:
 ```text
 SPEC-001: TASKS.md may be stale.
   Hash drift: SPEC.md sha256 changed since tasks were generated.
-  Run /speccy:amend to reconcile.
+  Run /speccy-amend to reconcile.
 ```
 
 This is a soft warning. The user / skill decides what to do. No
@@ -1760,19 +1764,22 @@ resources/
       speccy-amend.md
       speccy-review.md       Orchestrator (dispatches the six reviewer sub-agents)
       speccy-orchestrate.md  Drives the per-task work + review loop across one SPEC
-      speccy-vet.md Pre-ship SPEC-vs-impl drift review + autonomous fix loop
+      speccy-vet.md          Pre-ship SPEC-vs-impl drift review + autonomous fix loop
     phases/                  Full-body sources for the pinned phase workers
       speccy-init.md         Used by speccy-init's interactive SKILL.md too
       speccy-tasks.md        Decompose one SPEC into TASKS.md
       speccy-work.md         Implement one task (single-task primitive)
       speccy-ship.md         Write REPORT.md + open PR
-    personas/                Six reviewer persona bodies + co-located snippets
+    personas/                Six reviewer + three vet persona bodies + co-located snippets
       reviewer-business.md
       reviewer-tests.md
       reviewer-security.md
       reviewer-style.md
       reviewer-architecture.md
       reviewer-docs.md
+      vet-reviewer.md
+      vet-implementer.md
+      vet-simplifier.md
       verdict_return_contract.md   Topic-named snippets {% included %} by
       inline_note_format.md         the persona bodies above. Filename pattern
       no_tasks_md_writes.md         distinguishes snippets from body files;
@@ -1786,12 +1793,17 @@ resources/
       evidence.md            the source of truth).
       journal-blockers.md
   agents/                    Per-host MiniJinja wrappers (rendered at init time)
-    .claude/skills/speccy-<verb>/SKILL.md.tmpl   Eight skills total
+    .claude/skills/speccy-<verb>/SKILL.md.tmpl   Ten skills total
     .claude/agents/speccy-{tasks,work,ship}.md.tmpl   Pinned phase workers
     .claude/agents/reviewer-<persona>.md.tmpl    Six reviewer sub-agents
+    .claude/agents/vet-{reviewer,implementer,simplifier}.md.tmpl
+                                                 Three vet sub-agents driven by
+                                                 /speccy-vet (drift review + drift
+                                                 fix + simplifier polish)
     .agents/skills/speccy-<verb>/SKILL.md.tmpl   Codex skill files
     .codex/agents/speccy-{tasks,work,ship}.toml.tmpl
     .codex/agents/reviewer-<persona>.toml.tmpl
+    .codex/agents/vet-{reviewer,implementer,simplifier}.toml.tmpl
 ```
 
 There is no `resources/modules/prompts/` directory and no embedded
@@ -2418,16 +2430,20 @@ empty lists or null. The parser does not distinguish.
 
 ## Persona file resolution
 
-Lookup order:
+SPEC-0027 made host-native sub-agent files the sole canonical
+persona surface. There is **no project-local override directory**.
+Persona bodies live at `resources/modules/personas/reviewer-X.md`
+inside the CLI binary and are rendered into the host pack at
+`speccy init` time:
 
-1. Project-local: `.speccy/skills/personas/reviewer-X.md` (copied
-   to `.speccy/skills/` at `speccy init` time so users can tune
-   them)
-2. Shipped fallback compiled into the CLI binary:
-   `resources/modules/personas/reviewer-X.md`
+- Claude Code: `.claude/agents/reviewer-<persona>.md`
+- Codex: `.codex/agents/reviewer-<persona>.toml`
 
-If the project-local override exists but is malformed, lint warns
-and the CLI falls through to the shipped version.
+The host loads that file as the sub-agent's system context when
+`speccy-review` (or `speccy-vet`) spawns it. To customise a
+persona, edit the rendered file in place — the renderer treats it
+as a user-owned file thereafter and will not overwrite it without
+`--force`.
 
 ## Subdirectory naming
 

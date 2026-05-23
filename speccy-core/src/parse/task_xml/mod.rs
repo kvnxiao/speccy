@@ -773,7 +773,7 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
                 allowed_attrs,
             ));
         }
-        validate_attribute_value(&t.name, k, v, path, t.span.start)?;
+        validate_attribute_value(&t.name, k, v, path)?;
     }
     Ok(())
 }
@@ -783,7 +783,6 @@ fn validate_attribute_value(
     attr: &str,
     value: &str,
     path: &Utf8Path,
-    offset: usize,
 ) -> ParseResult<()> {
     match (element_name, attr) {
         ("task", "id") if !task_id_regex().is_match(value) => {
@@ -794,10 +793,7 @@ fn validate_attribute_value(
                 expected_pattern: r"T-\d{3,}".to_owned(),
             }))
         }
-        _ => {
-            let _ = offset;
-            Ok(())
-        }
+        _ => Ok(()),
     }
 }
 

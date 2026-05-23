@@ -8,7 +8,6 @@ use crate::parse::markdown::parse_markdown;
 use comrak::Arena;
 use comrak::arena_tree::Node;
 use comrak::nodes::Ast;
-use comrak::nodes::AstNode;
 use comrak::nodes::NodeValue;
 use std::cell::RefCell;
 
@@ -55,7 +54,7 @@ fn collect_unchecked_items<'a>(
         let line = item_ast.sourcepos.start.line;
         drop(item_ast);
 
-        let Some(paragraph) = first_paragraph(item) else {
+        let Some(paragraph) = crate::parse::markdown::first_paragraph_child(item) else {
             continue;
         };
         let text = inline_text(paragraph);
@@ -76,11 +75,4 @@ fn collect_unchecked_items<'a>(
             format!("unchecked open question: {question}"),
         ));
     }
-}
-
-fn first_paragraph<'a>(item: &'a AstNode<'a>) -> Option<&'a AstNode<'a>> {
-    item.children().find(|c| {
-        let ast = c.data.borrow();
-        matches!(ast.value, NodeValue::Paragraph)
-    })
 }

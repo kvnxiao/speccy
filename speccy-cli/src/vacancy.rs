@@ -43,13 +43,7 @@ pub enum VacancyError {
     CwdNotUtf8,
     /// I/O failure writing to stdout.
     #[error("failed to write output: {0}")]
-    Io(std::io::Error),
-}
-
-impl From<std::io::Error> for VacancyError {
-    fn from(e: std::io::Error) -> Self {
-        VacancyError::Io(e)
-    }
+    Io(#[from] std::io::Error),
 }
 
 /// `speccy vacancy` arguments.

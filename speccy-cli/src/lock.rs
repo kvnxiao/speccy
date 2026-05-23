@@ -152,7 +152,9 @@ fn locate_spec_dir(project_root: &Utf8Path, canonical_id: &str) -> Result<Utf8Pa
 fn find_spec_dir_in(parent: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
     let entries = fs_err::read_dir(parent.as_std_path()).ok()?;
     for entry in entries.flatten() {
-        let meta = entry.metadata().ok()?;
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
         if !meta.is_dir() {
             continue;
         }
@@ -168,7 +170,9 @@ fn find_spec_dir_in(parent: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
 fn find_spec_dir_in_mission_folders(specs_dir: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
     let entries = fs_err::read_dir(specs_dir.as_std_path()).ok()?;
     for entry in entries.flatten() {
-        let meta = entry.metadata().ok()?;
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
         if !meta.is_dir() {
             continue;
         }

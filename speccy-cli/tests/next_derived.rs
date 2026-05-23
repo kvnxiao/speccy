@@ -17,39 +17,11 @@ use assert_cmd::Command;
 use common::TestResult;
 use common::Workspace;
 use common::spec_md_template;
+use common::task_xml;
+use common::tasks_md_xml;
+use common::write_fresh_pass_vet_md;
 use common::write_spec;
 use predicates::str::contains;
-
-fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
-    format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n{tasks_xml}\n\n",
-    )
-}
-
-fn task_xml(id: &str, state: &str) -> String {
-    format!(
-        "<task id=\"{id}\" state=\"{state}\" covers=\"REQ-001\">\ndo the thing\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
-    )
-}
-
-fn write_fresh_pass_vet_md(spec_dir: &camino::Utf8Path, tasks_md: &str) -> TestResult {
-    use sha2::Digest as _;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(tasks_md.as_bytes());
-    let digest = hasher.finalize();
-    let mut hash = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        write!(hash, "{byte:02x}")?;
-    }
-    let journal = spec_dir.join("journal");
-    fs_err::create_dir_all(journal.as_std_path())?;
-    let body = format!(
-        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
-    );
-    fs_err::write(journal.join("VET.md").as_std_path(), body)?;
-    Ok(())
-}
 
 // -- CHK-007 ------------------------------------------------------------------
 

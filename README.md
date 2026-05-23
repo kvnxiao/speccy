@@ -167,7 +167,7 @@ From this point onward, the workflow is entirely slash-commands. The
 golden path consists of five recipes:
 
 ```text
-/speccy-plan      Phase 1: draft SPEC.md + spec.toml from the north star
+/speccy-plan      Phase 1: draft SPEC.md from the north star
 /speccy-tasks     Phase 2: decompose the SPEC into TASKS.md
 /speccy-work      Phase 3: implementer sub-agent loop, task by task
 /speccy-review    Phase 4: adversarial multi-persona review loop
@@ -216,29 +216,30 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
   specs/
     NNNN-slug/                  One spec, flat layout
       SPEC.md                   Frontmatter + PRD prose + nested <requirement>/<scenario>/<decision> elements + Changelog
-      TASKS.md                  Frontmatter (spec_hash_at_generation) + <task> elements + inline implementer/reviewer notes
+      TASKS.md                  Frontmatter (spec_hash_at_generation) + <task> elements
+      journal/T-NNN.md          Per-task implementer/reviewer/blockers activity prose (SPEC-0037)
       REPORT.md                 Frontmatter (outcome) + <report>/<coverage> elements (end of loop)
 
 .claude/                        (if host is Claude Code)
-  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship,orchestrate,holistic-gate}/
+  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship,orchestrate,vet}/
                                 Ten workflow recipes. The interactive skills
                                 (init, brainstorm, plan, review, amend, orchestrate,
-                                holistic-gate) eject as full-body SKILL.md; the three
+                                vet) eject as full-body SKILL.md; the three
                                 pinned phase workers (tasks, work, ship) eject as thin
                                 SKILL.md stubs pointing at the matching agent file.
   agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents (full body)
   agents/reviewer-*.md                 Six reviewer persona sub-agents
-  agents/holistic-{reviewer,implementer}.md
-                                Two holistic-loop sub-agents driven by
-                                /speccy-vet (drift review + drift fix)
+  agents/vet-{reviewer,implementer,simplifier}.md
+                                Three vet sub-agents driven by /speccy-vet
+                                (drift review + drift fix + simplifier polish)
 
 .agents/                        (if host is Codex)
   skills/speccy-*/                     Ten Codex skill SKILL.md files
 .codex/
   agents/speccy-{tasks,work,ship}.toml Pinned phase-worker sub-agents
   agents/reviewer-*.toml               Six reviewer persona sub-agents
-  agents/holistic-{reviewer,implementer}.toml
-                                Codex twins of the two holistic-loop sub-agents
+  agents/vet-{reviewer,implementer,simplifier}.toml
+                                Codex twins of the three vet sub-agents
 ```
 
 The requirement-to-scenario graph lives in-band as XML element tags
@@ -260,9 +261,11 @@ Speccy's shipped skill packs pin specific model and effort tiers for
 each phase of the development loop. The pin assignment is asymmetric
 and reflects the work-shape of each role: mechanical phases pin a
 mid-tier model so they run cheaply; adversarial reviewers pin a
-higher tier so they catch real drift. The orchestrator phases
-(`/speccy-init` and `/speccy-review`) stay unpinned and inherit
-whatever model the parent session is using.
+higher tier so they catch real drift. Interactive / orchestrator
+skills (`/speccy-init`, `/speccy-brainstorm`, `/speccy-plan`,
+`/speccy-amend`, `/speccy-review`, `/speccy-orchestrate`,
+`/speccy-vet`) stay unpinned and inherit whatever model the parent
+session is using.
 
 ### Pin assignment
 
@@ -279,6 +282,9 @@ whatever model the parent session is using.
 | `reviewer-security`     | `model: sonnet[1m]`, `effort: high`     | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `reviewer-style`        | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `reviewer-docs`         | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `vet-reviewer`          | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
+| `vet-implementer`       | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `vet-simplifier`        | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 
 The `[1m]` suffix selects the 1M-context variant on Claude Code so
 each agent can read the full SPEC, the full diff, and the relevant

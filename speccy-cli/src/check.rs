@@ -188,10 +188,7 @@ fn run_spec(
     let ws = scan(project_root);
     let spec = resolve_spec(&ws, spec_id)?;
 
-    let spec_status = spec
-        .spec_md
-        .as_ref()
-        .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+    let spec_status = spec.status_or_in_progress();
 
     // When the user names a dropped / superseded spec directly, make the
     // skip explicit (run_all silently skips them; here we surface it).
@@ -204,10 +201,7 @@ fn run_spec(
         return Ok(0);
     }
 
-    let label = spec
-        .spec_id
-        .clone()
-        .unwrap_or_else(|| display_spec_label(&spec.dir));
+    let label = spec.display_label();
     let (checks, malformed) = collect_for_spec(spec, &label, err)?;
 
     if checks.is_empty() {
@@ -228,10 +222,7 @@ fn run_qualified_check(
     let ws = scan(project_root);
     let spec = resolve_spec(&ws, spec_id)?;
 
-    let spec_status = spec
-        .spec_md
-        .as_ref()
-        .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+    let spec_status = spec.status_or_in_progress();
 
     if matches!(spec_status, SpecStatus::Dropped | SpecStatus::Superseded) {
         writeln!(
@@ -242,10 +233,7 @@ fn run_qualified_check(
         return Ok(0);
     }
 
-    let label = spec
-        .spec_id
-        .clone()
-        .unwrap_or_else(|| display_spec_label(&spec.dir));
+    let label = spec.display_label();
     let (spec_checks, malformed) = collect_for_spec(spec, &label, err)?;
 
     let matched: Vec<CollectedCheck> = spec_checks
@@ -299,19 +287,13 @@ fn run_task(
         // Parent SPEC.md marker tree failed to parse (or a stray
         // spec.toml is present); surface via collect_for_spec (one-shot
         // warning) and return an empty render set.
-        let label = spec
-            .spec_id
-            .clone()
-            .unwrap_or_else(|| display_spec_label(&spec.dir));
+        let label = spec.display_label();
         let (_checks, malformed) = collect_for_spec(spec, &label, err)?;
         writeln!(out, "No checks defined.")?;
         return Ok(i32::from(malformed > 0));
     };
 
-    let label = spec
-        .spec_id
-        .clone()
-        .unwrap_or_else(|| display_spec_label(&spec.dir));
+    let label = spec.display_label();
 
     // Accumulate scenarios in declared requirement order, deduplicating
     // on first occurrence so a scenario nested under multiple covered
@@ -347,13 +329,7 @@ fn run_task(
 fn resolve_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Result<&'w ParsedSpec, SelectorError> {
     ws.specs
         .iter()
-        .find(|s| {
-            let label = s
-                .spec_id
-                .clone()
-                .unwrap_or_else(|| display_spec_label(&s.dir));
-            label == spec_id
-        })
+        .find(|s| s.display_label() == spec_id)
         .ok_or_else(|| SelectorError::NoSpecMatching {
             spec_id: spec_id.to_owned(),
         })
@@ -399,14 +375,8 @@ fn collect_checks(
     let mut out = Vec::new();
     let mut malformed: u32 = 0;
     for parsed in &ws.specs {
-        let label = parsed
-            .spec_id
-            .clone()
-            .unwrap_or_else(|| display_spec_label(&parsed.dir));
-        let spec_status = parsed
-            .spec_md
-            .as_ref()
-            .map_or(SpecStatus::InProgress, |s| s.frontmatter.status);
+        let label = parsed.display_label();
+        let spec_status = parsed.status_or_in_progress();
         // Skip defunct specs entirely: their scenarios should not render
         // in the run-all path (run_spec/run_qualified_check surface the
         // skip explicitly when the user names them).
@@ -450,9 +420,4 @@ fn collect_for_spec(
             Ok((Vec::new(), 1))
         }
     }
-}
-
-fn display_spec_label(dir: &Utf8Path) -> String {
-    dir.file_name()
-        .map_or_else(|| dir.to_string(), ToOwned::to_owned)
 }

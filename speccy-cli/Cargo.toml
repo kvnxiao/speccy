@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
+const-hex = { workspace = true }
 indoc = { workspace = true }
 predicates = { workspace = true }
 serde-saphyr = { workspace = true }

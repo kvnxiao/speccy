@@ -237,15 +237,7 @@ fn write_vet_md(spec_dir: &Utf8Path, verdict: &str, tasks_hash: &str) -> TestRes
 fn sha256_hex_of_file(path: &Utf8Path) -> TestResult<String> {
     use sha2::Digest as _;
     let bytes = fs_err::read(path.as_std_path())?;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(&bytes);
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        write!(out, "{byte:02x}")?;
-    }
-    Ok(out)
+    Ok(const_hex::encode(sha2::Sha256::digest(&bytes)))
 }
 
 // -- SPEC-0041 REQ-001/REQ-002 ----------------------------------------------

@@ -17,22 +17,13 @@ mod common;
 
 use common::TestResult;
 use common::Workspace;
+use common::sha256_hex;
 use common::spec_md_template;
+use common::task_xml;
+use common::tasks_md_xml;
 use common::write_spec;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
-
-fn tasks_md_xml(spec_id: &str, tasks_xml: &str) -> String {
-    format!(
-        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\ngenerated_at: 2026-05-11T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n{tasks_xml}\n\n",
-    )
-}
-
-fn task_xml(id: &str, state: &str) -> String {
-    format!(
-        "<task id=\"{id}\" state=\"{state}\" covers=\"REQ-001\">\ndo the thing\n\n<task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
-    )
-}
 
 fn render_workspace(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf: Vec<u8> = Vec::new();
@@ -179,21 +170,6 @@ fn workspace_json_envelope_shape() -> TestResult {
 
 // -- SPEC-0041 REQ-001/REQ-002: vet kind in JSON -----------------------------
 
-fn sha256_hex_of(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        if write!(out, "{byte:02x}").is_err() {
-            break;
-        }
-    }
-    out
-}
-
 #[test]
 fn workspace_json_emits_vet_when_all_completed_and_no_vet_md() -> TestResult {
     let ws = Workspace::new()?;
@@ -237,7 +213,7 @@ fn workspace_json_emits_ship_when_vet_passes_fresh() -> TestResult {
         &spec_md_template("SPEC-0001", "in-progress"),
         Some(&tasks_md),
     )?;
-    let hash = sha256_hex_of(tasks_md.as_bytes());
+    let hash = sha256_hex(tasks_md.as_bytes());
     let journal = spec_dir.join("journal");
     fs_err::create_dir_all(journal.as_std_path())?;
     let vet_body = format!(

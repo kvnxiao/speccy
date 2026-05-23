@@ -13,7 +13,6 @@ pub mod rules;
 pub mod types;
 
 pub use registry::REGISTRY;
-pub use registry::lookup_severity;
 pub use types::Diagnostic;
 pub use types::Level;
 pub use types::ParsedSpec;

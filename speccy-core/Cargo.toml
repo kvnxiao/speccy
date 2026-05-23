@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 camino = { workspace = true }
 comrak = { workspace = true }
+const-hex = { workspace = true }
 fs-err = { workspace = true }
 include_dir = { workspace = true }
 jiff = { workspace = true }

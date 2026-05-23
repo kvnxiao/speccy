@@ -16,6 +16,7 @@ version = "0.1.0"
 camino = "1.1"
 clap = { version = "4", features = ["derive"] }
 comrak = { version = "0.52", default-features = false }
+const-hex = "1.14"
 fs-err = "3.1"
 include_dir = "0.7"
 jiff = { version = "0.2", default-features = false, features = ["std", "serde"] }

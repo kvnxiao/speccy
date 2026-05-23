@@ -28,7 +28,6 @@ use crate::parse::task_xml;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use regex::Regex;
-use std::fmt::Write as _;
 use std::sync::OnceLock;
 use thiserror::Error;
 
@@ -207,7 +206,7 @@ pub fn stale_for(spec: &SpecMd, tasks: Option<&TasksDoc>) -> Staleness {
 
     let mut reasons = Vec::new();
 
-    let current_hash = hex_of_sha256(&spec.sha256);
+    let current_hash = const_hex::encode(spec.sha256);
     if stored_hash != current_hash {
         reasons.push(StaleReason::HashDrift);
     }
@@ -258,7 +257,8 @@ pub fn count_open_questions(spec: &SpecMd) -> usize {
                         continue;
                     }
                     drop(item_ast);
-                    let Some(paragraph) = first_paragraph(item) else {
+                    let Some(paragraph) = crate::parse::markdown::first_paragraph_child(item)
+                    else {
                         continue;
                     };
                     let text = crate::parse::markdown::inline_text(paragraph);
@@ -274,16 +274,6 @@ pub fn count_open_questions(spec: &SpecMd) -> usize {
         }
     }
     count
-}
-
-fn first_paragraph<'a>(
-    item: &'a comrak::nodes::AstNode<'a>,
-) -> Option<&'a comrak::nodes::AstNode<'a>> {
-    use comrak::nodes::NodeValue;
-    item.children().find(|c| {
-        let ast = c.data.borrow();
-        matches!(ast.value, NodeValue::Paragraph)
-    })
 }
 
 /// Aggregated task-state counts for one spec's TASKS.md.
@@ -585,20 +575,6 @@ fn parse_one_report_xml(path: &Utf8Path) -> ParseResult<ReportDoc> {
     report_xml::parse(&source, path)
 }
 
-fn hex_of_sha256(bytes: &[u8; 32]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        // String::write_fmt is infallible, but the trait return is
-        // Result; absorbing it via match keeps `unused_result_ok` lint
-        // happy.
-        if write!(s, "{b:02x}").is_err() {
-            // Unreachable for in-memory String writes.
-            break;
-        }
-    }
-    s
-}
-
 #[expect(
     clippy::unwrap_used,
     reason = "compile-time literal regex; covered by unit tests"
@@ -629,5 +605,41 @@ mod tests {
     fn derive_spec_id_rejects_uppercase_slug() {
         let dir = Utf8PathBuf::from("/tmp/.speccy/specs/0001-FOO");
         assert!(derive_spec_id_from_dir(&dir).is_none());
+    }
+
+    #[test]
+    fn extract_frontmatter_field_returns_unquoted_value() {
+        let yaml = "spec: SPEC-0006\nspec_hash_at_generation: abc\n";
+        assert_eq!(
+            super::extract_frontmatter_field(yaml, "spec").as_deref(),
+            Some("SPEC-0006"),
+        );
+    }
+
+    #[test]
+    fn extract_frontmatter_field_strips_double_and_single_quotes() {
+        assert_eq!(
+            super::extract_frontmatter_field("spec: \"SPEC-0006\"\n", "spec").as_deref(),
+            Some("SPEC-0006"),
+        );
+        assert_eq!(
+            super::extract_frontmatter_field("spec: 'SPEC-0006'\n", "spec").as_deref(),
+            Some("SPEC-0006"),
+        );
+    }
+
+    #[test]
+    fn extract_frontmatter_field_skips_indented_lines() {
+        let yaml = "other:\n  spec: nested-not-matched\nspec: SPEC-0006\n";
+        assert_eq!(
+            super::extract_frontmatter_field(yaml, "spec").as_deref(),
+            Some("SPEC-0006"),
+        );
+    }
+
+    #[test]
+    fn extract_frontmatter_field_returns_none_when_absent() {
+        let yaml = "spec_hash_at_generation: x\ngenerated_at: y\n";
+        assert!(super::extract_frontmatter_field(yaml, "spec").is_none());
     }
 }

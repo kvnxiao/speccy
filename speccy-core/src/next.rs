@@ -178,26 +178,8 @@ fn vet_gate_is_fresh_pass(spec: &ParsedSpec) -> bool {
     let Ok(tasks_bytes) = fs_err::read(tasks_path.as_std_path()) else {
         return false;
     };
-    let actual_hash = sha256_hex(&tasks_bytes);
+    let actual_hash = const_hex::encode(Sha256::digest(&tasks_bytes));
     gate.tasks_hash.eq_ignore_ascii_case(&actual_hash)
-}
-
-/// Lowercase hex SHA-256 of the given bytes.
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        // `String::write_fmt` is infallible in practice; the trait
-        // signature returns `Result`. Mirror `workspace::hex_of_sha256`
-        // and absorb the result without `unwrap` / `expect`.
-        if write!(out, "{byte:02x}").is_err() {
-            break;
-        }
-    }
-    out
 }
 
 #[derive(Debug, Clone)]
@@ -275,30 +257,15 @@ pub fn default_personas() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        clippy::expect_used,
-        reason = "test code may .expect() with descriptive messages"
-    )]
-
     use super::attribute_value;
     use super::default_personas;
     use super::last_gate_block;
-    use super::sha256_hex;
 
     #[test]
     fn default_personas_is_the_first_four_of_all() {
         assert_eq!(
             default_personas(),
             &["business", "tests", "security", "style"],
-        );
-    }
-
-    #[test]
-    fn sha256_hex_matches_known_vector() {
-        // SHA-256 of the empty string.
-        assert_eq!(
-            sha256_hex(b""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         );
     }
 

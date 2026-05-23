@@ -5,6 +5,7 @@ use crate::parse::ReportDoc;
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;
 use crate::parse::TasksDoc;
+use crate::parse::spec_md::SpecStatus;
 use crate::parse::supersession::SupersessionIndex;
 use camino::Utf8PathBuf;
 
@@ -191,5 +192,29 @@ impl ParsedSpec {
     #[must_use = "callers must handle the None case (absent or parse failure)"]
     pub fn report_md_ok(&self) -> Option<&ReportDoc> {
         self.report_md.as_ref().and_then(|r| r.as_ref().ok())
+    }
+
+    /// Convenience: return the SPEC.md `status` field, falling back to
+    /// `SpecStatus::InProgress` when SPEC.md failed to parse. Mirrors
+    /// the policy `speccy check` / `speccy verify` apply when deciding
+    /// whether to render checks for a spec.
+    #[must_use = "the status drives downstream rendering decisions"]
+    pub fn status_or_in_progress(&self) -> SpecStatus {
+        self.spec_md_ok()
+            .map_or(SpecStatus::InProgress, |s| s.frontmatter.status)
+    }
+
+    /// Display label for the spec: the canonical `SPEC-NNNN` id when
+    /// SPEC.md parsing yielded one, else the spec directory's basename
+    /// (or the full path as a last resort). Used by `speccy check`
+    /// diagnostics, where the rendered label must be stable regardless
+    /// of parse success.
+    #[must_use = "the returned label appears in diagnostics"]
+    pub fn display_label(&self) -> String {
+        self.spec_id.clone().unwrap_or_else(|| {
+            self.dir
+                .file_name()
+                .map_or_else(|| self.dir.to_string(), ToOwned::to_owned)
+        })
     }
 }

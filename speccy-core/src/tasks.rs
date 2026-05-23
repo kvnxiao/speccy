@@ -16,10 +16,10 @@ use crate::error::ParseError;
 use crate::parse::frontmatter::Split;
 use crate::parse::frontmatter::split as split_frontmatter;
 use crate::workspace::derive_spec_id_from_dir;
+use crate::workspace::extract_frontmatter_field;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use jiff::Timestamp;
-use std::fmt::Write as _;
 use thiserror::Error;
 
 /// Failure mode of [`commit_frontmatter`].
@@ -65,22 +65,10 @@ pub enum CommitError {
     },
     /// I/O error reading or writing TASKS.md.
     #[error("I/O error processing TASKS.md")]
-    Io(#[source] std::io::Error),
+    Io(#[from] std::io::Error),
     /// Frontmatter splitter failed (e.g. unterminated `---` fence).
     #[error("failed to parse TASKS.md frontmatter")]
-    Parse(#[source] Box<ParseError>),
-}
-
-impl From<std::io::Error> for CommitError {
-    fn from(err: std::io::Error) -> Self {
-        CommitError::Io(err)
-    }
-}
-
-impl From<Box<ParseError>> for CommitError {
-    fn from(err: Box<ParseError>) -> Self {
-        CommitError::Parse(err)
-    }
+    Parse(#[from] Box<ParseError>),
 }
 
 /// Rewrite TASKS.md frontmatter at `tasks_md_path`, recording the SPEC.md
@@ -135,14 +123,14 @@ pub fn commit_frontmatter(
         Err(err) => return Err(CommitError::Io(err)),
     };
 
-    let hash_hex = hex_of_sha256(spec_md_sha256);
+    let hash_hex = const_hex::encode(spec_md_sha256);
     let ts_str = format_iso_z(now_utc);
 
     let split = split_frontmatter(&raw, tasks_md_path)?;
     let new_content = match split {
         Split::None => prepend_fresh_frontmatter(spec_id, &hash_hex, &ts_str, &raw),
         Split::Some { yaml, body } => {
-            let tasks_md_id = find_top_level_spec(yaml);
+            let tasks_md_id = extract_frontmatter_field(yaml, "spec");
 
             let folder_id = tasks_md_path.parent().and_then(derive_spec_id_from_dir);
             if let (Some(folder), Some(tasks_md)) = (folder_id.as_ref(), tasks_md_id.as_ref())
@@ -171,16 +159,6 @@ pub fn commit_frontmatter(
 
     fs_err::write(tasks_md_path.as_std_path(), new_content)?;
     Ok(())
-}
-
-fn hex_of_sha256(bytes: &[u8; 32]) -> String {
-    let mut s = String::with_capacity(64);
-    for b in bytes {
-        if write!(s, "{b:02x}").is_err() {
-            break;
-        }
-    }
-    s
 }
 
 fn format_iso_z(ts: Timestamp) -> String {
@@ -264,55 +242,13 @@ fn is_top_level_key(content: &str, key: &str) -> bool {
     after.starts_with(':')
 }
 
-fn find_top_level_spec(yaml: &str) -> Option<String> {
-    for line in yaml.lines() {
-        if line.starts_with(' ') || line.starts_with('\t') {
-            continue;
-        }
-        let Some(after) = line.strip_prefix("spec") else {
-            continue;
-        };
-        let Some(rest) = after.strip_prefix(':') else {
-            continue;
-        };
-        let trimmed = rest.trim();
-        return Some(strip_quotes(trimmed).to_owned());
-    }
-    None
-}
-
-fn strip_quotes(value: &str) -> &str {
-    if let Some(inner) = value.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
-        return inner;
-    }
-    if let Some(inner) = value.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
-        return inner;
-    }
-    value
-}
-
 #[cfg(test)]
 mod tests {
     use super::detect_line_ending;
-    use super::find_top_level_spec;
     use super::format_iso_z;
-    use super::hex_of_sha256;
     use super::is_top_level_key;
     use super::split_line_term;
     use jiff::Timestamp;
-
-    #[test]
-    fn hex_of_sha256_is_64_chars_lowercase() {
-        let bytes = [0xab_u8; 32];
-        let hex = hex_of_sha256(&bytes);
-        assert_eq!(hex.len(), 64);
-        assert!(
-            hex.chars()
-                .all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()),
-            "hash must be lowercase ASCII hex: {hex}",
-        );
-        assert_eq!(hex, "ab".repeat(32));
-    }
 
     #[test]
     fn format_iso_z_truncates_subsec_and_uses_z_suffix() {
@@ -348,43 +284,5 @@ mod tests {
             "spec_hash_at_generation: x",
             "spec_hash_at_generation",
         ));
-    }
-
-    #[test]
-    fn find_top_level_spec_extracts_unquoted_value() {
-        let yaml = "spec: SPEC-0006\nspec_hash_at_generation: abc\n";
-        assert_eq!(
-            find_top_level_spec(yaml).as_deref(),
-            Some("SPEC-0006"),
-            "spec value must be returned verbatim without surrounding whitespace",
-        );
-    }
-
-    #[test]
-    fn find_top_level_spec_strips_double_and_single_quotes() {
-        assert_eq!(
-            find_top_level_spec("spec: \"SPEC-0006\"\n").as_deref(),
-            Some("SPEC-0006"),
-        );
-        assert_eq!(
-            find_top_level_spec("spec: 'SPEC-0006'\n").as_deref(),
-            Some("SPEC-0006"),
-        );
-    }
-
-    #[test]
-    fn find_top_level_spec_skips_indented_lines() {
-        let yaml = "other:\n  spec: nested-not-matched\nspec: SPEC-0006\n";
-        assert_eq!(
-            find_top_level_spec(yaml).as_deref(),
-            Some("SPEC-0006"),
-            "indented `spec` keys must be ignored",
-        );
-    }
-
-    #[test]
-    fn find_top_level_spec_returns_none_when_absent() {
-        let yaml = "spec_hash_at_generation: x\ngenerated_at: y\n";
-        assert!(find_top_level_spec(yaml).is_none());
     }
 }
