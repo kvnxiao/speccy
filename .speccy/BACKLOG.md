@@ -14,8 +14,6 @@ Pre-existing tech debt (discovered during other work, blocks the hygiene gate)
 
 Tier 2 — consider, needs design pass
 
-F-2: `speccy next` and `speccy check` both support passing in a `SPEC-####` as an immediate argument to filter down to a specific spec. However, our skills and subagent resource templates are currently not using this with `--json`, which causes the entire spec tree to be printed out. This makes the LLM waste context by having to potentially write a script to filter down the list manually when a user calls for `/speccy-orchestrate SPEC-####` for example. We need to change our instructions to use that optional `SPEC-####` filter argument with `--json`, when passed in, so the LLM can filter down to the specific spec without wasting context. Note that `SPEC-####` is optional — if not passed in, the LLM will still print the entire spec tree. E.g. `speccy next --json` - skill will print the whole spec tree in JSON format and pick the next available spec to implement. Whereas `speccy next SPEC-#### --json` - skill will filter down to the specific spec and print it in JSON format to figure out what's next in its development lifecycle - or alternatively print some error message if the spec is already implemented (this error clause may not exist today and may need to be added).
-
 F-8: Strip implementer context from reviewer prompts
 
 - Reviewer fan-out sees diff + SPEC + Checks only — not the implementer's task notes/rationale.
