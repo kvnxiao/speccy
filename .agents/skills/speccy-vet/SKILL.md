@@ -48,14 +48,23 @@ at `state="completed"` — this is a pre-ship gate, not a mid-loop
 check. If any task is not completed, return a `fail` verdict
 immediately with that as the reason.
 
-## Why this lives in a sub-agent
+## Why this skill runs in a top-level session
 
 The drift-fix loop fans out additional sub-agents over multiple
-rounds. Running inline would bloat the caller's context with every
-reviewer / implementer prompt and verdict. Hosting this loop in a
-single sub-agent invocation means the caller sees only the final
-`<orchestrator-verdict>` block; everything else stays in this
-skill's session and exits with it.
+rounds (`vet-reviewer`, `vet-implementer`, `vet-simplifier`).
+Sub-agents cannot spawn sub-agents, so this skill must run in a
+context that **is** the top-level session — either:
+
+- A human invocation (`speccy-vet SPEC-NNNN`), where
+  the host CLI session itself runs the skill body, or
+- The `speccy-orchestrate` outer loop, which
+  inlines this skill body into its own session at the `ship`
+  dispatch (it cannot delegate to a wrapper sub-agent that would
+  then try to spawn the leaves).
+
+In both cases the leaf sub-agents (reviewer / implementer /
+simplifier) return one short verdict block as their final message;
+only those final messages flow back into the running session.
 
 ## What this skill writes and commits
 
@@ -139,10 +148,15 @@ clean with its own section.
 
 ## Loop
 
+Shared with the `speccy-orchestrate` ship dispatch
+— both this skill body and that dispatch step include the same
+partial below so Phase 0 / 1 / 2 / 3 have a single source of truth.
+
+
 Round budget: **3 rounds per invocation** for drift fixing. Each
 round is expensive (full SPEC re-read + diff re-analysis +
-implementer pass), so the budget of 3 is intentionally tighter than
-the per-task implementer retry budget.
+implementer pass), so the budget of 3 is intentionally tighter
+than the per-task implementer retry budget.
 
 ### Phase 0 — bootstrap
 
@@ -157,15 +171,14 @@ new invocation section in VET.md.
 
    Find the entry in `specs[]` whose `spec_id` equals the requested
    `SPEC-NNNN`. Its `spec_md_path` field (e.g.,
-   `.speccy/specs/NNNN-slug/SPEC.md`) gives the
-   absolute path to `SPEC.md`; strip the trailing `/SPEC.md` to get
-   `<spec-dir>` (e.g.,
-   `.speccy/specs/NNNN-slug/`). If no entry
-   matches, return `fail` immediately — the spec is unknown.
+   `.speccy/specs/NNNN-slug/SPEC.md`) gives the absolute path to
+   `SPEC.md`; strip the trailing `/SPEC.md` to get `<spec-dir>`
+   (e.g., `.speccy/specs/NNNN-slug/`). If no entry matches, return
+   `fail` immediately — the spec is unknown.
 
    Also verify every task in this spec is at `state="completed"`
    (read `<spec-dir>/TASKS.md`). If any task is `pending`,
-   `in-progress`, or `in-review`, return `fail` — this skill is a
+   `in-progress`, or `in-review`, return `fail` — this is a
    pre-ship gate, not a mid-loop check.
 
 2. **Diff baseline ref.** Run:
@@ -185,7 +198,7 @@ new invocation section in VET.md.
    is at `<spec-dir>/journal/VET.md`.
 
    - If the file does not exist, create it with the YAML
-     frontmatter above (`spec` and `generated_at`).
+     frontmatter (`spec`, `generated_at`).
    - Scan the file for `^## Invocation (\d+)` headers, take the
      max, and add 1 to get the new invocation number `N`. If no
      prior headers exist, `N = 1`.
@@ -202,17 +215,16 @@ new invocation section in VET.md.
 
 ### Phase 1 — drift review and fix
 
-Repeat for up to 3 rounds per invocation. This skill's session
-owns the round counter, the working-tree snapshots, and the
-VET.md writes; sub-agents own the substantive review and fix
-work.
+Repeat for up to 3 rounds per invocation. The running session owns
+the round counter, the working-tree snapshots, and the VET.md
+writes; sub-agents own the substantive review and fix work.
 
 **Defer-write pattern.** Hold returned verdict blocks in memory
 across each round and write to VET.md only **after** the
-snapshot-keep-vs-revert decision. Writing earlier would put
-VET.md changes inside the snapshot, and a stuck-revert would
-erase the audit trail. The journal is the durable record of *what
-the loop did*; it must survive any rollback the loop performs.
+snapshot-keep-vs-revert decision. Writing earlier would put VET.md
+changes inside the snapshot, and a stuck-revert would erase the
+audit trail. The journal is the durable record of *what the loop
+did*; it must survive any rollback the loop performs.
 
 1. **Spawn the drift reviewer sub-agent.** Prompt:
 
@@ -249,9 +261,9 @@ the loop did*; it must survive any rollback the loop performs.
 
 4. **Otherwise** (`verdict="blocking"` with budget remaining):
 
-   a. **Snapshot the working tree** before the implementer call, so
-      this skill can revert on `stuck` without losing the
-      VET.md writes:
+   a. **Snapshot the working tree** before the implementer call,
+      so the running session can revert on `stuck` without losing
+      the VET.md writes:
 
       ```bash
       git stash push --include-untracked -m "speccy-holistic-pre-implementer-<spec>-inv<N>-r<R>"
@@ -270,17 +282,17 @@ the loop did*; it must survive any rollback the loop performs.
       >
       > Resolved paths:
       > - Spec directory: `<spec-dir>`.
-      > - Diff baseline: `<base-ref>` (use `git diff <base-ref>` to
-      >   see the existing implementation; leave your changes
+      > - Diff baseline: `<base-ref>` (use `git diff <base-ref>`
+      >   to see the existing implementation; leave your changes
       >   uncommitted — the next reviewer reads the same command
       >   and will pick them up).
       >
-      > The skill orchestrator will revert your changes if you
+      > The running session will revert your changes if you
       > return `verdict="stuck"`. Do not manage rollback yourself.
       >
-      > Follow the scope, hygiene-gate, and verdict-return contract
-      > in your agent file. Return a single `<holistic-fix>` block
-      > as your final message.
+      > Follow the scope, hygiene-gate, and verdict-return
+      > contract in your agent file. Return a single
+      > `<holistic-fix>` block as your final message.
       >
       > Drift findings (the held `<drift-review>` block):
       >
@@ -294,7 +306,8 @@ the loop did*; it must survive any rollback the loop performs.
 
    c. **Resolve the snapshot based on the implementer's verdict**:
 
-      - **`addressed` or `blocking`**: keep the implementer's edits.
+      - **`addressed` or `blocking`**: keep the implementer's
+        edits.
 
         ```bash
         git stash drop
@@ -302,9 +315,9 @@ the loop did*; it must survive any rollback the loop performs.
 
         Then append **both** the held `<drift-review>` block and
         the held `<holistic-fix>` block to VET.md under the
-        current invocation section (drift-review first, then fix).
-        Decrement the round counter and go back to step 1. The
-        next reviewer reads the journal you just appended and
+        current invocation section (drift-review first, then
+        fix). Decrement the round counter and go back to step 1.
+        The next reviewer reads the journal you just appended and
         verifies the implementer's claims against the now-updated
         diff.
 
@@ -317,13 +330,13 @@ the loop did*; it must survive any rollback the loop performs.
         git stash pop
         ```
 
-        `git restore .` undoes implementer edits to tracked files;
-        `git clean -fd` removes any new files the implementer
-        added; `git stash pop` restores the pre-implementer
-        snapshot. Now append both held blocks to VET.md under
-        the current invocation section — the write happens
-        **after** the revert, so it survives. Return a `fail`
-        verdict.
+        `git restore .` undoes implementer edits to tracked
+        files; `git clean -fd` removes any new files the
+        implementer added; `git stash pop` restores the
+        pre-implementer snapshot. Now append both held blocks to
+        VET.md under the current invocation section — the write
+        happens **after** the revert, so it survives. Return a
+        `fail` verdict.
 
       - **Sub-agent error or missing/malformed `<holistic-fix>`**:
         treat as `stuck`. Revert as above. Append the held
@@ -361,21 +374,22 @@ the return block.
    `.codex/agents/vet-simplifier.toml`.
 
    The scan makes no modifications, so no defer-write is needed
-   — **append the returned `<simplifier-scan>` block to
-   VET.md immediately** (under the current invocation
-   section). The block is part of the audit trail whether or not
-   an apply step follows.
+   — **append the returned `<simplifier-scan>` block to VET.md
+   immediately** (under the current invocation section). The
+   block is part of the audit trail whether or not an apply step
+   follows.
 
 2. If `verdict="clean"` → record `simplifier="clean"` for the
-   return block and go to "Return contract".
+   return block and go to Phase 3.
 
 3. If `verdict="candidates"`:
 
-   a. **Snapshot the working tree** before the apply, so this
-      skill's session owns the rollback. The simplifier sub-agent
-      cannot reliably roll back itself — `git checkout` doesn't
-      undo new files and `git clean -fd` is dangerous if scoped
-      wrong. Owning the rollback here bounds the blast radius.
+   a. **Snapshot the working tree** before the apply, so the
+      running session owns the rollback. The simplifier
+      sub-agent cannot reliably roll back itself — `git
+      checkout` doesn't undo new files and `git clean -fd` is
+      dangerous if scoped wrong. Owning the rollback here bounds
+      the blast radius.
 
       ```bash
       git stash push --include-untracked -m "speccy-holistic-pre-simplifier-<spec>-<invocation>"
@@ -416,17 +430,17 @@ the return block.
       `.codex/agents/vet-simplifier.toml`.
 
       Hold the returned `<simplifier-apply>` block in memory; do
-      not write to VET.md yet (same defer-write pattern as
-      Phase 1 — write after the revert decision so the audit
-      trail survives any rollback).
+      not write to VET.md yet (same defer-write pattern as Phase 1
+      — write after the revert decision so the audit trail
+      survives any rollback).
 
    c. Resolve the snapshot based on the verdict, then transcribe:
 
-      - **`applied`** (hygiene green): `git stash drop` —
-        discard the snapshot, keep the simplifications. Append
-        the held `<simplifier-apply>` block to VET.md under
-        the current invocation section. Record
-        `simplifier="applied"` for the return block.
+      - **`applied`** (hygiene green): `git stash drop` — discard
+        the snapshot, keep the simplifications. Append the held
+        `<simplifier-apply>` block to VET.md under the current
+        invocation section. Record `simplifier="applied"` for the
+        return block.
 
       - **`blocking`** (hygiene failed), sub-agent error, or
         missing/malformed verdict: roll back.
@@ -448,16 +462,16 @@ the return block.
 
 ### Phase 3 — write `<gate>` block
 
-**Every** exit path from this skill — Phase 0 integrity failures,
-Phase 1 round-budget exhaustion, Phase 1 `stuck` reverts, Phase 2
-completion (pass or revert), and the success path — appends exactly
-one `<gate>` block to `<spec-dir>/journal/VET.md` under the current
-`## Invocation N` section, **before** returning the
-`<orchestrator-verdict>` block to the caller.
+**Every** exit path — Phase 0 integrity failures, Phase 1
+round-budget exhaustion, Phase 1 `stuck` reverts, Phase 2
+completion (pass or revert), and the success path — appends
+exactly one `<gate>` block to `<spec-dir>/journal/VET.md` under
+the current `## Invocation N` section, **before** surfacing the
+verdict to the caller.
 
 If Phase 0 failed before opening the invocation section (for
-example, the spec is unknown so `<spec-dir>` was never resolved or
-the journal file does not exist yet), bootstrap the file and
+example, the spec is unknown so `<spec-dir>` was never resolved
+or the journal file does not exist yet), bootstrap the file and
 section per Phase 0 step 3, then append the `<gate>` block. The
 on-disk gate record exists regardless of where the early exit
 fired.
@@ -477,9 +491,9 @@ Block shape:
 
 Attribute rules:
 
-- `verdict` — `passed` when the upcoming `<orchestrator-verdict>`
-  will carry `verdict="pass"`; `failed` when it will carry
-  `verdict="fail"` (including every Phase 0 early-exit path).
+- `verdict` — `passed` when the surfaced verdict will be
+  `verdict="pass"`; `failed` when it will be `verdict="fail"`
+  (including every Phase 0 early-exit path).
 - `tasks_hash` — lowercase hex SHA-256 of the byte contents of
   `<spec-dir>/TASKS.md` read **immediately before** appending this
   block. Compute via:
@@ -498,15 +512,17 @@ Attribute rules:
   e.g. `2026-05-22T14:30:00Z`.
 
 The block body is a single line summarising what happened
-(examples: `"Drift cleared on round 2; simplifier applied; clean."`,
-`"Phase 0 integrity check failed: task T-003 not completed."`,
-`"Drift round budget exhausted at round 3 without a pass."`).
+(examples: `"Drift cleared on round 2; simplifier applied;
+clean."`, `"Phase 0 integrity check failed: task T-003 not
+completed."`, `"Drift round budget exhausted at round 3 without a
+pass."`).
 
-`speccy next` reads the most recent `<gate>` block's `verdict` and
-`tasks_hash` to decide whether the SPEC is freshly vetted; a
+`speccy next` reads the most recent `<gate>` block's `verdict`
+and `tasks_hash` to decide whether the SPEC is freshly vetted; a
 `passed` gate whose `tasks_hash` no longer matches the on-disk
 TASKS.md forces a re-vet. That is the contract this block exists
 to satisfy.
+
 
 ## Return contract
 

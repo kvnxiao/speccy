@@ -2,10 +2,24 @@
 # {{ cmd_prefix }}speccy-orchestrate
 
 Thin composition layer over the Speccy single-task primitives.
-Queries `speccy next --json`, dispatches each step to a sub-agent,
-and re-queries until the SPEC is ready to ship. This skill itself
-holds no per-task or per-round state beyond the retry counter — all
-heavy work happens in sub-agent contexts that exit when done.
+Queries `speccy next --json`, dispatches each step to one or more
+sub-agents, and re-queries until the SPEC is ready to ship. This
+skill itself holds the outer dispatch loop, the per-task retry
+counter, and (for review and ship steps) the multi-persona /
+multi-round fan-out — all leaf work happens in sub-agent contexts
+that exit when done.
+
+**Why fan-outs run inline in this skill's session.** Sub-agents
+cannot spawn sub-agents. The persona fan-out in `speccy-review`
+(four reviewer personas in parallel) and the drift-fix loop in
+`speccy-vet` (reviewer + implementer + simplifier sub-agents across
+up to three rounds) therefore cannot be delegated to a single
+"wrapper" sub-agent that follows the skill body — the wrapper would
+fail to spawn its leaf sub-agents. Instead, this orchestrator
+follows the `speccy-review` and `speccy-vet` skill bodies **inline
+in its own session** and spawns the leaf sub-agents directly. Only
+`speccy-work` (which never fans out) is delegated to a single
+sub-agent.
 
 ## When to use
 
@@ -30,44 +44,56 @@ user). Do not invoke this skill for ad-hoc "implement one task" or
 The `SPEC-NNNN` argument is required. If missing, ask the user
 which spec to drive and exit without looping.
 
-## Lifecycle (three nested loops)
+## Lifecycle (outer loop + inline fan-outs)
 
 ```
-outer:    speccy-orchestrate dispatch loop  ← this skill
+outer:    speccy-orchestrate dispatch loop  ← this skill's session
             └── on `next_action.kind`:
-                  ├── work   → spawn speccy-work sub-agent
-                  ├── review → spawn sub-agent that runs speccy-review
-                  │              (inner: 4 reviewer personas fan out)
-                  └── ship   → spawn sub-agent that runs
-                               speccy-vet
-                                 (inner: drift-fix loop + simplifier
-                                  polish, up to 3 rounds)
+                  ├── work   → spawn ONE speccy-work sub-agent
+                  ├── review → fan out 4 reviewer-* sub-agents
+                  │             in parallel from this session
+                  │             (follows the speccy-review skill body)
+                  └── ship   → run the speccy-vet skill body inline
+                                in this session, spawning
+                                vet-reviewer / vet-implementer /
+                                vet-simplifier leaf sub-agents directly
+                                (drift-fix loop bounded to 3 rounds,
+                                 then one simplifier polish pass)
 inner-1:  per-task retry — same task_id flipping pending after review
             (bounded here in the orchestrator: 5 rounds, then stop)
-inner-2:  holistic drift fix — owned by speccy-vet
-            (bounded there: 3 rounds, then return fail)
-inner-3:  simplifier polish — owned by speccy-vet
-            (no loop: one scan + one apply with hygiene gate)
+inner-2:  holistic drift fix — described in speccy-vet, run inline
+            here (bounded: 3 rounds, then fail)
+inner-3:  simplifier polish — described in speccy-vet, run inline
+            here (no loop: one scan + one apply with hygiene gate)
 ```
 
-The orchestrator owns only the outer loop and inner-1's retry
-counter. It never touches the bodies of inner-2 or inner-3 — those
-live entirely inside the delegated skill's sub-agent and surface as
-one final verdict block.
+The orchestrator owns the outer loop, the per-task retry counter,
+the review consolidation step (journal append + TASKS.md state
+flip), and the vet round counter / snapshot management. Only the
+leaf work (one implementer pass, one persona review, one drift
+review, one drift fix, one simplifier scan / apply) lives in a
+spawned sub-agent.
 
 ## Context discipline
 
-Every dispatch goes through the host's sub-agent-spawn primitive so
-the dispatched body runs in a fresh sub-agent context, not inline in
-this orchestrator session. Inlining the delegated skill would bloat
-the orchestrator's context with every sub-agent prompt it constructs;
-sub-agent dispatch keeps long runs (10+ tasks × work + review +
-holistic gate) inside one context window because only the
-sub-agent's **final message** comes back.
+`speccy-work` dispatches to **one** sub-agent because the
+implementer pass is single-shot and does not need to spawn its own
+sub-agents. Its final message comes back as a short status hint.
+
+`speccy-review` and `speccy-vet` cannot be delegated to a single
+wrapper sub-agent because they themselves fan out — and sub-agents
+cannot spawn sub-agents. This orchestrator follows their skill
+bodies inline in its own session and spawns the leaf sub-agents
+(`reviewer-business`, `reviewer-tests`, `reviewer-security`,
+`reviewer-style`, `vet-reviewer`, `vet-implementer`,
+`vet-simplifier`) directly. The leaf sub-agents each return one
+short verdict block as their final message; only those final
+messages — not the per-persona reasoning — flow back into the
+orchestrator's context.
 
 Sub-agent final messages are **status hints, not state**. The
-orchestrator always re-queries `speccy next --json` after each
-dispatch to get ground truth.
+orchestrator always re-queries `speccy next --json` after a
+dispatch settles to get ground truth.
 
 ## Startup integrity check
 
@@ -124,81 +150,88 @@ Repeat until a stop condition fires:
 
 2. Dispatch on `next_action.kind`:
 
-   - **`work`** — spawn a sub-agent that runs the `speccy-work`
-     primitive for the resolved task. Prompt:
-
-     > Implement task `SPEC-NNNN/T-NNN` per the `speccy-work` skill.
-     > Single-task primitive; do not iterate. Keep your final
-     > message short — the caller reads `speccy next --json` for
-     > ground truth.
-
-     Substitute the resolved `task_id` from `next_action.task_id`.
-
-     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "speccy-work"`.
-     The sub-agent definition at `.claude/agents/speccy-work.md`
-     carries the host-native dispatch metadata.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
-     registered `speccy-work` sub-agent at
-     `.codex/agents/speccy-work.toml`.{% endif %}
-
-   - **`review`** — spawn a sub-agent that runs the `speccy-review`
-     primitive for the resolved task. Prompt:
-
-     > Follow the `speccy-review` skill for task `SPEC-NNNN/T-NNN`.
-     > The skill fans out four persona sub-agents and either flips
-     > the task to `completed` or back to `pending` with blockers
-     > in the journal. Return only a one-line verdict as your
-     > final message:
-     > `REVIEW SPEC-NNNN/T-NNN -> completed|pending`
-
-     Substitute the resolved `task_id`. Running the review skill
-     inside a sub-agent (rather than inline) keeps the four-persona
-     fan-out chatter and journal write logic out of this
-     orchestrator's context.
-
-     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "general-purpose"`
-     and the prompt above, instructing the sub-agent to read
-     `.claude/skills/speccy-review/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
-     sub-agent that loads and follows
-     `.agents/skills/speccy-review/SKILL.md` with the prompt above.{% endif %}
-
-   - **`ship`** — spawn a sub-agent that runs the
-     `speccy-vet` primitive for the spec. Prompt:
-
-     > Follow the `speccy-vet` skill for `SPEC-NNNN`.
-     > The skill runs an autonomous drift-review + retry loop and
-     > applies any simplifier candidates with a hygiene gate.
-     > Return only the final `<orchestrator-verdict>` block as
-     > your final message.
-
-     {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "general-purpose"`,
-     instructing the sub-agent to read
-     `.claude/skills/speccy-vet/SKILL.md` and follow it.{% else %}Invoke Codex's native sub-agent-spawn primitive to spawn a
-     sub-agent that loads and follows
-     `.agents/skills/speccy-vet/SKILL.md` with the
-     prompt above.{% endif %}
-
-     When the sub-agent returns, parse the verdict block:
-
-     - `verdict="pass"` → surface the one-line summary plus the
-       round and simplifier counters, then **ask the user** whether
-       to invoke `{{ cmd_prefix }}speccy-ship`. Only after explicit
-       confirmation, spawn a `speccy-ship` sub-agent. Ship opens a
-       PR; never auto-ship.
-     - `verdict="fail"` → surface the drift summary and suggested
-       next step from the verdict. Stop the loop. The user decides
-       how to address it (`{{ cmd_prefix }}speccy-amend`, manual
-       edits, etc.).
-
+   - **`work`** — execute the [Work dispatch](#work-dispatch)
+     section below.
+   - **`review`** — execute the [Review dispatch](#review-dispatch)
+     section below.
+   - **`ship`** — execute the [Ship dispatch](#ship-dispatch)
+     section below.
    - **`decompose`** — STOP. Tell the user to run
      `{{ cmd_prefix }}speccy-tasks` first; the orchestrator cannot
      loop on a spec without a task list.
-
    - **anything else** (unknown kind, missing field, `done`,
      `plan`, etc.) — STOP and report the observed `next_action`
      verbatim so the user can react.
 
-3. After the dispatched sub-agent returns, re-query
+3. After the dispatch settles (the one `speccy-work` sub-agent
+   returns; or the four reviewer-* personas have all returned and
+   this orchestrator has written the journal + TASKS.md; or the
+   inline vet workflow has written its `<gate>` block), re-query
    `speccy next --json` and loop from step 1.
+
+## Work dispatch
+
+Spawn a sub-agent that runs the `speccy-work` primitive for the
+resolved task. Prompt:
+
+> Implement task `SPEC-NNNN/T-NNN` per the `speccy-work` skill.
+> Single-task primitive; do not iterate. Keep your final message
+> short — the caller reads `speccy next --json` for ground truth.
+
+Substitute the resolved `task_id` from `next_action.task_id`.
+
+{% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "speccy-work"`. The
+sub-agent definition at `.claude/agents/speccy-work.md` carries
+the host-native dispatch metadata.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+registered `speccy-work` sub-agent at
+`.codex/agents/speccy-work.toml`.{% endif %}
+
+## Review dispatch
+
+Run the `speccy-review` skill body **inline in this orchestrator
+session** (do NOT wrap it in a single general-purpose sub-agent —
+that wrapper would need to spawn the four persona leaves, and
+sub-agents cannot spawn sub-agents). The shared partial below is
+the single source of truth, included by both this orchestrator's
+review dispatch and the `{{ cmd_prefix }}speccy-review` skill
+body.
+
+{% include "modules/skills/partials/review-fanout.md" %}
+
+After the write settles, increment the per-task retry counter if
+the task flipped back to `pending` (this is what feeds the
+5-round stop condition below). Then re-query `speccy next --json`.
+
+The `speccy-review` skill remains independently invocable as
+`{{ cmd_prefix }}speccy-review`; this orchestrator's review
+dispatch shares the same fan-out contract via the partial above so
+behaviour stays in sync across invocation paths.
+
+## Ship dispatch
+
+Run the `speccy-vet` skill body **inline in this orchestrator
+session** (do NOT wrap it in a single general-purpose sub-agent —
+that wrapper would need to spawn the vet-reviewer /
+vet-implementer / vet-simplifier leaves across up to three rounds,
+and sub-agents cannot spawn sub-agents). The shared partial below
+is the single source of truth, included by both this
+orchestrator's ship dispatch and the `{{ cmd_prefix }}speccy-vet`
+skill body.
+
+{% include "modules/skills/partials/vet-phases.md" %}
+
+After the vet workflow appends its `<gate>` block and surfaces a
+verdict to this orchestrator session, react as follows:
+
+- `verdict="pass"` → write a one-line summary plus the round and
+  simplifier counters, then **ask the user** whether to invoke
+  `{{ cmd_prefix }}speccy-ship`. Only after explicit confirmation,
+  spawn a `speccy-ship` sub-agent. Ship opens a PR; never
+  auto-ship.
+- `verdict="fail"` → surface the drift summary and one-line
+  suggested next step. Stop the outer loop. The user decides how
+  to address it (`{{ cmd_prefix }}speccy-amend`, manual edits,
+  etc.).
 
 ## Stop conditions
 
@@ -243,9 +276,13 @@ them in the status line.
 - This skill does not run `speccy verify`, write `REPORT.md`, or
   open a PR. Those belong to `{{ cmd_prefix }}speccy-ship`, invoked
   after confirmation.
-- This skill does not own the drift-fix loop or the simplifier
-  polish — those live in `{{ cmd_prefix }}speccy-vet`.
-  Bugs in those loops get fixed there, not here.
+- The drift-fix loop and simplifier polish are **defined** in
+  `{{ cmd_prefix }}speccy-vet` and re-described above only at the
+  dispatch-shape level. The skill body of
+  `{{ cmd_prefix }}speccy-vet` remains the source of truth for
+  Phase 0–3 semantics — phase grammar bugs and `<gate>` block shape
+  bugs get fixed there, not here. The orchestrator inlines the
+  fan-out only because sub-agents cannot spawn sub-agents.
 - This skill does not pick a different persona fan-out for review,
   retry blocked tasks with a different model, or split tasks
   automatically. Those are judgment calls; surfacing the stuck

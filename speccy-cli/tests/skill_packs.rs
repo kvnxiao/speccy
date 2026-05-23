@@ -574,8 +574,12 @@ fn resources_modules_personas_is_non_empty() {
 /// T-011 source-shape guard below. Kept as a single `include_str!`
 /// constant rather than a lookup table because only the one verb
 /// is checked.
-const SPECCY_REVIEW_MODULE_BODY: &str =
-    include_str!("../../resources/modules/skills/speccy-review.md");
+/// Source of truth for the four-persona fan-out is now the shared
+/// partial included by both `speccy-review.md` and
+/// `speccy-orchestrate.md`'s review dispatch. The host-divergence
+/// block lives there too.
+const SPECCY_REVIEW_FANOUT_PARTIAL: &str =
+    include_str!("../../resources/modules/skills/partials/review-fanout.md");
 
 /// Default reviewer fan-out used by both `/speccy-review` rendered
 /// branches: the four personas Speccy invokes per task. Other shipped
@@ -583,23 +587,25 @@ const SPECCY_REVIEW_MODULE_BODY: &str =
 const DEFAULT_REVIEWER_PERSONAS: &[&str] = &["business", "tests", "security", "style"];
 
 #[test]
-fn speccy_review_module_has_host_divergence_block() {
-    // Source-shape guard: the module body must carry the canonical
+fn speccy_review_fanout_partial_has_host_divergence_block() {
+    // Source-shape guard: the shared review fan-out partial must
+    // carry the canonical
     // `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
     // triple so the renderer (and any future contributor reading the
-    // source) sees the same syntax.
-    let body = SPECCY_REVIEW_MODULE_BODY;
+    // source) sees the same syntax. Both `speccy-review.md` and the
+    // `speccy-orchestrate` review dispatch include this partial.
+    let body = SPECCY_REVIEW_FANOUT_PARTIAL;
     assert!(
         body.contains("{% if host == \"claude-code\" %}"),
-        "`speccy-review.md` must contain a `{{% if host == \"claude-code\" %}}` block",
+        "`partials/review-fanout.md` must contain a `{{% if host == \"claude-code\" %}}` block",
     );
     assert!(
         body.contains("{% else %}"),
-        "`speccy-review.md` must contain an `{{% else %}}` branch",
+        "`partials/review-fanout.md` must contain an `{{% else %}}` branch",
     );
     assert!(
         body.contains("{% endif %}"),
-        "`speccy-review.md` must close the divergence block with `{{% endif %}}`",
+        "`partials/review-fanout.md` must close the divergence block with `{{% endif %}}`",
     );
 }
 

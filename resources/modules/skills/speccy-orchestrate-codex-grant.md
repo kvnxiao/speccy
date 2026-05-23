@@ -3,10 +3,9 @@
 
 Codex requires an **explicit user grant** before any skill is allowed
 to spawn sub-agents. Without the grant, the dispatch steps above
-return a permission error instead of invoking
-`{{ cmd_prefix }}speccy-work`, `{{ cmd_prefix }}speccy-review`, or
-`{{ cmd_prefix }}speccy-vet`, and the outer loop cannot
-make progress.
+return a permission error instead of spawning `speccy-work`,
+the four `reviewer-*` personas, or the `vet-*` leaf sub-agents,
+and the outer loop cannot make progress.
 
 ### Granting the permission
 
