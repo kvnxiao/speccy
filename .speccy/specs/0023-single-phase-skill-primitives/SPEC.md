@@ -77,7 +77,7 @@ touched.
   via the host's Read primitive. The per-task `<task>` XML block
   (`{{task_entry}}`) stays inline because it is scoped to the one
   task under work; the broader artifact bodies do not.
-- `.speccy/ARCHITECTURE.md` agrees with the shipped skill bodies
+- `docs/ARCHITECTURE.md` agrees with the shipped skill bodies
   about the primitive contract. The Phase 3 / Phase 4 skill-driven
   loop diagrams are deleted; a short paragraph notes that
   multi-task orchestration is a future Layer-2 concern not built
@@ -389,7 +389,7 @@ referenced anywhere in the resources tree).
 <requirement id="REQ-004">
 ### REQ-004: Architecture docs reflect the primitive contract
 
-`.speccy/ARCHITECTURE.md` is the design source of truth per
+`docs/ARCHITECTURE.md` is the design source of truth per
 AGENTS.md. After this spec lands, its description of Phase 3 and
 Phase 4 agrees with the shipped skill bodies: skills are
 single-phase primitives; multi-task orchestration is a future
@@ -654,7 +654,7 @@ Implementation order:
    `{{mission}}` (with the renderer suppressing the instruction when
    the focus has no `MISSION.md`). Remove the renderer code paths
    that loaded these files and filled the variables.
-6. Update `.speccy/ARCHITECTURE.md` §"Core Development Loop",
+6. Update `docs/ARCHITECTURE.md` §"Core Development Loop",
    §"Phase 3", §"Phase 4", and any skill-pack table that names
    loop semantics. Delete the existing Phase 3 / Phase 4 loop
    pseudocode and add the short Layer-2 paragraph in its place.
@@ -838,7 +838,7 @@ or to fix the host, not to re-inline.
   auto-load (Claude Code, Codex, others; `CLAUDE.md` is often a
   symlink to it). REQ-005 and DEC-006 capture the change.
 - Resolved: delete the Phase 3 / Phase 4 loop pseudocode in
-  `.speccy/ARCHITECTURE.md` rather than relabelling it. The
+  `docs/ARCHITECTURE.md` rather than relabelling it. The
   pseudocode describes a runtime that does not exist after this
   spec lands. REQ-004's done-when reflects the deletion plus a
   short Layer-2 note pointing at the existing `/loop` skill as the
@@ -891,7 +891,7 @@ or to fix the host, not to re-inline.
 | Date       | Author      | Summary |
 |------------|-------------|---------|
 | 2026-05-17 | human/kevin | Initial draft. Single-task primitives for `speccy-work` and `speccy-review`; reviewer prompts stop inlining the diff; ARCHITECTURE.md updated. CLI surface unchanged. |
-| 2026-05-17 | human/kevin | Resolved both open questions in scope. Added REQ-005 / DEC-006: CLI prompts drop the `{{agents}}` re-inline because modern AI coding harnesses auto-load `AGENTS.md`. Hardened REQ-004 to delete the Phase 3 / Phase 4 loop pseudocode in `.speccy/ARCHITECTURE.md` (rather than relabel it) and require a short Layer-2 note in its place. |
+| 2026-05-17 | human/kevin | Resolved both open questions in scope. Added REQ-005 / DEC-006: CLI prompts drop the `{{agents}}` re-inline because modern AI coding harnesses auto-load `AGENTS.md`. Hardened REQ-004 to delete the Phase 3 / Phase 4 loop pseudocode in `docs/ARCHITECTURE.md` (rather than relabel it) and require a short Layer-2 note in its place. |
 | 2026-05-17 | human/kevin | Added REQ-006 / DEC-007: CLI prompts drop the `{{spec_md}}`, `{{tasks_md}}`, and `{{mission}}` inlines as well, naming the files' repo-relative paths and instructing the agent to read them on demand. Same principle as REQ-005 broadened to all large artifact bodies; the scoped per-task `{{task_entry}}` stays inline. Approach gains a new step 5 and the verification step grows to cover the SPEC.md shrink. |
 </changelog>
 

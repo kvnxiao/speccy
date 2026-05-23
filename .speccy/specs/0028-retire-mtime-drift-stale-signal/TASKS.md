@@ -299,7 +299,7 @@ Edit `.speccy/specs/0004-status-command/SPEC.md`:
 
 ### ARCHITECTURE.md amendments
 
-Edit `.speccy/ARCHITECTURE.md`:
+Edit `docs/ARCHITECTURE.md`:
 
 - Lines 1488-1493 (the "Speccy detects this two ways" block):
   collapse to a one-way detection. Replace the numbered list
@@ -325,7 +325,7 @@ Per REQ-003 done-when:
   inside `<requirement>`, `<done-when>`, `<behavior>`, and
   `<scenario>` element bodies. A single historical mention in the
   new `<changelog>` row is acceptable per CHK-003.
-- `grep -n "mtime\|Modification time" .speccy/ARCHITECTURE.md`
+- `grep -n "mtime\|Modification time" docs/ARCHITECTURE.md`
   returns zero matches inside the staleness-detection narrative
   (lines roughly 1480-1505 and the Threat Model bullet at line
   1891). Any unrelated uses of "mtime" elsewhere in the doc (if
@@ -338,7 +338,7 @@ Per REQ-003 done-when:
 
 - Suggested files:
   - `.speccy/specs/0004-status-command/SPEC.md`
-  - `.speccy/ARCHITECTURE.md`
+  - `docs/ARCHITECTURE.md`
 
 <task-scenarios>
   - Given the file `.speccy/specs/0004-status-command/SPEC.md`
@@ -352,7 +352,7 @@ Per REQ-003 done-when:
     references SPEC-0028 as the source of the REQ-002 narrowing
     and names the specific change ("removed MtimeDrift" or
     substantially equivalent prose). (CHK-003 second paragraph.)
-  - Given `.speccy/ARCHITECTURE.md` after this task lands, when
+  - Given `docs/ARCHITECTURE.md` after this task lands, when
     scanned for the substrings `mtime` and `Modification time`
     inside the staleness-detection narrative (the prose around
     lines 1480-1505 and the Threat Model bullet at line 1891),

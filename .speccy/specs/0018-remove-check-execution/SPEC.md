@@ -65,7 +65,7 @@ including this one, to the new shape.
   Speccy artifact shape, not for project test failures.
 - CI continues to run project test commands directly, alongside
   `speccy verify`.
-- `.speccy/ARCHITECTURE.md` and shipped skills teach the new
+- `docs/ARCHITECTURE.md` and shipped skills teach the new
   feedback-only contract.
 </goals>
 
@@ -328,7 +328,7 @@ Architecture docs and skill prompts stop implying that Speccy runs or
 grades tests.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` describes checks as validation scenarios.
+- `docs/ARCHITECTURE.md` describes checks as validation scenarios.
 - The `check` command row is render-only.
 - The `verify` command row is shape-only.
 - The "Feedback, Not Enforcement" section explicitly says project CI

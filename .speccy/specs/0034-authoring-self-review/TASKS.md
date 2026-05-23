@@ -55,7 +55,7 @@ Open questions resolved before implementing:
 
 <task-scenarios>
 Given the post-T-001 source tree, when each file named in REQ-012 done-when
-(`AGENTS.md`, `README.md`, `.speccy/ARCHITECTURE.md`,
+(`AGENTS.md`, `README.md`, `docs/ARCHITECTURE.md`,
 `resources/modules/phases/speccy-init.md`, `resources/modules/skills/speccy-plan.md`,
 `speccy-cli/tests/skill_body_discovery.rs`) is searched for "greenfield",
 then every match appears only in prose that explicitly denies the distinction
@@ -73,7 +73,7 @@ substring "greenfield".
 Suggested files:
 - `AGENTS.md`
 - `README.md`
-- `.speccy/ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
 - `resources/modules/phases/speccy-init.md`
 - `resources/modules/skills/speccy-plan.md`
 - `speccy-cli/tests/skill_body_discovery.rs`

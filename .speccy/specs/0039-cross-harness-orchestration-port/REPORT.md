@@ -50,7 +50,7 @@ contains zero matches on grant-related lines. Retry count: 0.
 
 <coverage req="REQ-004" result="satisfied" scenarios="CHK-011 CHK-012">
 T-006 rewrote the doc comment at `speccy-core/src/prompt/id_alloc.rs:3` from
-citing `.speccy/ARCHITECTURE.md` to citing only SPEC-0005 DEC-005. After the
+citing `docs/ARCHITECTURE.md` to citing only SPEC-0005 DEC-005. After the
 edit, `rg -n 'ARCHITECTURE\.md' speccy-core/src speccy-cli/src resources`
 prints zero matches. The exempt project-local surfaces (`AGENTS.md`,
 `speccy-core/tests/docs_sweep.rs`, `speccy-cli/tests/init.rs`,
@@ -76,7 +76,7 @@ T-007 rewrote the three project-local positioning surfaces. `README.md` now
 includes `/speccy-orchestrate` in the slash-command recipe table framing it as
 the opinionated end-to-end driver, and the repo layout tree lists the
 orchestrate + holistic-gate skill directories under both `.claude/skills/` and
-`.agents/skills/`. `.speccy/ARCHITECTURE.md`'s "Long-Term Vision" section no
+`.agents/skills/`. `docs/ARCHITECTURE.md`'s "Long-Term Vision" section no
 longer lists multi-agent orchestration under "Future layers (not v1)"; a
 paragraph acknowledges the orchestration loop as a current skill-layer
 artifact. `AGENTS.md`'s "Product north star" drops the `(Future)` parenthetical

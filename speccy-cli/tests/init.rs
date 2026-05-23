@@ -1025,7 +1025,7 @@ fn assert_no_unsubstituted_token(body: &str, label: &str, needle: &str) {
 /// SPEC-0018 retired. Each one is tight enough that it only matches
 /// example code (the trailing `"` on `command = "` / `prompt = "`
 /// avoids prose like "prompt for the user", and the historical-note
-/// blockquotes in `.speccy/ARCHITECTURE.md` use backticks rather than
+/// blockquotes in `docs/ARCHITECTURE.md` use backticks rather than
 /// the literal quoted assignment).
 const SPEC_0018_LEGACY_NEEDLES: [&str; 6] = [
     "kind = \"test\"",
@@ -1060,7 +1060,7 @@ fn rendered_outputs_have_no_legacy_check_authoring_examples() -> TestResult {
     Ok(())
 }
 
-/// `.speccy/ARCHITECTURE.md` is not rendered through host packs, so
+/// `docs/ARCHITECTURE.md` is not rendered through host packs, so
 /// `rendered_outputs_have_no_legacy_check_authoring_examples` does not
 /// cover it. Lint it directly: the design doc must teach the
 /// post-SPEC-0018 `{id, scenario}` shape, and the only legitimate
@@ -1070,11 +1070,11 @@ fn rendered_outputs_have_no_legacy_check_authoring_examples() -> TestResult {
 /// `SPEC_0018_LEGACY_NEEDLES` only fire on example code.
 #[test]
 fn architecture_doc_has_no_legacy_check_authoring_examples() {
-    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    const ARCHITECTURE: &str = include_str!("../../docs/ARCHITECTURE.md");
     for needle in SPEC_0018_LEGACY_NEEDLES {
         assert!(
             !ARCHITECTURE.contains(needle),
-            ".speccy/ARCHITECTURE.md contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields; historical notes should use backticked prose, not literal assignments)",
+            "docs/ARCHITECTURE.md contains legacy check-authoring snippet `{needle}` (SPEC-0018 removed these fields; historical notes should use backticked prose, not literal assignments)",
         );
     }
 }
@@ -1143,49 +1143,49 @@ fn reviewer_tests_persona_pins_no_check_exit_code_evidence() {
 
 #[test]
 fn architecture_doc_pins_feedback_not_enforcement_contract() {
-    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    const ARCHITECTURE: &str = include_str!("../../docs/ARCHITECTURE.md");
     // Heading that names the stance.
     assert!(
         ARCHITECTURE.contains("# Stance: Feedback, Not Enforcement"),
-        ".speccy/ARCHITECTURE.md is missing the `Stance: Feedback, Not Enforcement` heading",
+        "docs/ARCHITECTURE.md is missing the `Stance: Feedback, Not Enforcement` heading",
     );
     // CI-owns-tests clause.
     assert!(
         ARCHITECTURE.contains("**Speccy does not run project tests.**"),
-        ".speccy/ARCHITECTURE.md is missing the `Speccy does not run project tests` clause",
+        "docs/ARCHITECTURE.md is missing the `Speccy does not run project tests` clause",
     );
     // Reviewer-personas-own-semantic-judgment clause.
     assert!(
         ARCHITECTURE.contains("**Reviewer personas own semantic judgment.**"),
-        ".speccy/ARCHITECTURE.md is missing the `Reviewer personas own semantic judgment` clause",
+        "docs/ARCHITECTURE.md is missing the `Reviewer personas own semantic judgment` clause",
     );
 }
 
 #[test]
 fn architecture_doc_pins_check_command_is_render_only() {
-    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    const ARCHITECTURE: &str = include_str!("../../docs/ARCHITECTURE.md");
     // CLI Surface row for `speccy check`: must describe it as
     // scenario rendering with no execution.
     assert!(
         ARCHITECTURE
             .contains("speccy check [SELECTOR]           Render check scenarios (no execution)"),
-        ".speccy/ARCHITECTURE.md `speccy check` row must describe it as render-only (no execution)",
+        "docs/ARCHITECTURE.md `speccy check` row must describe it as render-only (no execution)",
     );
 }
 
 #[test]
 fn architecture_doc_pins_verify_command_is_shape_only() {
-    const ARCHITECTURE: &str = include_str!("../../.speccy/ARCHITECTURE.md");
+    const ARCHITECTURE: &str = include_str!("../../docs/ARCHITECTURE.md");
     // CLI Surface row for `speccy verify`: must scope it to proof
     // shape only and explicitly disclaim running project tests.
     assert!(
         ARCHITECTURE
             .contains("speccy verify                     CI gate: proof-shape validation only"),
-        ".speccy/ARCHITECTURE.md `speccy verify` row must describe it as proof-shape validation only",
+        "docs/ARCHITECTURE.md `speccy verify` row must describe it as proof-shape validation only",
     );
     assert!(
         ARCHITECTURE.contains("Does NOT run project tests; that's CI's job."),
-        ".speccy/ARCHITECTURE.md `speccy verify` row must disclaim running project tests",
+        "docs/ARCHITECTURE.md `speccy verify` row must disclaim running project tests",
     );
 }
 

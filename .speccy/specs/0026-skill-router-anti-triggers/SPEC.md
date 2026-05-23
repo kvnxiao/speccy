@@ -114,7 +114,7 @@ is a code-review issue, not a CLI issue.
 - No change to any SKILL.md body, any prompt template under
   `resources/modules/prompts/`, or any rendered prompt the Rust
   CLI emits. F-2 is frontmatter-only.
-- No PSA, documentation page, or `.speccy/ARCHITECTURE.md` update
+- No PSA, documentation page, or `docs/ARCHITECTURE.md` update
   describing the tail-clause convention. The convention is
   demonstrated by the eight in-tree examples; documenting it
   separately would invite drift between the doc and the examples.

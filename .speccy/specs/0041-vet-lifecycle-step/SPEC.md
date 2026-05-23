@@ -380,7 +380,7 @@ file under SPEC-0038 and every prose mention in shipped skill / agent
   from `speccy-holistic-gate` to `speccy-vet`.
 - Every cross-mention inside `resources/modules/skills/*.md`,
   `.claude/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md`,
-  `README.md`, `.speccy/ARCHITECTURE.md`, `AGENTS.md`, and the
+  `README.md`, `docs/ARCHITECTURE.md`, `AGENTS.md`, and the
   shipped skill-pack assertions in
   `speccy-cli/tests/skill_packs.rs` updates from
   `speccy-holistic-gate` to `speccy-vet`.
@@ -398,7 +398,7 @@ file under SPEC-0038 and every prose mention in shipped skill / agent
   `resources/modules/skills/*.md`, `.claude/skills/*/SKILL.md`,
   `.agents/skills/*/SKILL.md`, `resources/agents/.claude/skills/*/SKILL.md.tmpl`,
   `resources/agents/.agents/skills/*/SKILL.md.tmpl`,
-  `.speccy/ARCHITECTURE.md`, `README.md`, and `AGENTS.md` is
+  `docs/ARCHITECTURE.md`, `README.md`, and `AGENTS.md` is
   updated to `VET.md`. The string `HOLISTIC.md` remains permissible
   inside `.speccy/specs/0039-cross-harness-orchestration-port/`
   (SPEC-0039's own history names the old artifact) and inside this
@@ -408,9 +408,9 @@ file under SPEC-0038 and every prose mention in shipped skill / agent
   audit, REQ-005 owns the persona work.
 
 <done-when>
-- `rg -n 'speccy-holistic-gate' resources/modules/ resources/agents/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md .speccy/ARCHITECTURE.md`
+- `rg -n 'speccy-holistic-gate' resources/modules/ resources/agents/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md docs/ARCHITECTURE.md`
   prints zero matches.
-- `rg -n 'HOLISTIC\.md' resources/modules/ resources/agents/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md .speccy/ARCHITECTURE.md`
+- `rg -n 'HOLISTIC\.md' resources/modules/ resources/agents/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md docs/ARCHITECTURE.md`
   prints zero matches.
 - `rg -n 'VET\.md' resources/modules/skills/speccy-vet.md resources/modules/skills/speccy-orchestrate.md`
   prints at least one match in each file, proving the renamed journal
@@ -441,8 +441,8 @@ file under SPEC-0038 and every prose mention in shipped skill / agent
 
 <scenario id="CHK-007">
 Given the source tree at HEAD after this SPEC lands,
-when `rg -n 'speccy-holistic-gate' resources/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md .speccy/ARCHITECTURE.md` runs,
-then it prints zero matches; and when `rg -n 'HOLISTIC\.md' resources/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md .speccy/ARCHITECTURE.md` runs, then it prints zero matches.
+when `rg -n 'speccy-holistic-gate' resources/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md docs/ARCHITECTURE.md` runs,
+then it prints zero matches; and when `rg -n 'HOLISTIC\.md' resources/ .claude/ .agents/ speccy-core/src/ speccy-cli/src/ speccy-cli/tests/ README.md AGENTS.md docs/ARCHITECTURE.md` runs, then it prints zero matches.
 </scenario>
 
 <scenario id="CHK-008">
@@ -732,7 +732,7 @@ in `speccy next`'s contract and in every shipped skill body.
 
 ## Notes
 
-- The `<gate>` block grammar is added to `.speccy/ARCHITECTURE.md`'s
+- The `<gate>` block grammar is added to `docs/ARCHITECTURE.md`'s
   journal-artifact section (renamed to reference `VET.md`) as part of
   this SPEC's task list, alongside the existing `<drift-review>` /
   `<holistic-fix>` / `<simplifier-*>` element family.

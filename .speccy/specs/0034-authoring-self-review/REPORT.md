@@ -192,12 +192,12 @@ markers, no "sole amendment path" callouts elsewhere.
 
 <coverage req="REQ-012" result="satisfied" scenarios="CHK-017 CHK-018">
 Claiming uses of "greenfield" removed from all six named live
-workflow surfaces: `AGENTS.md`, `README.md`, `.speccy/ARCHITECTURE.md`,
+workflow surfaces: `AGENTS.md`, `README.md`, `docs/ARCHITECTURE.md`,
 `resources/modules/phases/speccy-init.md`,
 `resources/modules/skills/speccy-plan.md`, and
 `speccy-cli/tests/skill_body_discovery.rs`. The three remaining
 post-edit hits (`AGENTS.md:121`, `README.md:96`,
-`.speccy/ARCHITECTURE.md:865`) all appear in prose that explicitly
+`docs/ARCHITECTURE.md:865`) all appear in prose that explicitly
 denies the greenfield/brownfield distinction. The
 `chk015_speccy_plan_uses_vacancy_not_status_for_greenfield_id` test
 was renamed to `chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id`
@@ -238,7 +238,7 @@ the module body. Re-eject propagated to both
   `/speccy-tasks`, plus a `LOOP_RECIPES = &[]` change in the dogfood
   test constant, neither authorized by REQ-011 or REQ-012; style —
   two surviving claiming uses of "greenfield" at
-  `.speccy/ARCHITECTURE.md:608` (`### Greenfield bootstrap` heading)
+  `docs/ARCHITECTURE.md:608` (`### Greenfield bootstrap` heading)
   and `README.md:148-158` (Greenfield/Brownfield state labels) that
   the original grep missed). Resolved in attempt-2 by reverting the
   amend-recipe mutation, restoring `LOOP_RECIPES` to its prior shape,

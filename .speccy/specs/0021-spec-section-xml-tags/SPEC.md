@@ -390,12 +390,12 @@ Active guidance must teach prompts to address the new elements
 directly rather than grep Markdown bold and headings.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` documents the expanded SPEC.md element
+- `docs/ARCHITECTURE.md` documents the expanded SPEC.md element
   grammar; the element-names table adds rows for `behavior`,
   `done-when`, `goals`, `non-goals`, `user-stories`, and
   `assumptions` with cardinality and location, and removes the
   retired `spec` and `overview` rows.
-- The SPEC.md template in `.speccy/ARCHITECTURE.md` is rewritten to
+- The SPEC.md template in `docs/ARCHITECTURE.md` is rewritten to
   use the new tags.
 - `resources/modules/prompts/implementer.md` references `<behavior>`
   and `<done-when>` directly when telling the implementer what to
@@ -546,7 +546,7 @@ structure.
 
 **Status:** Accepted
 
-**Context:** The SPEC.md template in `.speccy/ARCHITECTURE.md`
+**Context:** The SPEC.md template in `docs/ARCHITECTURE.md`
 already mandates both `**Done when:**` and `**Behavior:**` under
 each requirement. Making them required tagged elements aligns the
 parser with the existing template contract rather than extending it.
@@ -714,7 +714,7 @@ retired here. The typed `SpecDoc` removes any corresponding fields
 
 **Consequences:** SPEC-0021 is the single change-set for the SPEC.md
 whitelist evolution: six additions plus two retirements, net +4. The
-SPEC-0020 grammar documentation in `.speccy/ARCHITECTURE.md`
+SPEC-0020 grammar documentation in `docs/ARCHITECTURE.md`
 removes the `spec` and `overview` rows. No in-tree SPEC.md uses
 these elements today, so migration impact is limited to fixtures and
 hand-authored examples.

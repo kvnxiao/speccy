@@ -647,7 +647,7 @@ None. No artifact grammar or schema change.
   `## Open Questions`, `## Notes`, and `### Decisions` sections
   remain the canonical homes for summary-like, assumption-like,
   question-like, note-like, and load-bearing-decision content
-  respectively. If `.speccy/ARCHITECTURE.md` later restructures
+  respectively. If `docs/ARCHITECTURE.md` later restructures
   these, the routing-instruction section in
   `speccy-brainstorm.md` is the trailing edge that needs an update.
 - A skill body without a backing CLI command is a tractable new

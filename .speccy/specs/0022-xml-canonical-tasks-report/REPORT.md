@@ -92,7 +92,7 @@ requirements, 158 scenarios, 0 errors).
 
 <coverage req="REQ-005" result="satisfied" scenarios="CHK-005">
 - **REQ-005 — Docs, prompts, and shipped skills cite the new grammar.**
-  Proved by CHK-005 (`.speccy/ARCHITECTURE.md` carries element-name
+  Proved by CHK-005 (`docs/ARCHITECTURE.md` carries element-name
   tables for `tasks`, `task`, `task-scenarios`, `report`, `coverage`,
   documents the four task states and three coverage results as XML
   attribute enums, and confines checkbox-glyph references to a labelled
@@ -102,7 +102,7 @@ requirements, 158 scenarios, 0 errors).
   `<task-scenarios>` and `<scenario>` distinctly; the shipped skill
   packs under `.claude/skills/` and `.codex/` were regenerated from
   the embedded resources). Backed by the diff of
-  `.speccy/ARCHITECTURE.md` and `resources/modules/{prompts,personas,skills}/`
+  `docs/ARCHITECTURE.md` and `resources/modules/{prompts,personas,skills}/`
   visible in this PR, plus the `dogfood_outputs_match_committed_tree`
   test in `speccy-cli/tests/`.
 </coverage>

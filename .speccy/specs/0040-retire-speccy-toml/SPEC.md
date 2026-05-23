@@ -33,7 +33,7 @@ with them. Every integration test that asserts on
 `.speccy/speccy.toml` is removed or rewritten. The `toml` crate is
 dropped from `speccy-core/Cargo.toml`'s explicit dependencies
 (transitive consumers via other crates are acceptable). README.md
-and `.speccy/ARCHITECTURE.md` lose every `speccy.toml` reference
+and `docs/ARCHITECTURE.md` lose every `speccy.toml` reference
 and the entire TOML-side `schema_version` story.
 
 This is a pre-v1 cleanup: no legacy installed base, no migration
@@ -52,7 +52,7 @@ to a follow-up SPEC.
   content.
 - `speccy-core/Cargo.toml` no longer declares the `toml` crate as an
   explicit dependency.
-- README.md and `.speccy/ARCHITECTURE.md` contain no surviving
+- README.md and `docs/ARCHITECTURE.md` contain no surviving
   `speccy.toml` references and no surviving `## Schema version`
   section after this SPEC ships.
 - `speccy next` emits `next_action.kind = "work"` (not `"implement"`)
@@ -72,12 +72,12 @@ to a follow-up SPEC.
   parse-failure catch-all (verified by ~10 dependent sites across
   tests, fixtures, and the verify command). Only the stale
   description text mentioning `speccy.toml` in
-  `.speccy/ARCHITECTURE.md` changes.
+  `docs/ARCHITECTURE.md` changes.
 - No changes to the CLI `--json` envelope `schema_version: 1` field
   on `status`, `next`, `vacancy`, or `verify`. That field is a
   distinct downstream-consumer contract (per AGENTS.md quality
   bar: "JSON breaks are versioned via `schema_version`") and stays.
-- No broader restructure or rewrite of `.speccy/ARCHITECTURE.md`
+- No broader restructure or rewrite of `docs/ARCHITECTURE.md`
   beyond the sections directly touched by this deletion plus stale
   prose immediately adjacent to those edits. A full
   ARCHITECTURE.md audit is deferred to a separate follow-up SPEC.
@@ -122,7 +122,7 @@ to a follow-up SPEC.
   from the TOML `schema_version` field and is intentionally out of
   scope for this SPEC.
 - A future SPEC will brainstorm and draft the broader
-  `.speccy/ARCHITECTURE.md` restructure as a docs-only follow-up.
+  `docs/ARCHITECTURE.md` restructure as a docs-only follow-up.
 </assumptions>
 
 ## Requirements
@@ -421,9 +421,9 @@ then it exits 0.
 </requirement>
 
 <requirement id="REQ-007">
-### REQ-007: README.md and `.speccy/ARCHITECTURE.md` lose every `speccy.toml` reference and the TOML-side `schema_version` story
+### REQ-007: README.md and `docs/ARCHITECTURE.md` lose every `speccy.toml` reference and the TOML-side `schema_version` story
 
-README.md and `.speccy/ARCHITECTURE.md` are edited to remove
+README.md and `docs/ARCHITECTURE.md` are edited to remove
 every surviving mention of `speccy.toml` and the TOML-side
 `schema_version` concept. The specific edits are:
 
@@ -438,7 +438,7 @@ every surviving mention of `speccy.toml` and the TOML-side
     the workspace-level `.speccy/speccy.toml`" is rewritten or
     removed.
 
-- **`.speccy/ARCHITECTURE.md`**:
+- **`docs/ARCHITECTURE.md`**:
   - The `## speccy.toml` section (TOML body example plus
     surrounding prose) is removed in full.
   - The `## Schema version` section (which references
@@ -454,16 +454,16 @@ every surviving mention of `speccy.toml` and the TOML-side
     as one of the parsed artifacts is rewritten.
   - Stale prose immediately adjacent to these edits (within the
     same section) is fixed in place. A broader
-    `.speccy/ARCHITECTURE.md` audit is **out of scope** and is
+    `docs/ARCHITECTURE.md` audit is **out of scope** and is
     captured as a follow-up SPEC.
 
 <done-when>
 - A case-sensitive ripgrep for `speccy.toml` across `README.md` and
-  `.speccy/ARCHITECTURE.md` returns zero matches.
+  `docs/ARCHITECTURE.md` returns zero matches.
 - A case-sensitive ripgrep for the heading `## Schema version`
-  across `.speccy/ARCHITECTURE.md` returns zero matches.
+  across `docs/ARCHITECTURE.md` returns zero matches.
 - A case-sensitive ripgrep for the heading `## speccy.toml`
-  across `.speccy/ARCHITECTURE.md` returns zero matches.
+  across `docs/ARCHITECTURE.md` returns zero matches.
 - The SPC-001 row in the ARCHITECTURE.md lint catalogue describes
   the rule's current behavior (SPEC.md parse-failure catch-all)
   rather than `spec.toml` / `speccy.toml`.
@@ -474,21 +474,21 @@ every surviving mention of `speccy.toml` and the TOML-side
   reader skims `README.md` end-to-end, then no mention of
   `speccy.toml` appears.
 - Given the same repo, when a reader skims
-  `.speccy/ARCHITECTURE.md` for the lint catalogue and finds the
+  `docs/ARCHITECTURE.md` for the lint catalogue and finds the
   `SPC-001` row, then the row describes the SPEC.md parse-failure
   surface (not a stray TOML file).
 </behavior>
 
 <scenario id="CHK-012">
 Given the speccy repo at HEAD,
-when ripgrep searches `README.md` and `.speccy/ARCHITECTURE.md`
+when ripgrep searches `README.md` and `docs/ARCHITECTURE.md`
 (case-sensitive) for the literal `speccy.toml`,
 then the search returns zero matches.
 </scenario>
 
 <scenario id="CHK-013">
 Given the speccy repo at HEAD,
-when ripgrep searches `.speccy/ARCHITECTURE.md` for the literal
+when ripgrep searches `docs/ARCHITECTURE.md` for the literal
 heading strings `## speccy.toml` and `## Schema version`,
 then the search returns zero matches.
 </scenario>
@@ -510,7 +510,7 @@ match `"work"` instead. Every shipped skill body, agent
 definition, and prompt module under `.claude/`, `.codex/`, and
 `resources/modules/` that quotes `next_action.kind == "implement"`
 is updated to quote `"work"`. The shipped lint catalogue in
-`.speccy/ARCHITECTURE.md` is updated only where it quotes the
+`docs/ARCHITECTURE.md` is updated only where it quotes the
 JSON discriminator literally; surrounding prose that uses the
 English word "implement" as a verb stays untouched. Historical
 SPEC artifacts (prior `SPEC.md`, `TASKS.md`, `REPORT.md`,
@@ -592,7 +592,7 @@ authoring (`/speccy-plan`).
 </decision>
 
 <decision id="DEC-002">
-`.speccy/ARCHITECTURE.md` cleanup is scoped narrowly to the
+`docs/ARCHITECTURE.md` cleanup is scoped narrowly to the
 sections directly touched by the `speccy.toml` deletion plus
 stale prose immediately adjacent inside the same section. A
 broader `ARCHITECTURE.md` restructure (verifying every non-trivial
@@ -629,14 +629,14 @@ expected pre-v1 breakage.
 - **(C) Repurpose, don't retire.** Give `speccy.toml` a real reason
   to exist (persona overrides, configurable defaults, etc.).
   Rejected: scope creep. AGENTS.md is already the canonical home
-  for project conventions per `.speccy/ARCHITECTURE.md`'s own line:
+  for project conventions per `docs/ARCHITECTURE.md`'s own line:
   *"If the CLI ever needs structured access to environment
   metadata, the block will come back with a real purpose; until
   then, it isn't here."*
 
 **Out-of-scope follow-ups:**
 
-- A broader `.speccy/ARCHITECTURE.md` restructure (per DEC-002)
+- A broader `docs/ARCHITECTURE.md` restructure (per DEC-002)
   becomes a future docs-only SPEC drafted after this one lands.
 - Hunting transitive `toml` consumers in the dependency graph (per
   REQ-006) is not pursued in this SPEC.
@@ -656,6 +656,6 @@ no migration ceremony; transitive `toml` is acceptable.)
 <changelog>
 | Date       | Reason                                                   | Author     |
 |------------|----------------------------------------------------------|------------|
-| 2026-05-22 | Initial draft. Retire `.speccy/speccy.toml`: drop the scaffolded file from `speccy init` (replacing it with `.speccy/.gitkeep` to preserve workspace-discovery), delete the `speccy-core::parse::toml_files` module in full (parser, types, `SUPPORTED_SCHEMA_VERSION`, `guard_schema_version`, `ParseError::UnsupportedSchemaVersion`, re-exports), relocate the shared `read_to_string` helper, delete the CLI template file and rendering code, rewrite every test that references `.speccy/speccy.toml`, drop the explicit `toml` dependency from `speccy-core/Cargo.toml`, and remove every `speccy.toml` reference and the TOML-side `## Schema version` story from `README.md` and `.speccy/ARCHITECTURE.md`. SPC-001 the lint rule and the CLI `--json` envelope `schema_version: 1` contract are unchanged. Broader `.speccy/ARCHITECTURE.md` restructure is deferred to a follow-up SPEC. Pre-v1; no migration shim. | Kevin Xiao |
+| 2026-05-22 | Initial draft. Retire `.speccy/speccy.toml`: drop the scaffolded file from `speccy init` (replacing it with `.speccy/.gitkeep` to preserve workspace-discovery), delete the `speccy-core::parse::toml_files` module in full (parser, types, `SUPPORTED_SCHEMA_VERSION`, `guard_schema_version`, `ParseError::UnsupportedSchemaVersion`, re-exports), relocate the shared `read_to_string` helper, delete the CLI template file and rendering code, rewrite every test that references `.speccy/speccy.toml`, drop the explicit `toml` dependency from `speccy-core/Cargo.toml`, and remove every `speccy.toml` reference and the TOML-side `## Schema version` story from `README.md` and `docs/ARCHITECTURE.md`. SPC-001 the lint rule and the CLI `--json` envelope `schema_version: 1` contract are unchanged. Broader `docs/ARCHITECTURE.md` restructure is deferred to a follow-up SPEC. Pre-v1; no migration shim. | Kevin Xiao |
 | 2026-05-22 | Add REQ-008 mid-loop: rename `next_action.kind` from `"implement"` to `"work"` in the CLI's JSON and text output (with matching `NextAction::Work` enum rename), and update every first-party test, shipped skill body, agent definition, and ARCHITECTURE.md quote that referenced the old discriminator. Folded into SPEC-0040 because the orchestrator skill already speaks the work/review/ship/decompose vocabulary; the CLI's `"implement"` tag was the odd one out, and shipping the rename alongside the `speccy.toml` retirement keeps the "drop dead vocabulary" theme coherent. Historical SPEC artifacts are not retroactively edited. Pre-v1; no JSON-envelope schema bump. | Kevin Xiao |
 </changelog>

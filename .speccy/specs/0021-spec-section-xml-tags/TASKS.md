@@ -215,7 +215,7 @@ Apply migration across `.speccy/specs/*/SPEC.md` and dogfood `speccy verify`
 <task id="T-005" state="completed" covers="REQ-004">
 Sweep ARCHITECTURE.md, prompts, and shipped skill packs
 
-- Suggested files: `.speccy/ARCHITECTURE.md`,
+- Suggested files: `docs/ARCHITECTURE.md`,
   `resources/modules/prompts/implementer.md`,
   `resources/modules/prompts/reviewer-tests.md`,
   `resources/modules/prompts/reviewer-business.md`,
@@ -227,12 +227,12 @@ Sweep ARCHITECTURE.md, prompts, and shipped skill packs
   `resources/agents/.agents/`, `resources/agents/.codex/`
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` is read after this task, then
+  - When `docs/ARCHITECTURE.md` is read after this task, then
     the SPEC.md element-names table contains rows for `behavior`,
     `done-when`, `goals`, `non-goals`, `user-stories`, and
     `assumptions` (each with cardinality and location columns) and
     contains no rows for `spec` or `overview`.
-  - When the SPEC.md template inside `.speccy/ARCHITECTURE.md` is
+  - When the SPEC.md template inside `docs/ARCHITECTURE.md` is
     read after this task, then it uses `<done-when>` and
     `<behavior>` wrappers inside each `<requirement>` example and
     `<goals>`, `<non-goals>`, `<user-stories>` (and optional

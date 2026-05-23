@@ -28,7 +28,7 @@ T-003 wired all seven paths from REQ-002's mapping table into `init.rs` and
 files (`evidence.md` and `journal-blockers.md`); each per-skill `references/`
 directory ships exactly its attributed file. The mapping classification is
 observable from path first-component without a separate manifest.
-`.speccy/ARCHITECTURE.md` (updated in T-007) now references REQ-002's table as
+`docs/ARCHITECTURE.md` (updated in T-007) now references REQ-002's table as
 the canonical seven-row mapping source. Retry count: 0.
 </coverage>
 

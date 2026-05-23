@@ -409,7 +409,7 @@ Active guidance must stop teaching the HTML-comment marker form as
 the canonical carrier.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` documents the raw XML element grammar
+- `docs/ARCHITECTURE.md` documents the raw XML element grammar
   for SPEC.md, with the HTML-comment marker form listed only as
   migration history.
 - Shipped prompts under `resources/modules/prompts/` referencing

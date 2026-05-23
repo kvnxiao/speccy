@@ -87,14 +87,14 @@ form. A ripgrep for `^toml\s*=` in `speccy-core/Cargo.toml` returns zero hits.
 <coverage req="REQ-007" result="satisfied" scenarios="CHK-012 CHK-013">
 T-004 edited `README.md` to rewrite the "Scaffolds `.speccy/speccy.toml`"
 bullet, remove the `speccy.toml` line from the repo-layout diagram, and drop the
-closing TOML-claim paragraph. T-004 edited `.speccy/ARCHITECTURE.md` to remove
+closing TOML-claim paragraph. T-004 edited `docs/ARCHITECTURE.md` to remove
 the `## speccy.toml` section, the `## Schema version` section, the
 `speccy.toml` line in the file-layout diagram, and the stale TOML wording from
 the `SPC-001` lint-catalogue row (the row now describes the SPEC.md
 parse-failure catch-all per the actual rule in `spc.rs`) and the
 implementation-sequence bullet. A ripgrep for `speccy.toml` across `README.md`
-and `.speccy/ARCHITECTURE.md` returns zero hits. A ripgrep for `## speccy.toml`
-and `## Schema version` in `.speccy/ARCHITECTURE.md` returns zero hits. Retry
+and `docs/ARCHITECTURE.md` returns zero hits. A ripgrep for `## speccy.toml`
+and `## Schema version` in `docs/ARCHITECTURE.md` returns zero hits. Retry
 count: 0.
 </coverage>
 
@@ -108,7 +108,7 @@ renderer match arms were updated. Unit-test helper constructions of
 `speccy-cli/tests/next_json.rs`, `next_text.rs`, and `next_derived.rs` were
 updated to match `"work"`. Shipped skill and agent files under `.claude/`,
 `.codex/`, and `resources/modules/` that quoted `next_action.kind == "implement"`
-were updated to `"work"`. `.speccy/ARCHITECTURE.md` literal JSON discriminator
+were updated to `"work"`. `docs/ARCHITECTURE.md` literal JSON discriminator
 quotes were flipped. A ripgrep for `"implement"` scoped to `speccy-core/src/`
 and `speccy-cli/src/` returns zero hits. `cargo test --workspace --all-features`
 exits 0. A built binary emits `"kind":"work"` (not `"kind":"implement"`) for a

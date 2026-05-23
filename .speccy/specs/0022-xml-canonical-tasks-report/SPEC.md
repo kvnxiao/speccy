@@ -345,7 +345,7 @@ The skill layer must stop teaching the old checkbox/bullet grammar as
 the machine contract.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` documents the TASKS.md and REPORT.md XML
+- `docs/ARCHITECTURE.md` documents the TASKS.md and REPORT.md XML
   element grammars.
 - The four task states are documented as XML attribute values, with
   old checkbox markers listed only as migration history.

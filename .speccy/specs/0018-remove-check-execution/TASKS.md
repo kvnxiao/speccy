@@ -134,10 +134,10 @@ Migrate all `spec.toml` files and remove legacy check fields
 <task id="T-005" state="completed" covers="REQ-005">
 Update architecture docs and shipped prompts for scenarios
 
-- Suggested files: `.speccy/ARCHITECTURE.md`, `resources/modules/prompts/plan-greenfield.md`, `resources/modules/prompts/plan-amend.md`, `resources/modules/prompts/implementer.md`, `resources/modules/prompts/report.md`, `resources/modules/personas/reviewer-tests.md`, `.speccy/skills/prompts/`, `.speccy/skills/personas/`
+- Suggested files: `docs/ARCHITECTURE.md`, `resources/modules/prompts/plan-greenfield.md`, `resources/modules/prompts/plan-amend.md`, `resources/modules/prompts/implementer.md`, `resources/modules/prompts/report.md`, `resources/modules/personas/reviewer-tests.md`, `.speccy/skills/prompts/`, `.speccy/skills/personas/`
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` is inspected, then checks are
+  - When `docs/ARCHITECTURE.md` is inspected, then checks are
     described as English validation scenarios, `speccy check` is
     render-only, and `speccy verify` is shape-only.
   - The "Feedback, Not Enforcement" section explicitly says project

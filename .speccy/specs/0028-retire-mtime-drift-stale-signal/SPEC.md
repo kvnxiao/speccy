@@ -46,7 +46,7 @@ other rule consumes them). The dedicated test
 `HashDrift`-only assertion. SPEC-0004's enumeration of staleness
 reasons is amended via the changelog convention (Changelog row +
 inline edit to REQ-002), and ARCHITECTURE.md's two mtime
-references (`.speccy/ARCHITECTURE.md:1493` and `:1891`) are
+references (`docs/ARCHITECTURE.md:1493` and `:1891`) are
 trimmed to match.
 
 The change is a deletion, not a redesign. `HashDrift` and
@@ -82,7 +82,7 @@ non-blocking warning), and no on-disk artifact format changes.
   reduction from three reasons to two, and REQ-002's prose +
   `<done-when>` / `<behavior>` / `<scenario>` blocks are edited
   in place to drop every `MtimeDrift` mention.
-- `.speccy/ARCHITECTURE.md` references to mtime drift (the
+- `docs/ARCHITECTURE.md` references to mtime drift (the
   "Modification time" fallback bullet at line ~1493 and the
   staleness summary at line ~1891) are trimmed to match.
 </goals>
@@ -332,7 +332,7 @@ and the CHK-003 scenario all lose their mtime references. A
 `## Changelog` row is appended to SPEC-0004 noting the reduction
 from three reasons to two and citing SPEC-0028.
 
-`.speccy/ARCHITECTURE.md` is edited in two places to match: the
+`docs/ARCHITECTURE.md` is edited in two places to match: the
 "Modification time" bullet under the staleness detection section
 (currently around line 1493) is removed, and the "(hash or mtime
 drift)" parenthetical (currently around line 1891) is shortened
@@ -347,7 +347,7 @@ to "(hash drift)".
   (or the actual ship date) with reason "REQ-002 reduced from
   three staleness reasons to two; MtimeDrift retired per
   SPEC-0028" and a link/reference to SPEC-0028.
-- `grep -n "mtime" .speccy/ARCHITECTURE.md` returns zero matches
+- `grep -n "mtime" docs/ARCHITECTURE.md` returns zero matches
   in the staleness-detection prose. Other unrelated uses of
   "mtime" elsewhere in ARCHITECTURE.md (if any) are left
   untouched.
@@ -360,7 +360,7 @@ to "(hash drift)".
   CHK-003) is read, then the words "mtime", "MtimeDrift", and
   the string "modification time" do not appear (except possibly
   in the prose history of the `## Changelog`).
-- Given `.speccy/ARCHITECTURE.md` after this requirement lands,
+- Given `docs/ARCHITECTURE.md` after this requirement lands,
   when its staleness section is read, then the only stale
   signal it lists is `HashDrift` (plus the `BootstrapPending`
   sentinel that lives elsewhere in the architecture doc).
@@ -383,7 +383,7 @@ the REQ-002 reduction and the row's `reason` column names the
 specific change ("removed MtimeDrift" or substantially
 equivalent prose).
 
-Given `.speccy/ARCHITECTURE.md` after this requirement lands,
+Given `docs/ARCHITECTURE.md` after this requirement lands,
 when scanned for the substrings `mtime` and `Modification
 time` inside the staleness-detection narrative,
 then both substrings are absent from that narrative.

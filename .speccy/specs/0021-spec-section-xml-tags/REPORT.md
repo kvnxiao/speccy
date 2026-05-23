@@ -51,7 +51,7 @@ delivered
   rows and omits the two retired rows; the post-spec SPEC.md template
   uses the new tags). Backed by `resources/modules/personas/*.md`,
   `resources/modules/prompts/implementer.md`, and the updated
-  `.speccy/ARCHITECTURE.md` grammar table.
+  `docs/ARCHITECTURE.md` grammar table.
 </coverage>
 
 <coverage req="REQ-005" result="satisfied" scenarios="CHK-005">

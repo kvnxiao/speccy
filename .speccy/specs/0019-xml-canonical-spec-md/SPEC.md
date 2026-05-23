@@ -379,7 +379,7 @@ Agent-facing prompts must stop loading two separate spec carriers.
 - `speccy check` renders scenarios from SPEC.md marker blocks.
 - `speccy verify` validates marker structure and cross-references
   instead of spec-level TOML.
-- `.speccy/ARCHITECTURE.md` removes per-spec `spec.toml` from the
+- `docs/ARCHITECTURE.md` removes per-spec `spec.toml` from the
   file layout and documents the marker grammar.
 - Shipped skills and prompts no longer instruct agents to read or
   edit per-spec `spec.toml`.

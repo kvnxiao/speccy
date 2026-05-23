@@ -1150,7 +1150,7 @@ then exit is 0 for every spec.
 <requirement id="REQ-011">
 ### REQ-011: ARCHITECTURE.md and AGENTS.md document the new layout and schemas
 
-`.speccy/ARCHITECTURE.md` and `AGENTS.md` (the canonical
+`docs/ARCHITECTURE.md` and `AGENTS.md` (the canonical
 spec-workspace documentation surfaces) get updates documenting
 the new `journal/` artifact, the renamed element names, the
 attribute schemas, the `JNL-*` lint family, and the TASKS.md
@@ -1158,24 +1158,24 @@ attribute schemas, the `JNL-*` lint family, and the TASKS.md
 reference for future contributors and downstream skill packs.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` contains a section describing the
+- `docs/ARCHITECTURE.md` contains a section describing the
   `journal/T-NNN.md` artifact: its location, the
   frontmatter shape, the bare-element body shape, and the
   binding rules (filename ↔ task, frontmatter ↔ spec).
-- `.speccy/ARCHITECTURE.md` updates the closed-element-set
+- `docs/ARCHITECTURE.md` updates the closed-element-set
   reference to name `implementer` and `blockers` in place of
   the legacy `implementer-note` and `retry`, and drops `tasks`
   from the set entirely. The set cardinality is documented as
   five (down from six).
-- `.speccy/ARCHITECTURE.md` documents the TASKS.md structural
+- `docs/ARCHITECTURE.md` documents the TASKS.md structural
   shape change: bare `<task>` children directly under the
   `# Tasks:` heading; binding is resolved from filename +
   parent directory + frontmatter `spec:`, not from a wrapper
   attribute.
-- `.speccy/ARCHITECTURE.md` documents the `JNL-001`,
+- `docs/ARCHITECTURE.md` documents the `JNL-001`,
   `JNL-002`, `JNL-003` lint codes with their state-gating
   rules.
-- `.speccy/ARCHITECTURE.md` documents the TASKS.md
+- `docs/ARCHITECTURE.md` documents the TASKS.md
   "no notes elements" rule (REQ-006) as a TSK-family
   addition.
 - `AGENTS.md` references the journal artifact location in
@@ -1187,28 +1187,28 @@ reference for future contributors and downstream skill packs.
 </done-when>
 
 <behavior>
-- Given the post-SPEC `.speccy/ARCHITECTURE.md`, when the
+- Given the post-SPEC `docs/ARCHITECTURE.md`, when the
   file is searched for `journal/T-NNN.md`, then the path
   appears at least once as a documented artifact.
-- Given the post-SPEC `.speccy/ARCHITECTURE.md`, when the
+- Given the post-SPEC `docs/ARCHITECTURE.md`, when the
   file is searched for `JNL-001`, `JNL-002`, `JNL-003`,
   then each code appears in the lint-family reference
   section.
-- Given the post-SPEC `.speccy/ARCHITECTURE.md`, when the
+- Given the post-SPEC `docs/ARCHITECTURE.md`, when the
   file is searched for `<implementer-note>` or `<retry>` in
   the live-workflow prose (excluding any historical
   changelog rows), then no matches appear.
 </behavior>
 
 <scenario id="CHK-023">
-Given the post-SPEC `.speccy/ARCHITECTURE.md`,
+Given the post-SPEC `docs/ARCHITECTURE.md`,
 when the file body is searched for the literal substrings
 `journal/T-NNN.md` and `JNL-001`,
 then both substrings appear in the file body.
 </scenario>
 
 <scenario id="CHK-024">
-Given the post-SPEC `.speccy/ARCHITECTURE.md`,
+Given the post-SPEC `docs/ARCHITECTURE.md`,
 when the file body is searched for the literal substrings
 `<implementer-note>` and `<retry>` outside any
 historical-context or changelog section,
@@ -1582,7 +1582,7 @@ the rename as part of REQ-010's migration.
 | 2026-05-21 | human/kevin + Claude | Initial draft. Ejects `<implementer-note>` (renamed to `<implementer>`), `<review>`, and `<retry>` (renamed to `<blockers>`) elements out of TASKS.md and into per-task `journal/T-NNN.md` files under `.speccy/specs/NNNN-slug/journal/`. Filename + YAML frontmatter (`spec:`, `task:`, `generated_at:`) bind the file to its task and spec; no wrapper element. Element schemas pick up traceability attributes: `<implementer>` carries `date`, `model`, `round`; `<review>` carries `date`, `model`, `persona`, `verdict`, `round`; `<blockers>` carries `date`, `round`. All required, no optional attributes. `round` is monotonic integer from 1 unifying ad-hoc legacy `session="...attempt-N"` / `session="...rev-N"` encoding. `model` is free-form; effort/reasoning-intensity rides as slash-suffix (`claude-opus-4.7[1m]/low`). `date` is full ISO8601 with seconds + timezone. New `JNL-*` lint family validates journal shape lifecycle-aware per-task: `JNL-001` (pending must not have journal), `JNL-002` (completed must have journal), `JNL-003` (completed journal must be well-formed); in-progress and in-review states skip. TASKS.md gains an unconditional TSK-family rule forbidding the three activity elements at any state. Three skill bodies update (`speccy-work.md`, `speccy-review.md`, `speccy-amend.md`) to read/write the journal instead of TASKS.md. Reviewer return contract (`verdict_return_contract.md`) gains `model` requirement on returned `<review>` so orchestrator transcribes verbatim. Original F-11 hash-lock framing dropped (DEC-005): state-machine drift recovery via amend-flip suffices once TASKS.md is near-static. Full historical rewrite of SPEC-0001..SPEC-0036 is in scope, performed manually by LLM (no script, no `speccy migrate` CLI), with `JNL-*` lint as the correctness floor. `ARCHITECTURE.md` and `AGENTS.md` update to document the new layout, renames, schemas, and lint family. Closed XML element set stays at six (renames net out). No `effort` attribute, no `host` attribute, no `task_hash_at_generation` field, no new wrapper element, no new CLI subcommand. Brainstorm framing approved in conversation 2026-05-21 prior to plan invocation; alternative framings A (hash-lock TASKS.md), B (in-place compaction via `<history>` element), and C (per-attempt sharded files) all rejected. |
 | 2026-05-21 | human/kevin + Claude | Mid-decomposition scope expansion: drop the `<tasks spec="SPEC-NNNN">` wrapper from TASKS.md (DEC-008). The wrapper element duplicates a binding already encoded by filename `TASKS.md`, parent directory `NNNN-slug`, and frontmatter `spec:` field. REQ-005 extended to remove `<tasks>` from the closed element allow-list (set shrinks from six to five: `task`, `task-scenarios`, `implementer`, `review`, `blockers`). New scenarios CHK-025 (`<tasks>` wrapper trips unknown-element error) and CHK-026 (bare `<task>` children parse cleanly with no wrapper) capture the parser-side change. REQ-010 migration scope extended: every TASKS.md from SPEC-0001 through SPEC-0036 also has its `<tasks ...>` opening and `</tasks>` closing stripped as part of the activity-prose ejection. CHK-021 extended to grep for `<tasks` alongside the legacy elements; new CHK-027 asserts bare-`<task>`-under-heading shape. REQ-011 doc updates extended to document the smaller closed set and the wrapper-less TASKS.md shape. Decomposition-time decision; the wrapper is gone and won't be re-added. |
 | 2026-05-21 | human/kevin + Claude | Migration scope expansion: REQ-010 grows from 36 historical specs (SPEC-0001..0036) to 37 inclusive specs (SPEC-0001..0037). SPEC-0037 itself joins the migration sweep because implementer + reviewer agents working on T-001..T-005 follow the un-updated skill bodies and write activity prose in legacy format into SPEC-0037's own TASKS.md. After T-001's parser cutover, that format is unparseable, so SPEC-0037 needs the same migration as every historical spec. T-006's implementer entry goes directly to `journal/T-006.md` in the new format (the implementer of T-006 is aware of the new schema by then). Decomposition-time decision driven by user preference for "quickest path to completion" — accepts a transient red-CI window in exchange for not requiring per-agent dogfooding discipline during T-001..T-005. Done-when bullets, behavior, and CHK-021 / CHK-022 scenarios updated to reference 37 specs throughout. |
-| 2026-05-21 | human/kevin + Claude | Mid-loop decomposition revision: T-001's monolithic scope (Rust code + tests + docs + host-pack regen, covering REQ-001..007 + REQ-011) split into two narrower tasks. T-001 narrowed to code-only (Rust parser, lint, tests, ignore-tags on two integration tests; covers REQ-001..007). New T-002 inserted for docs sweep + host-pack regen (covers REQ-011 — `.speccy/ARCHITECTURE.md` and `AGENTS.md` describe the new shape; then `speccy init --force` regenerates `.claude` / `.codex` / `.agents`). T-002 lands before the skill-body tasks so their implementers / reviewers read accurate architectural docs. The previously-numbered T-002 through T-006 renumbered to T-003 through T-007. T-007 (was T-006) is the workspace-wide migration sweep. T-001's existing implementer-note from the punted round-1 attempt is preserved as a forensic record of the friction that motivated this split. The `<tasks spec="SPEC-0037">` wrapper was stripped from SPEC-0037's own TASKS.md as part of this orchestrator-side restructure (T-007 still strips the wrapper from the 36 historical specs, but SPEC-0037's own wrapper is gone now, making `speccy check SPEC-0037` parseable immediately). Two integration tests that walk the live in-tree corpus (`every_in_tree_tasks_md_parses_and_has_populated_scenarios` in `speccy-core/tests/in_tree_tasks_reports.rs`, and `speccy_verify_exits_zero_on_migrated_in_tree_workspace` in `speccy-cli/tests/verify_after_migration.rs`) are explicitly marked `#[ignore]` as part of T-001 with a comment pointing at T-007; T-007 removes those attributes as the final step of the sweep. |
+| 2026-05-21 | human/kevin + Claude | Mid-loop decomposition revision: T-001's monolithic scope (Rust code + tests + docs + host-pack regen, covering REQ-001..007 + REQ-011) split into two narrower tasks. T-001 narrowed to code-only (Rust parser, lint, tests, ignore-tags on two integration tests; covers REQ-001..007). New T-002 inserted for docs sweep + host-pack regen (covers REQ-011 — `docs/ARCHITECTURE.md` and `AGENTS.md` describe the new shape; then `speccy init --force` regenerates `.claude` / `.codex` / `.agents`). T-002 lands before the skill-body tasks so their implementers / reviewers read accurate architectural docs. The previously-numbered T-002 through T-006 renumbered to T-003 through T-007. T-007 (was T-006) is the workspace-wide migration sweep. T-001's existing implementer-note from the punted round-1 attempt is preserved as a forensic record of the friction that motivated this split. The `<tasks spec="SPEC-0037">` wrapper was stripped from SPEC-0037's own TASKS.md as part of this orchestrator-side restructure (T-007 still strips the wrapper from the 36 historical specs, but SPEC-0037's own wrapper is gone now, making `speccy check SPEC-0037` parseable immediately). Two integration tests that walk the live in-tree corpus (`every_in_tree_tasks_md_parses_and_has_populated_scenarios` in `speccy-core/tests/in_tree_tasks_reports.rs`, and `speccy_verify_exits_zero_on_migrated_in_tree_workspace` in `speccy-cli/tests/verify_after_migration.rs`) are explicitly marked `#[ignore]` as part of T-001 with a comment pointing at T-007; T-007 removes those attributes as the final step of the sweep. |
 </changelog>
 
 ## Open Questions

@@ -271,7 +271,7 @@ sub-case, add `scaffold_gitkeep`).
 </task>
 
 <task id="T-004" state="completed" covers="REQ-007">
-## Strip `speccy.toml` references and the `## Schema version` story from `README.md` and `.speccy/ARCHITECTURE.md`
+## Strip `speccy.toml` references and the `## Schema version` story from `README.md` and `docs/ARCHITECTURE.md`
 
 In `README.md`:
 
@@ -290,7 +290,7 @@ In `README.md`:
   in-band; preserving that part is fine, dropping the
   TOML-claim sentence is required.
 
-In `.speccy/ARCHITECTURE.md`:
+In `docs/ARCHITECTURE.md`:
 
 - Line 211: remove the `speccy.toml` line under
   `.speccy/` in the file-layout diagram.
@@ -328,25 +328,25 @@ In `.speccy/ARCHITECTURE.md`:
   follow-up SPEC.
 
 After this task, case-sensitive ripgreps over `README.md`
-and `.speccy/ARCHITECTURE.md` return zero matches for
+and `docs/ARCHITECTURE.md` return zero matches for
 `speccy.toml`, `## Schema version`, and `## speccy.toml`.
 
 <task-scenarios>
 Given the speccy repo at HEAD after this task,
 when ripgrep searches `README.md` and
-`.speccy/ARCHITECTURE.md` (case-sensitive) for the literal
+`docs/ARCHITECTURE.md` (case-sensitive) for the literal
 `speccy.toml`,
 then the search returns zero matches (covers CHK-012).
 
 Given the speccy repo at HEAD after this task,
-when ripgrep searches `.speccy/ARCHITECTURE.md`
+when ripgrep searches `docs/ARCHITECTURE.md`
 (case-sensitive) for the literal headings
 `## speccy.toml` and `## Schema version`,
 then the search returns zero matches (covers CHK-013).
 
 Given the speccy repo at HEAD after this task,
 when a reader skims the `SPC-001` row in
-`.speccy/ARCHITECTURE.md`'s lint catalogue,
+`docs/ARCHITECTURE.md`'s lint catalogue,
 then the row describes the SPEC.md parse-failure
 catch-all surface (the rule's actual current behavior)
 rather than a stray spec.toml or workspace
@@ -362,7 +362,7 @@ assertions touch `speccy.toml` or
 
 Suggested files:
 `README.md`,
-`.speccy/ARCHITECTURE.md`,
+`docs/ARCHITECTURE.md`,
 `speccy-core/src/lint/rules/spc.rs` (read-only — consult
 to derive the corrected SPC-001 row description; do not
 modify per Non-goals).
@@ -435,7 +435,7 @@ In shipped skill and agent material under
   `.claude/`, `.codex/`, and `resources/modules/` gets the
   same treatment.
 
-In `.speccy/ARCHITECTURE.md`:
+In `docs/ARCHITECTURE.md`:
 
 - Find every place that documents `speccy next`'s priority
   rule using the literal token `"implement"` (or
@@ -488,6 +488,6 @@ Suggested files:
 `.codex/agents/speccy-work.toml`,
 `resources/modules/phases/speccy-work.md`,
 `resources/modules/skills/speccy-orchestrate.md`,
-`.speccy/ARCHITECTURE.md`.
+`docs/ARCHITECTURE.md`.
 </task-scenarios>
 </task>

@@ -243,7 +243,7 @@ Workspace loader uses `SpecDoc`; spec.toml types deleted
 <task id="T-007" state="completed" covers="REQ-004 REQ-005">
 Sweep architecture, skills, and delete the migration tool
 
-- Suggested files: `.speccy/ARCHITECTURE.md`, `AGENTS.md`,
+- Suggested files: `docs/ARCHITECTURE.md`, `AGENTS.md`,
   `skills/**`, `.claude/skills/**`,
   `xtask/migrate-spec-markers-0019/` (delete),
   `speccy-core/tests/docs_sweep.rs`
@@ -252,9 +252,9 @@ Sweep architecture, skills, and delete the migration tool
   write" bullet — DEC-003's "no public `speccy fmt`" contract —
   the same way the other four bullets are pinned, so a future
   deletion of the "Public `speccy fmt` command" row at
-  `.speccy/ARCHITECTURE.md:1610` (or its AGENTS.md equivalent if
+  `docs/ARCHITECTURE.md:1610` (or its AGENTS.md equivalent if
   that list ever moves) regresses loudly. Concretely: walk
-  `.speccy/ARCHITECTURE.md` (or AGENTS.md, whichever carries the
+  `docs/ARCHITECTURE.md` (or AGENTS.md, whichever carries the
   "What We Deliberately Don't Do" list) and assert at least one
   line mentions both `speccy fmt` and `DEC-003`. Hygiene after the
   edit: `cargo test --workspace`, `cargo clippy --workspace
@@ -263,7 +263,7 @@ Sweep architecture, skills, and delete the migration tool
   `cargo run --quiet -- verify`.
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` is searched, then per-spec
+  - When `docs/ARCHITECTURE.md` is searched, then per-spec
     `spec.toml` is referenced only in historical context (e.g.
     under a SPEC-0019 changelog or migration note) and the canonical
     file layout lists `SPEC.md` as the single spec carrier; a
@@ -275,7 +275,7 @@ Sweep architecture, skills, and delete the migration tool
     `spec.toml`; matches are allowed only inside files explicitly
     labelled as migration or historical notes.
   - When the marker grammar is searched for in
-    `.speccy/ARCHITECTURE.md`, then the file documents the marker
+    `docs/ARCHITECTURE.md`, then the file documents the marker
     names, id regexes, nesting rules, and the deterministic-render
     contract.
   - When the repo is searched for `xtask/migrate-spec-markers-0019`

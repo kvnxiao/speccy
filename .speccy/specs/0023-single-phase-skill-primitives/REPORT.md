@@ -18,7 +18,7 @@ repo-relative path and instructs the agent to read it via the host's
 Read primitive. The four-persona parallel fan-out inside
 `/speccy-review` is preserved (DEC-002) and each persona sub-agent
 receives a bash-command-form spawn prompt rather than the inlined
-rendered prompt. `.speccy/ARCHITECTURE.md` agrees with the shipped
+rendered prompt. `docs/ARCHITECTURE.md` agrees with the shipped
 skill bodies on the primitive contract; multi-task orchestration is
 explicitly a future Layer-2 concern with the existing `/loop` skill
 named as the interim composer. CLI surface unchanged; SPEC.md /
@@ -94,7 +94,7 @@ scenarios, 0 errors).
 <coverage req="REQ-004" result="satisfied" scenarios="CHK-004">
 - **REQ-004 — Architecture docs reflect the primitive contract.**
   Proved by CHK-004 (§"Core Development Loop", §"Phase 3", and
-  §"Phase 4" of `.speccy/ARCHITECTURE.md` describe one primitive
+  §"Phase 4" of `docs/ARCHITECTURE.md` describe one primitive
   invocation per phase rather than skill-driven loops; the previous
   `loop:` pseudocode in §"Phase 3" and §"Phase 4" is deleted, not
   relabeled; each phase closes with a two-sentence Layer-2 note that
@@ -107,7 +107,7 @@ scenarios, 0 errors).
   bullet list, and "typical full session" code block were
   reconciled to single-task wording in the same edit; `speccy verify`
   exits 0 and no new lints fire as a result). Backed in
-  `.speccy/ARCHITECTURE.md` and the `cargo run -- verify` post-edit
+  `docs/ARCHITECTURE.md` and the `cargo run -- verify` post-edit
   run.
 </coverage>
 
@@ -191,7 +191,7 @@ Seven tasks, all completed, zero retries.
   `SPEC-0022/T-001 --persona business`: 37,457 → 21,263 chars
   (subsequent shrinks from T-005 / T-006 took this further to
   9,303 chars).
-- T-004 — Rewrote `.speccy/ARCHITECTURE.md` §"Core Development Loop",
+- T-004 — Rewrote `docs/ARCHITECTURE.md` §"Core Development Loop",
   §"Phase 3", and §"Phase 4" as single-task primitives; deleted the
   `loop:` pseudocode in each phase; added the Layer-2 note pointing
   at `/loop` as the interim composer at the end of each phase;

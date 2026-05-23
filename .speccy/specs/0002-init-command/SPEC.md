@@ -340,7 +340,7 @@ in v1; revisit if skill iteration cadence outpaces release cadence.
 #### DEC-002: Cursor detected but unsupported in v1
 
 **Status:** Accepted
-**Context:** `.speccy/ARCHITECTURE.md` lists `.cursor/` as a host signal
+**Context:** `docs/ARCHITECTURE.md` lists `.cursor/` as a host signal
 but no `skills/cursor/` pack ships in v1. Silent fallback would
 violate "surface unknowns; never invent" (CLAUDE.md).
 **Decision:** Detect `.cursor/` as a host signal but refuse to

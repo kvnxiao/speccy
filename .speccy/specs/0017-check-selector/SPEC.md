@@ -33,7 +33,7 @@ five shapes share the existing `speccy_core::task_lookup` resolver
 for task forms (so ambiguity and not-found errors are identical to
 `speccy implement` and `speccy review`), and add a thin sibling
 parser for spec / CHK forms. No new flags. No new noun in
-`.speccy/ARCHITECTURE.md`'s five-noun set.
+`docs/ARCHITECTURE.md`'s five-noun set.
 
 The downstream execution path (live streaming, exit-code aggregation,
 in-flight categorisation for in-progress specs) is unchanged. Only
@@ -290,16 +290,16 @@ Bare speccy check CHK-NNN keeps SPEC-0010 DEC-003 cross-spec semantics (matching
 ### REQ-005: ARCHITECTURE.md and shipped skill docs reflect the new shape
 
 The CLI surface is canonically documented in
-`.speccy/ARCHITECTURE.md`. That doc, and any shipped skill prompt
+`docs/ARCHITECTURE.md`. That doc, and any shipped skill prompt
 that calls `speccy check`, must reflect the new selector shape so
 agents don't get a stale invocation from the doc surface.
 
 <done-when>
-- `.speccy/ARCHITECTURE.md` "CLI Surface" table row for
+- `docs/ARCHITECTURE.md` "CLI Surface" table row for
   `speccy check` changes from `[CHK-ID]` to `[SELECTOR]` with
   indented sub-bullets for each shape, mirroring the style of the
   `speccy plan` and `speccy tasks` rows above it.
-- `.speccy/ARCHITECTURE.md` "Execution" code fence in the Checks
+- `docs/ARCHITECTURE.md` "Execution" code fence in the Checks
   section gains lines for spec, qualified-check, and task forms;
   bare `CHK-NNN` line stays.
 - Any shipped skill prompt under `.speccy/skills/` and `skills/` that
@@ -321,7 +321,7 @@ agents don't get a stale invocation from the doc surface.
 - The reviewer-docs and reviewer-architecture personas, given the
   diff, can trace every doc change to a REQ in this spec.
 
-Inspect `.speccy/ARCHITECTURE.md`:
+Inspect `docs/ARCHITECTURE.md`:
 
 1. CLI Surface row for `speccy check` (~line 141) now reads
    `speccy check [SELECTOR]` with indented sub-bullets for each
@@ -516,7 +516,7 @@ pub fn parse_selector(arg: Option<&str>) -> Result<CheckSelector, SelectorError>
 - Modified: `speccy-cli/tests/check.rs` -- existing tests using
   `Some("CHK-NNN")` keep passing (semantics unchanged); add tests
   for the new shapes.
-- Modified: `.speccy/ARCHITECTURE.md` -- CLI Surface row (line ~141)
+- Modified: `docs/ARCHITECTURE.md` -- CLI Surface row (line ~141)
   and Execution code fence (lines ~1003-1004) per REQ-005.
 
 ### Migration / rollback
@@ -587,7 +587,7 @@ Rollback is a `git revert`. No on-disk state changes.
 ## Notes
 
 This spec touches the CLI surface documented in
-`.speccy/ARCHITECTURE.md`. The doc edit is in REQ-005 so it lands
+`docs/ARCHITECTURE.md`. The doc edit is in REQ-005 so it lands
 inside this spec's review boundary rather than as a separate
 follow-up; the architecture reviewer persona should verify the new
 shape matches DEC-001's claim of internal consistency with

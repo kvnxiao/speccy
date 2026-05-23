@@ -152,7 +152,7 @@ Retry count: 3 (rounds 2, 3, 4 each addressed prior-round blockers).
 </coverage>
 
 <coverage req="REQ-011" result="satisfied" scenarios="CHK-023 CHK-024">
-T-002 rewrote the `# Review` section of `.speccy/ARCHITECTURE.md`
+T-002 rewrote the `# Review` section of `docs/ARCHITECTURE.md`
 into `## Invocation` and `## State transitions` subsections, added
 the full `TASKS.md per-task journal` section documenting the
 closed-set XML grammar + JNL-001/JNL-002/JNL-003 + TSK-006, and

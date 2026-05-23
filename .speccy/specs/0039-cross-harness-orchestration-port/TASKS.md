@@ -38,7 +38,7 @@ Pilot-to-shared transformation rules:
   `/speccy-work`, `/speccy-review`, and `/speccy-holistic-gate` —
   the holistic-gate skill is the renamed lifecycle skill per
   DEC-003.
-- The shared body MUST NOT reference `ARCHITECTURE.md`, `.speccy/ARCHITECTURE.md`,
+- The shared body MUST NOT reference `ARCHITECTURE.md`, `docs/ARCHITECTURE.md`,
   or any other repo-local doc. Shipped skill bodies stay portable to
   any speccy-using repo. If the pilot mentions `ARCHITECTURE.md`,
   drop the reference or replace it with a cite of the relevant
@@ -303,10 +303,10 @@ Suggested files: `resources/modules/skills/speccy-review.md`, `speccy-cli/tests/
 
 Rewrite the doc comment at `speccy-core/src/prompt/id_alloc.rs:3` to
 cite only the SPEC that the constant derives from (SPEC-0005 DEC-005)
-rather than `.speccy/ARCHITECTURE.md`. The current text reads:
+rather than `docs/ARCHITECTURE.md`. The current text reads:
 
 ```
-//! Per SPEC-0005 DEC-005 and `.speccy/ARCHITECTURE.md` "Spec ID allocation":
+//! Per SPEC-0005 DEC-005 and `docs/ARCHITECTURE.md` "Spec ID allocation":
 ```
 
 After this task it should read (or equivalent) — citing the SPEC as
@@ -342,7 +342,7 @@ Suggested files: `speccy-core/src/prompt/id_alloc.rs`.
 </task>
 
 <task id="T-007" state="completed" covers="REQ-006">
-## Reposition multi-agent orchestration as a shipped v1.0 artifact across `README.md`, `.speccy/ARCHITECTURE.md`, and `AGENTS.md`
+## Reposition multi-agent orchestration as a shipped v1.0 artifact across `README.md`, `docs/ARCHITECTURE.md`, and `AGENTS.md`
 
 Rewrite the three project-local doc surfaces that frame Speccy's
 positioning so the multi-agent orchestration loop reads as a shipped
@@ -362,7 +362,7 @@ would build. Concrete edits per file:
   in both the `.claude/skills/` and `.agents/skills/` lines after
   T-004 lands.
 
-- **`.speccy/ARCHITECTURE.md`** — rewrite the
+- **`docs/ARCHITECTURE.md`** — rewrite the
   "Long-Term Vision" section (currently lines 2515-2533) so the
   bullet list under "Future layers (not v1)" no longer includes
   multi-agent orchestration. The remaining future layers
@@ -412,7 +412,7 @@ when `rg -n 'speccy-orchestrate' README.md` runs,
 then it prints at least one match in a line introducing the orchestrator recipe in the slash-command table.
 
 Given the same checkout,
-when the "Long-Term Vision" section of `.speccy/ARCHITECTURE.md` is read,
+when the "Long-Term Vision" section of `docs/ARCHITECTURE.md` is read,
 then no bullet under "Future layers (not v1)" references multi-agent orchestration.
 
 Given the same checkout,
@@ -427,6 +427,6 @@ Given the same checkout,
 when `rg -c '`init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`' AGENTS.md` runs,
 then it reports at least one match — proving the seven-command CLI surface description survived the rewrite intact.
 
-Suggested files: `README.md`, `.speccy/ARCHITECTURE.md`, `AGENTS.md`.
+Suggested files: `README.md`, `docs/ARCHITECTURE.md`, `AGENTS.md`.
 </task-scenarios>
 </task>

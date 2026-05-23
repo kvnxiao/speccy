@@ -200,7 +200,7 @@ skill file directly under `.claude/skills/` or `.agents/skills/`;
 thereafter, the next contributor inherits the fix rather than
 rediscovering the friction themselves.
 
-See [`.speccy/ARCHITECTURE.md`](./.speccy/ARCHITECTURE.md) for the
+See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the
 canonical contract on what each phase produces, and on how the state
 machine transitions between them.
 
@@ -406,7 +406,7 @@ Speccy commits to six durable principles:
 
 The full architecture (schema, lint codes, JSON contracts, and the
 deliberate list of "what we do not do") lives in
-[`.speccy/ARCHITECTURE.md`](./.speccy/ARCHITECTURE.md).
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ---
 

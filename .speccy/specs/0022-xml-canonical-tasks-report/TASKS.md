@@ -316,7 +316,7 @@ Switch CLI commands and prompts to the typed TASKS/REPORT models; delete the old
 <task id="T-008" state="completed" covers="REQ-005">
 Sweep ARCHITECTURE.md, prompts, and shipped skill packs to teach the new grammar
 
-- Suggested files: `.speccy/ARCHITECTURE.md`,
+- Suggested files: `docs/ARCHITECTURE.md`,
   `resources/modules/prompts/tasks-generate.md`,
   `resources/modules/prompts/report.md`,
   `resources/modules/prompts/implementer.md`,
@@ -328,16 +328,16 @@ Sweep ARCHITECTURE.md, prompts, and shipped skill packs to teach the new grammar
   `resources/agents/.agents/`, `resources/agents/.codex/`
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` is read after this task, then the
+  - When `docs/ARCHITECTURE.md` is read after this task, then the
     TASKS.md and REPORT.md element-names tables contain rows for
     `tasks`, `task`, `task-scenarios`, `report`, and `coverage`
     (each with cardinality, parent, and attribute columns).
-  - When `.speccy/ARCHITECTURE.md` is read after this task, the four
+  - When `docs/ARCHITECTURE.md` is read after this task, the four
     task states are documented as XML attribute values (`pending`,
     `in-progress`, `in-review`, `completed`); the old checkbox
     glyphs (`[ ]`, `[~]`, `[?]`, `[x]`) appear only in a clearly
     labelled migration-history note.
-  - When `.speccy/ARCHITECTURE.md` is read after this task, the
+  - When `docs/ARCHITECTURE.md` is read after this task, the
     coverage result enum is documented as exactly
     `satisfied | partial | deferred` (no `dropped`), with a sentence
     noting that dropped requirements are removed from SPEC.md via

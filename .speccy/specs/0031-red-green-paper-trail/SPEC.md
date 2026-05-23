@@ -1356,7 +1356,7 @@ Rejected because:
   benefit.
 
 The `.speccy/` directory is already the canonical home for
-project-level Speccy reference content (`.speccy/ARCHITECTURE.md`,
+project-level Speccy reference content (`docs/ARCHITECTURE.md`,
 `.speccy/BACKLOG.md`, `.speccy/specs/`). Adding `.speccy/examples/`
 is consistent with that pattern. The earlier retirement of
 `.speccy/skills/` was about skill content (which migrated to
@@ -1689,7 +1689,7 @@ prompt.
   `.speccy/skills/`. The retired path housed skill content
   (which moved to host-native trees per SPEC-0027); reference
   content under `.speccy/` is the correct shape and is
-  consistent with `.speccy/ARCHITECTURE.md`,
+  consistent with `docs/ARCHITECTURE.md`,
   `.speccy/BACKLOG.md`, and `.speccy/specs/`.
 - The carried-forward `clippy::result_large_err` warning that
   SPEC-0030 addressed continues to apply only at the

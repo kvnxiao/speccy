@@ -452,7 +452,7 @@ exactly one consuming body and live skill-local.
   `journal-implementer-v2.md`, etc.). Exactly one canonical
   file per artifact.
 - The architecture doc's "Skill packs" or equivalent section
-  in `.speccy/ARCHITECTURE.md` documents the seven-row mapping
+  in `docs/ARCHITECTURE.md` documents the seven-row mapping
   (or this SPEC's REQ-002 table is the source of truth and
   ARCHITECTURE.md links to it).
 - The reference file at row (d) `journal-implementer.md` is

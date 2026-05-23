@@ -657,10 +657,10 @@ Implement `CheckSelector::Task`; tests for task-scoped execution
 
 
 <task id="T-006" state="completed" covers="REQ-005">
-Update `.speccy/ARCHITECTURE.md` and audit shipped skill docs
+Update `docs/ARCHITECTURE.md` and audit shipped skill docs
 
 - Suggested files:
-  - `.speccy/ARCHITECTURE.md` (CLI Surface row at ~line 141;
+  - `docs/ARCHITECTURE.md` (CLI Surface row at ~line 141;
     Execution code fence at ~lines 1003-1004)
   - `.speccy/skills/personas/implementer.md` (fix the `speccy
     check SPEC-NNNN T-002` example at ~line 69)
@@ -669,7 +669,7 @@ Update `.speccy/ARCHITECTURE.md` and audit shipped skill docs
     ~57 references `speccy check` generically and is likely fine
     as-is)
 - Implementer note (t006-architecture-skill-audit):
-  - Completed: `.speccy/ARCHITECTURE.md` CLI Surface row for `speccy
+  - Completed: `docs/ARCHITECTURE.md` CLI Surface row for `speccy
     check` updated from `[CHK-ID]` to `[SELECTOR]` with six
     indented sub-bullets enumerating no-arg + the five accepted
     shapes (`SPEC-NNNN`, `SPEC-NNNN/CHK-NNN`, `SPEC-NNNN/T-NNN`,
@@ -758,7 +758,7 @@ Update `.speccy/ARCHITECTURE.md` and audit shipped skill docs
     automated tests. Acceptance is structural and grep-checkable:
     - `git grep -n "speccy check \[CHK-ID\]"` returns zero hits
       anywhere in the repo after the edit.
-    - The `.speccy/ARCHITECTURE.md` CLI Surface row for
+    - The `docs/ARCHITECTURE.md` CLI Surface row for
       `speccy check` (around line 141 today) reads
       `speccy check [SELECTOR]` with indented sub-bullets naming
       each accepted shape (`SPEC-NNNN`, `SPEC-NNNN/CHK-NNN`,
@@ -782,7 +782,7 @@ Update `.speccy/ARCHITECTURE.md` and audit shipped skill docs
       shape.
     - No new lint codes are added and no new noun appears in the
       five-noun set (cross-check via
-      `git diff -- .speccy/ARCHITECTURE.md`).
+      `git diff -- docs/ARCHITECTURE.md`).
 </task-scenarios>
 </task>
 

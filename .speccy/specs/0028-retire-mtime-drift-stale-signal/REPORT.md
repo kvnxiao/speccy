@@ -67,7 +67,7 @@ the business reviewer flagged the resulting self-contradiction. A
 single 2026-05-18 Changelog row records both the REQ-002 narrowing
 and the assumption drop, citing SPEC-0028.
 
-`.speccy/ARCHITECTURE.md` was edited in two places: the two-way
+`docs/ARCHITECTURE.md` was edited in two places: the two-way
 staleness-detection block at line ~1486 was collapsed to a
 content-hash-only paragraph, and the Threat Model bullet at line
 ~1888 was shortened from "hash or mtime drift" to "hash drift".
@@ -77,7 +77,7 @@ CHK-003 is satisfied by:
 - `grep -n 'MtimeDrift|mtime drift|mtime-drift' .speccy/specs/0004-status-command/SPEC.md`
   returns a single match inside the `<changelog>` block (explicitly
   permitted as historical context by CHK-003 paragraph 1).
-- `grep -n 'mtime|Modification time' .speccy/ARCHITECTURE.md`
+- `grep -n 'mtime|Modification time' docs/ARCHITECTURE.md`
   returns zero matches inside the staleness-detection narrative.
 - `cargo test -p speccy-core --test in_tree_specs` exits 0 (the
   SPEC-0004 id-set in the snapshot fixture was unaffected by inline

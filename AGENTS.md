@@ -1,8 +1,6 @@
 # AGENTS.md
 
-> Canonical instruction file for AI agents working on **speccy**.
-> `CLAUDE.md` is a symlink to this file. On platforms that don't honor
-> symlinks, treat the two filenames as required-to-be-identical.
+> Canonical instruction file for AI agents working on **speccy**. `CLAUDE.md` is a symlink to this file. On platforms that don't honor symlinks, treat the two filenames as required-to-be-identical.
 
 ## Product north star
 
@@ -31,9 +29,8 @@ between intent and shipped behavior **visible**, so drift is loud the
 moment it happens. Speccy is a feedback engine, not an enforcement
 system.
 
-Speccy's shipped skill packs already drive the per-task work + review
-loop and the pre-ship drift gate end-to-end on a single host (via
-`/speccy-orchestrate` and `/speccy-holistic-gate`). Beyond that, speccy
+Speccy's shipped skills and subagent packs drive the per-task work + review
+loop and the pre-ship drift gate end-to-end on a single host. Beyond that, speccy
 aims to be the substrate underneath cross-host and cross-repository
 harnesses that move projects toward completion without humans
 re-explaining intent at every step.
@@ -51,7 +48,7 @@ re-explaining intent at every step.
 ### V1.0 outcome
 
 - Seven-command Rust CLI implementing the surface in
-  `.speccy/ARCHITECTURE.md`: `init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`.
+  `docs/ARCHITECTURE.md`: `init`, `status`, `next`, `check`, `verify`, `lock`, `vacancy`.
   Phase prompts (plan / tasks / implement / review / report) live in
   the shipped skill bodies, not in the CLI; the binary never renders
   natural-text prompts.
@@ -95,7 +92,7 @@ by hypothetical broader audiences are out of scope for v1.
   pain (API churn, behavioral changes) before Speccy's first release.
 
 Non-goals and the full list of "what we deliberately don't do" are
-catalogued in `.speccy/ARCHITECTURE.md`'s "What We Deliberately Don't
+catalogued in `docs/ARCHITECTURE.md`'s "What We Deliberately Don't
 Do" table. Constraints are catalogued in `## Core principles` below
 and in `## Standard hygiene`.
 
@@ -134,7 +131,7 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
 
 ## Where the design lives
 
-`.speccy/ARCHITECTURE.md` is the only source of truth for the schema, CLI
+`docs/ARCHITECTURE.md` is the only source of truth for the schema, CLI
 surface, lint codes, and implementation sequence. Read it before
 touching any code. If a design decision isn't documented, ask before
 deciding.
@@ -195,7 +192,7 @@ journal carries the closed-set XML elements `<implementer>`,
 `<review>`, and `<blockers>` under a small YAML frontmatter
 (`spec`, `task`, `generated_at`). These elements do not appear
 inside `<task>` bodies in `TASKS.md`; the parser rejects them
-there. See `.speccy/ARCHITECTURE.md` "TASKS.md per-task journal"
+there. See `docs/ARCHITECTURE.md` "TASKS.md per-task journal"
 for the full grammar, attribute schemas, the `JNL-001` / `JNL-002`
 / `JNL-003` lint family, and the `TSK-006` "no journal elements in
 TASKS.md" rule.

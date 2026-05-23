@@ -141,18 +141,18 @@ Reviewer CLI prompts stop inlining the branch diff
 <task id="T-004" state="completed" covers="REQ-004">
 Update ARCHITECTURE.md Phase 3 and Phase 4 to reflect the primitive contract
 
-- Suggested files: `.speccy/ARCHITECTURE.md`
+- Suggested files: `docs/ARCHITECTURE.md`
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` §"Core Development Loop" is
+  - When `docs/ARCHITECTURE.md` §"Core Development Loop" is
     read after this task, it describes the five phases without
     implying that phases 3 and 4 are skill-driven loops; phases
     3 and 4 describe one primitive invocation each (one task in,
     one state transition out).
-  - When `.speccy/ARCHITECTURE.md` §"Phase 3" and §"Phase 4" are
+  - When `docs/ARCHITECTURE.md` §"Phase 3" and §"Phase 4" are
     read after this task, the previous loop pseudocode is no
     longer present (deleted, not relabelled).
-  - When `.speccy/ARCHITECTURE.md` is grep'd for `loop`, `spawn`,
+  - When `docs/ARCHITECTURE.md` is grep'd for `loop`, `spawn`,
     `sub-agent`, or `subagent` in the context of Phase 3 or Phase
     4 after this task, active guidance does not present these as
     the skill's job. The Phase 4 description may name the
@@ -163,7 +163,7 @@ Update ARCHITECTURE.md Phase 3 and Phase 4 to reflect the primitive contract
     multi-task composition is a future Layer-2 concern not built
     today, pointing at the existing `/loop` skill as the interim
     composer.
-  - When `.speccy/ARCHITECTURE.md`, the rewritten
+  - When `docs/ARCHITECTURE.md`, the rewritten
     `resources/modules/skills/speccy-work.md`, and the rewritten
     `resources/modules/skills/speccy-review.md` are read together,
     they agree on the single-task primitive contract. Active

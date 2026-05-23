@@ -87,7 +87,7 @@ coordinated PRs.
 documentation positioned multi-agent orchestration as a *future*
 layer that downstream harnesses would build on top of Speccy's
 primitive skills (per `AGENTS.md` line 34, `AGENTS.md` line 44,
-and `.speccy/ARCHITECTURE.md` "Long-Term Vision"). Once REQ-001
+and `docs/ARCHITECTURE.md` "Long-Term Vision"). Once REQ-001
 through REQ-003 land, Speccy itself ships an opinionated
 implementation+review orchestration loop as an ejected skill in
 both packs (`speccy-orchestrate` driving `speccy-holistic-gate`).
@@ -128,7 +128,7 @@ narrative positioning rather than implementation hygiene.
   round budget (3 rounds) ship hardcoded inline in the shared module
   bodies; configurability is deliberately not in scope.
 - The project-local docs that frame Speccy's product positioning
-  (`README.md`, `.speccy/ARCHITECTURE.md`, `AGENTS.md` "Product north
+  (`README.md`, `docs/ARCHITECTURE.md`, `AGENTS.md` "Product north
   star") describe the opinionated multi-agent orchestration loop as
   a shipped v1.0 artifact rather than a future layer downstream
   harnesses might build.
@@ -594,13 +594,13 @@ to match the new native-primitive rendered output.
 
 Three project-local doc files frame Speccy's positioning to readers
 who land on the repo: `README.md` (public-facing introduction),
-`.speccy/ARCHITECTURE.md` (canonical design reference), and
+`docs/ARCHITECTURE.md` (canonical design reference), and
 `AGENTS.md` "Product north star" (the always-loaded vision block).
 Each carries language that defers multi-agent orchestration to a
 *future* layer downstream harnesses would build on top of Speccy
 (`AGENTS.md` line 34 "Long-term, speccy is the substrate underneath
 multi-agent harnesses"; `AGENTS.md` line 44 "(Future) multi-agent
-harnesses"; `.speccy/ARCHITECTURE.md` "Long-Term Vision" section).
+harnesses"; `docs/ARCHITECTURE.md` "Long-Term Vision" section).
 Once REQ-001 through REQ-003 land, that framing is stale: Speccy
 itself ships the orchestrator. This requirement rewrites the three
 files in the same diff so the narrative matches the shipped surface
@@ -613,7 +613,7 @@ schema, no CLI surface change.
   `/speccy-plan`/`/speccy-tasks`/`/speccy-work`/`/speccy-review`/`/speccy-ship`
   recipe table, framing it as the opinionated end-to-end driver
   rather than a future layer.
-- `.speccy/ARCHITECTURE.md` "Long-Term Vision" no longer lists
+- `docs/ARCHITECTURE.md` "Long-Term Vision" no longer lists
   multi-agent orchestration among the deferred future layers; the
   shipped orchestration loop is described as a current artifact of
   the skill layer.
@@ -636,7 +636,7 @@ schema, no CLI surface change.
   when they scan the slash-command recipe table, then they see
   `/speccy-orchestrate` listed as a shipped recipe alongside the
   five existing phases — not as a future layer.
-- Given the same reader opening `.speccy/ARCHITECTURE.md` to the
+- Given the same reader opening `docs/ARCHITECTURE.md` to the
   "Long-Term Vision" section, when they read the list of "future
   layers (not v1)", then multi-agent orchestration is not on it.
 - Given an AI agent loading `AGENTS.md` into a planner prompt,
@@ -655,7 +655,7 @@ recipe.
 
 <scenario id="CHK-016">
 Given the same checkout, when the
-"Long-Term Vision" section of `.speccy/ARCHITECTURE.md` is read,
+"Long-Term Vision" section of `docs/ARCHITECTURE.md` is read,
 then no bullet under "Future layers (not v1)" references multi-agent
 orchestration; and `rg -n '\(Future\) multi-agent' AGENTS.md` prints
 zero matches.
@@ -814,5 +814,5 @@ on grounds documented above.
 | Date       | Reason                                                   | Author     |
 |------------|----------------------------------------------------------|------------|
 | 2026-05-22 | Initial draft. Factor the orchestration loop's two skill bodies (`speccy-orchestrate`, `speccy-holistic-gate`) and the two holistic-loop persona bodies (`holistic-reviewer`, `holistic-implementer`) from the hand-written Claude pilot into the existing `resources/modules/` single-source-of-truth pattern; ship per-host wrappers and agent templates in both the Claude Code and Codex packs (DEC-002 + DEC-003 renaming conventions, DEC-006 side-by-side model pins); introduce the additive-via-separate-module + selective-wrapper-include host-variance mechanism (DEC-001 mechanism B) for the Codex sub-agent-spawn permission grant; retire the legacy prose-spawn idiom in existing shipped Codex templates; strip stray `ARCHITECTURE.md` references from production Rust source and all shipped harness content (DEC-004 one-shot sweep); hardcode the per-task retry budget (5 rounds) and the holistic drift-fix round budget (3 rounds) inline in the shared module bodies (DEC-005). Motivated by the cross-harness orchestration ask brainstormed in the originating chat, the lifecycle/sub-agent naming conflict observed during framing, and the parallel ARCHITECTURE.md decoupling and prose-spawn retirement requests folded in during brainstorm. | Kevin Xiao |
-| 2026-05-22 | Amend: add REQ-006 covering the project-local doc rewrite (`README.md`, `.speccy/ARCHITECTURE.md`, `AGENTS.md` "Product north star") to reposition the multi-agent orchestration loop as a shipped v1.0 artifact rather than a `(Future)` layer downstream harnesses would build. Expand the SPEC Summary with a "Positioning shift" paragraph naming the three doc surfaces whose framing becomes stale once REQ-001-REQ-003 land. Add the corresponding bullet to `<goals>`. The shift is project-local prose; no code, schema, or CLI surface change. Triggered mid-loop by the realization that the v1.0 narrative on those three docs will lag the shipped surface unless rewritten in the same diff. | Kevin Xiao |
+| 2026-05-22 | Amend: add REQ-006 covering the project-local doc rewrite (`README.md`, `docs/ARCHITECTURE.md`, `AGENTS.md` "Product north star") to reposition the multi-agent orchestration loop as a shipped v1.0 artifact rather than a `(Future)` layer downstream harnesses would build. Expand the SPEC Summary with a "Positioning shift" paragraph naming the three doc surfaces whose framing becomes stale once REQ-001-REQ-003 land. Add the corresponding bullet to `<goals>`. The shift is project-local prose; no code, schema, or CLI surface change. Triggered mid-loop by the realization that the v1.0 narrative on those three docs will lag the shipped surface unless rewritten in the same diff. | Kevin Xiao |
 </changelog>

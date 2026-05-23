@@ -2418,7 +2418,7 @@ Prompt slicing, implementer prompt, reviewer prompt read XML `SpecDoc`
 <task id="T-007" state="completed" covers="REQ-002 REQ-004 REQ-005">
 Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
 
-- Suggested files: `.speccy/ARCHITECTURE.md`,
+- Suggested files: `docs/ARCHITECTURE.md`,
   `resources/modules/prompts/*.md.tmpl`,
   `.claude/skills/**/*.md`, `.agents/skills/**/*.md`,
   `.codex/agents/**/*.md`,
@@ -2427,7 +2427,7 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
   `speccy-cli/tests/shipped_skills_no_legacy_markers.rs`
 - Implementer note (claude-opus-4-7-t007):
   - Completed: Rewrote the `## SPEC.md element grammar` section in
-    `.speccy/ARCHITECTURE.md` to teach the SPEC-0020 raw XML
+    `docs/ARCHITECTURE.md` to teach the SPEC-0020 raw XML
     element carrier (open/close tag form, the closed whitelist
     `spec / overview / requirement / scenario / decision /
     open-question / changelog`, attribute rules, the
@@ -2468,8 +2468,8 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
     `speccy-cli/tests/shipped_skills_no_legacy_markers.rs` is
     the load-bearing corpus grep that scans every Markdown/TOML
     file under the four shipped-guidance trees plus
-    `.speccy/ARCHITECTURE.md` for the literal `<!-- speccy:`
-    substring, allow-listing only `.speccy/ARCHITECTURE.md` and
+    `docs/ARCHITECTURE.md` for the literal `<!-- speccy:`
+    substring, allow-listing only `docs/ARCHITECTURE.md` and
     sanity-checking that ARCHITECTURE.md's allow-listed mentions
     sit inside a blockquote within ±6 lines of a `SPEC-0019`
     reference (so a future edit that drops the historical
@@ -2517,7 +2517,7 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
     init kept the claude-code-regenerated bodies (14
     overwritten, 20 skipped); pre-fmt corpus grep clean (only
     historical hits under `.speccy/specs/0019-*` / `0020-*` and
-    `.speccy/ARCHITECTURE.md`); `cargo test --workspace` 100%
+    `docs/ARCHITECTURE.md`); `cargo test --workspace` 100%
     green (over 290 tests across the workspace, including the
     five new T-007 tests); clippy clean; fmt-check showed three
     cosmetic diffs in the new test file (multi-line let
@@ -2582,7 +2582,7 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
     "speccy-core"]`; `docs_sweep::migration_xtask_directories_are_deleted`
     locks this in. REQ-005 corpus grep clean — only hit for
     `<!-- speccy:` outside SPEC-0019/0020 prose is
-    `.speccy/ARCHITECTURE.md:964` inside the explicit
+    `docs/ARCHITECTURE.md:964` inside the explicit
     `Historical note (SPEC-0019 → SPEC-0020 migration)`
     blockquote, and `architecture_md_legacy_marker_mention_is_historical_only`
     enforces the framing. Shipped prompts/personas/skills under
@@ -2630,13 +2630,13 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
     --workspace` + `cargo clippy --workspace --all-targets
     --all-features -- -D warnings` both green. Allow-list in
     `speccy-cli/tests/shipped_skills_no_legacy_markers.rs:48`
-    is tightly scoped (single path `.speccy/ARCHITECTURE.md`)
+    is tightly scoped (single path `docs/ARCHITECTURE.md`)
     and `architecture_md_legacy_marker_mention_is_historical_only`
     (lines 126-162) adversarially enforces both `>` blockquote
     framing and a SPEC-0019 mention within ±6 lines per hit, so
     a future edit cannot silently broaden the carve-out into
     active prose; corpus grep returned a single allow-listed hit
-    at `.speccy/ARCHITECTURE.md:964` inside the explicit
+    at `docs/ARCHITECTURE.md:964` inside the explicit
     `Historical note (SPEC-0019 → SPEC-0020 migration)`
     blockquote.
   - AGENTS.md hygiene rules upheld: no `unwrap`/`panic!`/
@@ -2688,7 +2688,7 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
     `Cargo.toml:2` `members = ["speccy-cli", "speccy-core"]` has
     no orphan reference; clippy and fmt are green locally.
     Bullet 6 → corpus test carries an explicit `ALLOW_LIST`
-    constant (`:48`) naming `.speccy/ARCHITECTURE.md`, with the
+    constant (`:48`) naming `docs/ARCHITECTURE.md`, with the
     framing test pinning the contract.
   - Local runs green: `cargo test -p speccy-cli --test
     shipped_skills_no_legacy_markers` 2/2 ok; `cargo test -p
@@ -2719,7 +2719,7 @@ Sweep ARCHITECTURE.md, prompts, skills; delete the migration tool
   with disk again.
 
 <task-scenarios>
-  - When `.speccy/ARCHITECTURE.md` is inspected after this task
+  - When `docs/ARCHITECTURE.md` is inspected after this task
     lands, then the section describing SPEC.md's machine-readable
     structure documents the raw XML element grammar (open/close
     tag form, whitelisted element names, attribute rules, HTML5

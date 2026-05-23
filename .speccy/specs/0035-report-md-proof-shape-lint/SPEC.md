@@ -12,7 +12,7 @@ supersedes: []
 ## Summary
 
 `speccy verify` is documented as "proof-shape lint that exits non-zero
-on broken structure" (AGENTS.md core principle 3; `.speccy/ARCHITECTURE.md`
+on broken structure" (AGENTS.md core principle 3; `docs/ARCHITECTURE.md`
 "Lint Codes" section starting at line 1763). Today its lint families
 cover SPEC.md structure (`SPC-*`), requirement-to-scenario shape
 (`REQ-*`), task-list shape (`TSK-*`), open questions (`QST-*`), and
@@ -86,7 +86,7 @@ project-specific test commands on top.
 - `speccy-core/src/lint/rules/mod.rs` exports the new module
   (`pub mod rpt;`).
 - The architecture doc's "Lint Codes" section
-  (`.speccy/ARCHITECTURE.md` lines 1763-1800) gains three new
+  (`docs/ARCHITECTURE.md` lines 1763-1800) gains three new
   documented entries `RPT-001`, `RPT-002`, `RPT-003` describing
   each code's trigger and severity. The prefix list in the same
   section's intro paragraph (line 1767) is updated to include
@@ -257,7 +257,7 @@ sub-module index at `speccy-core/src/lint/rules/mod.rs` declares
 `pub mod rpt;`. No other production-code file changes.
 
 The architecture doc's "Lint Codes" section
-(`.speccy/ARCHITECTURE.md` starting line 1763) gains a new
+(`docs/ARCHITECTURE.md` starting line 1763) gains a new
 `RPT-*` block listing the three codes with their triggers, and
 the intro paragraph (currently line 1767) updates the prefix
 list from `SPC-/REQ-/TSK-` to `SPC-/REQ-/TSK-/RPT-` (QST and
@@ -406,7 +406,7 @@ each appear exactly once in sorted position with severity
 </scenario>
 
 <scenario id="CHK-006">
-Given `.speccy/ARCHITECTURE.md` after this SPEC's implementation
+Given `docs/ARCHITECTURE.md` after this SPEC's implementation
 lands,
 when the "Lint Codes" section is read,
 then it documents `RPT-001`, `RPT-002`, and `RPT-003` with the

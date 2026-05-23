@@ -58,7 +58,7 @@ one selector arm (`Spec`, `QualifiedCheck`, `Task`) with the matching
 integration tests; T-005 wired
 `CheckError::TaskLookup(#[from] LookupError)` so `task_lookup`'s
 existing error wording reaches stderr byte-for-byte. T-006 updated
-`.speccy/ARCHITECTURE.md` and audited shipped skill docs for the
+`docs/ARCHITECTURE.md` and audited shipped skill docs for the
 new selector surface.
 
 ## Out-of-scope items absorbed

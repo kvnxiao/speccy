@@ -151,7 +151,7 @@ written by `/speccy-ship`. No new test asserts this; the existing
 integration test stays as the belt-and-braces check (per SPEC's
 non-goal "No removal of the existing in-tree integration test").
 
-Documentation update (`.speccy/ARCHITECTURE.md` "Lint Codes" section):
+Documentation update (`docs/ARCHITECTURE.md` "Lint Codes" section):
 - Update the intro paragraph's prefix list from `SPC-/REQ-/TSK-` to
   include `RPT-` alongside the existing entries (CHK-006 — prefix
   list update).
@@ -197,7 +197,7 @@ then exit code is 0, the JSON envelope's `lint_info[]` contains a
 diagnostic with `code == "RPT-001"` and `level == "info"`, and
 `lint_errors[]` contains no RPT diagnostic.
 
-Given `.speccy/ARCHITECTURE.md` after this task lands, when the
+Given `docs/ARCHITECTURE.md` after this task lands, when the
 "Lint Codes" section is read, then it documents `RPT-001`, `RPT-002`,
 `RPT-003` with the same shape as the existing `SPC-*` / `TSK-*`
 entries, and the intro prefix list at line 1767 includes `RPT-`
@@ -212,7 +212,7 @@ Suggested files:
 - `speccy-cli/tests/verify.rs`
 - `speccy-cli/tests/common.rs` (only if `write_spec` needs an extra
   parameter for the REPORT.md body; otherwise leave untouched)
-- `.speccy/ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
 </task-scenarios>
 </task>
 

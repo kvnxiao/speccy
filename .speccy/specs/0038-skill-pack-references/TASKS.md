@@ -42,7 +42,7 @@ Fold salvageable prose into successor locations:
 - `resources/modules/phases/speccy-work.md` — add salvaged "What to consider" bullets from the deleted `personas/implementer.md` (feature-flag/abstraction-layer guardrail, suggested-files-hint-may-be-stale warning, `<done-when>` / `<behavior>` re-reading reminder). Do not salvage the example block (that becomes `references/journal-implementer.md` in T-001).
 - `resources/modules/skills/speccy-plan.md` — add salvaged bullets from the deleted `personas/planner.md` (bounded-scope guardrail, "decisions hidden inside requirement prose belong in `### Decisions`" guidance). Do not salvage the anecdotal email-signup example.
 
-**Salvage discipline**: shipped skill bodies (`resources/modules/skills/`, `resources/modules/phases/`, `resources/modules/personas/`) MUST NOT reference repo-local docs like `.speccy/ARCHITECTURE.md`. The deleted `personas/planner.md:43` mentions ARCHITECTURE.md; that reference is dropped during salvage, not forwarded. Skill bodies must stay portable to any speccy-using repo.
+**Salvage discipline**: shipped skill bodies (`resources/modules/skills/`, `resources/modules/phases/`, `resources/modules/personas/`) MUST NOT reference repo-local docs like `docs/ARCHITECTURE.md`. The deleted `personas/planner.md:43` mentions ARCHITECTURE.md; that reference is dropped during salvage, not forwarded. Skill bodies must stay portable to any speccy-using repo.
 
 Remove `"personas/implementer.md"` and `"personas/planner.md"` from the `PERSONA_FILES` const in `speccy-cli/tests/skill_body_discovery.rs`.
 
@@ -151,9 +151,9 @@ Suggested files: `speccy-cli/tests/skill_body_discovery.rs`
 </task>
 
 <task id="T-007" state="completed" covers="REQ-002">
-## Update `.speccy/ARCHITECTURE.md` to document the seven-row reference-file mapping (repo-local; final step)
+## Update `docs/ARCHITECTURE.md` to document the seven-row reference-file mapping (repo-local; final step)
 
-Per REQ-002's `<done-when>` clause, `.speccy/ARCHITECTURE.md`'s "Skill packs" (or equivalent) section either documents the seven-row artifact→reference-file mapping directly, or links to SPEC-0038 REQ-002 as the source of truth. This is a repo-local documentation task — `.speccy/ARCHITECTURE.md` is a byproduct of *this* speccy-development repo dogfooding the tool on itself; it is NOT shipped to downstream speccy users.
+Per REQ-002's `<done-when>` clause, `docs/ARCHITECTURE.md`'s "Skill packs" (or equivalent) section either documents the seven-row artifact→reference-file mapping directly, or links to SPEC-0038 REQ-002 as the source of truth. This is a repo-local documentation task — `docs/ARCHITECTURE.md` is a byproduct of *this* speccy-development repo dogfooding the tool on itself; it is NOT shipped to downstream speccy users.
 
 Discipline guard: shipped skill bodies (`resources/modules/skills/`, `resources/modules/phases/`, `resources/modules/personas/`) and shipped reference files (`resources/modules/references/`) must NOT mention `ARCHITECTURE.md`. ARCHITECTURE.md is repo-local content; shipped skill content must stay portable to any speccy-using repo. T-002's salvage discipline guard covers this for the orphan-personas case; T-007 audits the post-T-001/T-002/T-004/T-005 state of `resources/` for any residual ARCHITECTURE.md mentions and removes any that slipped in.
 
@@ -161,8 +161,8 @@ This task runs last so the documentation update reflects the final shape of REQ-
 
 <task-scenarios>
 Given the source tree at HEAD after this task,
-when `.speccy/ARCHITECTURE.md` is read, then its "Skill packs" (or equivalent) section either lists the seven artifact→reference-file rows from REQ-002 or links to SPEC-0038 REQ-002 as the canonical source; when `resources/modules/` and `resources/agents/` are grep'd recursively for the literal substring `ARCHITECTURE.md`, then zero matches occur.
+when `docs/ARCHITECTURE.md` is read, then its "Skill packs" (or equivalent) section either lists the seven artifact→reference-file rows from REQ-002 or links to SPEC-0038 REQ-002 as the canonical source; when `resources/modules/` and `resources/agents/` are grep'd recursively for the literal substring `ARCHITECTURE.md`, then zero matches occur.
 
-Suggested files: `.speccy/ARCHITECTURE.md`
+Suggested files: `docs/ARCHITECTURE.md`
 </task-scenarios>
 </task>
