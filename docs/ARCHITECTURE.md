@@ -148,25 +148,29 @@ speccy status [SELECTOR]          Workspace overview; spec subset by default.
                                     SPEC-NNNN:           one spec, unfiltered
                                     --all:               every spec, unfiltered
                                     --include-archive:   also scan `.speccy/archive/`
-                                                         (status-only; per SPEC-0042 REQ-007)
                                     --json:              schema_version=1 envelope with resolved paths
 speccy next [SPEC-ID]             Next actionable per spec, derived from state.
-                                    no arg:        every active spec with next_action
-                                    SPEC-ID:       one spec or {next_action: null, reason}
-                                    --json:        schema_version=1 envelope
-                                  Action kind is derived (review > work > ship,
+                                    no arg:              every active spec with next_action
+                                    SPEC-ID:             one spec or {next_action: null, reason}
+                                    --include-archive:   also scan `.speccy/archive/`
+                                    --json:              schema_version=1 envelope
+                                  Action kind is derived (review > work > vet > ship,
                                   with `decompose` when TASKS.md is absent); spec
                                   state fully determines the kind, so there is no
-                                  caller-supplied `--kind` filter.
+                                  caller-supplied `--kind` filter. Workspace-form
+                                  empty state exits with code 2 and
+                                  `reason="no_active_specs"` (SPEC-0043 REQ-002).
 speccy check [SELECTOR]           Render check scenarios (no execution).
-                                    no arg:            every scenario across every spec
-                                    SPEC-NNNN:         every scenario under one spec
-                                    SPEC-NNNN/CHK-NNN: one scenario, spec-qualified
-                                    SPEC-NNNN/T-NNN:   scenarios covering a qualified task
-                                    CHK-NNN:           every spec's CHK-NNN
-                                    T-NNN:             scenarios covering an unqualified task
+                                    no arg:              every scenario across every spec
+                                    SPEC-NNNN:           every scenario under one spec
+                                    SPEC-NNNN/CHK-NNN:   one scenario, spec-qualified
+                                    SPEC-NNNN/T-NNN:     scenarios covering a qualified task
+                                    CHK-NNN:             every spec's CHK-NNN
+                                    T-NNN:               scenarios covering an unqualified task
+                                    --include-archive:   also scan `.speccy/archive/`
 speccy verify                     CI gate: proof-shape validation only.
-                                    --json:        schema_version=1 envelope
+                                    --include-archive:   also scan `.speccy/archive/`
+                                    --json:              schema_version=1 envelope
                                     parse errors, requirements with no scenarios,
                                     unresolved scenario refs, stale task hash, etc.
                                     Does NOT run project tests; that's CI's job.
@@ -2088,13 +2092,16 @@ its derived `next_action`:
 ```
 
 Per-spec form (positional `SPEC-NNNN`) — one entry, or
-`{ next_action: null, reason }` when the spec is `completed` or
-`superseded`. Action kind is derived from spec state via the
-priority rule `review > work > ship`, with `decompose` when
-TASKS.md is absent. There is no `--kind` flag: spec state fully
-determines the kind, so caller-supplied filtering would be
-redundant. Skills that want only one kind read the envelope and
-filter on `next_action.kind` themselves.
+`{ next_action: null, reason }` when the spec is `completed`,
+`dropped`, or `superseded`. Action kind is derived from spec state
+via the priority rule `review > work > vet > ship`, with
+`decompose` when TASKS.md is absent. There is no `--kind` flag:
+spec state fully determines the kind, so caller-supplied filtering
+would be redundant. Skills that want only one kind read the
+envelope and filter on `next_action.kind` themselves. The workspace
+form exits with code 2 and adds a top-level
+`reason="no_active_specs"` field when no active spec remains
+(SPEC-0043 REQ-002).
 
 ## `speccy vacancy --json`
 
@@ -2401,12 +2408,13 @@ inherited from SPEC.md.
 
 ## Spec ID allocation
 
-Global ID space. `speccy plan` walks `.speccy/specs/**/SPEC.md`
-across every mission folder and every flat (ungrouped) spec, finds
-the maximum `NNNN-` prefix, and increments. SPEC-NNN IDs are unique
-repo-wide regardless of which mission folder a spec sits in. Moving
-a spec into or out of a mission folder does not change its ID. Gaps
-left by dropped specs are not recycled.
+Global ID space. `speccy vacancy` walks `.speccy/specs/**/SPEC.md`
+and `.speccy/archive/**/SPEC.md` across every mission folder and
+every flat (ungrouped) spec, finds the maximum `NNNN-` prefix, and
+increments. SPEC-NNN IDs are unique repo-wide regardless of which
+mission folder a spec sits in. Moving a spec into or out of a
+mission folder does not change its ID, and archived specs continue
+to reserve their IDs. Gaps left by dropped specs are not recycled.
 
 ## `speccy init` behavior
 
@@ -2478,16 +2486,23 @@ structured failure info.
 ## `speccy next` priority
 
 Per-spec, the derived `next_action.kind` follows
-`review > work > ship`, with `decompose` when TASKS.md is
-absent. Drift visibility favours short feedback
-loops; bugs caught in the piecewise (implement → review → implement
-→ review) workflow are cheap, while bugs caught after multiple
-tasks build on top of an inherited mistake are expensive, so the
-default nudges agents toward piecewise. Callers that want
-batched-implementation Pattern B override by invoking
-`/speccy-work SPEC-NNNN/T-NNN` directly against a `state="pending"`
-task; the CLI surfaces a recommendation, not a gate. Workspace-form
-ordering is lowest spec ID first.
+`review > work > vet > ship`, with `decompose` when TASKS.md is
+absent. `vet` fires when every task is `state="completed"` but the
+pre-ship `journal/VET.md` gate artifact is missing or stale (no
+trailing `<gate verdict="passed" tasks_hash="...">` block whose
+hash matches the current TASKS.md SHA-256); `ship` fires once the
+vet gate is fresh and REPORT.md is absent. Drift visibility
+favours short feedback loops; bugs caught in the piecewise
+(implement → review → implement → review) workflow are cheap,
+while bugs caught after multiple tasks build on top of an
+inherited mistake are expensive, so the default nudges agents
+toward piecewise. Callers that want batched-implementation
+Pattern B override by invoking `/speccy-work SPEC-NNNN/T-NNN`
+directly against a `state="pending"` task; the CLI surfaces a
+recommendation, not a gate. Workspace-form ordering is lowest
+spec ID first. The workspace form exits with code 2 and
+`reason="no_active_specs"` when no active spec remains
+(SPEC-0043 REQ-002).
 
 ## `speccy check` rendering
 
@@ -2531,10 +2546,14 @@ end state:
 7. `speccy verify` (proof-shape validation; `--json schema_version: 1`).
 8. `speccy lock` (record SPEC.md hash into TASKS.md frontmatter).
 9. `speccy vacancy` (next free SPEC-NNNN; `--json schema_version: 1`).
-10. Skill packs: shipped under `resources/modules/{personas,phases,skills,references}/`
+10. `speccy archive` (relocate shipped/dropped/superseded specs to
+    `.speccy/archive/`; `--json schema_version: 1`).
+11. Skill packs: shipped under `resources/modules/{personas,phases,skills,references}/`
     plus per-host MiniJinja wrappers under `resources/agents/`.
-11. Dogfood: Speccy's own development tracked under `.speccy/specs/`,
-    with every shipped CLI verb proven by its own SPEC.
+12. Dogfood: Speccy's own development tracked under
+    `.speccy/specs/` during implementation and preserved under
+    `.speccy/archive/` after each spec ships, with every shipped
+    CLI verb proven by its own SPEC.
 
 Speccy dogfoods its own development. Every SPEC in this repo's
 `.speccy/specs/` is the proof for the corresponding slice of the

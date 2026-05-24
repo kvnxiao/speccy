@@ -11,8 +11,8 @@ Speccy is a feedback engine, not an enforcement system. Shipped
 skills wrap its CLI into an end-to-end loop that your agent harness
 can drive on your behalf.
 
-> **Status:** v0.1.0, work in progress. Speccy is dogfooded by Speccy
-> itself; its own implementation is tracked under `.speccy/specs/`.
+> **Status:** v1.0.0. Speccy is dogfooded by Speccy itself; its
+> implementation history is preserved under `.speccy/archive/`.
 
 ---
 

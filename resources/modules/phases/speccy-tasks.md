@@ -8,7 +8,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 ## When to use
 
 - Initial: after `{{ cmd_prefix }}speccy-plan` lands a fresh SPEC.
-- Amendment: after `{{ cmd_prefix }}speccy-plan SPEC-NNNN` edited an existing SPEC and
+- Amendment: after `{{ cmd_prefix }}speccy-amend SPEC-NNNN` edited an existing SPEC and
   the tasks may now be stale (the CLI surfaces a `TSK-003` lint when
   it detects hash drift).
 
@@ -50,7 +50,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
      `bootstrap-pending` sentinel; step 3 fills them in. Do not invoke
      `speccy lock` before TASKS.md exists on disk — the command edits
      the file in place and errors when it is missing.
-3. After writing, run `speccy lock` to rewrite the two
+3. After writing, run `speccy lock SPEC-NNNN` to rewrite the two
    `bootstrap-pending` placeholders to the current SPEC.md sha256 and
    the UTC timestamp:
 

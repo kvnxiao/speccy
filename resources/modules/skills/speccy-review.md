@@ -55,12 +55,18 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
   speccy next --json
   ```
 
-  If the result has no entry with `next_action.kind == "review"`,
-  exit and report that no reviewable tasks remain. Otherwise,
-  construct the disambiguated `<spec>/<task>` form from the
-  JSON's `spec_id` and `next_action.task_id` fields (the bare
-  task ID is ambiguous across specs — every spec has its own
-  `T-001`).
+  Workspace-form exit-code-stop contract: exit code 2 with a
+  top-level `reason="no_active_specs"` field in the JSON envelope
+  means the workspace has no active specs at all. Exit gracefully
+  and surface the reason; do not treat the non-zero exit as a CLI
+  error.
+
+  On exit code 0, if the resulting `specs` array has no entry with
+  `next_action.kind == "review"`, exit and report that no
+  reviewable tasks remain. Otherwise, construct the disambiguated
+  `<spec>/<task>` form from the JSON's `spec_id` and
+  `next_action.task_id` fields (the bare task ID is ambiguous
+  across specs — every spec has its own `T-001`).
 
   Exit-code-stop contract: once SPEC-NNNN is resolved, any
   subsequent per-spec query (`speccy next SPEC-NNNN --json`) that

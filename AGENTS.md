@@ -145,10 +145,10 @@ deciding.
 These rule files are authoritative for their domains. Load them when
 editing files in scope.
 
-- `.claude/rules/rust/*.md` — Rust conventions (error handling, testing,
-  linting, dependencies, unsafe, workspaces, performance, documentation,
-  defensive programming, code quality). Conflicts between this file and
-  a rule are bugs in *this* file — fix this file, not the rule.
+- `.claude/rules/rust/*.md` — Rust conventions (code quality, defensive
+  programming, dependencies, documentation, performance, workspaces).
+  Conflicts between this file and a rule are bugs in *this* file — fix
+  this file, not the rule.
 - `.claude/rules/github-actions/*.md` — CI workflow conventions (action
   versioning, runner selection, caching).
 

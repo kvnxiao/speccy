@@ -56,10 +56,18 @@ spec hash must have been committed before this skill runs.
      speccy next --json
      ```
 
-     If the result has no entry with `next_action.kind == "work"`,
-     exit and report that no implementable tasks remain. Otherwise,
-     construct the disambiguated `<spec>/<task>` form from the JSON's
-     `spec_id` and `next_action.task_id` fields (the bare task ID is
+     Workspace-form exit-code-stop contract: exit code 2 with a
+     top-level `reason="no_active_specs"` field in the JSON envelope
+     means the workspace has no active specs at all (fresh repo, or
+     every spec has shipped or been archived). Exit gracefully and
+     surface the reason; do not treat the non-zero exit as a CLI
+     error.
+
+     On exit code 0, if the resulting `specs` array has no entry
+     with `next_action.kind == "work"`, exit and report that no
+     implementable tasks remain. Otherwise, construct the
+     disambiguated `<spec>/<task>` form from the JSON's `spec_id`
+     and `next_action.task_id` fields (the bare task ID is
      ambiguous across specs — every spec has its own `T-001`).
 
      Exit-code-stop contract: once SPEC-NNNN is resolved, any

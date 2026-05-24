@@ -4,7 +4,7 @@ paths: **/*.{rs,toml}
 
 # Multi-Crate Workspaces
 
-> **Scope:** This rule applies only when the project is structured as a multi-crate Cargo workspace (i.e. the root `Cargo.toml` contains a `[workspace]` table). For a single-crate project, ignore the workspace-specific guidance below; use crate-level `[lints]`, `[dependencies]`, and `[package]` sections per `rust-linting.md` and the other rule files.
+> **Scope:** This rule applies only when the project is structured as a multi-crate Cargo workspace (i.e. the root `Cargo.toml` contains a `[workspace]` table). For a single-crate project, ignore the workspace-specific guidance below; use crate-level `[lints]`, `[dependencies]`, and `[package]` sections per the other rule files in this directory.
 
 ## Workspace Structure: Root-Level Crates
 
@@ -49,12 +49,11 @@ thiserror = "2.0"
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-# Clippy lints: the canonical strict configuration lives in `rust-linting.md`.
-# Apply that snippet under `[workspace.lints.clippy]` (not `[lints.clippy]`)
-# at the workspace root, and accompany it with the `clippy.toml` documented
-# there (which sets `allow-expect-in-tests = true`).
+# Clippy lints: configure the project's strict set under
+# `[workspace.lints.clippy]` (not `[lints.clippy]`) at the workspace root,
+# alongside a `clippy.toml` that sets `allow-expect-in-tests = true`.
 [workspace.lints.clippy]
-# … see rust-linting.md …
+# … project-specific strict lints …
 
 [workspace.package]
 edition = "2024"
