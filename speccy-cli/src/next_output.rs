@@ -46,6 +46,13 @@ pub struct JsonWorkspace {
     pub schema_version: u32,
     /// Active specs with their derived next actions.
     pub specs: Vec<JsonWorkspaceEntry>,
+    /// Present when `specs` is empty and the workspace itself is in a
+    /// terminal state for `speccy next`; absent otherwise. The only
+    /// slug emitted today is `"no_active_specs"`. Consumers that read
+    /// `reason` should treat it as the loop-stop signal in parallel
+    /// to the per-spec form's `reason` field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// A single per-spec entry inside the workspace JSON envelope.
@@ -118,6 +125,13 @@ impl TerminalReason {
     }
 }
 
+/// Stable slug used in the workspace-form JSON `reason` field and the
+/// stderr advisory when `speccy next` resolves to a terminal state at
+/// the workspace level. Mirrors [`TerminalReason::as_str`] in spirit
+/// but covers the workspace-level loop-stop signal (no active specs
+/// at all) rather than a per-spec terminal status.
+pub const WORKSPACE_TERMINAL_REASON: &str = "no_active_specs";
+
 /// Build the JSON payload for the per-spec form.
 #[must_use = "the JSON payload is the output of `speccy next SPEC-NNNN --json`"]
 pub fn render_json_per_spec(
@@ -160,20 +174,29 @@ pub fn render_json_per_spec_with_reason(
 }
 
 /// Build the JSON payload for the workspace form.
+///
+/// When `entries` is empty the envelope carries
+/// `reason: "no_active_specs"` (the workspace-level loop-stop signal);
+/// otherwise `reason` is omitted.
 #[must_use = "the JSON payload is the output of `speccy next --json`"]
 pub fn render_json_workspace(entries: &[(SpecNextEntry, SpecPaths)]) -> JsonWorkspace {
+    let specs: Vec<JsonWorkspaceEntry> = entries
+        .iter()
+        .map(|(e, paths)| JsonWorkspaceEntry {
+            spec_id: e.spec_id.clone(),
+            next_action: to_json_action(&e.action),
+            spec_md_path: paths.spec_md_path.clone(),
+            tasks_md_path: paths.tasks_md_path.clone(),
+            mission_md_path: paths.mission_md_path.clone(),
+        })
+        .collect();
+    let reason = specs
+        .is_empty()
+        .then(|| WORKSPACE_TERMINAL_REASON.to_owned());
     JsonWorkspace {
         schema_version: 1,
-        specs: entries
-            .iter()
-            .map(|(e, paths)| JsonWorkspaceEntry {
-                spec_id: e.spec_id.clone(),
-                next_action: to_json_action(&e.action),
-                spec_md_path: paths.spec_md_path.clone(),
-                tasks_md_path: paths.tasks_md_path.clone(),
-                mission_md_path: paths.mission_md_path.clone(),
-            })
-            .collect(),
+        specs,
+        reason,
     }
 }
 

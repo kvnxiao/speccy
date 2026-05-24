@@ -11,6 +11,7 @@
 
 use crate::next_output::SpecPaths;
 use crate::next_output::TerminalReason;
+use crate::next_output::WORKSPACE_TERMINAL_REASON;
 use crate::next_output::render_json_per_spec;
 use crate::next_output::render_json_per_spec_with_reason;
 use crate::next_output::render_json_workspace;
@@ -98,40 +99,67 @@ pub fn run(
     let (payload, exit_code) = if let Some(ref spec_id) = args.spec_id {
         run_per_spec(spec_id, &workspace, &project_root, args.json, err)?
     } else {
-        // Workspace form. Unchanged: terminal specs are already
-        // omitted by `compute_workspace` (REPORT.md present → None).
-        let raw_entries = compute_workspace(&workspace);
-        let entries_with_paths: Vec<_> = raw_entries
-            .into_iter()
-            .map(|entry| {
-                let paths = workspace
-                    .specs
-                    .iter()
-                    .find(|s| s.spec_id.as_deref() == Some(entry.spec_id.as_str()))
-                    .map_or_else(
-                        || SpecPaths {
-                            spec_md_path: String::new(),
-                            tasks_md_path: None,
-                            mission_md_path: None,
-                        },
-                        |s| spec_paths(s, &project_root),
-                    );
-                (entry, paths)
-            })
-            .collect();
-        let payload = if args.json {
-            let json = render_json_workspace(&entries_with_paths);
-            let mut text = serde_json::to_string(&json)?;
-            text.push('\n');
-            text
-        } else {
-            render_text_workspace(&entries_with_paths)
-        };
-        (payload, 0)
+        run_workspace(&workspace, &project_root, args.json, err)?
     };
 
     out.write_all(payload.as_bytes()).map_err(NextError::Io)?;
     Ok(exit_code)
+}
+
+/// Resolve the workspace form: derive an action per active spec, or
+/// emit a workspace-level terminal signal when no active specs remain.
+///
+/// Terminal signal (when `compute_workspace` returns no entries):
+/// - JSON envelope carries `reason: "no_active_specs"`.
+/// - Text form writes a one-line advisory to stderr.
+/// - Both forms exit with [`TERMINAL_EXIT_CODE`] so an AI harness sees the
+///   loop-stop signal without parsing stdout.
+fn run_workspace(
+    workspace: &speccy_core::workspace::Workspace,
+    project_root: &Utf8Path,
+    json: bool,
+    err: &mut dyn Write,
+) -> Result<(String, i32), NextError> {
+    let raw_entries = compute_workspace(workspace);
+    let entries_with_paths: Vec<_> = raw_entries
+        .into_iter()
+        .map(|entry| {
+            let paths = workspace
+                .specs
+                .iter()
+                .find(|s| s.spec_id.as_deref() == Some(entry.spec_id.as_str()))
+                .map_or_else(
+                    || SpecPaths {
+                        spec_md_path: String::new(),
+                        tasks_md_path: None,
+                        mission_md_path: None,
+                    },
+                    |s| spec_paths(s, project_root),
+                );
+            (entry, paths)
+        })
+        .collect();
+    let is_terminal = entries_with_paths.is_empty();
+    let payload = if json {
+        let envelope = render_json_workspace(&entries_with_paths);
+        let mut text = serde_json::to_string(&envelope)?;
+        text.push('\n');
+        text
+    } else if is_terminal {
+        String::new()
+    } else {
+        render_text_workspace(&entries_with_paths)
+    };
+    let exit_code = if is_terminal {
+        let line = format!(
+            "speccy next: no active specs in workspace (reason: {WORKSPACE_TERMINAL_REASON}); run `speccy plan` to draft a new SPEC.\n",
+        );
+        err.write_all(line.as_bytes()).map_err(NextError::Io)?;
+        TERMINAL_EXIT_CODE
+    } else {
+        0
+    };
+    Ok((payload, exit_code))
 }
 
 /// Resolve the per-spec form: classify terminal state, render the

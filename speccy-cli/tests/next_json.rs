@@ -299,6 +299,23 @@ fn run_per_spec_capture(
     Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
 }
 
+fn run_workspace_capture(
+    ws: &Workspace,
+) -> Result<(i32, String, String), Box<dyn std::error::Error>> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut err: Vec<u8> = Vec::new();
+    let code = run(
+        &NextArgs {
+            spec_id: None,
+            json: true,
+        },
+        &ws.root,
+        &mut out,
+        &mut err,
+    )?;
+    Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
+}
+
 #[test]
 fn per_spec_terminal_completed_exits_2_with_stderr_and_envelope() -> TestResult {
     // All tasks completed + REPORT.md present → terminal "completed".
@@ -379,6 +396,50 @@ fn per_spec_terminal_superseded_exits_2_with_superseded_reason() -> TestResult {
     assert_eq!(code, 2);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
     assert_eq!(parsed.get("reason"), Some(&serde_json::json!("superseded")));
+    Ok(())
+}
+
+#[test]
+fn empty_workspace_json_carries_no_active_specs_reason_and_exits_2() -> TestResult {
+    // Empty `.speccy/specs/` → workspace-level terminal: exit 2, JSON
+    // envelope carries `reason: "no_active_specs"` alongside the empty
+    // `specs` array, and a stderr advisory is written so an AI harness
+    // sees the loop-stop signal in both stdout and exit code.
+    let ws_empty = Workspace::new()?;
+    let (code, stdout, stderr) = run_workspace_capture(&ws_empty)?;
+    assert_eq!(code, 2, "empty workspace must exit 2: stderr={stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert_eq!(parsed.get("schema_version"), Some(&serde_json::json!(1)));
+    assert_eq!(parsed.get("specs"), Some(&serde_json::json!([])));
+    assert_eq!(
+        parsed.get("reason"),
+        Some(&serde_json::json!("no_active_specs")),
+    );
+    assert!(
+        stderr.contains("no active specs"),
+        "stderr must name the workspace-terminal reason: {stderr:?}",
+    );
+    Ok(())
+}
+
+#[test]
+fn non_empty_workspace_json_omits_reason_field() -> TestResult {
+    // Non-terminal workspace → `reason` field absent so consumers can
+    // distinguish "still has work" from "loop-stop" purely by presence.
+    let ws = Workspace::new()?;
+    let tasks_xml = task_xml("T-001", "pending");
+    write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&tasks_md_xml("SPEC-0001", &tasks_xml)),
+    )?;
+    let stdout = render_workspace(&ws)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    assert!(
+        parsed.get("reason").is_none(),
+        "non-terminal workspace must omit `reason`: {parsed}",
+    );
     Ok(())
 }
 

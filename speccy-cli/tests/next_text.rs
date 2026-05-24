@@ -163,14 +163,23 @@ fn exit_code_is_zero_for_all_kinds() -> TestResult {
         .success()
         .stdout(contains("work"));
 
-    // Empty workspace still exits 0 (no active specs → empty output).
+    Ok(())
+}
+
+#[test]
+fn empty_workspace_exits_2_with_stderr_advisory() -> TestResult {
+    // No specs at all → workspace-level terminal: exit 2, empty stdout,
+    // friendly stderr line so an AI harness sees the loop-stop signal.
     let ws_empty = Workspace::new()?;
     Command::cargo_bin("speccy")?
         .arg("next")
         .current_dir(ws_empty.root.as_std_path())
         .assert()
-        .success();
-
+        .code(2)
+        .stdout(predicates::str::is_empty())
+        .stderr(contains("no active specs"))
+        .stderr(contains("no_active_specs"))
+        .stderr(contains("speccy plan"));
     Ok(())
 }
 
