@@ -79,7 +79,7 @@ cd speccy
 cargo install --path speccy-cli --locked
 
 # or directly
-cargo install --git https://github.com/kvnxiao/speccy speccy --locked
+cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
 ```
 
 Subsequently, confirm the binary is on `PATH`:

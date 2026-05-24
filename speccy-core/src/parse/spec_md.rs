@@ -164,7 +164,7 @@ const HASH_EXCLUDED_FRONTMATTER_FIELDS: &[&str] = &["archived_at", "archived_rea
 )]
 fn req_heading_line_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^#{1,6}\s+(REQ-\d{3}):\s*(.*?)\s*$").unwrap())
+    CELL.get_or_init(|| Regex::new(r"^#{1,6}\s+(REQ-\d{3,}):\s*(.*?)\s*$").unwrap())
 }
 
 /// Parse a SPEC.md file.

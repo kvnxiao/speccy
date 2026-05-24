@@ -18,11 +18,18 @@
 //! `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-005.
 
 use camino::Utf8Path;
+use serde::Serialize;
 use speccy_core::prompt::allocate_next_spec_id_across_dirs;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
 use std::io::Write;
 use thiserror::Error;
+
+#[derive(Debug, Serialize)]
+struct VacancyJson<'a> {
+    schema_version: u32,
+    next_spec_id: &'a str,
+}
 
 /// CLI-level error returned by [`run`].
 #[derive(Debug, Error)]
@@ -37,6 +44,10 @@ pub enum VacancyError {
     /// I/O failure writing to stdout.
     #[error("failed to write output: {0}")]
     Io(#[from] std::io::Error),
+    /// JSON envelope serialization failure (structurally unreachable; the
+    /// envelope contains only a `u32` and a `String`).
+    #[error("failed to serialize JSON envelope: {0}")]
+    Serialize(#[source] serde_json::Error),
 }
 
 /// `speccy vacancy` arguments.
@@ -78,10 +89,12 @@ pub fn run(args: &VacancyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<()
     let next_id = format!("SPEC-{next_digits}");
 
     if args.json {
-        writeln!(
-            out,
-            "{{\"schema_version\":1,\"next_spec_id\":\"{next_id}\"}}",
-        )?;
+        let envelope = VacancyJson {
+            schema_version: 1,
+            next_spec_id: &next_id,
+        };
+        let json = serde_json::to_string(&envelope).map_err(VacancyError::Serialize)?;
+        writeln!(out, "{json}")?;
     } else {
         writeln!(out, "{next_id}")?;
     }

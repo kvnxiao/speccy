@@ -14,8 +14,8 @@
 //!   subcommand cannot land without a doc update.
 //! - `docs/ARCHITECTURE.md` pins the full `speccy next` priority ordering
 //!   (`review > work > vet > ship`) and the workspace-form `no_active_specs`
-//!   terminal signal, so an addition or rename in the priority chain forces
-//!   a doc edit.
+//!   terminal signal, so an addition or rename in the priority chain forces a
+//!   doc edit.
 
 use camino::Utf8PathBuf;
 

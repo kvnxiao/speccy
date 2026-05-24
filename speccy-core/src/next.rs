@@ -219,14 +219,24 @@ fn last_gate_block(text: &str) -> Option<GateBlock> {
             cursor = following;
             continue;
         }
-        let close_idx = following.find('>')?;
+        // A malformed `<gate` tag (no closing `>`, or missing the
+        // required `verdict` / `tasks_hash` attributes) must not poison
+        // the scan — earlier well-formed gates already accumulated in
+        // `last` are still the source of truth.
+        let Some(close_idx) = following.find('>') else {
+            cursor = following;
+            continue;
+        };
         let attrs = following.get(..close_idx)?;
-        let verdict = attribute_value(attrs, "verdict")?;
-        let tasks_hash = attribute_value(attrs, "tasks_hash")?;
-        last = Some(GateBlock {
-            verdict,
-            tasks_hash,
-        });
+        if let (Some(verdict), Some(tasks_hash)) = (
+            attribute_value(attrs, "verdict"),
+            attribute_value(attrs, "tasks_hash"),
+        ) {
+            last = Some(GateBlock {
+                verdict,
+                tasks_hash,
+            });
+        }
         cursor = following.get(close_idx..)?;
     }
     last
