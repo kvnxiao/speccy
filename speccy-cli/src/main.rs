@@ -65,6 +65,12 @@ enum Command {
         /// Optional `SPEC-NNNN` selector; omit for workspace-wide listing.
         #[arg(value_name = "SPEC-ID")]
         spec_id: Option<String>,
+        /// Also include specs under `.speccy/archive/` in the scan.
+        /// Archived specs are terminal — they only ever resolve to a
+        /// `reason` (`completed` / `dropped` / `superseded`) in the
+        /// per-spec form. Mirrors `status --include-archive`.
+        #[arg(long)]
+        include_archive: bool,
         /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]
         json: bool,
@@ -79,9 +85,19 @@ enum Command {
         /// `T-NNN` (unqualified task).
         #[arg(value_name = "SELECTOR")]
         selector: Option<String>,
+        /// Also include specs under `.speccy/archive/` in the scan, so
+        /// scenarios from archived SPECs render alongside active ones.
+        /// Mirrors `status --include-archive`.
+        #[arg(long)]
+        include_archive: bool,
     },
     /// CI gate: proof-shape validation with a binary exit code.
     Verify {
+        /// Also include specs under `.speccy/archive/` in the gate, so
+        /// proof-shape errors on archived SPECs continue to fail CI
+        /// after archiving. Mirrors `status --include-archive`.
+        #[arg(long)]
+        include_archive: bool,
         /// Emit JSON envelope (`schema_version = 1`).
         #[arg(long)]
         json: bool,
@@ -130,9 +146,19 @@ fn dispatch(command: Command) -> u8 {
             include_archive,
             json,
         } => run_status(selector, all, include_archive, json),
-        Command::Next { spec_id, json } => run_next(spec_id, json),
-        Command::Check { selector } => run_check(selector),
-        Command::Verify { json } => run_verify(json),
+        Command::Next {
+            spec_id,
+            include_archive,
+            json,
+        } => run_next(spec_id, include_archive, json),
+        Command::Check {
+            selector,
+            include_archive,
+        } => run_check(selector, include_archive),
+        Command::Verify {
+            include_archive,
+            json,
+        } => run_verify(include_archive, json),
         Command::Lock { spec_id } => run_lock(spec_id),
         Command::Vacancy { json } => run_vacancy(json),
         Command::Archive {
@@ -269,7 +295,7 @@ fn run_status(selector: Option<String>, all: bool, include_archive: bool, json: 
     }
 }
 
-fn run_next(spec_id: Option<String>, json: bool) -> u8 {
+fn run_next(spec_id: Option<String>, include_archive: bool, json: bool) -> u8 {
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
@@ -280,7 +306,11 @@ fn run_next(spec_id: Option<String>, json: bool) -> u8 {
     let mut stdout = std::io::stdout().lock();
     let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::next::run(
-        &speccy_cli::next::NextArgs { spec_id, json },
+        &speccy_cli::next::NextArgs {
+            spec_id,
+            include_archive,
+            json,
+        },
         &cwd,
         &mut stdout,
         &mut stderr,
@@ -296,7 +326,7 @@ fn run_next(spec_id: Option<String>, json: bool) -> u8 {
     }
 }
 
-fn run_check(selector: Option<String>) -> u8 {
+fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
     use speccy_cli::check::CheckError;
     use speccy_core::task_lookup::LookupError;
 
@@ -310,7 +340,10 @@ fn run_check(selector: Option<String>) -> u8 {
     let mut stdout = std::io::stdout().lock();
     let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::check::run(
-        speccy_cli::check::CheckArgs { selector },
+        speccy_cli::check::CheckArgs {
+            selector,
+            include_archive,
+        },
         &cwd,
         &mut stdout,
         &mut stderr,
@@ -412,7 +445,7 @@ fn run_vacancy(json: bool) -> u8 {
     }
 }
 
-fn run_verify(json: bool) -> u8 {
+fn run_verify(include_archive: bool, json: bool) -> u8 {
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
@@ -423,7 +456,10 @@ fn run_verify(json: bool) -> u8 {
     let mut stdout = std::io::stdout().lock();
     let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::verify::run(
-        speccy_cli::verify::VerifyArgs { json },
+        speccy_cli::verify::VerifyArgs {
+            include_archive,
+            json,
+        },
         &cwd,
         &mut stdout,
         &mut stderr,

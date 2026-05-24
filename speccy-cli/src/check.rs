@@ -23,7 +23,7 @@ use speccy_core::task_lookup::find as find_task;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
-use speccy_core::workspace::scan;
+use speccy_core::workspace::scan_with_archive;
 use std::collections::BTreeSet;
 use std::io::Write;
 use thiserror::Error;
@@ -66,6 +66,10 @@ pub struct CheckArgs {
     /// `SPEC-NNNN/CHK-NNN`, `SPEC-NNNN/T-NNN`, `CHK-NNN`, `T-NNN`. See
     /// [`crate::check_selector::parse_selector`].
     pub selector: Option<String>,
+    /// Also include specs under `.speccy/archive/` in the scan, so
+    /// scenarios from archived SPECs are rendered alongside active
+    /// ones. Mirrors `status --include-archive`.
+    pub include_archive: bool,
 }
 
 /// One scenario enriched with the `spec_id` of its parent spec.
@@ -94,7 +98,10 @@ pub fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let CheckArgs { selector } = args;
+    let CheckArgs {
+        selector,
+        include_archive,
+    } = args;
 
     let project_root = match find_root(cwd) {
         Ok(p) => p,
@@ -106,27 +113,27 @@ pub fn run(
     };
 
     let parsed = parse_selector(selector.as_deref())?;
+    let ws = scan_with_archive(&project_root, include_archive);
 
     match parsed {
-        CheckSelector::All => run_all(&project_root, out, err),
+        CheckSelector::All => run_all(&ws, out, err),
         CheckSelector::UnqualifiedCheck { check_id } => {
-            run_unqualified_check(&check_id, &project_root, out, err)
+            run_unqualified_check(&check_id, &ws, out, err)
         }
-        CheckSelector::Spec { spec_id } => run_spec(&spec_id, &project_root, out, err),
+        CheckSelector::Spec { spec_id } => run_spec(&spec_id, &ws, out, err),
         CheckSelector::QualifiedCheck { spec_id, check_id } => {
-            run_qualified_check(&spec_id, &check_id, &project_root, out, err)
+            run_qualified_check(&spec_id, &check_id, &ws, out, err)
         }
-        CheckSelector::Task(task_ref) => run_task(&task_ref, &project_root, out, err),
+        CheckSelector::Task(task_ref) => run_task(&task_ref, &ws, out, err),
     }
 }
 
 fn run_all(
-    project_root: &Utf8Path,
+    ws: &speccy_core::workspace::Workspace,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let ws = scan(project_root);
-    let (all_checks, malformed) = collect_checks(&ws, err)?;
+    let (all_checks, malformed) = collect_checks(ws, err)?;
 
     if all_checks.is_empty() {
         writeln!(out, "No checks defined.")?;
@@ -138,12 +145,11 @@ fn run_all(
 
 fn run_unqualified_check(
     check_id: &str,
-    project_root: &Utf8Path,
+    ws: &speccy_core::workspace::Workspace,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let ws = scan(project_root);
-    let (all_checks, malformed) = collect_checks(&ws, err)?;
+    let (all_checks, malformed) = collect_checks(ws, err)?;
 
     let filtered: Vec<CollectedCheck> = all_checks
         .into_iter()
@@ -161,12 +167,11 @@ fn run_unqualified_check(
 
 fn run_spec(
     spec_id: &str,
-    project_root: &Utf8Path,
+    ws: &speccy_core::workspace::Workspace,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let ws = scan(project_root);
-    let (checks, malformed) = match prepare_spec_checks(&ws, spec_id, out, err)? {
+    let (checks, malformed) = match prepare_spec_checks(ws, spec_id, out, err)? {
         SpecCheckPrep::Skip => return Ok(0),
         SpecCheckPrep::Ready { checks, malformed } => (checks, malformed),
     };
@@ -182,12 +187,11 @@ fn run_spec(
 fn run_qualified_check(
     spec_id: &str,
     check_id: &str,
-    project_root: &Utf8Path,
+    ws: &speccy_core::workspace::Workspace,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let ws = scan(project_root);
-    let (spec_checks, malformed) = match prepare_spec_checks(&ws, spec_id, out, err)? {
+    let (spec_checks, malformed) = match prepare_spec_checks(ws, spec_id, out, err)? {
         SpecCheckPrep::Skip => return Ok(0),
         SpecCheckPrep::Ready { checks, malformed } => (checks, malformed),
     };
@@ -260,12 +264,11 @@ fn prepare_spec_checks(
 /// right surface for that absence.
 fn run_task(
     task_ref: &TaskRef,
-    project_root: &Utf8Path,
+    ws: &speccy_core::workspace::Workspace,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, CheckError> {
-    let ws = scan(project_root);
-    let location = find_task(&ws, task_ref)?;
+    let location = find_task(ws, task_ref)?;
 
     if location.task.covers.is_empty() {
         writeln!(
@@ -276,7 +279,7 @@ fn run_task(
         return Ok(0);
     }
 
-    let spec = resolve_spec(&ws, &location.spec_id)?;
+    let spec = resolve_spec(ws, &location.spec_id)?;
 
     let Ok(spec_doc) = spec.spec_doc.as_ref() else {
         // Parent SPEC.md element tree failed to parse; surface via

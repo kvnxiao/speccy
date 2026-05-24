@@ -20,7 +20,7 @@ use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
-use speccy_core::workspace::scan;
+use speccy_core::workspace::scan_with_archive;
 use std::collections::HashMap;
 use std::io::Write;
 use thiserror::Error;
@@ -47,6 +47,10 @@ pub enum VerifyError {
 /// `speccy verify` arguments.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct VerifyArgs {
+    /// Also include specs under `.speccy/archive/` in the gate, so
+    /// proof-shape errors on archived SPECs continue to fail CI after
+    /// archiving. Mirrors `status --include-archive`.
+    pub include_archive: bool,
     /// Emit JSON instead of the text summary.
     pub json: bool,
 }
@@ -105,14 +109,17 @@ pub fn run(
     out: &mut dyn Write,
     _err: &mut dyn Write,
 ) -> Result<i32, VerifyError> {
-    let VerifyArgs { json } = args;
+    let VerifyArgs {
+        include_archive,
+        json,
+    } = args;
     let project_root = match find_root(cwd) {
         Ok(p) => p,
         Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(VerifyError::ProjectRootNotFound),
         Err(other) => return Err(VerifyError::Workspace(other)),
     };
 
-    let workspace = scan(&project_root);
+    let workspace = scan_with_archive(&project_root, include_archive);
     let diagnostics = lint::run(&workspace.as_lint_workspace());
     let status_by_spec = build_status_map(&workspace);
     let (lint_errors, lint_warnings, lint_info) = partition_lint(diagnostics, &status_by_spec);

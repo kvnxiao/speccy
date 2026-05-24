@@ -11,10 +11,10 @@
     reason = "test helpers panic on malformed fixture JSON; tests are infallible setup-side"
 )]
 //! End-to-end tests for `speccy status --include-archive` (SPEC-0042
-//! T-006 / REQ-007). Also pins the negative invariant that
-//! `--include-archive` is a `status`-only flag: every other hot-path
-//! command (`next`, `check`, `verify`, `lock`) must reject it with a
-//! clap exit-2 error.
+//! T-006 / REQ-007). Post-1.0 the flag is also accepted on `next`,
+//! `check`, and `verify` (read commands), so the negative invariant
+//! is narrower than at SPEC-0042 landing time: only write-side
+//! commands (`lock`) still reject the flag.
 
 mod common;
 
@@ -204,21 +204,104 @@ fn assert_rejects_include_archive(args: &[&str]) -> TestResult {
 }
 
 #[test]
-fn next_rejects_include_archive() -> TestResult {
-    assert_rejects_include_archive(&["next"])
-}
-
-#[test]
-fn check_rejects_include_archive() -> TestResult {
-    assert_rejects_include_archive(&["check"])
-}
-
-#[test]
-fn verify_rejects_include_archive() -> TestResult {
-    assert_rejects_include_archive(&["verify"])
-}
-
-#[test]
 fn lock_rejects_include_archive() -> TestResult {
     assert_rejects_include_archive(&["lock", "SPEC-0001"])
+}
+
+// ---------------------------------------------------------------------------
+// Positive coverage for the broadened `--include-archive` surface on
+// read commands (next, check, verify). Each test builds the same
+// "one archived, one active" workspace as the status tests above so
+// the on-disk shape mirrors a real post-archive repo.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn next_per_spec_include_archive_resolves_archived_spec() -> TestResult {
+    // Without --include-archive: per-spec form errors with SpecNotFound.
+    // With --include-archive: resolves the archived spec and prints its
+    // terminal `completed` reason on exit 2 (workspace-form filtering
+    // still hides archived specs because they carry REPORT.md, but
+    // archive entries do not have REPORT.md in this fixture, so we
+    // assert against the per-spec form which is the meaningful one).
+    let ws = workspace_with_one_archived_one_active()?;
+
+    // Default: SPEC-0001 is invisible to next.
+    Command::cargo_bin("speccy")?
+        .args(["next", "SPEC-0001"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "spec `SPEC-0001` not found under .speccy/specs/",
+        ));
+
+    // --include-archive: archived spec resolves; spec status is
+    // `implemented` so the per-spec form treats it as a non-terminal
+    // resolution and exits 0 (frontmatter is not dropped/superseded
+    // and the fixture has no REPORT.md).
+    Command::cargo_bin("speccy")?
+        .args(["next", "SPEC-0001", "--include-archive"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("SPEC-0001"));
+    Ok(())
+}
+
+#[test]
+fn check_include_archive_renders_archived_spec_scenarios() -> TestResult {
+    // Without --include-archive: check cannot find SPEC-0001 and
+    // errors. With --include-archive: it walks the archive and
+    // renders the scenarios on the archived SPEC.
+    let ws = workspace_with_one_archived_one_active()?;
+
+    Command::cargo_bin("speccy")?
+        .args(["check", "SPEC-0001"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "no spec `SPEC-0001` found in workspace",
+        ));
+
+    Command::cargo_bin("speccy")?
+        .args(["check", "SPEC-0001", "--include-archive"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("CHK-001"));
+    Ok(())
+}
+
+#[test]
+fn verify_include_archive_walks_archived_specs() -> TestResult {
+    // Verify's spec count covers both folders only when the flag is
+    // set. Default mode walks only `.speccy/specs/` and reports 1
+    // active spec (SPEC-0002). With --include-archive it sees both.
+    let ws = workspace_with_one_archived_one_active()?;
+
+    let mut default_cmd = Command::cargo_bin("speccy")?;
+    let default_out = default_cmd
+        .args(["verify"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+    let default_stdout = std::str::from_utf8(&default_out.get_output().stdout)?;
+    assert!(
+        default_stdout.contains("verified 1 specs"),
+        "default verify must count only the active spec: {default_stdout}",
+    );
+
+    let mut arch_cmd = Command::cargo_bin("speccy")?;
+    let arch_out = arch_cmd
+        .args(["verify", "--include-archive"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+    let arch_stdout = std::str::from_utf8(&arch_out.get_output().stdout)?;
+    assert!(
+        arch_stdout.contains("verified 2 specs"),
+        "verify --include-archive must count active + archived: {arch_stdout}",
+    );
+    Ok(())
 }

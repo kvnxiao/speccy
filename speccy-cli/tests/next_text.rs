@@ -32,6 +32,7 @@ fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     run(
         &NextArgs {
             spec_id: None,
+            include_archive: false,
             json: false,
         },
         &ws.root,

@@ -31,6 +31,7 @@ fn render_workspace(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>
     run(
         &NextArgs {
             spec_id: None,
+            include_archive: false,
             json: true,
         },
         &ws.root,
@@ -46,6 +47,7 @@ fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std:
     run(
         &NextArgs {
             spec_id: Some(spec_id.to_owned()),
+            include_archive: false,
             json: true,
         },
         &ws.root,
@@ -290,6 +292,7 @@ fn run_per_spec_capture(
     let code = run(
         &NextArgs {
             spec_id: Some(spec_id.to_owned()),
+            include_archive: false,
             json: true,
         },
         &ws.root,
@@ -307,6 +310,7 @@ fn run_workspace_capture(
     let code = run(
         &NextArgs {
             spec_id: None,
+            include_archive: false,
             json: true,
         },
         &ws.root,

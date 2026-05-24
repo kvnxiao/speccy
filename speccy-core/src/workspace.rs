@@ -164,15 +164,42 @@ pub fn find_root(start: &Utf8Path) -> Result<Utf8PathBuf, WorkspaceError> {
 /// This is the shared active-spec discovery helper for every hot-path
 /// command (`status` default mode, `next`, `check`, `verify`, `lock`).
 /// It deliberately excludes `.speccy/archive/`: archived specs are
-/// invisible to hot-path commands by SPEC-0042 REQ-006. The
-/// archive opt-in is the separate [`scan_archive_specs`] helper.
+/// invisible to hot-path commands by SPEC-0042 REQ-006. Opt-ins:
+///
+/// - [`scan_archive_specs`] returns archive specs as a separate slice (used by
+///   `status --include-archive`).
+/// - [`scan_with_archive`] returns one merged [`Workspace`] containing both
+///   active and archive specs (used by `check`, `next`, and `verify` when
+///   `--include-archive` is passed, so existing workspace-shaped logic flows
+///   through unchanged).
 #[must_use = "the returned workspace owns parsed artifacts the caller needs"]
 pub fn scan(project_root: &Utf8Path) -> Workspace {
+    scan_with_archive(project_root, false)
+}
+
+/// Like [`scan`], but optionally merges `.speccy/archive/` into the
+/// returned [`Workspace`] as the sole opt-in path for read commands
+/// (`check`, `next`, `verify`) that want to see archived specs
+/// alongside active ones.
+///
+/// `include_archive = false` is identical to [`scan`]. When `true`,
+/// archive specs are appended after the active list and the
+/// supersession index is rebuilt across the merged set, so a
+/// `superseded_by` row that points into the archive still resolves.
+///
+/// The `.speccy/archive/` layout is flat (SPEC-0042 contract), so
+/// mission folders are not walked there.
+#[must_use = "the returned workspace owns parsed artifacts the caller needs"]
+pub fn scan_with_archive(project_root: &Utf8Path, include_archive: bool) -> Workspace {
     let specs_dir = project_root.join(".speccy").join("specs");
     let mut spec_dirs = enumerate_spec_dirs(&specs_dir);
     spec_dirs.sort();
 
-    let specs: Vec<ParsedSpec> = spec_dirs.iter().map(|d| parse_spec_dir(d)).collect();
+    let mut specs: Vec<ParsedSpec> = spec_dirs.iter().map(|d| parse_spec_dir(d)).collect();
+
+    if include_archive {
+        specs.extend(scan_archive_specs(project_root));
+    }
 
     let spec_md_refs: Vec<&SpecMd> = specs
         .iter()

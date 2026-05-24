@@ -26,7 +26,7 @@ use speccy_core::next::compute_workspace;
 use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::WorkspaceError;
 use speccy_core::workspace::find_root;
-use speccy_core::workspace::scan;
+use speccy_core::workspace::scan_with_archive;
 use std::io::Write;
 use thiserror::Error;
 
@@ -64,6 +64,11 @@ pub enum NextError {
 pub struct NextArgs {
     /// Optional `SPEC-NNNN` selector for the per-spec form.
     pub spec_id: Option<String>,
+    /// Also include specs under `.speccy/archive/` in the scan, so the
+    /// per-spec form can resolve archived spec IDs (returning their
+    /// terminal `reason`). Archived specs are still filtered out of
+    /// the workspace form because they carry REPORT.md.
+    pub include_archive: bool,
     /// Whether to emit JSON instead of one-line text.
     pub json: bool,
 }
@@ -94,7 +99,7 @@ pub fn run(
         }
         Err(other) => return Err(NextError::Workspace(other)),
     };
-    let workspace = scan(&project_root);
+    let workspace = scan_with_archive(&project_root, args.include_archive);
 
     let (payload, exit_code) = if let Some(ref spec_id) = args.spec_id {
         run_per_spec(spec_id, &workspace, &project_root, args.json, err)?
