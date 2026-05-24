@@ -24,7 +24,7 @@ minijinja = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-speccy-core = { path = "../speccy-core", version = "0.1.0" }
+speccy-core = { path = "../speccy-core", version = "1.0.0" }
 thiserror = { workspace = true }
 
 [dev-dependencies]

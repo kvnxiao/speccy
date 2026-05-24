@@ -19,6 +19,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use common::TestResult;
 use common::Workspace;
+use common::find_repo_spec_dir;
 use common::write_spec;
 use indoc::indoc;
 use predicates::str::contains;
@@ -975,18 +976,30 @@ fn check_spec_0018_renders_scenarios_without_spawning_processes() -> TestResult 
         );
     }
 
-    // (2) Runtime guard: invoke `speccy check SPEC-0018` against this
-    // repo and assert the summary line. The repo root is two levels
-    // up from `CARGO_MANIFEST_DIR` (`speccy-cli/`).
+    // (2) Runtime guard: stage SPEC-0018 into a temp workspace and
+    // invoke `speccy check SPEC-0018` there. The SPEC source is looked
+    // up under either `.speccy/specs/` or `.speccy/archive/` so the
+    // guard survives archiving of completed specs.
     let manifest_dir = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
         .parent()
         .ok_or("CARGO_MANIFEST_DIR has no parent (expected workspace root)")?
         .to_path_buf();
+    let spec_dir_name = "0018-remove-check-execution";
+    let source_dir = find_repo_spec_dir(&repo_root, spec_dir_name)
+        .ok_or("SPEC-0018 not found in .speccy/specs/ or .speccy/archive/")?;
+
+    let ws = Workspace::new()?;
+    let staged_dir = ws.root.join(".speccy").join("specs").join(spec_dir_name);
+    fs_err::create_dir_all(staged_dir.as_std_path())?;
+    fs_err::copy(
+        source_dir.join("SPEC.md").as_std_path(),
+        staged_dir.join("SPEC.md").as_std_path(),
+    )?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.args(["check", "SPEC-0018"])
-        .current_dir(repo_root.as_std_path());
+        .current_dir(ws.root.as_std_path());
     cmd.assert()
         .success()
         .stdout(contains("scenarios rendered across"));

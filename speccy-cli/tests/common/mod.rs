@@ -34,6 +34,20 @@ impl Workspace {
     }
 }
 
+/// Locate a real in-tree spec directory by folder name (e.g.
+/// `0018-remove-check-execution`) under either `.speccy/specs/` or
+/// `.speccy/archive/` of the given repo root. Returns `None` if
+/// neither location contains a `SPEC.md` under that folder.
+///
+/// Integration tests that want to exercise the production CLI
+/// against a real SPEC use this to stay resilient to archiving.
+pub fn find_repo_spec_dir(repo_root: &Utf8Path, dir_name: &str) -> Option<Utf8PathBuf> {
+    ["specs", "archive"]
+        .iter()
+        .map(|sub| repo_root.join(".speccy").join(sub).join(dir_name))
+        .find(|p| p.join("SPEC.md").is_file())
+}
+
 pub fn write_spec(
     root: &Utf8Path,
     dir_name: &str,

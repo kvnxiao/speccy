@@ -18,37 +18,13 @@
 //!    the parent SPEC.md, and every scenario id resolves to a `<scenario
 //!    id=...>` nested under that requirement.
 
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
+mod corpus;
+
+use corpus::spec_dirs;
+use corpus::workspace_root;
 use speccy_core::parse::parse_report_xml;
 use speccy_core::parse::parse_spec_xml;
 use speccy_core::parse::parse_task_xml;
-
-fn workspace_root() -> Utf8PathBuf {
-    let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
-    let manifest = Utf8PathBuf::from(manifest_dir);
-    manifest
-        .parent()
-        .expect("speccy-core has a parent")
-        .to_path_buf()
-}
-
-fn spec_dirs(root: &Utf8Path) -> Vec<Utf8PathBuf> {
-    let specs_dir = root.join(".speccy").join("specs");
-    let mut out = Vec::new();
-    for entry in fs_err::read_dir(specs_dir.as_std_path()).expect("read .speccy/specs") {
-        let entry = entry.expect("read dir entry");
-        let path = entry.path();
-        let utf8 =
-            Utf8PathBuf::from_path_buf(path).expect("non-utf8 spec dir name should not exist");
-        if utf8.is_dir() && utf8.join("SPEC.md").is_file() {
-            out.push(utf8);
-        }
-    }
-    out.sort();
-    out
-}
 
 #[test]
 fn every_in_tree_tasks_md_parses_and_has_populated_scenarios() {

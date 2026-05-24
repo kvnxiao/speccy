@@ -16,36 +16,12 @@
 //!    grammar survive byte-for-byte, so silent rewrites of their fenced bodies
 //!    cannot corrupt the canonical reference.
 
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
+mod corpus;
+
+use corpus::find_spec_dir;
+use corpus::spec_dirs;
+use corpus::workspace_root;
 use speccy_core::parse::parse_spec_xml;
-
-fn workspace_root() -> Utf8PathBuf {
-    // CARGO_MANIFEST_DIR is `speccy-core`; parent is the workspace root.
-    let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
-    let manifest = Utf8PathBuf::from(manifest_dir);
-    manifest
-        .parent()
-        .expect("speccy-core has a parent")
-        .to_path_buf()
-}
-
-fn spec_dirs(root: &Utf8Path) -> Vec<Utf8PathBuf> {
-    let specs_dir = root.join(".speccy").join("specs");
-    let mut out = Vec::new();
-    for entry in fs_err::read_dir(specs_dir.as_std_path()).expect("read .speccy/specs") {
-        let entry = entry.expect("read dir entry");
-        let path = entry.path();
-        let utf8 =
-            Utf8PathBuf::from_path_buf(path).expect("non-utf8 spec dir name should not exist");
-        if utf8.is_dir() && utf8.join("SPEC.md").is_file() {
-            out.push(utf8);
-        }
-    }
-    out.sort();
-    out
-}
 
 #[test]
 fn every_in_tree_spec_md_parses_with_xml_parser() {
@@ -200,11 +176,9 @@ fn spec_0020_fenced_example_preserves_raw_xml_form() {
     // cannot silently mutate documentation that describes Speccy's own
     // grammar.
     let root = workspace_root();
-    let path = root
-        .join(".speccy")
-        .join("specs")
-        .join("0020-raw-xml-spec-carrier")
-        .join("SPEC.md");
+    let spec_dir = find_spec_dir(&root, "0020-raw-xml-spec-carrier")
+        .expect("SPEC-0020 exists under .speccy/specs/ or .speccy/archive/");
+    let path = spec_dir.join("SPEC.md");
     let source = fs_err::read_to_string(path.as_std_path()).expect("SPEC-0020 SPEC.md is readable");
     let expected = "```markdown\n\
 <requirement id=\"REQ-001\">\n\
