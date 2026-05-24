@@ -7,7 +7,9 @@
 //!
 //! See `.speccy/specs/0002-init-command/SPEC.md`.
 //! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` (T-008: three-way
-//! classification replacing Skip-on-exists).
+//! classification).
+//! See `.speccy/specs/0044-force-overwrites-all-shipped-files/SPEC.md`
+//! (uniform `--force` rule; the reviewer-persona carve-out is removed).
 
 use crate::host::Detected;
 use crate::host::HostChoice;
@@ -16,7 +18,6 @@ use crate::render::RenderError;
 use crate::render::render_host_pack;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use speccy_core::personas::ALL as PERSONAS_ALL;
 use std::io::Write;
 use thiserror::Error;
 
@@ -65,9 +66,14 @@ pub enum InitError {
 pub struct InitArgs {
     /// Optional `--host <name>` override.
     pub host: Option<String>,
-    /// `--force`: overwrite shipped files in place when `.speccy/`
-    /// already exists. User-authored files in the host skill directory
-    /// (any name not in the shipped bundle) are still preserved.
+    /// `--force`: overwrite any shipped file whose on-disk content
+    /// differs from the planned bundle content. The rule is uniform —
+    /// every rendered host-pack file (skill wrappers, reviewer-persona
+    /// definitions, and any other file emitted by `render_host_pack`)
+    /// is classified Create / Unchanged / Conflict and, under
+    /// `--force`, a `Conflict` is overwritten. User-authored files in
+    /// the host skill directory that the bundle does not ship (any
+    /// name not in the rendered plan) are untouched.
     pub force: bool,
 }
 
@@ -80,18 +86,15 @@ pub struct InitArgs {
 ///    content. Without `--force`, the entire batch is refused atomically. Under
 ///    `--force`, the file is overwritten.
 ///
-/// Host-native reviewer files (`.claude/agents/reviewer-<persona>.md`
-/// and `.codex/agents/reviewer-<persona>.toml`) are user-customisable
-/// and classified [`Action::Unchanged`] when they already exist
-/// (regardless of
-/// byte equality), so user edits to the persona body survive a re-init
-/// or `--force` run.
+/// The rule is uniform across every rendered host-pack file. There is
+/// no per-file exception — `.claude/agents/reviewer-<persona>.md` and
+/// `.codex/agents/reviewer-<persona>.toml` participate in the same
+/// classification as skill wrappers and every other emitted file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     /// Destination does not exist; file will be written fresh.
     Create,
-    /// Destination exists and is byte-identical to the planned content
-    /// (or is a user-tunable reviewer file that is Skip-on-exists).
+    /// Destination exists and is byte-identical to the planned content.
     /// No write occurs; the file is logged as `unchanged`.
     Unchanged,
     /// Destination exists and differs from the planned content.
@@ -205,8 +208,9 @@ fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>
 
     // `.speccy/skills/` is not written by `init`. The host-native
     // reviewer files under `.claude/agents/` and `.codex/agents/` are
-    // the sole canonical persona surface and are classified
-    // Skip-on-exists by `append_host_pack_items`.
+    // the sole canonical persona surface; they are classified by
+    // `append_host_pack_items` through the same Create / Unchanged /
+    // Conflict rule as every other rendered host-pack file.
 
     Ok(plan)
 }
@@ -229,23 +233,7 @@ fn append_host_pack_items(
     for file in rendered {
         let destination = project_root.join(&file.rel_path);
         let content = file.contents.into_bytes();
-        let action = if is_host_native_reviewer_file(&file.rel_path) {
-            // SPEC-0027 REQ-002: host-native reviewer files
-            // (`.claude/agents/reviewer-<persona>.md` and
-            // `.codex/agents/reviewer-<persona>.toml`) are the sole
-            // canonical persona surface. Treat them as user-tunable:
-            // create on absent, leave alone on exists (even under
-            // `--force`) so local edits to persona focus survive.
-            // In the three-way scheme this maps to: absent → Create,
-            // exists (regardless of content) → Unchanged.
-            if destination.exists() {
-                Action::Unchanged
-            } else {
-                Action::Create
-            }
-        } else {
-            classify_content(&destination, &content)
-        };
+        let action = classify_content(&destination, &content);
         plan.push(PlanItem {
             destination,
             content,
@@ -253,29 +241,6 @@ fn append_host_pack_items(
         });
     }
     Ok(())
-}
-
-/// Return `true` iff `rel_path` is a host-native reviewer-persona
-/// definition file shipped by `render_host_pack`. SPEC-0027 REQ-002
-/// classifies these as Skip-on-exists so user edits to the persona
-/// body (or the surrounding `name`/`description` frontmatter) survive
-/// `speccy init --force`.
-///
-/// Matching is strict: only the six personas in
-/// [`speccy_core::personas::ALL`] count, only at the exact two
-/// per-host directories the renderer emits to, and only with the
-/// host-specific file extension.
-fn is_host_native_reviewer_file(rel_path: &Utf8Path) -> bool {
-    let s = rel_path.as_str().replace('\\', "/");
-    for persona in PERSONAS_ALL {
-        if s == format!(".claude/agents/reviewer-{persona}.md") {
-            return true;
-        }
-        if s == format!(".codex/agents/reviewer-{persona}.toml") {
-            return true;
-        }
-    }
-    false
 }
 
 /// Three-way file classification for SPEC-0033 T-008.
@@ -325,7 +290,7 @@ fn execute_plan(plan: &[PlanItem], force: bool) -> Result<Outcome, InitError> {
                 outcome.created = outcome.created.saturating_add(1);
             }
             Action::Unchanged => {
-                // No write — byte-identical or reviewer Skip-on-exists.
+                // No write — byte-identical to the planned content.
                 outcome.unchanged = outcome.unchanged.saturating_add(1);
             }
             Action::Conflict => {

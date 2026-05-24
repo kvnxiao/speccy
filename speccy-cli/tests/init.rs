@@ -589,15 +589,15 @@ fn t003_init_force_preserves_pre_existing_speccy_skills_overrides() -> TestResul
     Ok(())
 }
 
-// SPEC-0027 REQ-002 — host-native reviewer files are Skip-on-exists
-// under `--force` so users who tune the persona body (or its
-// surrounding frontmatter) keep their edits across re-init. Skill
-// wrappers under `.claude/skills/` and `.agents/skills/` continue to
-// be Overwrite-on-exists.
+// SPEC-0044 REQ-001 — host-native reviewer files participate in the
+// uniform Create / Unchanged / Conflict classification with every
+// other rendered host-pack file. Under `--force`, a reviewer file
+// that differs from the shipped bundle is overwritten; the
+// SPEC-0027 Skip-on-exists carve-out is removed.
 
 #[test]
-fn t002_claude_reviewer_agent_files_preserve_user_edits_under_force() -> TestResult {
-    let fx = project_with_name("t002-claude-skip-preserve")?;
+fn t002_claude_reviewer_agent_files_overwrite_user_edits_under_force() -> TestResult {
+    let fx = project_with_name("t002-claude-overwrite-edits")?;
     mkdir(&fx.root, ".claude")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
@@ -619,27 +619,34 @@ fn t002_claude_reviewer_agent_files_preserve_user_edits_under_force() -> TestRes
     cmd.arg("init")
         .arg("--force")
         .current_dir(fx.root.as_std_path());
-    cmd.assert().success();
+    let output = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(output)?;
 
     let after = read_file(&fx.root, rel)?;
     assert!(
-        after.ends_with(sentinel),
-        "SPEC-0027 REQ-002: `speccy init --force` must preserve user edits to {rel}; expected tail `{sentinel}` but got tail:\n{}",
-        after
-            .chars()
-            .rev()
-            .take(80)
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect::<String>(),
+        !after.contains("sentinel-edit-12345"),
+        "SPEC-0044 REQ-001 / CHK-001: `speccy init --force` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
+    );
+    assert_eq!(
+        after, initial,
+        "SPEC-0044 REQ-001 / CHK-001: after `--force` the file must match the shipped bundle byte-for-byte",
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.trim_start().starts_with("(!) overwritten")
+                && l.contains(".claude/agents/reviewer-business.md")),
+        "SPEC-0044 REQ-001 / CHK-001: plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
     );
     Ok(())
 }
 
 #[test]
-fn t002_claude_reviewer_agent_files_recreate_when_deleted_under_force() -> TestResult {
-    let fx = project_with_name("t002-claude-skip-recreate")?;
+fn t002_claude_reviewer_agent_files_recreate_when_deleted() -> TestResult {
+    // SPEC-0044 REQ-001: deletion still triggers a fresh render under
+    // the uniform classification (Create on absent applies to every
+    // shipped file, with or without `--force`).
+    let fx = project_with_name("t002-claude-recreate")?;
     mkdir(&fx.root, ".claude")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
@@ -661,67 +668,14 @@ fn t002_claude_reviewer_agent_files_recreate_when_deleted_under_force() -> TestR
     let restored = read_file(&fx.root, rel)?;
     assert!(
         restored.contains("# Reviewer Persona: Business"),
-        "SPEC-0027 REQ-002: `init --force` after deletion must recreate {rel} from the shipped bundle (Create on absent); got:\n{restored}",
+        "SPEC-0044 REQ-001: `init` after deletion must recreate {rel} from the shipped bundle (Create on absent); got:\n{restored}",
     );
     Ok(())
 }
 
 #[test]
-fn t002_claude_init_force_plan_summary_marks_reviewer_agents_and_skills_unchanged() -> TestResult {
-    // SPEC-0027 REQ-002 + SPEC-0033 T-008: under the three-way classification,
-    // reviewer files that already exist (Skip-on-exists) show as `unchanged`,
-    // and skill SKILL.md files that are byte-identical also show as `unchanged`.
-    let fx = project_with_name("t002-claude-plan-labels")?;
-    mkdir(&fx.root, ".claude")?;
-    let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("init").current_dir(fx.root.as_std_path());
-    cmd.assert().success();
-
-    let mut cmd = Command::cargo_bin("speccy")?;
-    cmd.arg("init")
-        .arg("--force")
-        .current_dir(fx.root.as_std_path());
-    let output = cmd.assert().success().get_output().stdout.clone();
-    let stdout = String::from_utf8(output)?;
-
-    // SPEC-0027 REQ-002: reviewer files that already exist are preserved
-    // (Skip-on-exists maps to `unchanged` in the three-way scheme).
-    for persona in [
-        "business",
-        "tests",
-        "security",
-        "style",
-        "architecture",
-        "docs",
-    ] {
-        let path = format!(".claude/agents/reviewer-{persona}.md");
-        assert!(
-            stdout.contains(&path),
-            "SPEC-0027 REQ-002: plan summary must list `.claude/agents/reviewer-{persona}.md`; got:\n{stdout}",
-        );
-        // The reviewer file must not appear as `(!) overwritten` — it must
-        // be `unchanged` because Skip-on-exists is preserved.
-        let overwrite_needle = format!("(!) overwritten     .claude/agents/reviewer-{persona}.md");
-        assert!(
-            !stdout.contains(&overwrite_needle),
-            "SPEC-0027 REQ-002: reviewer file must not be `(!) overwritten` under --force; got:\n{stdout}",
-        );
-    }
-    // Skill files that are byte-identical show as `unchanged` (not `(!)
-    // overwritten`).
-    for skill in SKILL_NAMES {
-        let path = format!(".claude/skills/{skill}/SKILL.md");
-        assert!(
-            stdout.contains(&path),
-            "plan summary must list `.claude/skills/{skill}/SKILL.md`; got:\n{stdout}",
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResult {
-    let fx = project_with_name("t002-codex-skip-preserve")?;
+fn t002_codex_reviewer_agent_files_overwrite_user_edits_under_force() -> TestResult {
+    let fx = project_with_name("t002-codex-overwrite-edits")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
         .arg("--host")
@@ -729,7 +683,7 @@ fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResu
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let rel = ".codex/agents/reviewer-business.toml";
+    let rel = ".codex/agents/reviewer-security.toml";
     let initial = read_file(&fx.root, rel)?;
     let sentinel = "\n# sentinel-edit-67890\n";
     let mut edited = initial.clone();
@@ -742,12 +696,24 @@ fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResu
         .arg("codex")
         .arg("--force")
         .current_dir(fx.root.as_std_path());
-    cmd.assert().success();
+    let output = cmd.assert().success().get_output().stdout.clone();
+    let stdout = String::from_utf8(output)?;
 
     let after = read_file(&fx.root, rel)?;
     assert!(
-        after.ends_with(sentinel),
-        "SPEC-0027 REQ-002: `speccy init --force --host codex` must preserve user edits to {rel}",
+        !after.contains("sentinel-edit-67890"),
+        "SPEC-0044 REQ-001 / CHK-002: `speccy init --force --host codex` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
+    );
+    assert_eq!(
+        after, initial,
+        "SPEC-0044 REQ-001 / CHK-002: after `--force` the file must match the shipped bundle byte-for-byte",
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l.trim_start().starts_with("(!) overwritten")
+                && l.contains(".codex/agents/reviewer-security.toml")),
+        "SPEC-0044 REQ-001 / CHK-002: plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
     );
 
     fs_err::remove_file(fx.root.join(rel).as_std_path())?;
@@ -760,8 +726,8 @@ fn t002_codex_reviewer_agent_files_preserve_user_edits_under_force() -> TestResu
     cmd.assert().success();
     let restored = read_file(&fx.root, rel)?;
     assert!(
-        restored.contains("name = \"reviewer-business\""),
-        "SPEC-0027 REQ-002: `init --force --host codex` after deletion must recreate {rel} with the shipped Codex frontmatter",
+        restored.contains("name = \"reviewer-security\""),
+        "SPEC-0044 REQ-001: `init --force --host codex` after deletion must recreate {rel} with the shipped Codex frontmatter",
     );
     Ok(())
 }

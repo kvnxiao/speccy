@@ -322,9 +322,13 @@ plus `.codex/agents/speccy-{tasks,work,ship}.toml` and
 
 There is no project-local persona override directory. The
 host-native sub-agent files under `.claude/agents/` and
-`.codex/agents/` are the sole canonical persona surface, and
-`speccy init` classifies them Skip-on-exists so local edits to a
-persona's body survive `speccy init --force`.
+`.codex/agents/` are the sole canonical persona surface. They
+participate in the same uniform Create / Unchanged / Conflict
+classification as every other file `speccy init` writes; under
+`--force` a differing file is overwritten with the shipped bundle
+content. Users who customise a persona body preserve their edits via
+git (commit before running `--force`, restore from history
+afterwards).
 
 Decisions (ADRs) are not a separate folder. Each spec's `## Design
 > Decisions` subsection holds the architectural choices made for
@@ -1680,9 +1684,10 @@ things become possible:
 3. Projects edit the host-native sub-agent file in place
    (`.claude/agents/reviewer-security.md`,
    `.codex/agents/reviewer-security.toml`). The host-native location
-   is the only persona surface, and `speccy init` classifies those
-   files Skip-on-exists so a local edit survives
-   `speccy init --force`.
+   is the only persona surface. Edits are preserved via git, not via
+   a CLI-side carve-out — commit before running `speccy init
+   --force`, since the uniform classification overwrites any file
+   that differs from the shipped bundle.
 
 ---
 
@@ -1884,10 +1889,10 @@ differs from planned content → `Conflict`, and the entire batch
 refuses atomically unless `--force` is passed, in which case
 differing files are overwritten with the `(!) overwritten` log
 marker. Recovery from an unwanted overwrite is via `git checkout`;
-there is no in-CLI merge or backup mechanism. Host-native reviewer
-files (`.claude/agents/reviewer-<persona>.md` and the Codex twin)
-remain Skip-on-exists so local persona-body edits survive
-`--force`.
+there is no in-CLI merge or backup mechanism. The rule is uniform:
+every rendered host-pack file (skill wrappers, host-native reviewer
+files, and any other emitted file) follows the same Create /
+Unchanged / Conflict classification with no per-file exception.
 
 ## Workflow recipes
 
