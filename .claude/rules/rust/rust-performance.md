@@ -4,20 +4,6 @@ paths: **/*.{rs,toml}
 
 # Performance Considerations
 
-## Prefer Borrowing Over Cloning
-
-```rust
-// Bad: Unnecessary clone
-fn process(data: String) -> String {
-    data.to_uppercase()
-}
-
-// Good: Borrow when possible
-fn process(data: &str) -> String {
-    data.to_uppercase()
-}
-```
-
 ## Use `Cow` for Conditional Cloning
 
 ```rust

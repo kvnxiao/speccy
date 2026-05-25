@@ -1,0 +1,7 @@
+name = "speccy-tasks"
+description = "Decomposes a Speccy SPEC into a checklist of agent-sized tasks. Invoke via /agent speccy-tasks for the pinned execution path defined in this file's frontmatter."
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+developer_instructions = """
+{% include "modules/phases/speccy-tasks.md" %}
+"""

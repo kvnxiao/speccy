@@ -120,20 +120,6 @@ fn get_user(id: UserId) -> Result<User> {
 }
 ```
 
-## Safe Index Access
-
-```rust
-// Bad: Can panic
-let item = vec[index];
-
-// Good: Handle out of bounds
-let item = vec.get(index)
-    .ok_or(MyLibraryError::NotFound {
-        resource_type: "item".to_string(),
-        id: index.to_string(),
-    })?;
-```
-
 ## Safe Arithmetic
 
 ```rust

@@ -6,7 +6,10 @@ paths: **/*.{rs,toml}
 
 ## Public API Documentation
 
-Every public item must have documentation:
+Every public item must have documentation. Clippy enforces `# Errors`
+and `# Panics` sections (`missing_errors_doc` / `missing_panics_doc`);
+this rule covers the rest — the prose summary, `# Arguments`, and
+`# Examples`.
 
 ```rust
 /// Processes the input data and returns a processed result.
@@ -15,17 +18,6 @@ Every public item must have documentation:
 ///
 /// * `input` - The input string to process
 /// * `options` - Processing options
-///
-/// # Returns
-///
-/// Returns a `Result` containing the processed data or an error.
-///
-/// # Errors
-///
-/// This function will return an error if:
-/// - The input is empty
-/// - The input exceeds maximum length
-/// - Parsing fails
 ///
 /// # Examples
 ///
