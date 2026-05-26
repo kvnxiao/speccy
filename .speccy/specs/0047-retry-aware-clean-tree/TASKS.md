@@ -500,7 +500,7 @@ Suggested files: `.claude/skills/speccy-decompose/SKILL.md`,
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-005">
+<task id="T-006" state="completed" covers="REQ-005">
 ## Unify `<blockers>` round-attribute convention across docs and `/speccy-amend`
 
 Reconcile the documentation and `/speccy-amend` writer prose to
