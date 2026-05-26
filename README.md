@@ -38,7 +38,7 @@ representation, not content. The current command list lives in
 | `speccy check`   | Occasionally, to render the Given/When/Then scenarios for one or more specs. |
 | `speccy verify`  | In CI, as the gate.                                                       |
 | `speccy next`    | Mostly invoked by the shipped skills to resolve the next actionable task. |
-| `speccy lock`    | Invoked by `/speccy-tasks` to record the SPEC.md hash into TASKS.md after decomposition. |
+| `speccy lock`    | Invoked by `/speccy-decompose` to record the SPEC.md hash into TASKS.md after decomposition. |
 | `speccy vacancy` | Invoked by `/speccy-plan` to allocate the next free `SPEC-NNNN`. |
 | `speccy archive` | Relocates a shipped, dropped, or superseded SPEC into `.speccy/archive/`. |
 
@@ -170,7 +170,7 @@ golden path consists of five recipes:
 
 ```text
 /speccy-plan      Phase 1: draft SPEC.md from the north star
-/speccy-tasks     Phase 2: decompose the SPEC into TASKS.md
+/speccy-decompose Phase 2: decompose the SPEC into TASKS.md
 /speccy-work      Phase 3: implementer sub-agent loop, task by task
 /speccy-review    Phase 4: adversarial multi-persona review loop
 /speccy-ship      Phase 5: write REPORT.md, open the PR
@@ -226,7 +226,7 @@ flowchart TD
       Brain["/speccy-brainstorm<br/>Socratic atomization"]
       BrainGate{{HUMAN gate<br/>approve framing}}
       PlanCmd["/speccy-plan<br/>draft SPEC.md"]
-      TasksCmd["/speccy-tasks<br/>decompose TASKS.md"]
+      TasksCmd["/speccy-decompose<br/>decompose TASKS.md"]
       Brain --> BrainGate --> PlanCmd --> TasksCmd
     end
 
@@ -296,7 +296,7 @@ boundaries:
    short of `/speccy-ship` and asks you. Ship opens a PR (which is
    irreversible), so it is never auto-invoked.
 
-The planning steps in between (`/speccy-plan` and `/speccy-tasks`)
+The planning steps in between (`/speccy-plan` and `/speccy-decompose`)
 are also human-driven, but they do not contain explicit hard gates
 inside the skills themselves — you simply read each step's output
 and type the next slash command. If you trust the prior output, you
@@ -375,7 +375,7 @@ session is using.
 
 | Phase / persona         | Claude Code (`.claude/agents/...md`)    | Codex (`.codex/agents/...toml`)              | Agent file ships? |
 | ----------------------- | --------------------------------------- | -------------------------------------------- | ----------------- |
-| `speccy-tasks`          | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-decompose`      | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-work`           | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-ship`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-init`           | unpinned, inherits session              | unpinned, inherits session                   | no                |
@@ -396,7 +396,7 @@ TASKS.md slice without truncation. On Codex, `gpt-5.5` covers every
 pinned role and the asymmetric work-shape is carried entirely by
 `model_reasoning_effort`.
 
-The three pinned phase workers (`speccy-tasks`, `speccy-work`,
+The three pinned phase workers (`speccy-decompose`, `speccy-work`,
 `speccy-ship`) ship sub-agent files. `speccy-init` and
 `speccy-review` ship no agent file on either host — only the
 SKILL.md surface — because both phases need to drive the parent

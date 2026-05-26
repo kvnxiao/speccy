@@ -236,4 +236,4 @@ not invent a new SPEC.md section for brainstorm output:
 This recipe does not loop. After invoking
 `/speccy-plan` (new SPEC) or
 `/speccy-amend` (existing SPEC), the next step is
-`/speccy-tasks SPEC-NNNN` (decompose into TASKS.md).
+`/speccy-decompose SPEC-NNNN` (decompose into TASKS.md).

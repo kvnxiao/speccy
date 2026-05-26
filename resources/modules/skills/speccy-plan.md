@@ -116,7 +116,7 @@ is already agreed.
    signals an over-scoped session — 26 open questions is a scope smell,
    not a format limitation.
 
-5. Suggest the next step: `{{ cmd_prefix }}speccy-tasks SPEC-NNNN` to
+5. Suggest the next step: `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` to
    decompose into `TASKS.md`.
 
 This recipe does not loop.

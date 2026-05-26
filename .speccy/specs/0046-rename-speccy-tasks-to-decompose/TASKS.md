@@ -125,7 +125,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-003">
+<task id="T-003" state="completed" covers="REQ-003">
 ## Update cross-skill and documentation references
 
 Sweep every remaining `speccy-tasks` / `/speccy-tasks` reference in
