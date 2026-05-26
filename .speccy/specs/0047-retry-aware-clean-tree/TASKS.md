@@ -360,7 +360,7 @@ Suggested files: `.claude/agents/speccy-work.md`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-004">
+<task id="T-005" state="completed" covers="REQ-004">
 ## Add bootstrap commit step to `/speccy-decompose`
 
 Edit the `/speccy-decompose` skill body, the speccy-decompose agent
