@@ -15,6 +15,8 @@ use assert_cmd::Command;
 use camino::Utf8PathBuf;
 use tempfile::TempDir;
 
+mod common;
+
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 struct Fixture {
@@ -78,10 +80,10 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
     for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
-        let count = non_blank_line_count(&body);
+        let count = common::non_blank_line_count_outside_reconcile_partial(&body);
         assert!(
             count <= 10,
-            "T-009: {rel} must have ≤10 non-blank lines; got {count} non-blank lines:\n{body}",
+            "T-009: {rel} must have ≤10 non-blank lines outside reconcile-policy partial markers; got {count}:\n{body}",
         );
     }
     Ok(())
@@ -209,10 +211,10 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
     for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
         let rel = format!(".agents/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
-        let count = non_blank_line_count(&body);
+        let count = common::non_blank_line_count_outside_reconcile_partial(&body);
         assert!(
             count <= 10,
-            "CHK-017: {rel} must have ≤10 non-blank lines; got {count}:\n{body}",
+            "CHK-017: {rel} must have ≤10 non-blank lines outside reconcile-policy partial markers; got {count}:\n{body}",
         );
         let toml_file = format!(".codex/agents/{phase}.toml");
         assert!(

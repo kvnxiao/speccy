@@ -43,6 +43,8 @@ spec hash must have been committed before this skill runs.
 
 ## Steps
 
+**Entry precondition (REQ-002):** before any Task dispatch, run `git status --porcelain`; non-empty stdout exits the skill (surface dirty paths on stderr), empty stdout proceeds. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the shared reconcile-policy partial inlined into the calling SKILL.md body rather than the normal implementer flow.
+
 1. Resolve the target task.
 
    - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
@@ -90,7 +92,7 @@ spec hash must have been committed before this skill runs.
    scenarios being satisfied (it renders them, it does not run
    them).
 
-5. Exit transition. When the implementation is done, flip the task's
+5. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state="..."` attribute from `in-progress` to `in-review` in
    TASKS.md, then append one `<implementer>` block to the per-task
    journal file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (a

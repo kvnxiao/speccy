@@ -105,39 +105,41 @@ when exit code is 0.
 Before entering the dispatch loop, run one one-time sanity check
 to catch state left by a crashed prior session.
 
+**Reconcile-pass dispatch (REQ-007, REQ-008).** The very first
+`speccy next SPEC-NNNN --json` of the session — the same one that
+resolves the spec directory in step 1 below — may return
+`next_action.kind == "reconcile"` when the CLI's consistency check
+flags drift from a prior crashed session. When it does, dispatch the
+reconcile pass per the shared partial inlined immediately below
+**before** entering the dispatch loop. Apply the per-drift action
+for every entry in `consistency.drifts[]`, then re-query
+`speccy next SPEC-NNNN --json`. Only when the re-query returns
+`consistency.status == "ok"` does this orchestrator proceed to the
+dispatch loop. The reconcile pass is autonomous — no
+`AskUserQuestion`, no "press enter to continue" surface, anywhere
+in the dispatch path. Each subsequent loop iteration's
+`speccy next SPEC-NNNN --json` (step 1 of the [Loop](#loop) section
+below) re-runs the same check: if a per-task operation leaves
+drift, the next iteration catches it and dispatches the reconcile
+pass before continuing to the normal `work` / `review` / `ship`
+dispatch. The reconcile pass owns every drift kind in REQ-006's
+enum — including `state_in_progress_orphaned` (dirty tree) and
+`state_in_progress_clean` (clean tree) — so the orchestrator no
+longer scans TASKS.md for `state="in-progress"` itself.
+
+<!-- Shared partial: reconcile-policy. Source: {{ speccy_references_path }}/reconcile-policy.md -->
+{% include "modules/references/reconcile-policy.md" %}
+<!-- End shared partial: reconcile-policy. -->
+
 1. Resolve the spec directory from `speccy next SPEC-NNNN --json`:
    take the `spec_md_path` field and strip the trailing `/SPEC.md`
    to get `<spec-dir>`. If the command exits non-zero, surface the
    stderr line and stop — the SPEC is in a terminal state. If the
    command reports the spec is unknown, stop and report.
 
-2. Scan `<spec-dir>/TASKS.md` for any task at
-   `state="in-progress"`:
-
-   ```bash
-   grep -n 'state="in-progress"' <spec-dir>/TASKS.md
-   ```
-
-   If any match, **stop and surface** before dispatching anything:
-
-   ```
-   SPEC-NNNN/T-NNN is at state="in-progress" — likely a crashed
-   prior session. Resolve before re-running {{ cmd_prefix }}speccy-orchestrate:
-
-   - To discard the prior attempt: edit TASKS.md and flip the
-     task's state from "in-progress" back to "pending".
-   - To inspect what was in progress: check
-     <spec-dir>/journal/T-NNN.md for the last <implementer>
-     block (if any was written before the crash) and the working
-     tree for uncommitted edits.
-   ```
-
-   Exit. This is an autonomy-breaking recovery path on purpose —
-   silently resetting state could lose real work, and silently
-   resuming could re-run an implementer that already made
-   progress.
-
-3. If no in-progress tasks, proceed to the dispatch loop.
+2. If `next_action.kind == "reconcile"`, run the reconcile pass per
+   the shared partial above, then re-query and continue. Otherwise
+   proceed directly to the dispatch loop.
 
 ## Loop
 
@@ -176,6 +178,18 @@ Repeat until a stop condition fires:
    `speccy next SPEC-NNNN --json` and loop from step 1.
 
 ## Work dispatch
+
+**Clean-tree precondition (REQ-002).** Before spawning the
+`speccy-work` sub-agent, run `git status --porcelain` in the
+orchestrator's running session. If stdout is non-empty, **halt the
+outer loop** and surface the dirty paths to the user — no
+`speccy-work` sub-agent is spawned, and the loop does not advance.
+Empty stdout permits the dispatch below. This check fires in the
+orchestrator's session (not delegated to the sub-agent) because the
+outer loop's invariant — every dispatched implementer turn begins on
+a clean tree — must be enforced by the loop owner. The `speccy-work`
+skill body re-runs the same check defensively at its own entry as a
+second-level guard.
 
 Spawn a sub-agent that runs the `speccy-work` primitive for the
 resolved task. Prompt:
