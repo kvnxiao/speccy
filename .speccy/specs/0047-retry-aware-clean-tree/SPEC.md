@@ -108,6 +108,12 @@ task-scope.
   or the journal `<implementer>` element grammar. The retry-mode
   implementer writes the same block shape; only its prompt
   changes.
+- No analogous bootstrap commit step in `/speccy-plan` or
+  `/speccy-amend`. Plan and amend leave their SPEC.md edits
+  uncommitted; the user (or, in the freshly-decomposed bootstrap
+  path, `/speccy-decompose` itself via REQ-004) lands them.
+  Extending the same pattern to plan or amend may follow in a
+  later SPEC if friction surfaces.
 </non-goals>
 
 ## User Stories
@@ -442,6 +448,145 @@ specifically (not round-1).
 
 </requirement>
 
+<requirement id="REQ-004">
+### REQ-004: `/speccy-decompose` commits SPEC + TASKS as final step
+
+The `/speccy-decompose` skill commits the SPEC artefacts as the
+final step of its execution, before returning. This closes the
+bootstrap-commit gap that trips the SPEC-0045/REQ-002 strict
+clean-tree gate when `/speccy-orchestrate SPEC-NNNN` starts on a
+freshly decomposed SPEC.
+
+The commit step runs after `speccy lock SPEC-NNNN` writes the
+final spec hash and timestamp into TASKS.md's frontmatter:
+
+1. Stage the SPEC's own files via narrow `git add` calls (not
+   `git add -A`):
+
+   ```
+   git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md
+   ```
+
+   Both files are staged regardless of whether SPEC.md was already
+   committed; staging unchanged content is a no-op.
+
+2. Run `git diff --cached --quiet`. If the call exits 0 (nothing
+   staged), skip the commit silently — both files are already
+   committed at their current content. If the exit code is
+   non-zero, proceed to commit.
+
+3. Commit with the message format:
+
+   - **Title:** `[SPEC-NNNN]: create spec and decompose tasks`.
+   - **Body:** the SPEC's `title:` frontmatter value read from
+     SPEC.md (the one-line slug after the `title:` key).
+   - **Trailer:** `Co-Authored-By: <model>
+     <noreply@anthropic.com>` resolved per SPEC-0045/REQ-004's
+     host-harness convention, with the documented `Speccy Skill
+     Pack` fallback when the host exposes no model identifier.
+
+   Pass the body via a HEREDOC so newlines survive verbatim,
+   matching SPEC-0045/REQ-004's commit invocation pattern.
+
+The commit captures exactly two files: `SPEC.md` and `TASKS.md`
+under the spec's own directory. The narrow `git add` invocation
+guarantees no unrelated dirty paths are swept in, so the soundness
+argument from SPEC-0045/REQ-003 (which assumes a clean-tree
+precondition) does not need to apply here — `git add -A` is
+deliberately not used.
+
+This requirement applies only to `/speccy-decompose`. The
+analogous case for `/speccy-plan` (committing SPEC.md when plan
+finishes) and `/speccy-amend` (committing SPEC.md + reconciled
+TASKS.md after an amendment) is out of scope; see Non-goals.
+
+<done-when>
+- The `/speccy-decompose` skill body
+  (`.claude/skills/speccy-decompose/SKILL.md` and host-portable
+  mirrors) documents the commit step as the final step of the
+  recipe, after `speccy lock SPEC-NNNN`.
+- The same is documented in the speccy-decompose agent prompt
+  (`.claude/agents/speccy-decompose.md` and any Codex variant),
+  inserted as a new step between today's step 3 (`speccy lock`)
+  and step 4 ("Suggest the next step").
+- The commit step uses narrow `git add <spec-dir>/SPEC.md
+  <spec-dir>/TASKS.md` rather than `git add -A`.
+- The commit step skips silently when `git diff --cached --quiet`
+  reports nothing staged (e.g. re-running decompose on an
+  already-committed SPEC).
+- The commit message title is `[SPEC-NNNN]: create spec and
+  decompose tasks` with the SPEC's `title:` field as the body.
+- The commit message carries the `Co-Authored-By` trailer
+  resolved per SPEC-0045/REQ-004's host-harness convention.
+</done-when>
+
+<behavior>
+- Given a working tree with an untracked `<spec-dir>/SPEC.md` and
+  no `<spec-dir>/TASKS.md`, when `/speccy-decompose SPEC-NNNN`
+  runs to completion, then exactly one new commit lands whose
+  tree contains both `<spec-dir>/SPEC.md` and
+  `<spec-dir>/TASKS.md`, whose title is `[SPEC-NNNN]: create
+  spec and decompose tasks`, and whose body is the SPEC's `title:`
+  field.
+- Given a working tree where `<spec-dir>/SPEC.md` is already
+  committed at HEAD and `<spec-dir>/TASKS.md` is untracked, when
+  `/speccy-decompose SPEC-NNNN` runs to completion, then exactly
+  one new commit lands whose tree adds `<spec-dir>/TASKS.md` only;
+  the title is still `[SPEC-NNNN]: create spec and decompose
+  tasks`.
+- Given a working tree where both files are already committed at
+  HEAD at the same content the decompose run would produce, when
+  `/speccy-decompose` is re-run for the same SPEC, then no new
+  commit lands (the staged diff is empty and the commit step
+  skips silently).
+- Given a working tree with unrelated dirty paths outside
+  `<spec-dir>/` (e.g. a stray edit to `src/lib.rs`) plus an
+  untracked `<spec-dir>/TASKS.md` from the decompose run, when
+  `/speccy-decompose SPEC-NNNN` runs to completion, then the
+  resulting commit contains only the two SPEC files; the
+  unrelated dirty paths remain dirty and untouched in the tree.
+- Given that the decompose commit landed, when the next caller
+  runs `/speccy-orchestrate SPEC-NNNN`, then the orchestrator's
+  startup integrity check sees an empty `git status --porcelain`
+  (or only paths unrelated to the SPEC), and the outer loop
+  proceeds to its first work dispatch without halting.
+</behavior>
+
+<scenario id="CHK-009">
+Given a fresh working tree where `<spec-dir>/SPEC.md` is
+untracked and `<spec-dir>/TASKS.md` does not yet exist on disk,
+when `/speccy-decompose SPEC-NNNN` runs to completion,
+then `git log -1 --format=%s` returns `[SPEC-NNNN]: create spec
+and decompose tasks`,
+and `git log -1 --name-only --format=` lists exactly two paths
+`<spec-dir>/SPEC.md` and `<spec-dir>/TASKS.md`,
+and `git status --porcelain` is empty.
+</scenario>
+
+<scenario id="CHK-010">
+Given a working tree with an unrelated stray edit to `src/lib.rs`
+and an untracked `<spec-dir>/SPEC.md`,
+when `/speccy-decompose SPEC-NNNN` runs to completion,
+then the resulting commit's name-only listing contains exactly
+`<spec-dir>/SPEC.md` and `<spec-dir>/TASKS.md` (the `src/lib.rs`
+modification is not present in the commit),
+and `git status --porcelain` after the commit still shows the
+`src/lib.rs` modification untouched.
+</scenario>
+
+<scenario id="CHK-011">
+Given a working tree where `<spec-dir>/SPEC.md` and
+`<spec-dir>/TASKS.md` are both already committed at HEAD with the
+exact content `/speccy-decompose` would re-emit,
+when `/speccy-decompose SPEC-NNNN` is re-invoked,
+then `git rev-parse HEAD` returns the same SHA as before
+(no new commit was created),
+and no `git commit` stderr line surfaces a "nothing to commit"
+error.
+</scenario>
+
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -666,4 +811,5 @@ retry-shape reference) plus three co-edited inline rules.
 | Date       | Author       | Summary |
 |------------|--------------|---------|
 | 2026-05-26 | human/kevin  | Initial draft. Introduces three requirements covering: (REQ-001) the retry-shape detection rule as a deterministic, file-read predicate canonically documented in a new `references/retry-shape.md` reference; (REQ-002) extension of SPEC-0045/REQ-002's clean-tree precondition at both `/speccy-work` entry and `/speccy-orchestrate` work dispatch to permit a dirty tree when the task is in retry shape, with the rule inlined verbatim at both skill body sites bounded by marker comments; (REQ-003) growth of the speccy-work implementer prompt with a retry-aware mode that reads the latest `<blockers>` and amends the WIP in place rather than reimplementing from scratch, with the rule inlined verbatim at the agent prompt site bounded by marker comments. Three DECs codify: (DEC-001) review-blocked retry is normal flow, not consistency drift, so the reconcile enum is not extended; (DEC-002) the detection rule lives in skill bodies, not the CLI; (DEC-003) the rule is replicated across three sites without a shared partial because it is small enough that the partial overhead is not justified. |
+| 2026-05-26 | human/kevin  | Add REQ-004: `/speccy-decompose` commits SPEC.md + TASKS.md atomically as the final step of decompose completion. Title `[SPEC-NNNN]: create spec and decompose tasks`; body is the SPEC's `title:` frontmatter value; trailer per SPEC-0045/REQ-004. Narrow `git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md` keeps unrelated dirty paths out of the commit; `git diff --cached --quiet` makes the step idempotent on re-runs. Closes the bootstrap-commit gap that trips SPEC-0045/REQ-002's strict clean-tree gate when `/speccy-orchestrate SPEC-NNNN` is invoked on a freshly decomposed SPEC. T-005 added to implement in the `/speccy-decompose` skill body, agent prompt, and host-portable mirrors. Non-goals updated to record that the analogous pattern for `/speccy-plan` and `/speccy-amend` is explicitly out of scope for this SPEC; CHK-009/CHK-010/CHK-011 cover REQ-004. Amendment driven by the user surfacing the bootstrap-commit friction during the initial `/speccy-orchestrate SPEC-0047` invocation. |
 </changelog>

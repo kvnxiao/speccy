@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0047
-spec_hash_at_generation: 3f049cafc7f7dae804ab6ab19257271ef8838e6bf0526281874ebb49bf87093a
-generated_at: 2026-05-26T20:16:17Z
+spec_hash_at_generation: 0b139bf595e1ee043bf139a8ab2839809e16d769567228d386c14854ebe5454f
+generated_at: 2026-05-26T20:27:02Z
 ---
 # Tasks: SPEC-0047 Retry-aware clean-tree precondition — work dispatch tolerates dirty trees on review-blocked retries
 
@@ -341,5 +341,145 @@ Suggested files: `.claude/agents/speccy-work.md`,
 `.codex/agents/speccy-work.toml`,
 `resources/agents/.claude/agents/speccy-work.md.tmpl`,
 `resources/agents/.codex/agents/speccy-work.toml.tmpl`.
+</task-scenarios>
+</task>
+
+<task id="T-005" state="pending" covers="REQ-004">
+## Add bootstrap commit step to `/speccy-decompose`
+
+Edit the `/speccy-decompose` skill body, the speccy-decompose agent
+prompt, and their host-portable mirrors / template sources to add
+the REQ-004 bootstrap commit step as the final step before
+returning.
+
+Today the agent prompt's Steps section flows: resolve SPEC.md →
+write TASKS.md → `speccy lock SPEC-NNNN` → suggest next step. The
+new flow inserts the commit step between `speccy lock` and the
+"Suggest the next step" line:
+
+1. After `speccy lock SPEC-NNNN` runs successfully, stage exactly
+   the two SPEC artefacts via narrow `git add`:
+
+   ```
+   git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md
+   ```
+
+   Do not use `git add -A` or `git add .`. Staging unchanged
+   content is a no-op, so passing both paths unconditionally is
+   safe regardless of whether SPEC.md was already committed.
+
+2. Run `git diff --cached --quiet`. If exit code is 0 (nothing
+   staged), skip the commit silently — both files are already
+   committed at their current content. If non-zero, proceed.
+
+3. Build the commit message:
+
+   - Title: `[SPEC-NNNN]: create spec and decompose tasks`.
+     Substitute `SPEC-NNNN` with the resolved spec id.
+   - Body: the value of the `title:` field from SPEC.md's YAML
+     frontmatter, trimmed (the one-line title slug, not the
+     full document heading).
+   - Trailer: a single `Co-Authored-By: <model>
+     <noreply@anthropic.com>` line where `<model>` is sourced from
+     the host harness's runtime model identifier (env var, runtime
+     API, or host-specific equivalent). When the host exposes no
+     model identifier, fall back to the documented
+     `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`
+     string. Match SPEC-0045/REQ-004's trailer resolution
+     verbatim.
+
+4. Pass the body via a HEREDOC so newlines and any special
+   characters in the SPEC title survive verbatim, e.g.:
+
+   ```
+   git commit -m "$(cat <<'EOF'
+   [SPEC-NNNN]: create spec and decompose tasks
+
+   <SPEC title from frontmatter>
+
+   Co-Authored-By: <model> <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+Update both reader sites identically:
+
+- `.claude/skills/speccy-decompose/SKILL.md` — the skill body
+  (today this is a thin wrapper that defers to the agent prompt;
+  if the wrapper does not document steps, document the new step
+  there only if the existing skill body documents the recipe).
+- `.claude/agents/speccy-decompose.md` — insert the new step
+  between today's step 3 (`speccy lock`) and step 4 ("Suggest the
+  next step"). Renumber the suggest-next-step line accordingly.
+
+Mirror the change to host-portable copies under
+`.agents/skills/speccy-decompose/SKILL.md`, the Codex agent
+variant if one exists, and any `resources/agents/...` /
+`resources/modules/...` template sources, via the existing
+templating pipeline. Do not edit only one of these locations and
+leave the others stale.
+
+Document the step's idempotency (re-running decompose on an
+already-committed SPEC produces no new commit) and the narrow
+staging scope (unrelated dirty paths outside `<spec-dir>/` are
+not swept in) inline in the agent prompt prose, so a future
+reader can trace the design intent without re-reading SPEC-0047.
+
+<task-scenarios>
+Given the agent prompt `.claude/agents/speccy-decompose.md` after
+this task,
+when a reader traces the Steps section,
+then a new step appears between today's step 3 (`speccy lock
+SPEC-NNNN`) and the "Suggest the next step" line, documenting
+the three-step bootstrap commit (narrow stage, diff check,
+HEREDOC commit) per REQ-004 (covers CHK-009 commit-shape and
+CHK-011 idempotency-skip).
+
+Given the same file,
+when grepped for `git add -A` or `git add .` inside the new
+bootstrap commit step,
+then zero matches are found (the step uses narrow file-list
+staging only — covers CHK-010 narrow-staging scope).
+
+Given the same file,
+when scanned for the commit message title format,
+then the literal string `[SPEC-NNNN]: create spec and decompose
+tasks` appears (with `SPEC-NNNN` either as the literal
+placeholder for runtime substitution or substituted at runtime).
+
+Given the same file,
+when scanned for the commit message body source,
+then the prose names the SPEC's `title:` frontmatter field as the
+body source (trimmed of leading/trailing whitespace).
+
+Given the same file,
+when scanned for the `Co-Authored-By` trailer resolution,
+then the prose names the host-harness model identifier as the
+primary source and the `Speccy Skill Pack` literal as the
+fallback when no host model is exposed (matching SPEC-0045/REQ-004
+verbatim).
+
+Given the skill body `.claude/skills/speccy-decompose/SKILL.md`,
+when its body is compared to the agent prompt,
+then either (a) the skill body is a thin wrapper that defers to
+the agent prompt unchanged, in which case no edits are required,
+or (b) the skill body documents the same step inline; pick the
+path that matches the existing wrapper convention and apply it
+consistently.
+
+Given the mirrored `.agents/skills/speccy-decompose/SKILL.md`
+(and any Codex variant of the agent prompt),
+when its bootstrap commit step prose is compared to the Claude
+mirror,
+then the step appears verbatim (modulo any host-specific wording
+the templating pipeline substitutes).
+
+Suggested files: `.claude/skills/speccy-decompose/SKILL.md`,
+`.claude/agents/speccy-decompose.md`,
+`.agents/skills/speccy-decompose/SKILL.md`,
+`.codex/agents/speccy-decompose.toml` (if it exists),
+`resources/agents/.claude/skills/speccy-decompose/SKILL.md.tmpl`,
+`resources/agents/.claude/agents/speccy-decompose.md.tmpl`,
+`resources/agents/.agents/skills/speccy-decompose/SKILL.md.tmpl`.
 </task-scenarios>
 </task>
