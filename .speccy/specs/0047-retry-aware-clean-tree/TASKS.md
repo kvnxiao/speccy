@@ -181,7 +181,7 @@ plus the resource fan-out manifest if one exists.
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-002">
+<task id="T-003" state="completed" covers="REQ-002">
 ## Make `/speccy-orchestrate` work dispatch retry-aware
 
 Edit `.claude/skills/speccy-orchestrate/SKILL.md` (and the mirrored
