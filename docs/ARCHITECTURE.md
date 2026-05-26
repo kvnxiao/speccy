@@ -2108,6 +2108,113 @@ form exits with code 2 and adds a top-level
 `reason="no_active_specs"` field when no active spec remains
 (SPEC-0043 REQ-002).
 
+### `consistency` block (SPEC-0045 REQ-006)
+
+Every per-spec `speccy next --json` envelope carries a top-level
+`consistency` object alongside `next_action`:
+
+```json
+{
+  "consistency": {
+    "status": "ok" | "drift" | "blocked",
+    "drifts": [ /* DriftEntry, ... */ ]
+  },
+  "next_action": { "kind": "reconcile" | "work" | "review" | "vet" | "ship" | "decompose", ... }
+}
+```
+
+`status` values:
+
+- `"ok"` — no drift detected. `drifts` is `[]`. The
+  `next_action` is whatever normal spec-state dispatch resolved.
+- `"drift"` — one or more `auto_fixable` entries, no `blocking`
+  entries. The reconcile pass can land all fixes without user
+  intervention.
+- `"blocked"` — at least one `blocking` entry. Recovery requires
+  the dispatched reconcile actions from
+  `.claude/speccy-references/reconcile-policy.md`.
+
+**Override rule:** when `consistency.status != "ok"`,
+`next_action.kind` is always `"reconcile"`. Other `next_action`
+fields (e.g. `task_id`, paths) remain as normal spec-state dispatch
+would have set them, so the reconcile pass knows which task the
+drift relates to.
+
+`drifts[]` entries share this shape:
+
+```json
+{
+  "task_id": "T-NNN",
+  "kind": "<DriftKind>",
+  "severity": "auto_fixable" | "blocking",
+  "tasks_state": "pending" | "in-progress" | "in-review" | "completed",
+  "details": { /* per-kind, see below */ }
+}
+```
+
+The five `kind` values and their `details` shapes:
+
+| `kind` | `severity` | `details` shape |
+|---|---|---|
+| `commit_without_state` | `auto_fixable` | `{ "commit_sha": "<40-hex>", "commit_short_sha": "<8-hex>" }` |
+| `state_completed_no_commit` | `blocking` | `{ "expected_trailer": "[SPEC-NNNN/T-NNN]:", "working_tree_dirty": true \| false }` |
+| `state_in_progress_orphaned` | `blocking` | `{ "working_tree_dirty": true \| false, "dirty_files_count": <usize> }` |
+| `state_in_progress_clean` | `blocking` | `{ "working_tree_dirty": false }` |
+| `journal_xml_malformed` | `blocking` | `{ "journal_path": "<path>", "last_well_formed_byte_offset": <usize> }` |
+
+Each `kind` describes exactly one class of drift between TASKS.md
+state, git log, the working tree, and the per-task journal file:
+
+- `commit_without_state` — a commit titled `[SPEC-NNNN/T-NNN]: ...`
+  exists in git log but TASKS.md still marks the task at a
+  non-`completed` state. The reconcile pass flips the task state
+  forward to `completed`.
+- `state_completed_no_commit` — TASKS.md marks the task
+  `completed` but no matching commit exists. The
+  `working_tree_dirty` boolean distinguishes the two recovery
+  branches: dirty → reconstruct the commit; clean → roll the
+  task state back to `in-review`.
+- `state_in_progress_orphaned` — TASKS.md marks the task
+  `in-progress`, the working tree has uncommitted changes, and no
+  matching commit exists. Indicates a crashed implementer.
+  Reconcile rolls the state back to `pending` and discards the
+  partial work.
+- `state_in_progress_clean` — TASKS.md marks the task
+  `in-progress`, the working tree is clean, and no matching commit
+  exists. Indicates a crashed implementer whose partial work was
+  already discarded (or never reached disk). Reconcile rolls the
+  state back to `pending` without any git mutation. The reconcile
+  pass owns this case autonomously (DEC-004); the orchestrator
+  startup check no longer forks to the user when an in-progress
+  task is detected on a clean tree.
+- `journal_xml_malformed` — the per-task journal file
+  (`.speccy/specs/NNNN-slug/journal/T-NNN.md`) failed XML parse.
+  `last_well_formed_byte_offset` is the byte offset of the last
+  successfully parsed element close; reconcile truncates to that
+  offset and re-aligns the TASKS.md state to whatever the truncated
+  journal implies.
+
+**CLI stays read-only.** The consistency check is detection-only.
+The binary never invokes `git add`, `git commit`, `git restore`,
+`git clean`, or `git stash`. All mutation lives in the reconcile
+pass dispatched by the skill layer.
+
+**Extending the enum.** The `kind` enum is extensible. Adding a
+new drift kind is a two-change procedure:
+
+1. Add the variant + detection logic in the Rust source (the
+   `DriftKind` enum in `speccy-core` and its detection branch in
+   the consistency check).
+2. Add the matching row to the policy table in
+   `.claude/speccy-references/reconcile-policy.md` and re-sync the
+   three inlined copies in the `speccy-work`, `speccy-review`,
+   and `speccy-orchestrate` skill bodies.
+
+The reconcile-policy partial is the single source of truth for
+what each drift kind means at the dispatch layer — see
+`.claude/speccy-references/reconcile-policy.md` for the policy
+table that maps each `kind` to its concrete action.
+
 ## `speccy vacancy --json`
 
 ```json

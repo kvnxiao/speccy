@@ -109,39 +109,153 @@ when exit code is 0.
 Before entering the dispatch loop, run one one-time sanity check
 to catch state left by a crashed prior session.
 
+**Reconcile-pass dispatch (REQ-007, REQ-008).** The very first
+`speccy next SPEC-NNNN --json` of the session — the same one that
+resolves the spec directory in step 1 below — may return
+`next_action.kind == "reconcile"` when the CLI's consistency check
+flags drift from a prior crashed session. When it does, dispatch the
+reconcile pass per the shared partial inlined immediately below
+**before** entering the dispatch loop. Apply the per-drift action
+for every entry in `consistency.drifts[]`, then re-query
+`speccy next SPEC-NNNN --json`. Only when the re-query returns
+`consistency.status == "ok"` does this orchestrator proceed to the
+dispatch loop. The reconcile pass is autonomous — no
+`AskUserQuestion`, no "press enter to continue" surface, anywhere
+in the dispatch path. Each subsequent loop iteration's
+`speccy next SPEC-NNNN --json` (step 1 of the [Loop](#loop) section
+below) re-runs the same check: if a per-task operation leaves
+drift, the next iteration catches it and dispatches the reconcile
+pass before continuing to the normal `work` / `review` / `ship`
+dispatch. The reconcile pass owns every drift kind in REQ-006's
+enum — including `state_in_progress_orphaned` (dirty tree) and
+`state_in_progress_clean` (clean tree) — so the orchestrator no
+longer scans TASKS.md for `state="in-progress"` itself.
+
+<!-- Shared partial: reconcile-policy. Source: .claude/speccy-references/reconcile-policy.md -->
+# Reconcile policy: shared partial
+
+This file is the single source of truth for Speccy's reconcile
+dispatch policy. It is inlined verbatim into three skill body files
+via the existing shared-partial convention:
+
+- `.claude/skills/speccy-orchestrate/SKILL.md`
+- `.claude/skills/speccy-work/SKILL.md`
+- `.claude/skills/speccy-review/SKILL.md`
+
+Each inlined site is bounded by marker comments naming this partial:
+
+```
+<!-- Shared partial: reconcile-policy. Source: .claude/speccy-references/reconcile-policy.md -->
+<partial content>
+<!-- End shared partial: reconcile-policy. -->
+```
+
+When this file changes, all three inlined copies must be re-synced.
+
+---
+
+## Dispatch trigger
+
+The reconcile pass is triggered when `speccy next --json` (in either
+per-spec or workspace form) returns `next_action.kind == "reconcile"`.
+
+The CLI sets this value whenever the envelope's `consistency.status`
+field is anything other than `"ok"` — i.e. `"drift"` or `"blocked"`.
+When `consistency.status == "ok"`, `next_action.kind` reflects the
+normal dispatch (`work`, `review`, `ship`, `decompose`, ...) and the
+calling skill proceeds normally without invoking this policy.
+
+The calling skill (one of `/speccy-orchestrate`, `/speccy-work`,
+`/speccy-review`) iterates the `consistency.drifts[]` array and
+applies one action per entry per the table below.
+
+## Policy table
+
+| `kind` | `severity` | Action |
+|---|---|---|
+| `commit_without_state` | `auto_fixable` | Edit TASKS.md: flip the task's `state` attribute to `completed` (deterministic write). |
+| `state_completed_no_commit` (dirty tree, `details.working_tree_dirty == true`) | `blocking` | Run `git add -A` followed by `git commit` using the REQ-004 message format (title `[SPEC-NNNN/T-NNN]: <task title>`; body extracted from the latest `<implementer>` block's `Completed` field in `journal/T-NNN.md`; `Co-Authored-By` trailer per host). |
+| `state_completed_no_commit` (clean tree, `details.working_tree_dirty == false`) | `blocking` | Edit TASKS.md: roll the task's `state` back to `in-review`. Journal file is preserved intact as evidence for the next reviewer round. |
+| `state_in_progress_orphaned` | `blocking` | Run `git restore .` and `git clean -fd` to discard the partial implementer work, then edit TASKS.md to flip the task's `state` to `pending`. The orchestrator's per-task retry budget will redo the work. |
+| `state_in_progress_clean` (`details.working_tree_dirty == false`) | `blocking` | Edit TASKS.md: roll the task's `state` back to `pending`. No git mutation — the tree is already clean, so there is no partial work to discard. The orchestrator's per-task retry budget will redo the work. |
+| `journal_xml_malformed` | `blocking` | Truncate the journal file at `details.journal_path` to `details.last_well_formed_byte_offset` bytes. Reset the corresponding TASKS.md `state` to whatever the truncated journal implies (if the last well-formed element is `<implementer>`, state goes to `in-review`; if a closing `<review>` block survived and all four personas passed, the per-task journal already reflects a passing round and state may flip to `completed` via the standard commit step). |
+
+## Post-dispatch re-query discipline
+
+After applying actions for every entry in `consistency.drifts[]`, the
+skill re-queries `speccy next --json` (in the same per-spec form it
+was invoked with).
+
+- If `consistency.status == "ok"` on the re-query, the skill resumes
+  its normal dispatch on the returned `next_action.kind`.
+- If `consistency.status` is still `"drift"` or `"blocked"`, the
+  skill applies actions again for the new drift list. The mechanism
+  has no hard round budget; idempotency plus re-detectability on
+  subsequent sessions bounds the worst case.
+
+## Three properties
+
+The reconcile pass holds three properties by construction:
+
+1. **Autonomous.** The pass applies the action for each drift kind
+   without prompting the user, without surfacing a fork ("re-commit
+   or roll back?"), and without halting the orchestration loop. No
+   `AskUserQuestion` invocation, no "press enter to continue"
+   surface, appears anywhere in the dispatch path. The policy table
+   above is exhaustive over the documented enum; an unknown `kind`
+   is the only path that escalates (treated as `blocking` and
+   surfaced to the caller).
+
+2. **Rollback-biased.** When recovery is ambiguous — most notably
+   `state_completed_no_commit` with a clean working tree, meaning
+   the lost commit's content is truly unrecoverable — the policy
+   prefers rolling backward (TASKS.md state reset to `in-review`,
+   journal preserved as evidence) over any forward-recovery attempt
+   that might guess at lost content. The orchestrator's per-task
+   retry budget absorbs the redo cost.
+
+3. **Idempotent.** Each policy action is a no-op when applied to
+   already-converged state. Re-running `git add -A && git commit`
+   on a clean tree produces no commit; re-running a TASKS.md state
+   flip when the state is already at the target value is a no-op;
+   truncating a journal at its current length is a no-op.
+   Successive session crashes during reconciliation converge to the
+   same eventual state.
+
+## Extending the enum
+
+Adding a new drift kind to the consistency enum requires changes in
+exactly two places:
+
+1. **CLI detection.** Add the new variant to the `DriftKind` enum in
+   the Rust source (`speccy-core/src/consistency.rs` or its
+   equivalent under the current module layout) and implement the
+   deterministic detection logic that emits drift entries of the
+   new kind in `speccy next --json`'s `consistency.drifts[]` array.
+   Detection must be read-only: no mutating git commands, no
+   side-effecting writes to TASKS.md or the journal.
+
+2. **Policy table.** Add a row to the policy table in this partial
+   naming the new kind, its `severity`, and the deterministic
+   action the calling skill takes when it encounters the kind in
+   `consistency.drifts[]`. Then re-sync all three inlined copies in
+   the skill body files listed at the top of this partial.
+
+No other site needs to change. The CLI knows what it *detected*;
+this partial knows what to *do*. Future hosts (Codex, others) that
+consume the consistency block reuse this partial unchanged.
+
+<!-- End shared partial: reconcile-policy. -->
+
 1. Resolve the spec directory from `speccy next SPEC-NNNN --json`:
    take the `spec_md_path` field and strip the trailing `/SPEC.md`
    to get `<spec-dir>`. If the command exits non-zero, surface the
    stderr line and stop — the SPEC is in a terminal state. If the
    command reports the spec is unknown, stop and report.
 
-2. Scan `<spec-dir>/TASKS.md` for any task at
-   `state="in-progress"`:
-
-   ```bash
-   grep -n 'state="in-progress"' <spec-dir>/TASKS.md
-   ```
-
-   If any match, **stop and surface** before dispatching anything:
-
-   ```
-   SPEC-NNNN/T-NNN is at state="in-progress" — likely a crashed
-   prior session. Resolve before re-running /speccy-orchestrate:
-
-   - To discard the prior attempt: edit TASKS.md and flip the
-     task's state from "in-progress" back to "pending".
-   - To inspect what was in progress: check
-     <spec-dir>/journal/T-NNN.md for the last <implementer>
-     block (if any was written before the crash) and the working
-     tree for uncommitted edits.
-   ```
-
-   Exit. This is an autonomy-breaking recovery path on purpose —
-   silently resetting state could lose real work, and silently
-   resuming could re-run an implementer that already made
-   progress.
-
-3. If no in-progress tasks, proceed to the dispatch loop.
+2. If `next_action.kind == "reconcile"`, run the reconcile pass per
+   the shared partial above, then re-query and continue. Otherwise
+   proceed directly to the dispatch loop.
 
 ## Loop
 
@@ -180,6 +294,18 @@ Repeat until a stop condition fires:
    `speccy next SPEC-NNNN --json` and loop from step 1.
 
 ## Work dispatch
+
+**Clean-tree precondition (REQ-002).** Before spawning the
+`speccy-work` sub-agent, run `git status --porcelain` in the
+orchestrator's running session. If stdout is non-empty, **halt the
+outer loop** and surface the dirty paths to the user — no
+`speccy-work` sub-agent is spawned, and the loop does not advance.
+Empty stdout permits the dispatch below. This check fires in the
+orchestrator's session (not delegated to the sub-agent) because the
+outer loop's invariant — every dispatched implementer turn begins on
+a clean tree — must be enforced by the loop owner. The `speccy-work`
+skill body re-runs the same check defensively at its own entry as a
+second-level guard.
 
 Spawn a sub-agent that runs the `speccy-work` primitive for the
 resolved task. Prompt:
@@ -295,6 +421,66 @@ wrote to the journal or TASKS.md directly (per DEC-008). Per-task
 journal files do not introduce parallel writes from reviewer
 sub-agents — the running session remains the sole journal writer
 during review.
+
+### Atomic commit on review pass (REQ-003, REQ-004)
+
+When every spawned reviewer returned `verdict="pass"` and the
+journal append + TASKS.md flip to `completed` are written, the
+running session performs the commit step:
+
+1. Run `git status --porcelain`. If stdout is empty, **skip the
+   commit step silently** (no surface to the user, no error). This
+   handles two cases uniformly: tasks whose net filesystem change is
+   zero, and idempotent re-entry from the reconcile pass against an
+   already-converged state.
+2. If stdout is non-empty, run `git add -A` followed by `git commit`
+   with the message format below. The commit captures the
+   implementer's code changes, the TASKS.md state flip, and the
+   journal append in a single atomic commit (parent count = 1).
+
+Commit message format (REQ-004):
+
+- **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
+  read verbatim from the `<task>` element's `## ` heading in
+  TASKS.md (the one-line H2 immediately after the `<task ...>`
+  opening tag). Substitute the resolved spec and task IDs.
+- **Body:** the trimmed content of the `Completed` field from the
+  latest `<implementer>` block in the per-task journal file. Extract
+  mechanically as the bytes between the `- Completed:` bullet marker
+  and the next `- <Field>:` bullet marker (one of `Undone`,
+  `Hygiene checks`, `Evidence`, `Discovered issues`,
+  `Procedural compliance`). Trim leading and trailing whitespace.
+- **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
+  line where `<model>` is sourced from the host harness's runtime
+  model identifier (env var, runtime API, or host-specific
+  equivalent). When the host does not expose a model identifier,
+  use the documented fallback string
+  `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+
+Pass the body via a HEREDOC so newlines and special characters
+survive verbatim, e.g.:
+
+```
+git commit -m "$(cat <<'EOF'
+[SPEC-NNNN/T-NNN]: <task title>
+
+<trimmed Completed field>
+
+Co-Authored-By: <model> <noreply@anthropic.com>
+EOF
+)"
+```
+
+The title prefix is the sole task-identity link in git history; the
+consistency check correlates commits to tasks by grepping for this
+prefix. Do not stage selectively — `git add -A` is sound under the
+clean-tree precondition (REQ-002) that fires at the start of work
+dispatch, which guarantees every dirty path at commit time is
+task-scoped.
+
+The skill body does not check the current git branch; it trusts the
+caller / host to have placed the working tree on a feature branch.
+Commits land on whatever HEAD is.
 
 
 After the write settles, increment the per-task retry counter if

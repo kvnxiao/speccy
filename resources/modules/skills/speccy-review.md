@@ -43,6 +43,12 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
 
 ## Steps
 
+**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the shared partial inlined below instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
+
+<!-- Shared partial: reconcile-policy. Source: {{ speccy_references_path }}/reconcile-policy.md -->
+{% include "modules/references/reconcile-policy.md" %}
+<!-- End shared partial: reconcile-policy. -->
+
 ### Resolve the target task
 
 - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.

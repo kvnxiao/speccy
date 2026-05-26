@@ -20,6 +20,9 @@ use crate::next_output::render_text_per_spec_with_reason;
 use crate::next_output::render_text_workspace;
 use crate::paths::to_repo_relative;
 use camino::Utf8Path;
+use speccy_core::consistency::ConsistencyBlock;
+use speccy_core::consistency::ShellGitProbe;
+use speccy_core::consistency::detect as detect_consistency;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::next::compute_for_spec;
 use speccy_core::next::compute_workspace;
@@ -126,22 +129,26 @@ fn run_workspace(
     err: &mut dyn Write,
 ) -> Result<(String, i32), NextError> {
     let raw_entries = compute_workspace(workspace);
+    let probe = ShellGitProbe::new(project_root);
     let entries_with_paths: Vec<_> = raw_entries
         .into_iter()
         .map(|entry| {
-            let paths = workspace
+            let spec_match = workspace
                 .specs
                 .iter()
-                .find(|s| s.spec_id.as_deref() == Some(entry.spec_id.as_str()))
-                .map_or_else(
-                    || SpecPaths {
-                        spec_md_path: String::new(),
-                        tasks_md_path: None,
-                        mission_md_path: None,
-                    },
-                    |s| spec_paths(s, project_root),
-                );
-            (entry, paths)
+                .find(|s| s.spec_id.as_deref() == Some(entry.spec_id.as_str()));
+            let paths = spec_match.map_or_else(
+                || SpecPaths {
+                    spec_md_path: String::new(),
+                    tasks_md_path: None,
+                    mission_md_path: None,
+                },
+                |s| spec_paths(s, project_root),
+            );
+            let consistency = spec_match.map_or_else(ConsistencyBlock::ok, |s| {
+                detect_consistency(&entry.spec_id, s, &probe)
+            });
+            (entry, paths, consistency)
         })
         .collect();
     let is_terminal = entries_with_paths.is_empty();
@@ -213,12 +220,18 @@ fn run_per_spec(
     };
 
     let paths = spec_paths(spec, project_root);
+    let probe = ShellGitProbe::new(project_root);
+    let consistency = detect_consistency(spec_id, spec, &probe);
     let payload = if json {
         let envelope = match terminal_reason {
-            Some(reason) => {
-                render_json_per_spec_with_reason(spec_id, effective_action, reason, paths)
-            }
-            None => render_json_per_spec(spec_id, effective_action, paths),
+            Some(reason) => render_json_per_spec_with_reason(
+                spec_id,
+                effective_action,
+                reason,
+                paths,
+                consistency,
+            ),
+            None => render_json_per_spec(spec_id, effective_action, paths, consistency),
         };
         let mut text = serde_json::to_string(&envelope)?;
         text.push('\n');

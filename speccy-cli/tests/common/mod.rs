@@ -157,6 +157,36 @@ pub fn task_xml(id: &str, state: &str) -> String {
     )
 }
 
+/// Count non-blank lines in `s`, excluding any line that falls within a
+/// `reconcile-policy` shared-partial marker block. SPEC-0045/REQ-008
+/// inlines the partial verbatim into phase-worker SKILL.md stubs; the
+/// marker-bounded region is an explicit, auditable exemption from the
+/// "thin stub" non-empty-line cap. Uses the first open marker and the
+/// last close marker as the boundary so the partial's own illustrative
+/// inner markers (inside a fenced code block) stay inside the block.
+pub fn non_blank_line_count_outside_reconcile_partial(s: &str) -> usize {
+    let open_marker = "<!-- Shared partial: reconcile-policy.";
+    let close_marker = "<!-- End shared partial: reconcile-policy. -->";
+    let lines: Vec<&str> = s.lines().collect();
+    let open_idx = lines.iter().position(|l| l.trim().starts_with(open_marker));
+    let close_idx = lines
+        .iter()
+        .rposition(|l| l.trim().starts_with(close_marker));
+    let mut count = 0usize;
+    for (idx, line) in lines.iter().enumerate() {
+        if let (Some(o), Some(c)) = (open_idx, close_idx)
+            && idx >= o
+            && idx <= c
+        {
+            continue;
+        }
+        if !line.trim().is_empty() {
+            count += 1;
+        }
+    }
+    count
+}
+
 /// Write a fresh, passing `journal/VET.md` whose `tasks_hash` matches
 /// the supplied TASKS.md bytes. Drives the SPEC-0041 fresh-pass gate
 /// branch in `speccy next`.

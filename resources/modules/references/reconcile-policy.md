@@ -1,16 +1,3 @@
----
-name: speccy-work
-description: 'Implement one Speccy task per invocation and exit. With an optional `SPEC-NNNN/T-NNN` selector, the session implements that task; without a selector, it resolves the next implementable task via `speccy next --json` and implements only that one. Use when the user says "implement T-003", "work the next task", "run the implementer", "pick up the next pending task in SPEC-NNNN", or wants to implement one slice against an existing task list. Requires: `TASKS.md` with ≥1 `state="pending"` task. If no `TASKS.md` → prefer speccy-tasks. If no `SPEC.md` → prefer speccy-plan. If no `.speccy/` → prefer speccy-init. Do NOT trigger for generic "fix bug" or "refactor X" asks that are not scoped to an existing Speccy task.'
----
-
-# /speccy-work
-
-Read `.claude/agents/speccy-work.md` and follow it, or invoke
-`/agent speccy-work` for the pinned execution path.
-
-**Entry precondition (REQ-002):** before any Task dispatch, run `git status --porcelain`; non-empty stdout exits the skill (surface dirty paths on stderr), empty stdout proceeds. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch per the inlined partial below instead of the implementer.
-
-<!-- Shared partial: reconcile-policy. Source: .claude/speccy-references/reconcile-policy.md -->
 # Reconcile policy: shared partial
 
 This file is the single source of truth for Speccy's reconcile
@@ -123,6 +110,3 @@ exactly two places:
 No other site needs to change. The CLI knows what it *detected*;
 this partial knows what to *do*. Future hosts (Codex, others) that
 consume the consistency block reuse this partial unchanged.
-<!-- End shared partial: reconcile-policy. -->
-
-**Hygiene gate (REQ-001):** after the implementer turn, before flipping `state` from `in-progress` to `in-review`, run `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, the appended `<implementer>` block's `Hygiene checks` field carries one line per gate naming its exit code.

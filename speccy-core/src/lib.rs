@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(unsafe_code)]
 
+pub mod consistency;
 pub mod error;
 pub mod lint;
 pub mod next;

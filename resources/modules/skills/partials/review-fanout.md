@@ -94,3 +94,63 @@ wrote to the journal or TASKS.md directly (per DEC-008). Per-task
 journal files do not introduce parallel writes from reviewer
 sub-agents — the running session remains the sole journal writer
 during review.
+
+### Atomic commit on review pass (REQ-003, REQ-004)
+
+When every spawned reviewer returned `verdict="pass"` and the
+journal append + TASKS.md flip to `completed` are written, the
+running session performs the commit step:
+
+1. Run `git status --porcelain`. If stdout is empty, **skip the
+   commit step silently** (no surface to the user, no error). This
+   handles two cases uniformly: tasks whose net filesystem change is
+   zero, and idempotent re-entry from the reconcile pass against an
+   already-converged state.
+2. If stdout is non-empty, run `git add -A` followed by `git commit`
+   with the message format below. The commit captures the
+   implementer's code changes, the TASKS.md state flip, and the
+   journal append in a single atomic commit (parent count = 1).
+
+Commit message format (REQ-004):
+
+- **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
+  read verbatim from the `<task>` element's `## ` heading in
+  TASKS.md (the one-line H2 immediately after the `<task ...>`
+  opening tag). Substitute the resolved spec and task IDs.
+- **Body:** the trimmed content of the `Completed` field from the
+  latest `<implementer>` block in the per-task journal file. Extract
+  mechanically as the bytes between the `- Completed:` bullet marker
+  and the next `- <Field>:` bullet marker (one of `Undone`,
+  `Hygiene checks`, `Evidence`, `Discovered issues`,
+  `Procedural compliance`). Trim leading and trailing whitespace.
+- **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
+  line where `<model>` is sourced from the host harness's runtime
+  model identifier (env var, runtime API, or host-specific
+  equivalent). When the host does not expose a model identifier,
+  use the documented fallback string
+  `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+
+Pass the body via a HEREDOC so newlines and special characters
+survive verbatim, e.g.:
+
+```
+git commit -m "$(cat <<'EOF'
+[SPEC-NNNN/T-NNN]: <task title>
+
+<trimmed Completed field>
+
+Co-Authored-By: <model> <noreply@anthropic.com>
+EOF
+)"
+```
+
+The title prefix is the sole task-identity link in git history; the
+consistency check correlates commits to tasks by grepping for this
+prefix. Do not stage selectively — `git add -A` is sound under the
+clean-tree precondition (REQ-002) that fires at the start of work
+dispatch, which guarantees every dirty path at commit time is
+task-scoped.
+
+The skill body does not check the current git branch; it trusts the
+caller / host to have placed the working tree on a feature branch.
+Commits land on whatever HEAD is.

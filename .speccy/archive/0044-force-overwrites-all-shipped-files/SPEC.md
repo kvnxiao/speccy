@@ -5,6 +5,7 @@ title: "`speccy init --force` overwrites all shipped files; reviewer-persona car
 status: implemented
 created: 2026-05-24
 supersedes: []
+archived_at: 2026-05-25
 ---
 
 # SPEC-0044: `speccy init --force` overwrites all shipped files; reviewer-persona carve-out is removed
