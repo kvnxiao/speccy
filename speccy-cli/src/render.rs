@@ -368,8 +368,8 @@ mod tests {
             .find(|f| f.rel_path.as_str() == ".claude/skills/speccy-plan/SKILL.md")
             .expect("claude-code render output must include speccy-plan");
         assert!(
-            plan.contents.contains("/speccy-tasks"),
-            "rendered speccy-plan SKILL.md must contain `/speccy-tasks`; got contents:\n{}",
+            plan.contents.contains("/speccy-decompose"),
+            "rendered speccy-plan SKILL.md must contain `/speccy-decompose`; got contents:\n{}",
             plan.contents,
         );
     }
@@ -383,13 +383,13 @@ mod tests {
             .find(|f| f.rel_path.as_str() == ".agents/skills/speccy-plan/SKILL.md")
             .expect("codex render output must include speccy-plan");
         assert!(
-            plan.contents.contains("speccy-tasks"),
-            "rendered Codex speccy-plan SKILL.md must contain `speccy-tasks`; got:\n{}",
+            plan.contents.contains("speccy-decompose"),
+            "rendered Codex speccy-plan SKILL.md must contain `speccy-decompose`; got:\n{}",
             plan.contents,
         );
         assert!(
-            !plan.contents.contains("/speccy-tasks"),
-            "rendered Codex speccy-plan SKILL.md must not contain `/speccy-tasks`; got:\n{}",
+            !plan.contents.contains("/speccy-decompose"),
+            "rendered Codex speccy-plan SKILL.md must not contain `/speccy-decompose`; got:\n{}",
             plan.contents,
         );
     }

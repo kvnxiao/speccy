@@ -125,7 +125,7 @@ const LOOP_RECIPES: &[&str] = &["speccy-amend/SKILL.md"];
 const SKILL_NAMES: &[&str] = &[
     "speccy-init",
     "speccy-plan",
-    "speccy-tasks",
+    "speccy-decompose",
     "speccy-work",
     "speccy-review",
     "speccy-ship",
@@ -149,7 +149,7 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 /// are pointer-only bodies. The fourth phase (`speccy-init`) keeps its
 /// full body sourced from `modules/phases/speccy-init.md` (T-009 scope
 /// explicitly excludes it from the stub transformation).
-const PINNED_STUB_PHASES: &[&str] = &["speccy-tasks", "speccy-work", "speccy-ship"];
+const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-work", "speccy-ship"];
 
 // The current seven-verb CLI surface. This list is used as a substring
 // matcher inside SKILL.md code fences to determine whether a rendered
@@ -311,7 +311,7 @@ fn recipe_content_shape() {
     // render once per host and check the rendered SKILL.md body
     // against the content-shape invariants.
     //
-    // Exception: the three pinned phase-worker skills (`speccy-tasks`,
+    // Exception: the three pinned phase-worker skills (`speccy-decompose`,
     // `speccy-work`, `speccy-ship`) have thin stub bodies. Stubs are
     // pointer-only: they name the matching agent file and
     // `/agent speccy-<phase>` invocation and explicitly do NOT carry
@@ -789,7 +789,7 @@ fn claude_code_wrapper_shape_and_body() {
             path.display(),
         );
 
-        // The three pinned phase-worker skills (`speccy-tasks`,
+        // The three pinned phase-worker skills (`speccy-decompose`,
         // `speccy-work`, `speccy-ship`) have thin stub bodies instead
         // of a single `{% include %}` directive. `speccy-init` keeps
         // its full body but includes from `modules/phases/` rather
@@ -927,7 +927,7 @@ fn t006_codex_wrapper_shape_and_body() {
             path.display(),
         );
 
-        // The three pinned phase-worker skills (`speccy-tasks`,
+        // The three pinned phase-worker skills (`speccy-decompose`,
         // `speccy-work`, `speccy-ship`) have thin stub bodies instead
         // of a single `{% include %}` directive. `speccy-init` keeps
         // its full body but includes from `modules/phases/` rather

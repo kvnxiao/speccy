@@ -67,7 +67,7 @@ const SKILL_FILES: &[&str] = &[
 ];
 
 const PHASE_FILES: &[&str] = &[
-    "phases/speccy-tasks.md",
+    "phases/speccy-decompose.md",
     "phases/speccy-work.md",
     "phases/speccy-ship.md",
     "phases/speccy-init.md",
@@ -291,10 +291,10 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-019: speccy-tasks template documents TASKS.md output shape
+// CHK-019: speccy-decompose template documents TASKS.md output shape
 // ---------------------------------------------------------------------------
 
-/// CHK-019: `resources/modules/phases/speccy-tasks.md` Step 2 must contain
+/// CHK-019: `resources/modules/phases/speccy-decompose.md` Step 2 must contain
 /// a concrete example fragment documenting the required TASKS.md output
 /// shape, including the `# Tasks: SPEC-` level-1 heading and the
 /// space-separated `covers="REQ-001 REQ-002"` multi-REQ form.
@@ -304,18 +304,18 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
 /// wording to the parser's expectations (REQ-013 / SPEC-0034).
 #[test]
 fn chk019_speccy_tasks_template_documents_output_shape() {
-    let body = require_module("phases/speccy-tasks.md");
+    let body = require_module("phases/speccy-decompose.md");
 
     assert!(
         body.contains("# Tasks: SPEC-"),
-        "`resources/modules/phases/speccy-tasks.md` Step 2 must contain a \
+        "`resources/modules/phases/speccy-decompose.md` Step 2 must contain a \
          concrete example fragment with the literal substring `# Tasks: SPEC-` \
          to document the required level-1 heading shape (REQ-013 / CHK-019)",
     );
 
     assert!(
         body.contains(r#"covers="REQ-001 REQ-002""#),
-        "`resources/modules/phases/speccy-tasks.md` Step 2 must contain a \
+        "`resources/modules/phases/speccy-decompose.md` Step 2 must contain a \
          concrete example fragment with the literal substring \
          `covers=\"REQ-001 REQ-002\"` to demonstrate the space-separated \
          multi-REQ form (REQ-013 / CHK-019)",

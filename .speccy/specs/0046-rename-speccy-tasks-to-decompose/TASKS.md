@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0046
-spec_hash_at_generation: e90d342db31e3f4649b0fa9dc93e97b763085c13541eecefe69eefc7bf2e67e1
-generated_at: 2026-05-26T18:03:22Z
+spec_hash_at_generation: 19f834e1d4a6b46971105a1ed4ba286605bb648270ba2ed7117856bc914bf6e0
+generated_at: 2026-05-26T18:46:55Z
 ---
 # Tasks: SPEC-0046 Rename the `/speccy-tasks` skill to `/speccy-decompose`
 
@@ -198,7 +198,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Update integration + inline tests and verify the hygiene suite
 
 Update every test file that hard-codes the old `speccy-tasks` slug

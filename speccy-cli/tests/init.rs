@@ -56,7 +56,7 @@ fn split_frontmatter(source: &str) -> Option<(&str, &str)> {
 const SKILL_NAMES: [&str; 8] = [
     "speccy-init",
     "speccy-plan",
-    "speccy-tasks",
+    "speccy-decompose",
     "speccy-work",
     "speccy-review",
     "speccy-ship",
@@ -309,12 +309,12 @@ fn copy_claude_code_pack_skill_md() -> TestResult {
     }
 
     // Slash-prefix invariant: Claude Code's `speccy-plan` skill points
-    // the main agent at the `/speccy-tasks` skill as the suggested next
+    // the main agent at the `/speccy-decompose` skill as the suggested next
     // step. The renderer must substitute `{{ cmd_prefix }}` to `"/"`.
     let plan_body = read_file(&fx.root, ".claude/skills/speccy-plan/SKILL.md")?;
     assert!(
-        plan_body.contains("/speccy-tasks"),
-        "rendered .claude/skills/speccy-plan/SKILL.md must contain `/speccy-tasks`",
+        plan_body.contains("/speccy-decompose"),
+        "rendered .claude/skills/speccy-plan/SKILL.md must contain `/speccy-decompose`",
     );
 
     Ok(())
@@ -366,16 +366,16 @@ fn copy_codex_pack_skill_md() -> TestResult {
     }
 
     // No-slash-prefix invariant: Codex's `speccy-plan` skill references
-    // `speccy-tasks` without the leading `/` (the renderer substitutes
+    // `speccy-decompose` without the leading `/` (the renderer substitutes
     // `{{ cmd_prefix }}` to the empty string).
     let plan_body = read_file(&fx.root, ".agents/skills/speccy-plan/SKILL.md")?;
     assert!(
-        plan_body.contains("speccy-tasks"),
-        "rendered .agents/skills/speccy-plan/SKILL.md must contain `speccy-tasks`",
+        plan_body.contains("speccy-decompose"),
+        "rendered .agents/skills/speccy-plan/SKILL.md must contain `speccy-decompose`",
     );
     assert!(
-        !plan_body.contains("/speccy-tasks"),
-        "rendered .agents/skills/speccy-plan/SKILL.md must NOT contain `/speccy-tasks` (Codex uses bare command names)",
+        !plan_body.contains("/speccy-decompose"),
+        "rendered .agents/skills/speccy-plan/SKILL.md must NOT contain `/speccy-decompose` (Codex uses bare command names)",
     );
     Ok(())
 }
@@ -1132,7 +1132,7 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     Ok(())
 }
 
-const CLAUDE_PINNED_PHASES: [&str; 3] = ["tasks", "work", "ship"];
+const CLAUDE_PINNED_PHASES: [&str; 3] = ["decompose", "work", "ship"];
 const CLAUDE_OPUS_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
 const CLAUDE_SONNET_HIGH_REVIEWERS: [&str; 1] = ["security"];
 const CLAUDE_SONNET_MEDIUM_REVIEWERS: [&str; 2] = ["style", "docs"];
@@ -1181,7 +1181,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
 
     // Each phase has its own pin; check them individually.
     let claude_phase_pins: &[(&str, &str, &str)] = &[
-        ("tasks", "sonnet[1m]", "medium"),
+        ("decompose", "sonnet[1m]", "medium"),
         ("work", "opus[1m]", "low"),
         ("ship", "sonnet[1m]", "medium"),
     ];
@@ -1215,7 +1215,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
 
     assert_claude_reviewer_pins(&fx.root)?;
 
-    for phase in ["tasks", "work", "ship", "init"] {
+    for phase in ["decompose", "work", "ship", "init"] {
         let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
         let fm = parse_no_pin_skill(&fx.root, &rel)?;
         assert_no_pin_keys(&rel, &fm);

@@ -30,7 +30,7 @@ fn workspace_root() -> Utf8PathBuf {
         .to_path_buf()
 }
 
-const PINNED_PHASES: &[&str] = &["tasks", "work", "ship"];
+const PINNED_PHASES: &[&str] = &["decompose", "work", "ship"];
 
 /// Test-only failure path. Scoped so the `clippy::panic` expectation
 /// is in one place rather than spread across every assertion.
@@ -290,7 +290,7 @@ fn init_skill_stays_full_body_codex() {
 #[test]
 fn phase_body_files_moved_to_modules_phases() {
     let root = workspace_root();
-    for phase in ["tasks", "work", "ship", "init"] {
+    for phase in ["decompose", "work", "ship", "init"] {
         let new_path = root.join(format!("resources/modules/phases/speccy-{phase}.md"));
         assert!(
             new_path.exists(),

@@ -479,12 +479,12 @@ fn codex_pinned_reasoning_effort_is_valid() {
 /// Slash-command invocation runs in the parent session; the
 /// cost-and-time pin lives in the matching subagent files instead.
 const UNPINNED_CLAUDE_SKILLS: &[&str] = &[
-    ".claude/skills/speccy-tasks/SKILL.md",
+    ".claude/skills/speccy-decompose/SKILL.md",
     ".claude/skills/speccy-work/SKILL.md",
     ".claude/skills/speccy-ship/SKILL.md",
     ".claude/skills/speccy-init/SKILL.md",
     ".claude/skills/speccy-review/SKILL.md",
-    "resources/agents/.claude/skills/speccy-tasks/SKILL.md.tmpl",
+    "resources/agents/.claude/skills/speccy-decompose/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-work/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-ship/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-init/SKILL.md.tmpl",

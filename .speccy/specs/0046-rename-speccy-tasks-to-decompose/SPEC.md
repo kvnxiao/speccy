@@ -140,6 +140,7 @@ when `.claude/skills/speccy-decompose/SKILL.md`,
 then each exists and its `name:` / `name = ` frontmatter field
 equals `speccy-decompose`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -176,6 +177,7 @@ then the resulting `.claude/skills/`, `.claude/agents/`,
 `.agents/skills/`, and `.codex/agents/` trees contain
 `speccy-decompose` entries and no `speccy-tasks` entries.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -224,6 +226,7 @@ when each file is grepped for `/speccy-decompose`,
 then at least one match is returned in each file (the
 "suggest the next step" line).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -268,6 +271,7 @@ when each of `cargo clippy --workspace --all-targets --all-features
 `cargo deny check` runs,
 then each exits 0.
 </scenario>
+
 </requirement>
 
 ## Decisions

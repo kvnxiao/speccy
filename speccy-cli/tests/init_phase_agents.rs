@@ -77,7 +77,7 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
     let fx = make_fixture("t009-skill-stub-thin")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let count = common::non_blank_line_count_outside_reconcile_partial(&body);
@@ -95,7 +95,7 @@ fn phase_worker_skill_stub_has_no_disallowed_frontmatter_keys() -> TestResult {
     run_init_claude(&fx.root, &[]).success();
 
     let disallowed = ["context:", "agent:", "model:", "effort:"];
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let fm = extract_frontmatter(&body)
@@ -115,7 +115,7 @@ fn phase_worker_skill_stub_names_agent_file_and_invocation_path() -> TestResult 
     let fx = make_fixture("t009-skill-stub-names-agent")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let agent_file = format!(".claude/agents/{phase}.md");
@@ -145,7 +145,7 @@ fn phase_worker_agent_has_model_and_effort_frontmatter() -> TestResult {
     // Each phase has its own model/effort pin.
     let phase_pins: &[(&str, &str, &str)] = &[
         ("speccy-work", "opus[1m]", "low"),
-        ("speccy-tasks", "sonnet[1m]", "medium"),
+        ("speccy-decompose", "sonnet[1m]", "medium"),
         ("speccy-ship", "sonnet[1m]", "medium"),
     ];
     for (phase, expected_model, expected_effort) in phase_pins {
@@ -172,7 +172,7 @@ fn phase_worker_agent_has_full_body_with_no_minijinja_markup() -> TestResult {
     let fx = make_fixture("t009-agent-full-body")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/agents/{phase}.md");
         let body = read_file(&fx.root, &rel)?;
         let (_, post_fm) = split_frontmatter(&body)
@@ -208,7 +208,7 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
     let fx = make_fixture("chk017-codex-stub")?;
     run_init_codex(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".agents/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let count = common::non_blank_line_count_outside_reconcile_partial(&body);
@@ -235,7 +235,7 @@ fn chk017_codex_toml_has_model_and_effort_at_top_level() -> TestResult {
     let fx = make_fixture("chk017-codex-toml")?;
     run_init_codex(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".codex/agents/{phase}.toml");
         let body = read_file(&fx.root, &rel)?;
         // Parse as TOML to verify top-level keys.
@@ -269,7 +269,7 @@ fn chk017_codex_toml_has_full_developer_instructions() -> TestResult {
     let fx = make_fixture("chk017-codex-body")?;
     run_init_codex(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".codex/agents/{phase}.toml");
         let body = read_file(&fx.root, &rel)?;
         let parsed: toml::Value =
@@ -308,7 +308,7 @@ fn phase_worker_agent_files_are_created_by_claude_init() -> TestResult {
     let fx = make_fixture("t009-phase-agents-exist")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let path = format!(".claude/agents/{phase}.md");
         assert!(
             fx.root.join(&path).exists(),
@@ -323,7 +323,7 @@ fn phase_worker_agent_files_are_created_by_codex_init() -> TestResult {
     let fx = make_fixture("t009-codex-phase-agents-exist")?;
     run_init_codex(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-tasks", "speccy-ship"] {
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let path = format!(".codex/agents/{phase}.toml");
         assert!(
             fx.root.join(&path).exists(),
