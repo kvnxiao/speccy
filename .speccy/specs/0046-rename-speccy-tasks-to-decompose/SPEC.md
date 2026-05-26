@@ -2,7 +2,7 @@
 id: SPEC-0046
 slug: rename-speccy-tasks-to-decompose
 title: Rename the `/speccy-tasks` skill to `/speccy-decompose`
-status: in-progress
+status: implemented
 created: 2026-05-25
 supersedes: []
 ---
