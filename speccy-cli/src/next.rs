@@ -164,7 +164,7 @@ fn run_workspace(
     };
     let exit_code = if is_terminal {
         let line = format!(
-            "speccy next: no active specs in workspace (reason: {WORKSPACE_TERMINAL_REASON}); run `speccy plan` to draft a new SPEC.\n",
+            "speccy next: no active specs in workspace (reason: {WORKSPACE_TERMINAL_REASON}); use your harness' speccy-brainstorm or speccy-plan skill to draft a new SPEC.\n",
         );
         err.write_all(line.as_bytes()).map_err(NextError::Io)?;
         TERMINAL_EXIT_CODE

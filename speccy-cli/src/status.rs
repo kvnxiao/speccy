@@ -426,7 +426,7 @@ fn render_text(
     hidden_count: usize,
     out: &mut dyn std::io::Write,
 ) -> Result<(), StatusError> {
-    if report.workspace.specs.is_empty() {
+    if report.specs.is_empty() {
         write_line(out, "No specs in workspace.")?;
         return Ok(());
     }

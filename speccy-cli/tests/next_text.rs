@@ -180,7 +180,8 @@ fn empty_workspace_exits_2_with_stderr_advisory() -> TestResult {
         .stdout(predicates::str::is_empty())
         .stderr(contains("no active specs"))
         .stderr(contains("no_active_specs"))
-        .stderr(contains("speccy plan"));
+        .stderr(contains("speccy-brainstorm"))
+        .stderr(contains("speccy-plan"));
     Ok(())
 }
 
