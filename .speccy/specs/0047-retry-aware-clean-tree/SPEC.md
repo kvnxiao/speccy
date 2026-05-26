@@ -114,6 +114,13 @@ task-scope.
   path, `/speccy-decompose` itself via REQ-004) lands them.
   Extending the same pattern to plan or amend may follow in a
   later SPEC if friction surfaces.
+- No change to the orchestrator's review-dispatch code that
+  writes `<blockers>` elements. The orchestrator already writes
+  `<blockers round="N">` matching the round just blocked
+  (the convention REQ-005 unifies the docs around); REQ-005
+  brings the documentation and `/speccy-amend`'s writer prose
+  into alignment with that existing behaviour rather than
+  changing it.
 </non-goals>
 
 ## User Stories
@@ -587,6 +594,131 @@ error.
 
 </requirement>
 
+<requirement id="REQ-005">
+### REQ-005: Unify the `<blockers>` round-attribute convention across writers and docs
+
+The shipped `<blockers>` element has inconsistent `round`
+semantics across three sites that document or write it:
+
+- **`speccy-orchestrate` review dispatch text and the `speccy-review`
+  skill body:** `<blockers round="N">` carries the round of the
+  implementer attempt just reviewed and blocked. A round-1
+  reviewer fan-out blocks → `<blockers round="1">`.
+- **`journal-blockers.md` reference:** today documents `round` as
+  "the round the implementer should retry as (positive integer,
+  equal to the round of the blocking reviews plus 1). A round-1
+  blocker carries `round=\"2\"`; a round-2 blocker carries
+  `round=\"3\"`."
+- **`speccy-amend` skill body:** today instructs amendment-driven
+  blockers to use `round=\"N+1\"` where `N` is the highest prior
+  round.
+
+Three writers, two contradictory conventions. SPEC-0047's REQ-001
+chose the orchestrator convention (round = round just blocked)
+because that is the convention the orchestrator's actual
+review-dispatch code writes when retry-shape detection matters.
+REQ-005 unifies the documentation and `/speccy-amend` writer
+prose around that same rule.
+
+**Unified rule:** `<blockers round="N">` always carries the round
+of the prior `<implementer>` attempt whose work the blockers
+describe — the round just blocked by review, or the round of the
+prior completed attempt invalidated by an amendment. The next
+`<implementer>` block written after the blockers carries
+`round="N+1"`.
+
+Updates required:
+
+1. The canonical `journal-blockers.md` reference (canonical
+   source under `resources/modules/references/` plus host-portable
+   mirrors at `.claude/speccy-references/` and
+   `.agents/speccy-references/`) rewrites the `round` attribute
+   description and the worked example so both match the unified
+   rule. The example flow becomes `<implementer round="1">` +
+   `<review round="1">` (blocking) + `<blockers round="1">` +
+   `<implementer round="2">` (retry).
+2. The `/speccy-amend` skill body
+   (`.claude/skills/speccy-amend/SKILL.md` plus host-portable
+   mirrors and the `resources/agents/...` template source)
+   changes the amendment-driven blockers-round directive from
+   `round="N+1"` to `round="N"` where `N` is the highest prior
+   round across `<implementer>` / `<review>` / `<blockers>`
+   blocks (the round of the implementer attempt the amend
+   invalidates). Surrounding prose adjusts to match.
+3. The orchestrator/review skill body remains unchanged because
+   it already writes the unified convention.
+
+<done-when>
+- The canonical `journal-blockers.md` reference describes
+  `round` as "the round of the implementer attempt the blockers
+  describe" (or equivalent wording), and the worked example uses
+  `<blockers round="1">` immediately after `<review round="1">`
+  (blocking).
+- `journal-blockers.md` contains no language like "plus 1",
+  "round the implementer should retry as", or `round="2"` /
+  `round="3"` examples that imply the old N+1 convention.
+- `.claude/skills/speccy-amend/SKILL.md` (and host-portable
+  mirrors) uses `round="N"` rather than `round="N+1"` in its
+  amendment-driven blockers directive, with surrounding prose
+  matching the unified rule.
+- Mirrored host-portable copies are byte-identical to the
+  canonical sources after the templating pipeline runs.
+- The orchestrator/review skill body's `<blockers round="1">`
+  example survives unchanged (it was already correct).
+</done-when>
+
+<behavior>
+- Given a fresh task whose round-1 reviewer fan-out returns
+  `verdict="blocking"`, when the orchestrator's review dispatch
+  writes the blockers element, then the appended block carries
+  `round="1"` (matching today's actual behaviour; unchanged).
+- Given a previously completed task whose journal contains
+  `<implementer round="1">` + `<review round="1">` (passing) +
+  `<implementer round="2">` (passing on retry), and a SPEC
+  amendment that invalidates it, when `/speccy-amend` writes the
+  amendment-driven blockers block, then it carries `round="2"`
+  (matching the highest prior round, not `round="3"`).
+- Given the post-REQ-005 `journal-blockers.md` reference, when a
+  reviewer reads the worked example, then the example shows
+  `<blockers round="1">` immediately after `<review round="1">`
+  (blocking), with no `round="2"` blockers block in the flow.
+- Given the post-REQ-005 `journal-blockers.md` reference, when
+  the "Amendment-driven blockers" paragraph is read, then it
+  describes the unified rule (round = prior implementer round)
+  rather than the old `round="N+1"` convention.
+</behavior>
+
+<scenario id="CHK-012">
+Given the canonical `journal-blockers.md` reference after REQ-005
+lands,
+when grepped for the literal string `round="N+1"` or the prose
+fragment `the round the implementer should retry as`,
+then zero matches are found in the canonical source and in both
+host-portable mirrors.
+</scenario>
+
+<scenario id="CHK-013">
+Given the canonical `journal-blockers.md` reference after REQ-005
+lands,
+when the worked example is read,
+then it contains the sequence `<implementer round="1">` →
+`<review … round="1">` (blocking) → `<blockers … round="1">` →
+`<implementer round="2">` (retry),
+and no `<blockers round="2">` block appears in the example flow.
+</scenario>
+
+<scenario id="CHK-014">
+Given `.claude/skills/speccy-amend/SKILL.md` after REQ-005 lands,
+when grepped for the literal string `round="N+1"`,
+then zero matches are found,
+and the surrounding prose names the rule as `round="N"` where
+`N` is the highest prior round across the existing
+`<implementer>` / `<review>` / `<blockers>` blocks (the round of
+the implementer attempt the amend invalidates).
+</scenario>
+
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -812,4 +944,5 @@ retry-shape reference) plus three co-edited inline rules.
 |------------|--------------|---------|
 | 2026-05-26 | human/kevin  | Initial draft. Introduces three requirements covering: (REQ-001) the retry-shape detection rule as a deterministic, file-read predicate canonically documented in a new `references/retry-shape.md` reference; (REQ-002) extension of SPEC-0045/REQ-002's clean-tree precondition at both `/speccy-work` entry and `/speccy-orchestrate` work dispatch to permit a dirty tree when the task is in retry shape, with the rule inlined verbatim at both skill body sites bounded by marker comments; (REQ-003) growth of the speccy-work implementer prompt with a retry-aware mode that reads the latest `<blockers>` and amends the WIP in place rather than reimplementing from scratch, with the rule inlined verbatim at the agent prompt site bounded by marker comments. Three DECs codify: (DEC-001) review-blocked retry is normal flow, not consistency drift, so the reconcile enum is not extended; (DEC-002) the detection rule lives in skill bodies, not the CLI; (DEC-003) the rule is replicated across three sites without a shared partial because it is small enough that the partial overhead is not justified. |
 | 2026-05-26 | human/kevin  | Add REQ-004: `/speccy-decompose` commits SPEC.md + TASKS.md atomically as the final step of decompose completion. Title `[SPEC-NNNN]: create spec and decompose tasks`; body is the SPEC's `title:` frontmatter value; trailer per SPEC-0045/REQ-004. Narrow `git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md` keeps unrelated dirty paths out of the commit; `git diff --cached --quiet` makes the step idempotent on re-runs. Closes the bootstrap-commit gap that trips SPEC-0045/REQ-002's strict clean-tree gate when `/speccy-orchestrate SPEC-NNNN` is invoked on a freshly decomposed SPEC. T-005 added to implement in the `/speccy-decompose` skill body, agent prompt, and host-portable mirrors. Non-goals updated to record that the analogous pattern for `/speccy-plan` and `/speccy-amend` is explicitly out of scope for this SPEC; CHK-009/CHK-010/CHK-011 cover REQ-004. Amendment driven by the user surfacing the bootstrap-commit friction during the initial `/speccy-orchestrate SPEC-0047` invocation. |
+| 2026-05-26 | human/kevin  | Add REQ-005: unify the `<blockers round="N">` convention across the three writers/docs. `speccy-orchestrate` review dispatch writes `<blockers round="N">` matching the round just blocked, but `journal-blockers.md` and `/speccy-amend`'s SKILL.md document the contradictory `round="N+1"` (next-retry-round) convention. REQ-005 keeps the orchestrator behaviour unchanged and rewrites the docs + `/speccy-amend` writer prose to match: `<blockers round="N">` carries the round of the prior `<implementer>` attempt the blockers describe (review-blocked, or amend-invalidated). T-006 added to implement in `journal-blockers.md` (canonical source + mirrors) and `/speccy-amend` (skill body + host-portable mirrors). CHK-012/CHK-013/CHK-014 cover REQ-005. Also restructure T-001: its scope was structurally too narrow (creating the `retry-shape.md` reference alone failed SPEC-0038/REQ-007's `chk022_no_orphan_references` lint because the consuming `/speccy-work` skill body did not land in the same commit). T-001 absorbs T-002's `/speccy-work` first-consumer scope so the reference and its first consumer land atomically; T-002 is deleted; T-003/T-004/T-005 keep their IDs (gap at T-002). Amendment driven by the round-convention conflict surfaced by the T-001 implementer's discovered issue. |
 </changelog>

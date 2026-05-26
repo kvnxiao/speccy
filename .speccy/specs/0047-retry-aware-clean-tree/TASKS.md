@@ -1,30 +1,36 @@
 ---
 spec: SPEC-0047
-spec_hash_at_generation: 0b139bf595e1ee043bf139a8ab2839809e16d769567228d386c14854ebe5454f
-generated_at: 2026-05-26T20:27:02Z
+spec_hash_at_generation: cbe426d1a2b14ae14b0775d29a4a31792a060231503f42026db5bfa1f9820f56
+generated_at: 2026-05-26T20:46:53Z
 ---
 # Tasks: SPEC-0047 Retry-aware clean-tree precondition — work dispatch tolerates dirty trees on review-blocked retries
 
-<task id="T-001" state="pending" covers="REQ-001">
-## Author the retry-shape canonical reference file
+<task id="T-001" state="pending" covers="REQ-001 REQ-002">
+## Author the retry-shape reference and inline it into `/speccy-work`
 
-Create a new reference file that carries the canonical statement of
-the retry-shape detection rule, mirroring the cross-cutting
-references pattern already established by
+Create the canonical retry-shape reference file AND land its first
+consuming body in the same commit. The original decomposition
+split these into T-001 (reference) + T-002 (`/speccy-work` first
+consumer), but SPEC-0038/REQ-007's `chk022_no_orphan_references`
+lint rejects any reference file that lacks at least one consuming
+body, so the two responsibilities must land atomically. T-002 was
+deleted as part of the amendment that introduced this combined
+task; T-003/T-004 (the remaining consumers) keep their IDs.
+
+### Part A — canonical reference file (was T-001)
+
+Create the canonical retry-shape reference under the existing
+cross-cutting references pattern (mirroring
 `.claude/speccy-references/reconcile-policy.md` and
-`.claude/speccy-references/journal-blockers.md`. The rule is read by
-two skill bodies and one agent prompt (T-002, T-003, T-004 inline it
-verbatim with marker comments), so it belongs at the cross-skill
-location rather than nested under one skill's own `references/`
-directory.
+`.claude/speccy-references/journal-blockers.md`).
 
 Place the canonical source under the templating pipeline so the
 host-portable mirrors (`.claude/speccy-references/retry-shape.md`
 for the Claude pack, `.agents/speccy-references/retry-shape.md` for
 the Agents pack, plus any Codex equivalent) are produced by the
 existing `resources/modules/...` → host fan-out. Use whatever
-mechanism the reconcile-policy partial already uses; do not invent a
-new sync mechanism.
+mechanism the reconcile-policy partial already uses; do not invent
+a new sync mechanism.
 
 The file body documents:
 
@@ -57,50 +63,19 @@ The file body documents:
 The file uses the same convention as `.claude/speccy-references/`
 partials: no YAML frontmatter; plain Markdown. Do not introduce a
 `speccy verify` lint rule for this file; the rule is enforced by
-reviewer judgment on the three inlined copies in T-002/T-003/T-004,
-not by the CLI.
+reviewer judgment on the consumer-side inlines in T-001 Part B,
+T-003, and T-004, not by the CLI.
 
-<task-scenarios>
-Given the canonical reference file after this task lands,
-when grepped for the literal phrase
-`highest \`round\` attribute on any \`<implementer>\` block`,
-then exactly one match is found in the rule statement section
-(covers CHK-001/CHK-002/CHK-003 as the source-of-truth statement
-that the three inlined copies in T-002/T-003/T-004 will be checked
-against).
-
-Given the same file,
-when scanned for the worked examples,
-then it contains exactly three example journal snippets labelled
-as retry shape, first-attempt shape, and the awaiting-review edge
-case respectively.
-
-Given the post-task workspace,
-when the host-portable mirror paths are inspected (the Claude pack
-location, the Agents pack location, and any Codex equivalent
-documented in `resources/modules/`),
-then each mirror exists and its content is byte-identical to the
-canonical source under `resources/modules/` after the templating
-pipeline runs.
-
-Suggested files: `resources/modules/references/retry-shape.md`
-(new canonical source), `.claude/speccy-references/retry-shape.md`
-(new Claude mirror), `.agents/speccy-references/retry-shape.md`
-(new Agents mirror), plus the resource fan-out manifest if one
-exists.
-</task-scenarios>
-</task>
-
-<task id="T-002" state="pending" covers="REQ-002">
-## Make `/speccy-work` skill body's entry precondition retry-aware
+### Part B — first consumer: `/speccy-work` skill body (was T-002)
 
 Edit `.claude/skills/speccy-work/SKILL.md` (and the mirrored
-`.agents/skills/speccy-work/SKILL.md` plus any `resources/agents/...`
-template source) to extend the existing SPEC-0045/REQ-002 entry
-precondition with retry-shape awareness.
+`.agents/skills/speccy-work/SKILL.md` plus any
+`resources/agents/...` template source) to extend the existing
+SPEC-0045/REQ-002 entry precondition with retry-shape awareness.
 
 Today's entry precondition runs `git status --porcelain` and exits
-on non-empty stdout. The new precondition runs three steps in order:
+on non-empty stdout. The new precondition runs three steps in
+order:
 
 1. Resolve the target task per the existing step 1 of the agent
    recipe (selector argument or `speccy next --json`).
@@ -116,34 +91,64 @@ bounded by the marker comment pair:
 
 ```
 <!-- Shared rule: retry-shape. Source: .claude/speccy-references/retry-shape.md -->
-<rule text from T-001's reference file>
+<rule text from Part A's reference file>
 <!-- End shared rule: retry-shape. -->
 ```
 
 The rule text between the markers must be byte-for-byte identical
-(after whitespace normalisation) to T-001's canonical source.
+(after whitespace normalisation) to Part A's canonical source.
 
 Keep the existing reconcile-policy partial inline at its current
-location. The retry-shape rule and the reconcile-policy partial are
-two separate inlines, each bounded by its own marker comments.
+location. The retry-shape rule and the reconcile-policy partial
+are two separate inlines, each bounded by its own marker comments.
 
 The mirrored `.agents/skills/speccy-work/SKILL.md` and the
 `resources/agents/...` template source must stay in sync via the
 existing pipeline; do not edit only one of the three locations and
 leave the others stale.
 
+### Atomic-landing constraint
+
+Parts A and B MUST land in the same commit. Splitting them across
+two commits leaves the reference file orphaned at the first commit
+boundary and trips `chk022_no_orphan_references` during the
+standard hygiene suite. Verify by running the suite locally before
+flipping to `in-review`.
+
 <task-scenarios>
+Given the post-task workspace,
+when the canonical reference file is grepped for the literal phrase
+`highest \`round\` attribute on any \`<implementer>\` block`,
+then exactly one match is found in the rule statement section
+(covers CHK-001/CHK-002/CHK-003 as the source-of-truth statement
+that the consumer-side inlines in Part B and T-003/T-004 are
+checked against).
+
+Given the same canonical file,
+when scanned for the worked examples,
+then it contains exactly three example journal snippets labelled
+as retry shape, first-attempt shape, and the awaiting-review edge
+case respectively.
+
+Given the post-task workspace,
+when the host-portable mirror paths are inspected (the Claude
+pack location, the Agents pack location, and any Codex
+equivalent documented in `resources/modules/`),
+then each mirror exists and its content is byte-identical to the
+canonical source under `resources/modules/` after the templating
+pipeline runs.
+
 Given the skill body `.claude/skills/speccy-work/SKILL.md` after
 this task,
 when grepped for the open marker comment
 `<!-- Shared rule: retry-shape.`,
 then exactly one match is found,
 and the content between the open and close markers is byte-for-byte
-identical (after whitespace normalisation) to the T-001 canonical
-reference file (covers CHK-004 path / CHK-005 path through
-documented rule).
+identical (after whitespace normalisation) to the canonical
+reference file (covers CHK-004 / CHK-005 path through documented
+rule).
 
-Given the same file,
+Given the same skill body,
 when a reader traces the entry precondition prose,
 then it documents the two branches explicitly: first-attempt shape
 keeps the existing strict gate (non-empty `git status --porcelain`
@@ -158,10 +163,21 @@ then the retry-shape rule and the two-branch documentation appear
 verbatim (modulo any host-specific wording the templating pipeline
 substitutes).
 
-Suggested files: `.claude/skills/speccy-work/SKILL.md`,
+Given the standard hygiene suite run after this task's edits land,
+when `cargo test --workspace` runs the `chk022_no_orphan_references`
+test,
+then the test passes because the new `retry-shape.md` reference
+has a consuming body (the `/speccy-work` skill body's marker
+comment block).
+
+Suggested files: `resources/modules/references/retry-shape.md`
+(new canonical source), `.claude/speccy-references/retry-shape.md`
+(new Claude mirror), `.agents/speccy-references/retry-shape.md`
+(new Agents mirror), `.claude/skills/speccy-work/SKILL.md`,
 `.agents/skills/speccy-work/SKILL.md`,
 `resources/agents/.claude/skills/speccy-work/SKILL.md.tmpl`,
-`resources/agents/.agents/skills/speccy-work/SKILL.md.tmpl`.
+`resources/agents/.agents/skills/speccy-work/SKILL.md.tmpl`,
+plus the resource fan-out manifest if one exists.
 </task-scenarios>
 </task>
 
@@ -481,5 +497,165 @@ Suggested files: `.claude/skills/speccy-decompose/SKILL.md`,
 `resources/agents/.claude/skills/speccy-decompose/SKILL.md.tmpl`,
 `resources/agents/.claude/agents/speccy-decompose.md.tmpl`,
 `resources/agents/.agents/skills/speccy-decompose/SKILL.md.tmpl`.
+</task-scenarios>
+</task>
+
+<task id="T-006" state="pending" covers="REQ-005">
+## Unify `<blockers>` round-attribute convention across docs and `/speccy-amend`
+
+Reconcile the documentation and `/speccy-amend` writer prose to
+match the orchestrator's actual review-dispatch behaviour.
+Today three sites describe `<blockers round="N">` semantics and
+two of them (the `journal-blockers.md` reference and the
+`/speccy-amend` skill body) document the opposite convention from
+the one the orchestrator's review dispatch actually writes.
+
+The unified rule (per SPEC.md REQ-005):
+
+> `<blockers round="N">` carries the round of the prior
+> `<implementer>` attempt the blockers describe — the round just
+> blocked by review, or the round of the prior completed attempt
+> invalidated by amendment. The next `<implementer>` block
+> written after the blockers carries `round="N+1"`.
+
+Scope of edits:
+
+### Part A — `journal-blockers.md` reference
+
+Edit the canonical source under `resources/modules/references/`
+(use whatever path the templating pipeline already has — the
+existing dogfood mirrors at
+`.claude/speccy-references/journal-blockers.md` and
+`.agents/speccy-references/journal-blockers.md` are produced from
+this source).
+
+1. Rewrite the `round` attribute description under "Required
+   attributes on `<blockers>`" to remove the "round the
+   implementer should retry as (positive integer, equal to the
+   round of the blocking reviews plus 1)" language. Replace with:
+   "the round of the implementer attempt the blockers describe
+   (the round just blocked by review, or the round of the prior
+   completed attempt invalidated by amendment). A round-1
+   blocker carries `round=\"1\"`; a round-2 blocker carries
+   `round=\"2\"`."
+2. Update the worked example flow (currently shows `<review
+   round="1">` blocking → `<blockers round="2">` →
+   `<implementer round="2">`) to use `<blockers round="1">`
+   between the round-1 review and the round-2 implementer.
+3. Update the "Amendment-driven blockers" paragraph at the
+   bottom of the file to describe the unified rule (the
+   amendment-driven blockers carry the round of the prior
+   completed implementer attempt that the amend invalidates,
+   not N+1).
+4. Regenerate the dogfood mirrors via the existing templating
+   pipeline so both host-portable copies stay in sync.
+
+### Part B — `/speccy-amend` skill body
+
+Edit `.claude/skills/speccy-amend/SKILL.md` (and the mirrored
+`.agents/skills/speccy-amend/SKILL.md` plus any
+`resources/agents/...` template source) to change the
+amendment-driven blockers directive:
+
+1. Locate the directive that today reads:
+
+   > "If the task already has a journal file with rounds up to N
+   > (i.e. the highest `round=\"N\"` across its existing
+   > `<implementer>` / `<review>` / `<blockers>` blocks), use
+   > `round=\"N+1\"`. The next implementer attempt continues from
+   > that round."
+
+   Rewrite to:
+
+   > "If the task already has a journal file with rounds up to N
+   > (i.e. the highest `round=\"N\"` across its existing
+   > `<implementer>` / `<review>` / `<blockers>` blocks), use
+   > `round=\"N\"` matching the round of the implementer attempt
+   > the amend invalidates. The next implementer attempt will
+   > continue at round `N+1` when it writes its own `<implementer>`
+   > block."
+
+2. Update the surrounding case for "no prior journal file" so it
+   matches: use `round="1"` (unchanged in semantic — there are no
+   prior implementer rounds, so the amendment-driven blockers
+   point at the next implementer attempt that will write round 1).
+   Wait — re-examine this case. If there are no prior implementer
+   rounds AND the task is somehow being amended, what does
+   `round=` mean? The unified rule says blockers round = prior
+   implementer round. If there is no prior implementer round, the
+   amendment-driven blockers logically belong to a not-yet-run
+   round-0 implementer, which does not exist.
+   
+   In practice, an amendment-driven blockers block is only written
+   for tasks already marked `state="completed"` — meaning at
+   least one prior implementer round (the one that produced the
+   completion) exists in the journal. The "no prior journal file"
+   branch therefore should not fire for amendment-driven blockers.
+   
+   If the existing skill body has a `round="1"` fallback for this
+   case, preserve it but add a note that the branch is
+   unreachable in practice (amendment-driven blockers always have
+   ≥1 prior implementer round), so the value is informational.
+
+3. The mirrored `.agents/skills/speccy-amend/SKILL.md` and the
+   `resources/agents/...` template source must stay in sync via
+   the existing pipeline.
+
+### Part C — verify the orchestrator/review skill body is already correct
+
+The `speccy-review` skill body inside
+`.claude/skills/speccy-orchestrate/SKILL.md` (and the
+standalone `/speccy-review` skill body if it exists) already
+writes `<blockers round="N">` matching the round just blocked.
+No edits required — verify by grepping for the example block
+shape in the dispatch description.
+
+<task-scenarios>
+Given the canonical `journal-blockers.md` reference after this
+task,
+when grepped for the literal string `round="N+1"` or the prose
+fragment `the round the implementer should retry as`,
+then zero matches are found in the canonical source and in both
+host-portable mirrors (covers CHK-012).
+
+Given the canonical `journal-blockers.md` reference after this
+task,
+when the worked example is read,
+then it contains the sequence `<implementer round="1">` →
+`<review … round="1">` (blocking) → `<blockers … round="1">` →
+`<implementer round="2">` (retry),
+and no `<blockers round="2">` block appears in the example flow
+(covers CHK-013).
+
+Given `.claude/skills/speccy-amend/SKILL.md` after this task,
+when grepped for the literal string `round="N+1"`,
+then zero matches are found,
+and the surrounding prose names the rule as `round="N"` where N
+is the highest prior round across existing `<implementer>` /
+`<review>` / `<blockers>` blocks (covers CHK-014).
+
+Given the host-portable mirrors of both `journal-blockers.md` and
+the `/speccy-amend` skill body after this task,
+when their content is compared to the canonical sources,
+then they are byte-identical (modulo any host-specific wording
+the templating pipeline substitutes).
+
+Given the orchestrator/review skill body inside
+`.claude/skills/speccy-orchestrate/SKILL.md` after this task,
+when the review-dispatch example block is read,
+then it still shows `<blockers date="…" round="1">` immediately
+after `<review … round="1">` (blocking) — unchanged from before
+the task, because the orchestrator's writer was already correct.
+
+Suggested files:
+`resources/modules/references/journal-blockers.md` (canonical
+source — confirm via templating pipeline),
+`.claude/speccy-references/journal-blockers.md` (regenerated
+mirror), `.agents/speccy-references/journal-blockers.md`
+(regenerated mirror),
+`.claude/skills/speccy-amend/SKILL.md`,
+`.agents/skills/speccy-amend/SKILL.md`,
+`resources/agents/.claude/skills/speccy-amend/SKILL.md.tmpl`,
+`resources/agents/.agents/skills/speccy-amend/SKILL.md.tmpl`.
 </task-scenarios>
 </task>
