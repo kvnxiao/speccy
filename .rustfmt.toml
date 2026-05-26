@@ -1,6 +1,6 @@
-# rustfmt.toml — speccy formatting configuration.
+# rustfmt.toml - formatting configuration.
 #
-# Speccy enforces nightly rustfmt so the unstable options below
+# This project enforces nightly rustfmt so the unstable options below
 # (group_imports, imports_granularity, normalize_comments,
 # normalize_doc_attributes, wrap_comments, float_literal_trailing_zero)
 # take effect. CI runs nightly rustfmt; contributors must do the same:
