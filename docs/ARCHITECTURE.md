@@ -2152,7 +2152,7 @@ drift relates to.
 }
 ```
 
-The four `kind` values and their `details` shapes:
+The five `kind` values and their `details` shapes:
 
 | `kind` | `severity` | `details` shape |
 |---|---|---|
