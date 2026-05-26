@@ -5,7 +5,7 @@ generated_at: 2026-05-26T20:46:53Z
 ---
 # Tasks: SPEC-0047 Retry-aware clean-tree precondition — work dispatch tolerates dirty trees on review-blocked retries
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002">
 ## Author the retry-shape reference and inline it into `/speccy-work`
 
 Create the canonical retry-shape reference file AND land its first

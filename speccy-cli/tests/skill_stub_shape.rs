@@ -71,7 +71,7 @@ fn claude_agent_body_len(root: &Utf8PathBuf, phase: &str) -> usize {
             "Claude Code agent file `{path}` must be readable: {err}"
         ))
     });
-    body_after_frontmatter(&contents, path.as_str()).len()
+    body_len_without_shared_markers(body_after_frontmatter(&contents, path.as_str()))
 }
 
 /// Extract the `developer_instructions` value from a Codex TOML agent
@@ -89,18 +89,64 @@ fn codex_agent_dev_instructions_len(root: &Utf8PathBuf, phase: &str) -> Option<u
             "Codex agent TOML `{path}` must parse as TOML: {err}"
         ))
     });
-    Some(
-        parsed
-            .as_table()
-            .and_then(|t| t.get("developer_instructions"))
-            .and_then(toml::Value::as_str)
-            .unwrap_or_else(|| {
-                fail(&format!(
-                    "Codex agent TOML `{path}` must have a string `developer_instructions` key"
-                ))
-            })
-            .len(),
-    )
+    let dev = parsed
+        .as_table()
+        .and_then(|t| t.get("developer_instructions"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_else(|| {
+            fail(&format!(
+                "Codex agent TOML `{path}` must have a string `developer_instructions` key"
+            ))
+        });
+    Some(body_len_without_shared_markers(dev))
+}
+
+/// Return the byte-length of `body` after stripping any region
+/// bounded by a recognised shared-marker comment pair. SPEC-0045/
+/// REQ-008 inlines the `reconcile-policy` partial verbatim into a
+/// handful of skill bodies; SPEC-0047/REQ-002 inlines the
+/// `retry-shape` rule into `/speccy-work` and `/speccy-orchestrate`
+/// (and, after T-004 lands, into the speccy-work agent prompt
+/// too). The stub-shape invariant (CHK-010) compares "real" body
+/// size, not inlined-partial size, so those marker-bounded regions
+/// are subtracted from both sides of the comparison.
+fn body_len_without_shared_markers(body: &str) -> usize {
+    const MARKERS: &[(&str, &str)] = &[
+        (
+            "<!-- Shared partial: reconcile-policy.",
+            "<!-- End shared partial: reconcile-policy. -->",
+        ),
+        (
+            "<!-- Shared rule: retry-shape.",
+            "<!-- End shared rule: retry-shape. -->",
+        ),
+    ];
+    let lines: Vec<&str> = body.lines().collect();
+    let mut exempt: Vec<bool> = vec![false; lines.len()];
+    for (open_marker, close_marker) in MARKERS {
+        let Some(open_idx) = lines.iter().position(|l| l.trim().starts_with(open_marker)) else {
+            continue;
+        };
+        let Some(close_idx) = lines
+            .iter()
+            .rposition(|l| l.trim().starts_with(close_marker))
+        else {
+            continue;
+        };
+        if close_idx >= open_idx {
+            for slot in exempt.iter_mut().take(close_idx + 1).skip(open_idx) {
+                *slot = true;
+            }
+        }
+    }
+    let mut bytes = 0usize;
+    for (idx, line) in lines.iter().enumerate() {
+        if exempt.get(idx).copied().unwrap_or(false) {
+            continue;
+        }
+        bytes = bytes.saturating_add(line.len()).saturating_add(1); // +1 for the `\n`
+    }
+    bytes
 }
 
 /// Strip the YAML frontmatter from `contents` and return the body
@@ -132,11 +178,10 @@ fn stub_skill_body_smaller_than_agent_body_claude_code() {
     let root = workspace_root();
     for phase in PINNED_PHASES {
         let skill_body = read_claude_skill(&root, phase);
-        let skill_body_len = body_after_frontmatter(
+        let skill_body_len = body_len_without_shared_markers(body_after_frontmatter(
             &skill_body,
             &format!(".claude/skills/speccy-{phase}/SKILL.md"),
-        )
-        .len();
+        ));
         let agent_body_len = claude_agent_body_len(&root, phase);
         assert!(
             skill_body_len < agent_body_len,
@@ -152,11 +197,10 @@ fn stub_skill_body_smaller_than_agent_body_codex() {
     let root = workspace_root();
     for phase in PINNED_PHASES {
         let skill_body = read_codex_skill(&root, phase);
-        let skill_body_len = body_after_frontmatter(
+        let skill_body_len = body_len_without_shared_markers(body_after_frontmatter(
             &skill_body,
             &format!(".agents/skills/speccy-{phase}/SKILL.md"),
-        )
-        .len();
+        ));
         // T-004 (a prerequisite to T-009) ships the Codex phase-worker
         // TOML files. Skip this half of the assertion when T-004 has
         // not yet run (i.e. the TOML files are absent from the working

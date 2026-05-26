@@ -80,10 +80,10 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
     for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
-        let count = common::non_blank_line_count_outside_reconcile_partial(&body);
+        let count = common::non_blank_line_count_outside_shared_markers(&body);
         assert!(
             count <= 10,
-            "T-009: {rel} must have ≤10 non-blank lines outside reconcile-policy partial markers; got {count}:\n{body}",
+            "T-009: {rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
         );
     }
     Ok(())
@@ -211,10 +211,10 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
     for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
         let rel = format!(".agents/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
-        let count = common::non_blank_line_count_outside_reconcile_partial(&body);
+        let count = common::non_blank_line_count_outside_shared_markers(&body);
         assert!(
             count <= 10,
-            "CHK-017: {rel} must have ≤10 non-blank lines outside reconcile-policy partial markers; got {count}:\n{body}",
+            "CHK-017: {rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
         );
         let toml_file = format!(".codex/agents/{phase}.toml");
         assert!(

@@ -1105,10 +1105,10 @@ fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &s
     // those marker-bounded regions are explicit, auditable exemptions
     // from the "stub body stays short" cap. The cap still polices any
     // prose outside the markers — full-body leakage is still caught.
-    let non_empty_lines = common::non_blank_line_count_outside_reconcile_partial(post_fm);
+    let non_empty_lines = common::non_blank_line_count_outside_shared_markers(post_fm);
     assert!(
         non_empty_lines < 12,
-        "rendered {rel} thin-stub body must be short (< 12 non-empty lines outside reconcile-policy partial markers), got {non_empty_lines} lines; full body has leaked",
+        "rendered {rel} thin-stub body must be short (< 12 non-empty lines outside shared-marker blocks), got {non_empty_lines} lines; full body has leaked",
     );
     Ok(())
 }
