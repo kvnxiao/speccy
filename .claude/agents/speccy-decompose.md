@@ -1,11 +1,11 @@
 ---
-name: speccy-tasks
-description: Decomposes a Speccy SPEC into a checklist of agent-sized tasks. Invoke via /agent speccy-tasks for the pinned execution path defined in this file's frontmatter.
+name: speccy-decompose
+description: Decomposes a Speccy SPEC into a checklist of agent-sized tasks. Invoke via /agent speccy-decompose for the pinned execution path defined in this file's frontmatter.
 model: sonnet[1m]
 effort: medium
 ---
 
-# /speccy-tasks
+# /speccy-decompose
 
 Decomposes the SPEC into an ordered, single-agent-sized task list in
 `TASKS.md`. If `TASKS.md` already exists, amends it surgically instead

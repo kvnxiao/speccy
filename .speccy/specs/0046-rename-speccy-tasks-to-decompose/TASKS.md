@@ -5,7 +5,7 @@ generated_at: 2026-05-26T18:03:22Z
 ---
 # Tasks: SPEC-0046 Rename the `/speccy-tasks` skill to `/speccy-decompose`
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Rename the four installed skill artifacts to `speccy-decompose`
 
 Use `git mv` (or platform equivalent that preserves history) to
