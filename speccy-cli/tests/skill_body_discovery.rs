@@ -303,7 +303,7 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
 /// downstream agents must produce — asserting them here locks the template
 /// wording to the parser's expectations (REQ-013 / SPEC-0034).
 #[test]
-fn chk019_speccy_tasks_template_documents_output_shape() {
+fn chk019_speccy_decompose_template_documents_output_shape() {
     let body = require_module("phases/speccy-decompose.md");
 
     assert!(
