@@ -1,5 +1,5 @@
 
-# {{ cmd_prefix }}speccy-tasks
+# {{ cmd_prefix }}speccy-decompose
 
 Decomposes the SPEC into an ordered, single-agent-sized task list in
 `TASKS.md`. If `TASKS.md` already exists, amends it surgically instead

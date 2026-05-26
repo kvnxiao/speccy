@@ -66,7 +66,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002">
+<task id="T-002" state="completed" covers="REQ-002">
 ## Rename the resource templates that generate the installed skills
 
 Mirror T-001 on the template side so `speccy init` writes the new
