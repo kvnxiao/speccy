@@ -176,7 +176,7 @@ speccy verify                     CI gate: proof-shape validation only.
                                     Does NOT run project tests; that's CI's job.
 speccy lock SPEC-NNNN             Record SPEC.md sha256 + UTC timestamp into TASKS.md
                                   frontmatter (`spec_hash_at_generation`,
-                                  `generated_at`). Used by `/speccy-tasks` after
+                                  `generated_at`). Used by `/speccy-decompose` after
                                   decomposition; replaces the old
                                   `speccy tasks --commit` sub-action.
 speccy vacancy                    Return the next free `SPEC-NNNN`.
@@ -258,7 +258,7 @@ resources/               Shipped with Speccy; rendered/copied by `speccy init`
                          topic-named snippets (verdict_return_contract.md,
                          inline_note_format.md, no_tasks_md_writes.md,
                          diff_fetch_command.md)
-    phases/              Three pinned phase-worker bodies (speccy-tasks.md,
+    phases/              Three pinned phase-worker bodies (speccy-decompose.md,
                          speccy-work.md, speccy-ship.md); plus speccy-init.md
                          which is dual-consumed by `speccy init` itself
     skills/              Six interactive skill bodies (speccy-brainstorm.md,
@@ -347,7 +347,7 @@ body the agent reads lives in a skill file under
 `.claude/skills/...` (or the Codex twin), ejected at `speccy init`
 time. The CLI has no `plan` / `tasks` / `implement` / `review` /
 `report` verbs; the phase recipes are `/speccy-plan`,
-`/speccy-tasks`, `/speccy-work`, `/speccy-review`, and
+`/speccy-decompose`, `/speccy-work`, `/speccy-review`, and
 `/speccy-ship` respectively.
 
 ## Phase 1: Planning
@@ -374,8 +374,8 @@ shape, then calls `speccy lock SPEC-NNNN` to re-record the hash.
 
 ## Phase 2: Task decomposition
 
-The `/speccy-tasks` skill (pinned phase worker; thin SKILL.md stub
-plus full body at `.claude/agents/speccy-tasks.md`) drives task
+The `/speccy-decompose` skill (pinned phase worker; thin SKILL.md stub
+plus full body at `.claude/agents/speccy-decompose.md`) drives task
 decomposition. The agent body instructs the agent to:
 
 - read the SPEC.md (path supplied via `speccy next --json` or the
@@ -1788,7 +1788,7 @@ resources/
       speccy-vet.md          Pre-ship SPEC-vs-impl drift review + autonomous fix loop
     phases/                  Full-body sources for the pinned phase workers
       speccy-init.md         Used by speccy-init's interactive SKILL.md too
-      speccy-tasks.md        Decompose one SPEC into TASKS.md
+      speccy-decompose.md    Decompose one SPEC into TASKS.md
       speccy-work.md         Implement one task (single-task primitive)
       speccy-ship.md         Write REPORT.md + open PR
     personas/                Six reviewer + three vet persona bodies + co-located snippets
@@ -1845,7 +1845,7 @@ no separate manifest declares it. The mapping:
 | Artifact                        | Source                                              | Claude Code path                                                  | Codex path                                                       | Class       |
 |---------------------------------|-----------------------------------------------------|-------------------------------------------------------------------|------------------------------------------------------------------|-------------|
 | SPEC.md                         | `resources/modules/references/spec.md`              | `.claude/skills/speccy-plan/references/spec.md`                   | `.agents/skills/speccy-plan/references/spec.md`                  | skill-local |
-| TASKS.md                        | `resources/modules/references/tasks.md`             | `.claude/skills/speccy-tasks/references/tasks.md`                 | `.agents/skills/speccy-tasks/references/tasks.md`                | skill-local |
+| TASKS.md                        | `resources/modules/references/tasks.md`             | `.claude/skills/speccy-decompose/references/tasks.md`             | `.agents/skills/speccy-decompose/references/tasks.md`                | skill-local |
 | REPORT.md                       | `resources/modules/references/report.md`            | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                | skill-local |
 | journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`  | `.agents/skills/speccy-work/references/journal-implementer.md`   | skill-local |
 | journal `<review>` block        | `resources/modules/references/journal-review.md`    | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`      | skill-local |
@@ -1899,7 +1899,7 @@ Unchanged / Conflict classification with no per-file exception.
 Each top-level skill is a recipe. The five interactive skills
 (`speccy-init`, `speccy-brainstorm`, `speccy-plan`, `speccy-amend`,
 `speccy-review` orchestrator) eject as full-body SKILL.md only. The
-three pinned phase workers (`speccy-tasks`, `speccy-work`,
+three pinned phase workers (`speccy-decompose`, `speccy-work`,
 `speccy-ship`) eject as a thin SKILL.md stub (≤10 non-blank lines
 naming the matching agent file) plus a full-body agent file at
 `.claude/agents/speccy-<phase>.md` (Codex:
@@ -1911,7 +1911,7 @@ the parent session.
 - `/speccy-init` -- bootstrap the project (interactive)
 - `/speccy-brainstorm` -- atomize a fuzzy ask before drafting a SPEC
 - `/speccy-plan` -- Phase 1 (AGENTS.md north star + optional MISSION.md -> SPEC)
-- `/speccy-tasks` -- Phase 2 (SPEC -> TASKS, then `speccy lock`)
+- `/speccy-decompose` -- Phase 2 (SPEC -> TASKS, then `speccy lock`)
 - `/speccy-work` -- Phase 3 (implement one task)
 - `/speccy-review` -- Phase 4 (review one task; orchestrator)
 - `/speccy-amend` -- Mid-loop SPEC + TASKS reconciliation
@@ -1925,7 +1925,7 @@ A typical full session in Claude Code looks like:
 /speccy-plan
 [agent reads `speccy vacancy --json`, writes SPEC.md]
 
-/speccy-tasks SPEC-001
+/speccy-decompose SPEC-001
 [agent writes TASKS.md, then `speccy lock SPEC-001`]
 
 /speccy-work SPEC-001/T-001

@@ -1,11 +1,5 @@
----
-name: speccy-tasks
-description: Decomposes a Speccy SPEC into a checklist of agent-sized tasks. Invoke via /agent speccy-tasks for the pinned execution path defined in this file's frontmatter.
-model: sonnet[1m]
-effort: medium
----
 
-# /speccy-tasks
+# {{ cmd_prefix }}speccy-decompose
 
 Decomposes the SPEC into an ordered, single-agent-sized task list in
 `TASKS.md`. If `TASKS.md` already exists, amends it surgically instead
@@ -13,8 +7,8 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 
 ## When to use
 
-- Initial: after `/speccy-plan` lands a fresh SPEC.
-- Amendment: after `/speccy-amend SPEC-NNNN` edited an existing SPEC and
+- Initial: after `{{ cmd_prefix }}speccy-plan` lands a fresh SPEC.
+- Amendment: after `{{ cmd_prefix }}speccy-amend SPEC-NNNN` edited an existing SPEC and
   the tasks may now be stale (the CLI surfaces a `TSK-003` lint when
   it detects hash drift).
 
@@ -67,7 +61,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    `speccy lock` edits TASKS.md's frontmatter in place; it does not
    emit a hash to stdout, and it requires TASKS.md to already exist.
 
-4. Suggest the next step: `/speccy-work SPEC-NNNN` to start the
+4. Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-NNNN` to start the
    implementation loop.
 
 This recipe does not loop.

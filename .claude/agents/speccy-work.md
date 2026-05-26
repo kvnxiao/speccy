@@ -28,7 +28,7 @@ terminal, the `/loop` skill, or a future orchestrator).
 - Without an argument: when picking up wherever `TASKS.md` left
   off. The session implements one task and exits.
 
-`/speccy-tasks` must have written `TASKS.md` and the
+`/speccy-decompose` must have written `TASKS.md` and the
 spec hash must have been committed before this skill runs.
 
 ## What to consider

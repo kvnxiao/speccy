@@ -165,7 +165,7 @@ Repeat until a stop condition fires:
    - **`ship`** — execute the [Ship dispatch](#ship-dispatch)
      section below.
    - **`decompose`** — STOP. Tell the user to run
-     `{{ cmd_prefix }}speccy-tasks` first; the orchestrator cannot
+     `{{ cmd_prefix }}speccy-decompose` first; the orchestrator cannot
      loop on a spec without a task list.
    - **anything else** (unknown kind, missing field, `done`,
      `plan`, etc.) — STOP and report the observed `next_action`
@@ -263,7 +263,7 @@ verdict to this orchestrator session, react as follows:
   task. Surface the journal path
   (`.speccy/specs/NNNN-slug/journal/T-NNN.md`) so the user can
   read the blockers and decide whether to decompose
-  (`{{ cmd_prefix }}speccy-amend` + `{{ cmd_prefix }}speccy-tasks`),
+  (`{{ cmd_prefix }}speccy-amend` + `{{ cmd_prefix }}speccy-decompose`),
   pick a different model, or intervene by hand. Track per-task
   retry counts in memory across loop iterations; the budget of 5
   is the orchestrator's only per-task retry bound.

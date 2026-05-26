@@ -221,6 +221,38 @@ fn all_flag_on_empty_workspace_prints_empty_message() -> TestResult {
 }
 
 #[test]
+fn archive_only_workspace_with_include_archive_renders_archived_specs() -> TestResult {
+    // Regression: when the active tree is empty but archived specs
+    // exist, `status --all --include-archive` previously short-circuited
+    // with "No specs in workspace." Now it must render the archived
+    // specs.
+    let ws = Workspace::new()?;
+    let archive_dir = ws.root.join(".speccy").join("archive").join("0001-done");
+    fs_err::create_dir_all(archive_dir.as_std_path())?;
+    fs_err::write(
+        archive_dir.join("SPEC.md").as_std_path(),
+        spec_md_template("SPEC-0001", "implemented"),
+    )?;
+
+    let args = StatusArgs {
+        selector: None,
+        all: true,
+        include_archive: true,
+        json: false,
+    };
+    let text = render_text(&ws.root, &args)?;
+    assert!(
+        !text.contains("No specs in workspace."),
+        "archive-only + --include-archive must not print the empty banner, got:\n{text}",
+    );
+    assert!(
+        text.contains("SPEC-0001"),
+        "archived spec must appear in the rendered output, got:\n{text}",
+    );
+    Ok(())
+}
+
+#[test]
 fn all_flag_json_matches_default_json_shape() -> TestResult {
     let ws = Workspace::new()?;
     write_spec(
