@@ -261,7 +261,7 @@ Suggested files: `.claude/skills/speccy-orchestrate/SKILL.md`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-003">
+<task id="T-004" state="completed" covers="REQ-003">
 ## Add retry-aware mode to the speccy-work agent prompt
 
 Edit `.claude/agents/speccy-work.md` (and the Codex variant at
