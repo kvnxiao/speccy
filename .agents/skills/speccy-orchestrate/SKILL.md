@@ -57,12 +57,14 @@ outer:    speccy-orchestrate dispatch loop  ← this skill's session
                   ├── review → fan out 4 reviewer-* sub-agents
                   │             in parallel from this session
                   │             (follows the speccy-review skill body)
-                  └── ship   → run the speccy-vet skill body inline
-                                in this session, spawning
-                                vet-reviewer / vet-implementer /
-                                vet-simplifier leaf sub-agents directly
-                                (drift-fix loop bounded to 3 rounds,
-                                 then one simplifier polish pass)
+                  ├── vet    → run the speccy-vet skill body inline
+                  │             in this session, spawning
+                  │             vet-reviewer / vet-implementer /
+                  │             vet-simplifier leaf sub-agents directly
+                  │             (drift-fix loop bounded to 3 rounds,
+                  │              then one simplifier polish pass)
+                  └── ship   → ask the user, then spawn a
+                                speccy-ship sub-agent on confirm
 inner-1:  per-task retry — same task_id flipping pending after review
             (bounded here in the orchestrator: 5 rounds, then stop)
 inner-2:  holistic drift fix — described in speccy-vet, run inline
@@ -172,6 +174,8 @@ Repeat until a stop condition fires:
      section below.
    - **`review`** — execute the [Review dispatch](#review-dispatch)
      section below.
+   - **`vet`** — execute the [Vet dispatch](#vet-dispatch) section
+     below.
    - **`ship`** — execute the [Ship dispatch](#ship-dispatch)
      section below.
    - **`decompose`** — STOP. Tell the user to run
@@ -418,7 +422,7 @@ The `speccy-review` skill remains independently invocable as
 dispatch shares the same fan-out contract via the partial above so
 behaviour stays in sync across invocation paths.
 
-## Ship dispatch
+## Vet dispatch
 
 Run the `speccy-vet` skill body **inline in this orchestrator
 session** (do NOT wrap it in a single general-purpose sub-agent —
@@ -439,14 +443,31 @@ After the vet workflow appends its `<gate>` block and surfaces a
 verdict to this orchestrator session, react as follows:
 
 - `verdict="pass"` → write a one-line summary plus the round and
-  simplifier counters, then **ask the user** whether to invoke
-  `speccy-ship`. Only after explicit confirmation,
-  spawn a `speccy-ship` sub-agent. Ship opens a PR; never
-  auto-ship.
+  simplifier counters, then re-query
+  `speccy next SPEC-NNNN --json`. The next iteration will observe
+  `next_action.kind == "ship"` and route to the [Ship
+  dispatch](#ship-dispatch) section below.
 - `verdict="fail"` → surface the drift summary and one-line
   suggested next step. Stop the outer loop. The user decides how
   to address it (`speccy-amend`, manual edits,
   etc.).
+
+## Ship dispatch
+
+The `ship` kind is emitted by the CLI after a fresh passing
+vet-gate artifact lands and `REPORT.md` is absent, so the vet
+workflow has already completed and the only remaining step is user
+confirmation before opening a PR.
+
+Ask the user via the Codex equivalent user-prompt primitive whether to invoke
+`speccy-ship` now. Ship opens a PR — irreversible —
+so this confirmation is always explicit; never auto-ship.
+
+- On confirm: spawn a `speccy-ship` sub-agent.
+  Invoke Codex's native sub-agent-spawn primitive against the
+  registered `speccy-ship` sub-agent at
+  `.codex/agents/speccy-ship.toml`.
+- On decline: stop the outer loop.
 
 ## Stop conditions
 
@@ -462,7 +483,7 @@ verdict to this orchestrator session, react as follows:
   retry counts in memory across loop iterations; the budget of 5
   is the orchestrator's only per-task retry bound.
 - A dispatched sub-agent errors out → stop and surface the error.
-- `next_action.kind` is not one of `work`, `review`, `ship`,
+- `next_action.kind` is not one of `work`, `review`, `vet`, `ship`,
   `decompose` → stop and report.
 - User interrupts → stop on the next loop boundary.
 
@@ -475,7 +496,7 @@ follow the loop without reading sub-agent transcripts:
 SPEC-NNNN → work T-003
 SPEC-NNNN → review T-003
 SPEC-NNNN → work T-003 (retry 2/5 after blocking review)
-SPEC-NNNN → holistic gate
+SPEC-NNNN → vet
 SPEC-NNNN → ready to ship — confirm before proceeding?
 ```
 

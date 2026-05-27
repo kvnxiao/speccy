@@ -399,7 +399,7 @@ captures the dogfood evidence)
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-006">
+<task id="T-006" state="completed" covers="REQ-006">
 ## Align orchestrator dispatch tree with CLI's `Vet`/`Ship` kind split
 
 Edit `resources/modules/skills/speccy-orchestrate.md` to dispatch
