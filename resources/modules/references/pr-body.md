@@ -67,7 +67,7 @@ result to a scratch file passed to `gh pr create --body-file`:
 
 - [SPEC.md](<spec-dir>/SPEC.md)
 - [REPORT.md](<spec-dir>/REPORT.md)
-- [journal/](<spec-dir>/journal/)
+- [journal/](<repo-url>/tree/<head-branch>/<spec-dir>/journal)
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
@@ -87,20 +87,46 @@ Used in the three Reference docs bullets to produce repo-relative
 links GitHub renders as clickable file paths.
 
 **The Reference docs entries must be markdown links, not inline
-code.** Copy the template's `[SPEC.md](<spec-dir>/SPEC.md)` shape
-verbatim and substitute `<spec-dir>` in place — do not render the
-paths as `` `.speccy/specs/.../SPEC.md` `` (inline code). Inline
-code is not clickable on GitHub; the whole point of the section is
-to give reviewers one-click access to the spec artifacts. After
-substitution, the three bullets read:
+code.** Copy the template's link shapes verbatim and substitute the
+placeholders — do not render the paths as `` `.speccy/.../SPEC.md` ``
+(inline code). Inline code is not clickable on GitHub; the whole
+point of the section is to give reviewers one-click access to the
+spec artifacts.
+
+**File links use relative paths.** GitHub resolves relative paths in
+PR bodies against the repo root on the PR's head branch, so the
+`SPEC.md` and `REPORT.md` bullets do not need a
+`https://github.com/...` prefix.
+
+**Folder links require absolute URLs.** A relative folder path like
+`(<spec-dir>/journal/)` does **not** work — GitHub interprets it as
+a branch comparison and redirects to a useless
+`/compare/...journal?expand=1` page. The folder bullet must use the
+absolute `tree/<head-branch>/...` form so the link lands on the
+folder browser. This is why the template's `journal/` bullet uses
+the `<repo-url>` and `<head-branch>` placeholders.
+
+After substitution, the three bullets read (using SPEC-0048 as an
+example):
 
 - `[SPEC.md](.speccy/specs/0048-ship-pr-body-markdown-template/SPEC.md)`
 - `[REPORT.md](.speccy/specs/0048-ship-pr-body-markdown-template/REPORT.md)`
-- `[journal/](.speccy/specs/0048-ship-pr-body-markdown-template/journal/)`
+- `[journal/](https://github.com/kvnxiao/speccy/tree/v1/speccy-ship-pr-prompt/.speccy/specs/0048-ship-pr-body-markdown-template/journal)`
 
-GitHub resolves relative paths in PR bodies against the repo root
-on the PR's head branch, so no `https://github.com/...` prefix is
-needed.
+### `<repo-url>`
+
+The GitHub repository URL without a trailing slash —
+`https://github.com/<owner>/<repo>`. Sourced from
+`gh repo view --json url --jq .url` at ship time. Used only in the
+absolute-URL form of the Reference docs `journal/` bullet (folder
+links require absolute URLs; see `<spec-dir>` above).
+
+### `<head-branch>`
+
+The current feature branch name — the branch that will become the
+PR's head ref. Sourced from `git branch --show-current` at ship
+time. Used only in the absolute-URL form of the Reference docs
+`journal/` bullet.
 
 ### `<summary>`
 
