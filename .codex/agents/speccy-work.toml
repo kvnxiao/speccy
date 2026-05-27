@@ -52,7 +52,9 @@ in place and appends `<implementer round="N+1">`.
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, (ii) read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the retry-shape rule inlined at step 2 from `.agents/speccy-references/retry-shape.md`, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the shared reconcile-policy partial inlined into the calling SKILL.md body rather than the normal implementer flow.
+**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, (ii) read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the retry-shape rule summarized at step 2 (canonical statement at `.agents/speccy-references/retry-shape.md`), (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `.agents/speccy-references/reconcile-policy.md`) rather than the normal implementer flow.
+
+**Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `.agents/speccy-references/reconcile-policy.md` for the full policy table.
 
 1. Resolve the target task.
 
@@ -87,95 +89,20 @@ in place and appends `<implementer round="N+1">`.
      code is 0.
 
 2. Read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the
-   REQ-001 retry-shape rule inlined immediately below. The rule
+   REQ-001 retry-shape rule summarized immediately below. The rule
    reads only the journal file — no git, no `speccy next`, no
    other CLI subcommand. Compute the result (first-attempt shape
    or retry shape); the rest of the recipe branches on this
    result.
 
-<!-- Shared rule: retry-shape. Source: .agents/speccy-references/retry-shape.md -->
-## Rule statement
-
-> `T-NNN` is in **retry shape** at `<spec-dir>` iff
-> `<spec-dir>/journal/T-NNN.md` exists, contains at least one
-> `<implementer>` element block, and contains at least one
-> `<blockers>` element block whose `round` attribute equals the
-> highest `round` attribute on any `<implementer>` block in the
-> file. Otherwise `T-NNN` is in **first-attempt shape**.
-
-## Read-only scope
-
-The rule reads only `<spec-dir>/journal/T-NNN.md`. It does not read
-TASKS.md, does not invoke `git`, does not call `speccy next`, and
-does not invoke any other CLI subcommand. Detection is mechanical:
-parse the journal's XML elements (using the same closed-set journal
-grammar `<implementer>` / `<review>` / `<blockers>` enforced by the
-`JNL-*` lint family), read the `round` attributes, compare.
-
-## Worked example 1 — retry shape
-
-```
-<implementer round="1" date="2026-05-26T18:00:00Z" model="claude-opus-4.7[1m]/low">
-... first-pass implementer body ...
-</implementer>
-
-<review persona="style" verdict="blocking" round="1" ...>
-... style persona feedback ...
-</review>
-
-<blockers round="1" ...>
-Style: drop the `println!` short-circuit in `reporter.rs`.
-</blockers>
-```
-
-Applying the rule: the journal contains one `<implementer>` block
-(highest `round="1"`) and a `<blockers round="1">` block whose
-`round` attribute equals that highest implementer round. The
-result is **retry shape**. The dirty tree from the round-1
-implementer is the WIP the round-2 implementer amends in place.
-
-## Worked example 2 — first-attempt shape
-
-```
-<implementer round="1" date="2026-05-26T18:00:00Z" model="claude-opus-4.7[1m]/low">
-... first-pass implementer body ...
-</implementer>
-```
-
-Applying the rule: the journal contains one `<implementer>` block
-and no `<blockers>` blocks. The result is **first-attempt shape**.
-The strict clean-tree gate applies — a non-empty
-`git status --porcelain` halts the calling skill with the
-dirty-paths surface.
-
-A journal file that does not exist on disk also yields
-**first-attempt shape** (the rule's first conjunct fails). The
-strict clean-tree gate applies the same way.
-
-## Edge case — implementer awaiting review
-
-```
-<implementer round="1" ...>...</implementer>
-<review persona="style" verdict="blocking" round="1" ...>...</review>
-<blockers round="1" ...>...</blockers>
-
-<implementer round="2" ...>...</implementer>
-<review persona="business" verdict="blocking" round="2" ...>...</review>
-<blockers round="2" ...>...</blockers>
-
-<implementer round="3" ...>... round-3 pass, awaiting review ...</implementer>
-```
-
-Applying the rule: the highest implementer-block round in this
-journal is `3`, but no `<blockers round="3">` block
-exists (the round-3 reviewer fan-out has not yet fired). The
-result is **first-attempt shape** — the task is awaiting review,
-not awaiting a retry. The strict clean-tree gate applies; if the
-round-3 implementer's WIP is still in the tree, the calling skill
-halts. (In practice the round-3 implementer's atomic-commit step
-would have already landed its work before the journal entered this
-state; this edge case is documented for completeness.)
-<!-- End shared rule: retry-shape. -->
+   **Retry shape.** A task is in retry shape iff its journal
+   contains both an `<implementer>` element and a `<blockers>`
+   element whose `round` attribute matches the highest implementer
+   round. Otherwise it's first-attempt shape — the strict
+   clean-tree gate applies. See
+   `.agents/speccy-references/retry-shape.md` for the full rule
+   statement, read-only scope, worked examples, and the
+   "implementer awaiting review" edge case.
 
 3. Branch on the rule result.
 

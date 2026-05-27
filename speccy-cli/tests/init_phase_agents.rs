@@ -77,7 +77,12 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
     let fx = make_fixture("t009-skill-stub-thin")?;
     run_init_claude(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
+    // SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+    // stub-delegate to pure-include, so its SKILL.md body now expands
+    // the full `modules/skills/speccy-work.md` body and no longer
+    // satisfies the ≤10-line stub cap. Stub-delegate phases retain
+    // the cap; speccy-work is exempt per the new convention.
+    for phase in &["speccy-decompose", "speccy-ship"] {
         let rel = format!(".claude/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let count = common::non_blank_line_count_outside_shared_markers(&body);
@@ -208,7 +213,13 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
     let fx = make_fixture("chk017-codex-stub")?;
     run_init_codex(&fx.root, &[]).success();
 
-    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
+    // SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated to
+    // pure-include shape; the ≤10-line cap no longer applies to it.
+    // The toml-pointer and `/agent` invocation references are still
+    // present in the pure-include body (the module opens with the
+    // delegation pointer), so those assertions still apply uniformly
+    // across all three phases.
+    for phase in &["speccy-decompose", "speccy-ship"] {
         let rel = format!(".agents/skills/{phase}/SKILL.md");
         let body = read_file(&fx.root, &rel)?;
         let count = common::non_blank_line_count_outside_shared_markers(&body);
@@ -216,6 +227,10 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
             count <= 10,
             "CHK-017: {rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
         );
+    }
+    for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
+        let rel = format!(".agents/skills/{phase}/SKILL.md");
+        let body = read_file(&fx.root, &rel)?;
         let toml_file = format!(".codex/agents/{phase}.toml");
         assert!(
             body.contains(&toml_file),

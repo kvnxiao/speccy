@@ -133,11 +133,39 @@ time. Used only in the absolute-URL form of the Reference docs
 
 ### `<summary>`
 
-The prose body of the `## Summary` section in `SPEC.md`, copied
-verbatim up to (but not including) the next `##` heading. Do not
-paraphrase, condense, or re-author — the SPEC's summary is the
-source of truth for what shipped. If the SPEC summary is multiple
-paragraphs, copy all of them, preserving paragraph breaks.
+The prose body of the `## Summary` section in `SPEC.md`, copied up
+to (but not including) the next `##` heading. Do not paraphrase,
+condense, or re-author — the SPEC's summary is the source of truth
+for what shipped. If the SPEC summary is multiple paragraphs, copy
+all of them, preserving paragraph breaks.
+
+**Unwrap intra-paragraph line breaks.** SPEC.md prose is authored
+at ~70 columns for readability in the editor, but GitHub renders
+PR bodies as GitHub-Flavored Markdown where a single newline
+inside a paragraph becomes a `<br>` — so a verbatim paste comes
+through wrapped at the SPEC's authored column rather than the
+viewer's viewport. When filling the placeholder, within each
+paragraph collapse runs of whitespace (including single
+newlines) to a single space, and preserve blank lines as
+paragraph separators. Preserve fenced code blocks, lists, block
+quotes, and any other structural markdown inside the summary
+verbatim — only soft line breaks inside prose paragraphs unwrap.
+
+Worked example. The SPEC.md Summary fragment
+
+```
+Speccy's `resources/` template tree carries canonical sources for the
+`reconcile-policy`, `retry-shape`, and `vet-phases` rules under
+`modules/references/` and `modules/skills/partials/`.
+```
+
+becomes the single PR-body paragraph
+
+```
+Speccy's `resources/` template tree carries canonical sources for the `reconcile-policy`, `retry-shape`, and `vet-phases` rules under `modules/references/` and `modules/skills/partials/`.
+```
+
+so GitHub's renderer wraps it to the viewer's viewport.
 
 ### `<coverage-rows>`
 

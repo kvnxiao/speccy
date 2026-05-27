@@ -43,11 +43,9 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
 
 ## Steps
 
-**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the shared partial inlined below instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
+**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `{{ speccy_references_path }}/reconcile-policy.md`) instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
 
-<!-- Shared partial: reconcile-policy. Source: {{ speccy_references_path }}/reconcile-policy.md -->
-{% include "modules/references/reconcile-policy.md" %}
-<!-- End shared partial: reconcile-policy. -->
+**Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `{{ speccy_references_path }}/reconcile-policy.md` for the full policy table, the three properties the dispatch holds by construction (autonomous / rollback-biased / idempotent), and the extension protocol for adding new drift kinds.
 
 ### Resolve the target task
 

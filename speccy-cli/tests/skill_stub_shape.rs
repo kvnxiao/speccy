@@ -15,8 +15,11 @@
 //! (ii) each of those six rendered SKILL.md bodies contains the literal
 //!      substring `/agent speccy-<phase>` with the matching phase name
 //!      and a reference to the matching agent file path;
-//! (iii) each of those six rendered SKILL.md bodies does not contain
-//!       `## Steps` or `## When to use`.
+//! (iii) the four rendered SKILL.md bodies for the stub-delegate
+//!       phases (`decompose`, `ship`) do not contain `## Steps` or
+//!       `## When to use`; the two `speccy-work` SKILL.md bodies are
+//!       recipe-shape and carry both headings per SPEC-0049 /
+//!       DEC-001(a).
 
 use camino::Utf8PathBuf;
 
@@ -31,6 +34,14 @@ fn workspace_root() -> Utf8PathBuf {
 }
 
 const PINNED_PHASES: &[&str] = &["decompose", "work", "ship"];
+// SPEC-0049 / REQ-003 / DEC-001: `work` migrated from stub-delegate
+// to pure-include shape, so its SKILL.md body now carries the full
+// `## When to use` and `## Steps` sections of a recipe skill. The
+// stub-only invariants (no `## Steps`, no `## When to use`) no
+// longer apply to `work`; the agent-file-pointer and `/agent`
+// invocation references still appear in the pure-include body, so
+// those assertions still apply uniformly.
+const STUB_ONLY_PHASES: &[&str] = &["decompose", "ship"];
 
 /// Test-only failure path. Scoped so the `clippy::panic` expectation
 /// is in one place rather than spread across every assertion.
@@ -262,7 +273,7 @@ fn stub_skill_names_agent_invocation_and_file_codex() {
 #[test]
 fn stub_skill_has_no_steps_or_when_to_use_claude_code() {
     let root = workspace_root();
-    for phase in PINNED_PHASES {
+    for phase in STUB_ONLY_PHASES {
         let skill_body = read_claude_skill(&root, phase);
         let label = format!(".claude/skills/speccy-{phase}/SKILL.md");
         assert!(
@@ -279,7 +290,7 @@ fn stub_skill_has_no_steps_or_when_to_use_claude_code() {
 #[test]
 fn stub_skill_has_no_steps_or_when_to_use_codex() {
     let root = workspace_root();
-    for phase in PINNED_PHASES {
+    for phase in STUB_ONLY_PHASES {
         let skill_body = read_codex_skill(&root, phase);
         let label = format!(".agents/skills/speccy-{phase}/SKILL.md");
         assert!(
@@ -330,7 +341,16 @@ fn init_skill_stays_full_body_codex() {
 
 /// The phase body files exist at `resources/modules/phases/` and the
 /// old paths at `resources/modules/skills/speccy-<phase>.md` are gone
-/// (for the four phase names).
+/// (for the phase names whose skill body has not been re-introduced
+/// as a distinct file under `modules/skills/`).
+///
+/// SPEC-0049 introduces `resources/modules/skills/speccy-work.md` as
+/// the new host-neutral *skill* body (consumed by the speccy-work
+/// wrappers per DEC-001(a)), distinct from the *agent* body at
+/// `resources/modules/phases/speccy-work.md` (consumed by the pinned
+/// subagent template). Both files coexist; `work` is therefore
+/// excluded from the old-path-gone assertion. The other three phases
+/// retain T-009 CHK-010's rename invariant.
 #[test]
 fn phase_body_files_moved_to_modules_phases() {
     let root = workspace_root();
@@ -340,6 +360,11 @@ fn phase_body_files_moved_to_modules_phases() {
             new_path.exists(),
             "`resources/modules/phases/speccy-{phase}.md` must exist after the rename (T-009 CHK-010)",
         );
+        if phase == "work" {
+            // SPEC-0049: the skill-body file at this path is a distinct
+            // artifact from the phase/agent body; presence is expected.
+            continue;
+        }
         let old_path = root.join(format!("resources/modules/skills/speccy-{phase}.md"));
         assert!(
             !old_path.exists(),
