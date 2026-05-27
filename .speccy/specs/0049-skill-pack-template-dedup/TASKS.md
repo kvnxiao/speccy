@@ -85,7 +85,7 @@ Suggested files: `resources/modules/skills/speccy-work.md`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001">
+<task id="T-002" state="completed" covers="REQ-001">
 ## Refactor `modules/skills/speccy-orchestrate.md` — remove three verbatim canonical bodies
 
 Edit `resources/modules/skills/speccy-orchestrate.md` to remove
