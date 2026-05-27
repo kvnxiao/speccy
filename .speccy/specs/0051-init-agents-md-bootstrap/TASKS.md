@@ -317,7 +317,7 @@ Suggested files: `resources/agents/.claude/skills/speccy-init/SKILL.md.tmpl`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-007">
+<task id="T-005" state="completed" covers="REQ-007">
 ## Run the standard four-gate hygiene suite
 
 Run the four hygiene gates required by AGENTS.md § "Standard
