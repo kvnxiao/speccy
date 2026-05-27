@@ -2,7 +2,7 @@
 id: SPEC-0049
 slug: skill-pack-template-dedup
 title: Skill pack template dedup — canonical rule bodies stop leaking into wrappers and modules
-status: in-progress
+status: implemented
 created: 2026-05-27
 supersedes: []
 ---

@@ -195,8 +195,8 @@ steps in the orchestrator's running session:
 
 1. Resolve the target task from `next_action.task_id`.
 2. Read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the
-   retry-shape rule inlined immediately below from
-   `{{ speccy_references_path }}/retry-shape.md`.
+   retry-shape rule summarized immediately below (canonical
+   statement at `{{ speccy_references_path }}/retry-shape.md`).
 3. Run `git status --porcelain`. **First-attempt shape** with
    non-empty stdout halts the outer loop and surfaces the dirty
    paths to the user — no `speccy-work` sub-agent is spawned, and
@@ -312,8 +312,7 @@ so this confirmation is always explicit; never auto-ship.
 
 ## Stop conditions
 
-- `verdict="pass"` from the holistic gate → ask the user before
-  invoking ship.
+- `ship` dispatch declined by the user → stop the outer loop.
 - Same `task_id` flips back to `pending` after review for
   **5 rounds in a row** → stop. The implementer is stuck on this
   task. Surface the journal path
