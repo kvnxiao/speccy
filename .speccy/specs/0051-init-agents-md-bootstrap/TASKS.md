@@ -256,7 +256,7 @@ Suggested files: `resources/modules/phases/speccy-init.md`
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-006">
+<task id="T-004" state="completed" covers="REQ-006">
 ## Update wrapper frontmatter descriptions and reeject host packs
 
 Update the per-host `SKILL.md.tmpl` wrapper frontmatter for
