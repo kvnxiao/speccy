@@ -5,6 +5,7 @@ title: Rename the `/speccy-tasks` skill to `/speccy-decompose`
 status: implemented
 created: 2026-05-25
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0046: Rename the `/speccy-tasks` skill to `/speccy-decompose`

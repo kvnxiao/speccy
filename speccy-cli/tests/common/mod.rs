@@ -158,26 +158,43 @@ pub fn task_xml(id: &str, state: &str) -> String {
 }
 
 /// Count non-blank lines in `s`, excluding any line that falls within a
-/// `reconcile-policy` shared-partial marker block. SPEC-0045/REQ-008
-/// inlines the partial verbatim into phase-worker SKILL.md stubs; the
-/// marker-bounded region is an explicit, auditable exemption from the
-/// "thin stub" non-empty-line cap. Uses the first open marker and the
-/// last close marker as the boundary so the partial's own illustrative
-/// inner markers (inside a fenced code block) stay inside the block.
-pub fn non_blank_line_count_outside_reconcile_partial(s: &str) -> usize {
-    let open_marker = "<!-- Shared partial: reconcile-policy.";
-    let close_marker = "<!-- End shared partial: reconcile-policy. -->";
+/// `reconcile-policy` shared-partial marker block or a
+/// `retry-shape` shared-rule marker block. SPEC-0045/REQ-008 inlines
+/// the reconcile partial verbatim into phase-worker SKILL.md stubs;
+/// SPEC-0047/REQ-002 inlines the retry-shape rule into the
+/// `/speccy-work` and `/speccy-orchestrate` skill bodies. Both
+/// marker-bounded regions are explicit, auditable exemptions from
+/// the "thin stub" non-empty-line cap. For each marker type, uses
+/// the first open marker and the last close marker as the boundary
+/// so the inlined content's own illustrative inner markers (inside
+/// fenced code blocks) stay inside the block.
+pub fn non_blank_line_count_outside_shared_markers(s: &str) -> usize {
+    let exemptions: [(&str, &str); 2] = [
+        (
+            "<!-- Shared partial: reconcile-policy.",
+            "<!-- End shared partial: reconcile-policy. -->",
+        ),
+        (
+            "<!-- Shared rule: retry-shape.",
+            "<!-- End shared rule: retry-shape. -->",
+        ),
+    ];
     let lines: Vec<&str> = s.lines().collect();
-    let open_idx = lines.iter().position(|l| l.trim().starts_with(open_marker));
-    let close_idx = lines
+    let ranges: Vec<(usize, usize)> = exemptions
         .iter()
-        .rposition(|l| l.trim().starts_with(close_marker));
+        .filter_map(|(open_marker, close_marker)| {
+            let open_idx = lines
+                .iter()
+                .position(|l| l.trim().starts_with(open_marker))?;
+            let close_idx = lines
+                .iter()
+                .rposition(|l| l.trim().starts_with(close_marker))?;
+            Some((open_idx, close_idx))
+        })
+        .collect();
     let mut count = 0usize;
     for (idx, line) in lines.iter().enumerate() {
-        if let (Some(o), Some(c)) = (open_idx, close_idx)
-            && idx >= o
-            && idx <= c
-        {
+        if ranges.iter().any(|(o, c)| idx >= *o && idx <= *c) {
             continue;
         }
         if !line.trim().is_empty() {
