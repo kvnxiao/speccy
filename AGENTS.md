@@ -254,6 +254,19 @@ Before any commit lands, all four must pass:
   when the underlying issue resolves.
 - If you're tempted to add agent-behavior knobs to the CLI, stop — that
   belongs in skills or prompts, not in deterministic code.
+- Never put real Speccy-repo identifiers in shipped template /
+  reference / skill bodies. Anything under `resources/modules/`,
+  `resources/agents/`, and the ejected packs at `.claude/`,
+  `.agents/`, `.codex/` will land in other people's repositories
+  via `speccy init`, where Speccy's own spec IDs, slugs, repo URLs,
+  and branch names are meaningless and confusing. When an
+  illustrative example needs concrete values, use obviously
+  fictional placeholders (`SPEC-0042`, `0042-example-slug`,
+  `acme/widget`, `feature/example-branch`) and label the block as
+  "illustrative example — substitute your own values." Speccy's
+  own spec artifacts under `.speccy/specs/` are a different
+  matter — those are local dogfood evidence and stay
+  Speccy-specific.
 - When you hit friction caused by a stale or wrong instruction in a
   shipped skill (wrong command, missing environment variable, an
   undocumented step), do this: update the relevant source module

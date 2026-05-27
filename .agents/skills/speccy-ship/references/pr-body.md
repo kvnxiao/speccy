@@ -106,12 +106,15 @@ absolute `tree/<head-branch>/...` form so the link lands on the
 folder browser. This is why the template's `journal/` bullet uses
 the `<repo-url>` and `<head-branch>` placeholders.
 
-After substitution, the three bullets read (using SPEC-0048 as an
-example):
+After substitution, the three bullets look like the following
+(illustrative example — `SPEC-0042`, the slug `example-feature-slug`,
+the repo `acme/widget`, and the branch `feature/example-branch` are
+fictional; substitute your own spec ID, slug, repo URL, and head
+branch at fill time):
 
-- `[SPEC.md](.speccy/specs/0048-ship-pr-body-markdown-template/SPEC.md)`
-- `[REPORT.md](.speccy/specs/0048-ship-pr-body-markdown-template/REPORT.md)`
-- `[journal/](https://github.com/kvnxiao/speccy/tree/v1/speccy-ship-pr-prompt/.speccy/specs/0048-ship-pr-body-markdown-template/journal)`
+- `[SPEC.md](.speccy/specs/0042-example-feature-slug/SPEC.md)`
+- `[REPORT.md](.speccy/specs/0042-example-feature-slug/REPORT.md)`
+- `[journal/](https://github.com/acme/widget/tree/feature/example-branch/.speccy/specs/0042-example-feature-slug/journal)`
 
 ### `<repo-url>`
 
