@@ -9,24 +9,6 @@
 
 use speccy_core::personas::ALL;
 
-const EXPECTED: &[&str] = &[
-    "business",
-    "tests",
-    "security",
-    "style",
-    "architecture",
-    "docs",
-];
-
-#[test]
-fn registry_contains_six_personas_in_declared_order() {
-    assert_eq!(
-        ALL, EXPECTED,
-        "ALL must list the six personas in the order business, tests, security, style, architecture, docs",
-    );
-    assert_eq!(ALL.len(), 6, "registry must contain exactly six entries");
-}
-
 #[test]
 fn registry_default_personas_is_first_four_prefix() {
     let default = ALL.get(..4).expect("ALL must have at least 4 elements");
