@@ -2,7 +2,7 @@
 id: SPEC-0048
 slug: ship-pr-body-markdown-template
 title: Markdown PR body template — `/speccy-ship` assembles markdown from spec artifacts instead of piping raw REPORT.md XML
-status: in-progress
+status: implemented
 created: 2026-05-27
 supersedes: []
 ---

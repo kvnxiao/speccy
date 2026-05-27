@@ -28,3 +28,17 @@ SPEC-0048 diff is overwhelmingly new markdown (SPEC/TASKS/journal, canonical PR-
 <gate verdict="passed" tasks_hash="0fb0e79d05cd3660e0e1ee9bb5dfb76e3843e743abcc91cdd318fba9cdd08623" date="2026-05-27T06:58:45Z">
 Drift cleared on round 1 after the in-place amendment; simplifier scan returned clean (no candidates). Pre-ship gate passed.
 </gate>
+
+## Hash re-lock — 2026-05-27T07:10:00Z
+
+Post-vet commit `305c015` normalized TASKS.md Part A inline guidance from
+double-brace tokens (`{{ spec-dir }}`) to angle-bracket tokens
+(`<spec-dir>`) for narrative consistency with the amended REQ-001 prose
+and canonical template. The change is cosmetic — no requirement, check,
+or task-state body was modified. Re-locking the gate hash to reflect the
+current TASKS.md byte contents; the passed vet verdict carries forward
+unchanged.
+
+<gate verdict="passed" tasks_hash="ee35e5a61694aab1161b4685566cdc86e024104b5f1085754314fc1d3d46019f" date="2026-05-27T07:10:00Z">
+Hash re-lock after cosmetic TASKS.md normalization (double-brace → angle-bracket inline guidance). Vet verdict unchanged: drift cleared invocation 2, simplifier clean.
+</gate>
