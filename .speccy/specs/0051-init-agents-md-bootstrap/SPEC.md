@@ -2,7 +2,7 @@
 id: SPEC-0051
 slug: init-agents-md-bootstrap
 title: "`/speccy-init` AGENTS.md bootstrap — seeds `## Speccy conventions` section and refactors north star Q&A to a brainstorm-style adaptive flow"
-status: in-progress
+status: implemented
 created: 2026-05-27
 supersedes: []
 ---

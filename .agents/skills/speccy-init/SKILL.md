@@ -5,16 +5,22 @@ description: 'Bootstrap a new Speccy workspace by scaffolding `.speccy/` and ins
 
 # speccy-init
 
-Bootstraps a Speccy workspace in three steps: scaffold `.speccy/`,
-copy the Codex skill pack into `.agents/skills/`, and (if needed)
-seed the product north star into the project's root `AGENTS.md`.
+Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Codex
+skill pack into `.agents/skills/`, seed the product north star into
+the project's root `AGENTS.md` (freeze-on-first-write), and upsert
+the canonical `## Speccy conventions` section into the same
+`AGENTS.md` (always-upsert, so re-runs refresh it).
 
 ## When to use
 
 Run once per project, before any other Speccy skill. Re-run with
-`--force` after upgrading `speccy` to refresh shipped recipes.
-`speccy init` only ever touches files it ships; user-authored skill
-files in `.agents/skills/` are left alone.
+`--force` after upgrading `speccy` to refresh both the shipped skill
+files **and** the `## Speccy conventions` section in `AGENTS.md` so
+your agents pick up newly shipped skills and refined rules. The
+`## Product north star` section is written once and then left alone;
+the conventions section is always re-upserted from the canonical
+template. `speccy init` only ever touches files it ships;
+user-authored skill files in `.agents/skills/` are left alone.
 
 ## Steps
 
