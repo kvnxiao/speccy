@@ -380,28 +380,6 @@ fn recipe_content_shape() {
 // --------------------------------------------------------------------
 
 // --------------------------------------------------------------------
-// Bundle layout: per-host SKILL.md.tmpl wrappers.
-// --------------------------------------------------------------------
-
-#[test]
-fn bundle_layout_has_skill_md_per_host() {
-    // Per-host SKILL.md surface lives as wrapper templates under
-    // `resources/agents/<install_root>/skills/`. Claude Code →
-    // `.claude/skills/`, Codex → `.agents/skills/`.
-    let root = workspace_root();
-    for (_host, install_root) in HOST_SKILL_ROOTS {
-        for skill in SKILL_NAMES {
-            let rel = format!("resources/agents/{install_root}/skills/{skill}/SKILL.md.tmpl");
-            let path = root.join(&rel);
-            let body = fs_err::read_to_string(&path).unwrap_or_else(|err| {
-                panic_with_test_message(&format!("workspace must contain `{rel}`: {err}"))
-            });
-            assert!(!body.trim().is_empty(), "wrapper `{rel}` must be non-empty");
-        }
-    }
-}
-
-// --------------------------------------------------------------------
 // SKILL.md frontmatter shape (name matches dir, description is a
 // single line).
 // --------------------------------------------------------------------

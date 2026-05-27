@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0050
-spec_hash_at_generation: b2f86baf25f08d1b537899dbd00a6182595becb401c6cff55871137ba72969ca
-generated_at: 2026-05-27T20:54:45Z
+spec_hash_at_generation: 6098630d8e523ae54e94cf53dd70e5f761f35c35799ed8f8354b2010d389897f
+generated_at: 2026-05-27T21:04:33Z
 ---
 # Tasks: SPEC-0050 Remove vacuous tests — delete 6 tests that gate editorial prose, file non-emptiness, or constant copies rather than behavior
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002 REQ-003 REQ-004">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002 REQ-003 REQ-004">
 ## Delete the six vacuous tests and verify the workspace hygiene suite stays green
 
 Delete six `#[test]` functions across three files plus the orphan

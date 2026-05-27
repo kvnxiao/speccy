@@ -128,6 +128,7 @@ Given the same workspace state,
 when `cargo test --workspace --test init` runs,
 then it exits 0 and the test runner output does not contain any of the four removed function names.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -166,6 +167,7 @@ Given the same workspace state,
 when `cargo test --workspace --test skill_packs` runs,
 then it exits 0 and the runner output does not contain `bundle_layout_has_skill_md_per_host`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -207,6 +209,7 @@ Given the same workspace state,
 when `cargo test --workspace --test personas` runs,
 then it exits 0, reports `2 passed`, and the runner output does not contain `registry_contains_six_personas_in_declared_order`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -239,6 +242,7 @@ when the four hygiene commands (`cargo test --workspace`,
 `cargo +nightly fmt --all --check`, `cargo deny check`) run in sequence,
 then each exits 0.
 </scenario>
+
 </requirement>
 
 ## Decisions
