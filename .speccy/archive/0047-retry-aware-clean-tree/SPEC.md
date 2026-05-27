@@ -5,6 +5,7 @@ title: Retry-aware clean-tree precondition — work dispatch tolerates dirty tre
 status: implemented
 created: 2026-05-26
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0047: Retry-aware clean-tree precondition — work dispatch tolerates dirty trees on review-blocked retries
