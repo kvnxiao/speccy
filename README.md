@@ -166,7 +166,7 @@ working example.
 ### Step 3: Drive specs end-to-end from your agent harness
 
 From this point onward, the workflow is entirely slash-commands. The
-golden path consists of five recipes:
+golden path consists of these recipes:
 
 ```text
 /speccy-plan      Phase 1: draft SPEC.md from the north star
@@ -322,28 +322,41 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
       SPEC.md                   Frontmatter + PRD prose + nested <requirement>/<scenario>/<decision> elements + Changelog
       TASKS.md                  Frontmatter (spec_hash_at_generation) + <task> elements
       journal/T-NNN.md          Per-task implementer/reviewer/blockers activity prose (SPEC-0037)
+      journal/VET.md            Per-SPEC pre-ship vet journal: <drift-review>,
+                                <holistic-fix>, <simplifier-*>, and trailing
+                                <gate> blocks. The trailing <gate> is what
+                                `speccy next` reads to decide whether the
+                                ship gate is fresh (SPEC-0044).
       REPORT.md                 Frontmatter (outcome) + <report>/<coverage> elements (end of loop)
 
 .claude/                        (if host is Claude Code)
-  skills/speccy-{init,brainstorm,plan,tasks,work,review,amend,ship,orchestrate,vet}/
-                                Ten workflow recipes. The interactive skills
-                                (init, brainstorm, plan, review, amend, orchestrate,
-                                vet) eject as full-body SKILL.md; the three
-                                pinned phase workers (tasks, work, ship) eject as thin
-                                SKILL.md stubs pointing at the matching agent file.
-  agents/speccy-{tasks,work,ship}.md   Pinned phase-worker sub-agents (full body)
-  agents/reviewer-*.md                 Six reviewer persona sub-agents
+  skills/speccy-*/              Workflow recipes (init, brainstorm, plan,
+                                decompose, work, review, amend, ship,
+                                orchestrate, vet). Interactive skills
+                                eject as full-body SKILL.md; pinned phase
+                                workers (decompose, work, ship) eject as a
+                                SKILL.md body that defers to the matching
+                                agent file as the canonical procedure source.
+  agents/speccy-{decompose,work,ship}.md  Pinned phase-worker sub-agents (full body)
+  agents/reviewer-*.md                    Reviewer persona sub-agents
   agents/vet-{reviewer,implementer,simplifier}.md
-                                Three vet sub-agents driven by /speccy-vet
+                                Vet sub-agents driven by /speccy-vet
                                 (drift review + drift fix + simplifier polish)
+  speccy-references/                      Host-shared reference files imported
+                                from multiple skill bodies (evidence.md,
+                                journal-blockers.md, reconcile-policy.md,
+                                retry-shape.md). Skill-local references
+                                (e.g. spec.md, tasks.md) live under each
+                                skill's own references/ subdirectory.
 
 .agents/                        (if host is Codex)
-  skills/speccy-*/                     Ten Codex skill SKILL.md files
+  skills/speccy-*/                          Codex skill SKILL.md files
+  speccy-references/                        Codex twin of host-shared refs
 .codex/
-  agents/speccy-{tasks,work,ship}.toml Pinned phase-worker sub-agents
-  agents/reviewer-*.toml               Six reviewer persona sub-agents
+  agents/speccy-{decompose,work,ship}.toml  Pinned phase-worker sub-agents
+  agents/reviewer-*.toml                    Reviewer persona sub-agents
   agents/vet-{reviewer,implementer,simplifier}.toml
-                                Codex twins of the three vet sub-agents
+                                            Vet sub-agents (Codex twins)
 ```
 
 The requirement-to-scenario graph lives in-band as XML element tags
@@ -396,7 +409,7 @@ TASKS.md slice without truncation. On Codex, `gpt-5.5` covers every
 pinned role and the asymmetric work-shape is carried entirely by
 `model_reasoning_effort`.
 
-The three pinned phase workers (`speccy-decompose`, `speccy-work`,
+The pinned phase workers (`speccy-decompose`, `speccy-work`,
 `speccy-ship`) ship sub-agent files. `speccy-init` and
 `speccy-review` ship no agent file on either host — only the
 SKILL.md surface — because both phases need to drive the parent
@@ -416,12 +429,12 @@ the phase:
 - **Codex:** invoke the equivalent sub-agent spawner against
   `.codex/agents/speccy-work.toml`, then run `/speccy-work`.
 
-For the three pinned phases, the SKILL.md body is a thin stub
-that points at the matching agent file as the canonical procedure
-source. The agent file's body is the single on-disk source of
-truth for that phase. `/speccy-init`'s SKILL.md and
-`/speccy-review`'s SKILL.md both remain full-body because there is
-no sub-agent file for either to defer to.
+For the pinned phases, the SKILL.md body defers to the matching
+agent file as the canonical procedure source. The agent file's
+body is the single on-disk source of truth for that phase.
+`/speccy-init`'s SKILL.md and `/speccy-review`'s SKILL.md both
+remain full-body because there is no sub-agent file for either
+to defer to.
 
 The `/speccy-review` orchestrator stays unpinned on both hosts
 deliberately: it is the sole writer to `TASKS.md` during the review
@@ -492,7 +505,7 @@ drift stays loud while the CLI itself never blocks you mid-loop.
 
 ## Design
 
-Speccy commits to six durable principles:
+Speccy commits to a small set of durable principles:
 
 1. **Feedback, not enforcement.** Speccy makes drift visible; it
    does not block agents from making mistakes.
@@ -507,9 +520,9 @@ Speccy commits to six durable principles:
    review (business, tests, security, and style by default) is the
    mechanism by which drift gets caught. Personas live as markdown
    skills.
-5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, and
-   Check), a small flat command surface, and no mode toggles. `--json`
-   toggles representation, never content.
+5. **Stay small.** A handful of nouns (Mission, Spec, Requirement,
+   Task, Check), a small flat command surface, and no mode toggles.
+   `--json` toggles representation, never content.
 6. **Surface unknowns; never invent.** An ambiguous spec means stop
    and surface the ambiguity; an inability to validate something
    means say so out loud.
