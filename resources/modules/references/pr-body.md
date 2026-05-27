@@ -1,0 +1,138 @@
+# PR body reference: `/speccy-ship` markdown template
+
+`REPORT.md` wraps a `<report>` root with one `<coverage>` child per
+surviving requirement so `speccy verify`'s `RPT-*` lint family can
+proof-shape it. GitHub's markdown renderer does not strip those
+custom elements, so when the raw `REPORT.md` is piped through
+`gh pr create --body "$(cat ...)"` the angle-bracket wrappers leak
+into the rendered PR page as visible prose. Reviewers either decode
+the XML by eye or click through to `REPORT.md` in Files-changed.
+
+This file is the canonical markdown PR body template. The
+`/speccy-ship` recipe fills the placeholders from on-disk artifacts
+(`SPEC.md`, `REPORT.md`, spec-dir path) and passes the rendered
+markdown to `gh pr create --body-file` instead.
+
+## Scope: one SPEC per PR
+
+The template assumes a single SPEC per pull request: one
+`spec-dir`, one summary, one coverage table. Branches that bundle
+multiple SPECs, or carry unrelated precursor commits, fall back to
+a hand-authored PR body. The template can still serve as a per-SPEC
+starting skeleton when hand-authoring — copy the rendered output
+for each SPEC and stitch the sections — but the recipe does not
+prescribe multi-SPEC composition. The agent reads the branch shape
+at decision time and picks the path that matches.
+
+## Title
+
+The PR title is the SPEC id and slug, joined by a space, sourced
+from `SPEC.md`'s frontmatter `id` and `slug` fields:
+
+```
+<SPEC-NNNN> <slug>
+```
+
+Passed to `gh pr create --title "<SPEC-NNNN> <slug>"`. The title
+shape is unchanged from the pre-template recipe.
+
+## Body template
+
+The template has three placeholders, written as angle-bracket
+tokens (`<spec-dir>`, `<summary>`, `<coverage-rows>`) so they do
+not collide with MiniJinja's double-brace expression syntax. Fill
+each one per `## Filling the placeholders` below and write the
+result to a scratch file passed to `gh pr create --body-file`:
+
+```markdown
+## Summary
+
+<summary>
+
+## Coverage
+
+| Req | Result | Scenarios | Retries |
+|---|---|---|---|
+<coverage-rows>
+
+## Test plan
+
+- [x] `cargo test --workspace`
+- [x] `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- [x] `cargo +nightly fmt --all --check`
+- [x] `cargo deny check`
+- [x] `speccy verify`
+
+## Reference docs
+
+- [SPEC.md](<spec-dir>/SPEC.md)
+- [REPORT.md](<spec-dir>/REPORT.md)
+- [journal/](<spec-dir>/journal/)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
+The body has exactly four top-level `##` headings in this order:
+`## Summary`, `## Coverage`, `## Test plan`, `## Reference docs`.
+Do not reorder, rename, or add sections.
+
+## Filling the placeholders
+
+### `<spec-dir>`
+
+The spec-local directory, relative to repo root —
+`.speccy/specs/NNNN-slug`. Sourced from the `spec_md_path` field of
+`speccy next SPEC-NNNN --json` (strip the trailing `/SPEC.md`).
+Used in the three Reference docs bullets to produce repo-relative
+links GitHub renders as clickable file paths.
+
+### `<summary>`
+
+The prose body of the `## Summary` section in `SPEC.md`, copied
+verbatim up to (but not including) the next `##` heading. Do not
+paraphrase, condense, or re-author — the SPEC's summary is the
+source of truth for what shipped. If the SPEC summary is multiple
+paragraphs, copy all of them, preserving paragraph breaks.
+
+### `<coverage-rows>`
+
+One markdown table row per `<coverage>` element in `REPORT.md`, in
+the order the elements appear (the canonical REPORT.md shape lists
+them in numerical requirement order). Each row has four columns:
+
+- **Req**: the `req` attribute value (e.g. `REQ-001`).
+- **Result**: the `result` attribute value (e.g. `satisfied`,
+  `partial`, `not-applicable`, `unsatisfied`).
+- **Scenarios**: the `scenarios` attribute value split on
+  whitespace and re-joined with `, ` (e.g. `CHK-001, CHK-002`).
+  An empty `scenarios` attribute (allowed for `not-applicable`
+  rows) renders as an empty cell.
+- **Retries**: the value of the `Retry count:` line that closes
+  the element body, copied verbatim including any per-task
+  parenthetical breakdown (e.g. `0`, `2 (T-001: 1, T-002: 1)`).
+
+Example rendered rows:
+
+```markdown
+| REQ-001 | satisfied | CHK-001, CHK-002 | 0 |
+| REQ-002 | satisfied | CHK-003, CHK-004 | 1 |
+| REQ-003 | not-applicable |  | 0 |
+```
+
+## Anti-patterns
+
+- **No raw-XML paste.** Do not use `gh pr create --body "$(cat ...
+  REPORT.md)"`. GitHub does not render `<report>` / `<coverage>` as
+  HTML; the angle brackets leak into the PR page.
+- **No fabricated rows.** Every Coverage row corresponds to a
+  `<coverage>` element actually present in `REPORT.md`. Do not
+  invent rows for requirements REPORT.md omits, and do not drop
+  rows for requirements REPORT.md includes.
+- **No edits to the Test plan checklist.** The five items are
+  fixed: the four `AGENTS.md` "## Standard hygiene" gates plus
+  `speccy verify`. They are pre-checked because the ship recipe
+  halts before `gh pr create` if any gate failed — a PR reaching
+  this step necessarily cleared all five.
+- **No dropping the footer.** The `🤖 Generated with [Claude Code]`
+  attribution line closes the body. Codex hosts swap the link
+  target for the Codex CLI equivalent; no host omits the footer.

@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0048
-spec_hash_at_generation: 7f7253b4d707dd60d1ee2be0c5416bb44c6e727da6c22097a8dc21b0553debd0
+spec_hash_at_generation: f6c236bbdb51c3f7add3c95e672a741fd0b8e553a7d9fc0f9d483ce397f386f2
 generated_at: 2026-05-27T06:04:42Z
 ---
 # Tasks: SPEC-0048 Markdown PR body template — `/speccy-ship` assembles markdown from spec artifacts instead of piping raw REPORT.md XML
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002 REQ-003">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002 REQ-003">
 ## Author the canonical `pr-body.md` reference, fan out the host mirrors, and rewire `/speccy-ship` step 5 to render the template
 
 Land the canonical reference, its templating partials, both host-portable

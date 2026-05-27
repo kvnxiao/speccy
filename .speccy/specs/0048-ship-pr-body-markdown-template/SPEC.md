@@ -217,6 +217,7 @@ when its scope section is inspected,
 then it carries a "one SPEC per PR" statement and an explicit
 hand-authored-body fallback clause for multi-SPEC branches.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -280,6 +281,7 @@ matching `{% include "modules/references/pr-body.md" %}`, and the two
 dogfood mirrors are byte-identical to
 `resources/modules/references/pr-body.md`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -357,6 +359,7 @@ when step 5 of `resources/modules/phases/speccy-ship.md` is read,
 then it carries an explicit multi-SPEC fallback paragraph naming
 hand-authoring as the path for branches bundling multiple SPECs.
 </scenario>
+
 </requirement>
 
 ## Decisions

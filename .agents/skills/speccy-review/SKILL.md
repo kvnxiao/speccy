@@ -224,6 +224,15 @@ The prompt for each spawn is:
 > identify the model that produced the verdict (with the optional
 > slash-suffix effort convention from the verdict-return contract).
 > Do not edit TASKS.md and do not edit the journal file.
+>
+> The working tree may be dirty: the implementer leaves changes
+> uncommitted on purpose, and the orchestrator (not the implementer)
+> owns the single atomic commit on review pass per REQ-003/REQ-004.
+> On retry rounds the dirty tree is the prior pass's WIP that the
+> retry implementer amended in place per the retry-shape contract.
+> Do not flag uncommitted state, commit timing, or "changes not
+> committed before the in-review flip" -- those are out of scope
+> for per-task review.
 
 Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name per
 spawn.
