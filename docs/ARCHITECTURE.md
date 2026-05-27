@@ -71,7 +71,7 @@ Speccy, not in the user's workflow.
 
 ---
 
-# Five Proper Nouns
+# Proper Nouns
 
 | Noun | What it is | Where it lives |
 |---|---|---|
@@ -107,7 +107,7 @@ TASKS.md / MISSION.md / AGENTS.md.
 
 # Core Development Loop
 
-The full loop is five phases. Phases 3 and 4 are single-task
+The loop has the phases listed below. Phases 3 and 4 are single-task
 primitives: one invocation, one task, one state transition recorded
 in TASKS.md. Composing those invocations into a batch is a caller
 concern, not the skill's.
@@ -116,7 +116,7 @@ concern, not the skill's.
 1. plan       skill writes SPEC.md (PRD-shaped, XML-element-structured)
 2. tasks      skill writes TASKS.md (one task sized for one agent session); skill calls `speccy lock`
 3. implement  skill implements one task; exits with state transition
-4. review     skill fans out four personas on one task; exits with state transition
+4. review     skill fans out the default reviewer personas on one task; exits with state transition
 5. report     skill writes REPORT.md and opens PR
 ```
 
@@ -254,20 +254,21 @@ AGENTS.md                Project-wide product north star + agent conventions
 
 resources/               Shipped with Speccy; rendered/copied by `speccy init`
   modules/               Single-source bodies (no host duplication)
-    personas/            Six reviewer persona body files + co-located
-                         topic-named snippets (verdict_return_contract.md,
-                         inline_note_format.md, no_tasks_md_writes.md,
-                         diff_fetch_command.md)
-    phases/              Three pinned phase-worker bodies (speccy-decompose.md,
-                         speccy-work.md, speccy-ship.md); plus speccy-init.md
-                         which is dual-consumed by `speccy init` itself
-    skills/              Six interactive skill bodies (speccy-brainstorm.md,
-                         speccy-plan.md, speccy-amend.md, speccy-review.md
-                         orchestrator, speccy-orchestrate.md, speccy-vet.md)
-                         — full-body SKILL.md eject targets
-    references/          Canonical worked-instance reference files
-                         (spec.md, tasks.md, report.md, journal-*.md,
-                         evidence.md) shared across skills
+    personas/            Reviewer and vet persona bodies, plus
+                         co-located snippets included from those
+                         bodies.
+    phases/              Agent bodies for the pinned phase workers
+                         and the init phase.
+    skills/              Interactive skill bodies plus the SKILL.md
+                         bodies for the pinned phase workers
+                         (which defer to the matching agent file).
+                         `partials/` holds sharable skill fragments
+                         included from multiple skill bodies.
+    references/          Canonical reference files shared across
+                         skills. Skill-local refs eject into each
+                         skill's `references/` subdirectory;
+                         host-shared refs eject under
+                         `<host>/speccy-references/`.
   agents/                Per-host wrappers (MiniJinja-templated)
     .claude/             Renders to <project>/.claude/{skills,agents}/
     .agents/             Renders to <project>/.agents/skills/ (Codex)
@@ -306,19 +307,22 @@ per-host wrappers as MiniJinja templates. `speccy init` renders those
 wrappers into the user's project at the host-native location.
 
 For Claude Code that lands as `.claude/skills/speccy-<verb>/SKILL.md`
-for every shipped skill (full body for the five interactive skills;
-thin ≤10-line stub for the three pinned phase workers), plus
-`.claude/agents/speccy-{tasks,work,ship}.md` for the pinned phase
-worker bodies and `.claude/agents/reviewer-<persona>.md` for the six
-reviewer sub-agents. Neither `speccy-init` nor `speccy-review` ships
-an agent file: both stay in the parent session because both are
-interactive (init Q&A; review verdict consolidation) and need the
-parent session's full capacity for user prompts and serialised
-TASKS.md writes.
+for every shipped skill (full body for the interactive skills;
+defer-to-agent SKILL.md for the pinned phase workers), plus
+`.claude/agents/speccy-{decompose,work,ship}.md` for the pinned
+phase worker bodies, `.claude/agents/reviewer-<persona>.md` for
+the reviewer sub-agents, and
+`.claude/agents/vet-{reviewer,implementer,simplifier}.md` for the
+vet sub-agents that `/speccy-vet` drives. Skills that stay in the
+parent session (no agent file) are the ones that either need
+interactive user prompts or own serialised writes to TASKS.md /
+the journal — `speccy-init`, `speccy-review`, `speccy-orchestrate`,
+and `speccy-vet` fall into this bucket.
 
 For Codex the parallel is `.agents/skills/speccy-<verb>/SKILL.md`
-plus `.codex/agents/speccy-{tasks,work,ship}.toml` and
-`.codex/agents/reviewer-<persona>.toml`.
+plus `.codex/agents/speccy-{decompose,work,ship}.toml`,
+`.codex/agents/reviewer-<persona>.toml`, and
+`.codex/agents/vet-{reviewer,implementer,simplifier}.toml`.
 
 There is no project-local persona override directory. The
 host-native sub-agent files under `.claude/agents/` and
@@ -424,7 +428,7 @@ to resolve the next implementable task. In either case the session:
 - uses `speccy check SPEC-NNNN/T-NNN` only to render the scenarios
   it is satisfying;
 - appends one `<implementer>` block to
-  `.speccy/specs/NNNN-slug/journal/T-NNN.md` using the six-field
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` using the multi-field
   handoff template the agent body supplies (the journal file is
   created on round 1 if it does not exist; subsequent rounds
   append);
@@ -455,15 +459,14 @@ that specific task. Without an argument the session calls
 `speccy next --json` and filters for `next_action.kind == "review"`.
 In either case the session:
 
-- fans out four reviewer sub-agents in parallel within this single
-  task, one per persona in the default fan-out (`business`, `tests`,
-  `security`, `style`); each sub-agent's body is loaded from
-  `.claude/agents/reviewer-<persona>.md` or its Codex parallel, with
-  per-persona model pins (Opus[1m] xhigh for business / tests /
-  architecture; Sonnet[1m] high for security; Sonnet[1m] medium for
-  style / docs);
-- aggregates the four returned `<review>` blocks and appends each
-  to `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the orchestrator
+- fans out one reviewer sub-agent per persona in the default
+  fan-out (`business`, `tests`, `security`, `style`) in parallel
+  within this single task; each sub-agent's body is loaded from
+  `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
+  with per-persona model pins (see "Model pinning" in the README
+  for the current matrix);
+- aggregates the returned `<review>` blocks and appends each to
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the orchestrator
   is the sole writer to the journal during review — reviewer
   sub-agents return their `<review>` element to the orchestrator
   which writes serially, preserving the existing concurrency
@@ -474,11 +477,11 @@ In either case the session:
   `<blockers>` block to the journal summarising the blockers, and
   exits.
 
-The within-task four-persona fan-out is intrinsic to the primitive,
-not orchestration: adversarial diversity requires fresh contexts per
-persona, and the fan-out is bounded to four sub-agents on one task
-in one round. Failed tasks return to `state="pending"` for a later
-Phase 3 invocation to pick up.
+The within-task fan-out is intrinsic to the primitive, not
+orchestration: adversarial diversity requires fresh contexts per
+persona, and the fan-out is bounded to one sub-agent per default
+persona on one task in one round. Failed tasks return to
+`state="pending"` for a later Phase 3 invocation to pick up.
 
 The default fan-out is **business**, **tests**, **security**,
 **style**. The other personas (**architecture**, **docs**) are
@@ -512,7 +515,7 @@ a PR via `gh` (or equivalent); Speccy itself never touches GitHub.
 
 # TASKS.md State Model
 
-Four task states, carried by the `state` attribute on each `<task>`
+Task states, carried by the `state` attribute on each `<task>`
 XML element (see "TASKS.md format" below for the full grammar).
 
 | `state` value | Meaning | Who sets it |
@@ -579,7 +582,7 @@ Matches REQ-002 intent.
 Hash assertion present.
 </review>
 
-<review persona="security" verdict="blocking" date="2026-05-11T19:00:00Z" model="claude-sonnet-4-6[1m]/medium" round="1">
+<review persona="security" verdict="blocking" date="2026-05-11T19:00:00Z" model="claude-opus-4-7[1m]/high" round="1">
 bcrypt cost 10; policy requires >=12. See `src/auth/password.ts:14`.
 </review>
 
@@ -612,7 +615,7 @@ The frontmatter requires exactly three fields: `spec` (matching
 
 | Element | Cardinality | Parent | Required attributes | Notes |
 |---|---|---|---|---|
-| `implementer` | 1+ per round, ≥1 round total | bare under frontmatter | `date`, `model`, `round` | Implementer handoff for one round. Body is Markdown using the six-field handoff template (Completed / Undone / Commands run / Exit codes / Discovered issues / Procedural compliance). |
+| `implementer` | 1+ per round, ≥1 round total | bare under frontmatter | `date`, `model`, `round` | Implementer handoff for one round. Body is Markdown using the multi-field handoff template (Completed / Undone / Commands run / Exit codes / Discovered issues / Procedural compliance). |
 | `review` | 1+ per reviewed round | bare under frontmatter | `date`, `model`, `persona`, `verdict`, `round` | One reviewer's verdict for one round. `verdict` is `pass` or `blocking`; `persona` is one of the persona registry values. |
 | `blockers` | 0 or 1 per round | bare under frontmatter | `date`, `round` | Directive carried across a retry boundary — either reviewer-aggregated blockers or an amendment-driven blocker. Body names what the next round must address. |
 
@@ -649,9 +652,9 @@ Shape violations under either binding or monotonicity surface as
 
 ### Lint family for journal artifacts (JNL-*)
 
-Three new lint codes (registered in the canonical registry alongside
-`SPC-*`, `TSK-*`, `RPT-*`) enforce the journal contract. All three
-default to `Level::Error` and gate `speccy verify`:
+A `JNL-*` lint family (registered in the canonical registry alongside
+`SPC-*`, `TSK-*`, `RPT-*`) enforces the journal contract. All `JNL-*`
+codes default to `Level::Error` and gate `speccy verify`:
 
 - **JNL-001** — Task is `state="pending"` but `journal/T-NNN.md`
   exists. A pending task has not yet been claimed by an
@@ -1180,8 +1183,8 @@ deterministic rendering).
 
 Only `task` and `task-scenarios` are the live Speccy element names
 inside a TASKS.md body. The closed XML element set across all
-Speccy artifacts is five element names total — `task`,
-`task-scenarios`, `implementer`, `review`, `blockers` — with the
+Speccy artifacts is — `task`, `task-scenarios`, `implementer`,
+`review`, `blockers` — with the
 last three only ever appearing inside `journal/T-NNN.md` (never in
 TASKS.md).
 
@@ -1657,9 +1660,9 @@ journal-writer concurrency contract belongs to the orchestrator.
 ## State transitions
 
 Persona sub-agents **do not** flip the task's `state` attribute.
-That would create a race when the four personas run in parallel. The
-`/speccy-review` skill flips state once after all four persona
-`<review>` elements have been aggregated:
+That would create a race when the personas run in parallel. The
+`/speccy-review` skill flips state once after every persona's
+`<review>` element has been aggregated:
 
 - All `verdict="pass"` -> `state="in-review"` becomes
   `state="completed"`.
@@ -1779,50 +1782,33 @@ to-end without each project inventing its own integration.
 ```
 resources/
   modules/
-    skills/                  Full-body SKILL.md sources for interactive skills
-      speccy-brainstorm.md
-      speccy-plan.md
-      speccy-amend.md
-      speccy-review.md       Orchestrator (dispatches the six reviewer sub-agents)
-      speccy-orchestrate.md  Drives the per-task work + review loop across one SPEC
-      speccy-vet.md          Pre-ship SPEC-vs-impl drift review + autonomous fix loop
-    phases/                  Full-body sources for the pinned phase workers
-      speccy-init.md         Used by speccy-init's interactive SKILL.md too
-      speccy-decompose.md    Decompose one SPEC into TASKS.md
-      speccy-work.md         Implement one task (single-task primitive)
-      speccy-ship.md         Write REPORT.md + open PR
-    personas/                Six reviewer + three vet persona bodies + co-located snippets
-      reviewer-business.md
-      reviewer-tests.md
-      reviewer-security.md
-      reviewer-style.md
-      reviewer-architecture.md
-      reviewer-docs.md
-      vet-reviewer.md
-      vet-implementer.md
-      vet-simplifier.md
-      verdict_return_contract.md   Topic-named snippets {% included %} by
-      inline_note_format.md         the persona bodies above. Filename pattern
-      no_tasks_md_writes.md         distinguishes snippets from body files;
-      diff_fetch_command.md         no `_partials/` subdirectory exists.
-    references/              Canonical worked-instance reference files,
-      spec.md                ejected into per-skill `references/` and
-      tasks.md               host-shared `speccy-references/` directories
-      report.md              under both host packs. See "Skill-pack
-      journal-implementer.md reference files" below for the seven-row
-      journal-review.md      artifact→path mapping (SPEC-0038 REQ-002 is
-      evidence.md            the source of truth).
-      journal-blockers.md
+    skills/                  Interactive skill bodies (speccy-brainstorm,
+                             -plan, -amend, -review, -orchestrate, -vet)
+                             plus SKILL.md bodies for the pinned workers
+                             that defer to the agent file.
+                             `partials/` holds sharable skill fragments
+                             included from multiple skill bodies.
+    phases/                  Agent bodies for the pinned workers and init
+                             (speccy-decompose, -work, -ship, -init).
+    personas/                Reviewer persona bodies (`reviewer-*.md`),
+                             vet persona bodies (`vet-*.md`), and
+                             topic-named snippets included from those
+                             bodies. The snippet/body distinction is
+                             carried by filename pattern; no
+                             `_partials/` subdirectory exists.
+    references/              Canonical reference files. Skill-local
+                             refs eject into each skill's `references/`
+                             subdirectory; host-shared refs eject under
+                             `<host>/speccy-references/`. The full
+                             mapping lives in "Skill-pack reference
+                             files" below.
   agents/                    Per-host MiniJinja wrappers (rendered at init time)
-    .claude/skills/speccy-<verb>/SKILL.md.tmpl   Ten skills total
-    .claude/agents/speccy-{tasks,work,ship}.md.tmpl   Pinned phase workers
-    .claude/agents/reviewer-<persona>.md.tmpl    Six reviewer sub-agents
+    .claude/skills/speccy-<verb>/SKILL.md.tmpl
+    .claude/agents/speccy-{decompose,work,ship}.md.tmpl
+    .claude/agents/reviewer-<persona>.md.tmpl
     .claude/agents/vet-{reviewer,implementer,simplifier}.md.tmpl
-                                                 Three vet sub-agents driven by
-                                                 /speccy-vet (drift review + drift
-                                                 fix + simplifier polish)
-    .agents/skills/speccy-<verb>/SKILL.md.tmpl   Codex skill files
-    .codex/agents/speccy-{tasks,work,ship}.toml.tmpl
+    .agents/skills/speccy-<verb>/SKILL.md.tmpl
+    .codex/agents/speccy-{decompose,work,ship}.toml.tmpl
     .codex/agents/reviewer-<persona>.toml.tmpl
     .codex/agents/vet-{reviewer,implementer,simplifier}.toml.tmpl
 ```
@@ -1842,22 +1828,34 @@ or a host-shared `speccy-references/` directory at host root
 (multi-consumer). The path's first component classifies the file;
 no separate manifest declares it. The mapping:
 
-| Artifact                        | Source                                              | Claude Code path                                                  | Codex path                                                       | Class       |
-|---------------------------------|-----------------------------------------------------|-------------------------------------------------------------------|------------------------------------------------------------------|-------------|
-| SPEC.md                         | `resources/modules/references/spec.md`              | `.claude/skills/speccy-plan/references/spec.md`                   | `.agents/skills/speccy-plan/references/spec.md`                  | skill-local |
-| TASKS.md                        | `resources/modules/references/tasks.md`             | `.claude/skills/speccy-decompose/references/tasks.md`             | `.agents/skills/speccy-decompose/references/tasks.md`                | skill-local |
-| REPORT.md                       | `resources/modules/references/report.md`            | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                | skill-local |
-| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`  | `.agents/skills/speccy-work/references/journal-implementer.md`   | skill-local |
-| journal `<review>` block        | `resources/modules/references/journal-review.md`    | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`      | skill-local |
-| evidence file (`evidence/T-NNN.md`) | `resources/modules/references/evidence.md`      | `.claude/speccy-references/evidence.md`                           | `.agents/speccy-references/evidence.md`                          | host-shared |
-| journal `<blockers>` block      | `resources/modules/references/journal-blockers.md`  | `.claude/speccy-references/journal-blockers.md`                   | `.agents/speccy-references/journal-blockers.md`                  | host-shared |
+| Artifact                        | Source                                                | Claude Code path                                                  | Codex path                                                          | Class       |
+|---------------------------------|-------------------------------------------------------|-------------------------------------------------------------------|---------------------------------------------------------------------|-------------|
+| SPEC.md                         | `resources/modules/references/spec.md`                | `.claude/skills/speccy-plan/references/spec.md`                   | `.agents/skills/speccy-plan/references/spec.md`                     | skill-local |
+| TASKS.md                        | `resources/modules/references/tasks.md`               | `.claude/skills/speccy-decompose/references/tasks.md`             | `.agents/skills/speccy-decompose/references/tasks.md`               | skill-local |
+| REPORT.md                       | `resources/modules/references/report.md`              | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                   | skill-local |
+| PR body template                | `resources/modules/references/pr-body.md`             | `.claude/skills/speccy-ship/references/pr-body.md`                | `.agents/skills/speccy-ship/references/pr-body.md`                  | skill-local |
+| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`    | `.agents/skills/speccy-work/references/journal-implementer.md`      | skill-local |
+| journal `<review>` block        | `resources/modules/references/journal-review.md`      | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`         | skill-local |
+| evidence file (`evidence/T-NNN.md`) | `resources/modules/references/evidence.md`        | `.claude/speccy-references/evidence.md`                           | `.agents/speccy-references/evidence.md`                             | host-shared |
+| journal `<blockers>` block      | `resources/modules/references/journal-blockers.md`    | `.claude/speccy-references/journal-blockers.md`                   | `.agents/speccy-references/journal-blockers.md`                     | host-shared |
+| reconcile policy table          | `resources/modules/references/reconcile-policy.md`    | `.claude/speccy-references/reconcile-policy.md`                   | `.agents/speccy-references/reconcile-policy.md`                     | host-shared |
+| retry-shape invariant           | `resources/modules/references/retry-shape.md`         | `.claude/speccy-references/retry-shape.md`                        | `.agents/speccy-references/retry-shape.md`                          | host-shared |
 
-Host-shared rows have two consuming bodies each: `evidence.md` is
-referenced by `/speccy-work` (writes evidence) and the
-`reviewer-tests` sub-agent (reads evidence); `journal-blockers.md`
-is referenced by `/speccy-review` (writes review-induced blockers)
-and `/speccy-amend` (writes amendment-induced blockers). All other
-rows have exactly one consuming body and live skill-local.
+Host-shared rows are referenced from multiple consuming bodies and
+live at `<host>/speccy-references/<file>.md` so each consumer
+imports the same canonical text. `evidence.md` is referenced by
+`/speccy-work` (writes evidence) and the `reviewer-tests` sub-agent
+(reads evidence); `journal-blockers.md` is referenced by
+`/speccy-review` (writes review-induced blockers) and
+`/speccy-amend` (writes amendment-induced blockers);
+`reconcile-policy.md` is referenced by `/speccy-work`,
+`/speccy-review`, and `/speccy-orchestrate` (all of which dispatch
+on `consistency.drifts[]`); `retry-shape.md` is referenced by
+`/speccy-work` (deciding whether the strict clean-tree gate applies)
+and by reviewer sub-agents (recognising retry-shape attempts).
+Skill-local rows have exactly one consuming body each (or two in
+the case of `pr-body.md` and `report.md`, both consumed by
+`/speccy-ship`).
 
 SPEC-0038 REQ-002 is the source of truth. The
 `chkNNN_no_orphan_references` test in
@@ -1876,12 +1874,15 @@ speccy init --host codex
 Init renders the per-host wrappers into host-native locations:
 
 - Claude Code: `.claude/skills/speccy-<verb>/SKILL.md` plus
-  `.claude/agents/speccy-{tasks,work,ship}.md` for the pinned phase
-  workers and `.claude/agents/reviewer-<persona>.md` for the six
-  reviewer sub-agents.
+  `.claude/agents/speccy-{decompose,work,ship}.md` for the pinned
+  phase workers, `.claude/agents/reviewer-<persona>.md` for the
+  reviewer sub-agents, and
+  `.claude/agents/vet-{reviewer,implementer,simplifier}.md` for
+  the vet sub-agents.
 - Codex: `.agents/skills/speccy-<verb>/SKILL.md` plus
-  `.codex/agents/speccy-{tasks,work,ship}.toml` and
-  `.codex/agents/reviewer-<persona>.toml`.
+  `.codex/agents/speccy-{decompose,work,ship}.toml`,
+  `.codex/agents/reviewer-<persona>.toml`, and
+  `.codex/agents/vet-{reviewer,implementer,simplifier}.toml`.
 
 Existing files are handled by a three-way per-file classification:
 absent → `created`; byte-identical to planned content → `unchanged`;
@@ -1896,14 +1897,16 @@ Unchanged / Conflict classification with no per-file exception.
 
 ## Workflow recipes
 
-Each top-level skill is a recipe. The five interactive skills
-(`speccy-init`, `speccy-brainstorm`, `speccy-plan`, `speccy-amend`,
-`speccy-review` orchestrator) eject as full-body SKILL.md only. The
-three pinned phase workers (`speccy-decompose`, `speccy-work`,
-`speccy-ship`) eject as a thin SKILL.md stub (≤10 non-blank lines
-naming the matching agent file) plus a full-body agent file at
-`.claude/agents/speccy-<phase>.md` (Codex:
-`.codex/agents/speccy-<phase>.toml`). The eject shape follows the
+Each top-level skill is a recipe. Interactive skills eject as a
+full-body SKILL.md only. Pinned phase workers (`speccy-decompose`,
+`speccy-work`, `speccy-ship`) eject as a SKILL.md body that names
+the matching agent file as the canonical procedure source plus a
+full-body agent file at `.claude/agents/speccy-<phase>.md` (Codex:
+`.codex/agents/speccy-<phase>.toml`). The SKILL.md bodies for
+pinned workers are deliberately small — they defer to the agent
+file — but are not fixed-line stubs; they may inline entry
+preconditions or policy references that callers need to see
+without reading the agent body. The eject shape follows the
 invocation pattern: recurring loop-friendly phases pin a
 heavy-model fork via the agent file; interactive skills stay in
 the parent session.
@@ -1932,9 +1935,9 @@ A typical full session in Claude Code looks like:
 [agent implements one task, flips state="pending" -> state="in-review", exits]
 
 /speccy-review SPEC-001/T-001
-[orchestrator fans out four personas on one task, aggregates notes,
- flips state="in-review" -> state="completed" (or back to "pending"
- with a Retry note), exits]
+[orchestrator fans out the default reviewer personas on one task,
+ aggregates notes, flips state="in-review" -> state="completed"
+ (or back to "pending" with a Retry note), exits]
 
 [caller re-invokes /speccy-work and /speccy-review on the remaining
  tasks; the existing /loop skill is the interim composer for batched
@@ -1999,7 +2002,7 @@ not infer it from skill-pack identity.
 
     <review persona="security" verdict="blocking"
             date="2026-05-21T19:00:00Z"
-            model="claude-sonnet-4-6[1m]/medium" round="1">
+            model="claude-opus-4-7[1m]/high" round="1">
     bcrypt cost 10; policy requires >=12.
     See `src/auth/password.ts:14`.
     </review>
@@ -2012,10 +2015,11 @@ lives. They are upgradeable as models improve; the CLI is not.
 
 # JSON Interfaces
 
-Four commands carry stable JSON contracts: `status`, `next`,
-`vacancy`, and `verify`. `--json` switches representation; the
-content is the same as the text output. Schema versions are pinned
-per-envelope and bumped only on breaking shape changes.
+A handful of commands carry stable JSON contracts: `status`,
+`next`, `vacancy`, `verify`, and `archive` (the archive receipt
+form). `--json` switches representation; the content is the same as
+the text output. Schema versions are pinned per-envelope and bumped
+only on breaking shape changes.
 
 ## `speccy status --json`
 
@@ -2049,7 +2053,12 @@ per-envelope and bumped only on breaking shape changes.
       "tasks_md_path": ".speccy/specs/0001-user-signup/TASKS.md",
       "mission_md_path": null
     }
-  ]
+  ],
+  "lint": {
+    "errors": [],
+    "warnings": [],
+    "info": []
+  }
 }
 ```
 
@@ -2069,6 +2078,21 @@ mission folder). The `superseded_by` field is **computed** at query
 time by walking every parsed SPEC.md's `frontmatter.supersedes` and
 inverting the relation; it does not appear on disk.
 
+A few per-spec fields are omitted from the envelope when absent
+(serde `skip_serializing_if`) rather than serialised as `null`:
+
+- `parse_error` — first parse error encountered when loading the
+  spec, when frontmatter or element-tree parsing failed.
+- `archived_at` — UTC archive date (`YYYY-MM-DD`) from the
+  `archived_at` frontmatter field. Non-archived specs render
+  byte-identically to pre-SPEC-0042 output (no key emitted).
+- `archived_reason` — free-form archive reason from the
+  `archived_reason` frontmatter field, when present.
+
+The top-level `lint` block carries workspace-level diagnostics
+(those not attributable to any single spec). Per-spec diagnostics
+live on the matching `specs[]` entry.
+
 ## `speccy next --json`
 
 Workspace form (no positional selector) — every active spec with
@@ -2083,14 +2107,16 @@ its derived `next_action`:
       "next_action": { "kind": "review", "task_id": "T-002" },
       "spec_md_path": ".speccy/specs/0001-user-signup/SPEC.md",
       "tasks_md_path": ".speccy/specs/0001-user-signup/TASKS.md",
-      "mission_md_path": null
+      "mission_md_path": null,
+      "consistency": { "status": "ok", "drifts": [] }
     },
     {
       "spec_id": "SPEC-0002",
       "next_action": { "kind": "decompose" },
       "spec_md_path": ".speccy/specs/0002-password-reset/SPEC.md",
       "tasks_md_path": null,
-      "mission_md_path": null
+      "mission_md_path": null,
+      "consistency": { "status": "ok", "drifts": [] }
     }
   ]
 }
@@ -2106,7 +2132,13 @@ would be redundant. Skills that want only one kind read the
 envelope and filter on `next_action.kind` themselves. The workspace
 form exits with code 2 and adds a top-level
 `reason="no_active_specs"` field when no active spec remains
-(SPEC-0043 REQ-002).
+(SPEC-0043 REQ-002). Per-spec envelopes likewise carry a top-level
+`reason` field — `"completed"`, `"dropped"`, or `"superseded"` —
+when `next_action` is `null`; the field is omitted otherwise.
+
+Every envelope entry (per-spec and each workspace `specs[]` entry)
+carries a `consistency` block alongside `next_action`; the shape
+and semantics live in the next subsection.
 
 ### `consistency` block (SPEC-0045 REQ-006)
 
@@ -2152,7 +2184,7 @@ drift relates to.
 }
 ```
 
-The five `kind` values and their `details` shapes:
+The `kind` values and their `details` shapes:
 
 | `kind` | `severity` | `details` shape |
 |---|---|---|
@@ -2236,17 +2268,39 @@ payload.
     "warnings": [],
     "info": []
   },
-  "specs_total": 35,
-  "requirements_total": 142,
-  "scenarios_total": 287
+  "summary": {
+    "lint": {
+      "errors": 0,
+      "warnings": 0,
+      "info": 0
+    },
+    "shape": {
+      "specs": 35,
+      "requirements": 142,
+      "scenarios": 287,
+      "errors": 0
+    }
+  },
+  "passed": true
 }
 ```
 
-No `outcome`, `exit_code`, or `duration_ms` fields; the binary exit
-code is the contract for CI scripts, and the JSON payload is for
-downstream tooling that wants structured failure detail. Diagnostics
-on `in-progress` / `dropped` / `superseded` specs are demoted to
-`Level::Info` so only `implemented` specs gate the build.
+The top-level `lint` block carries the structured diagnostics
+(errors / warnings / info) grouped by severity. The `summary` block
+mirrors the text output's counts: `summary.lint` holds the
+post-demotion lint counts (gating errors after in-progress demotion,
+plus warning and info totals), and `summary.shape` holds the
+structural counts walked from the workspace (specs, requirements,
+scenarios) plus a redundant `errors` count that mirrors
+`summary.lint.errors`. `passed` is `true` iff the process exit code
+is 0.
+
+There are no `outcome`, `exit_code`, or `duration_ms` fields; the
+binary exit code is the contract for CI scripts, and the JSON
+payload is for downstream tooling that wants structured failure
+detail. Diagnostics on `in-progress` / `dropped` / `superseded`
+specs are demoted to `Level::Info` so only `implemented` specs gate
+the build.
 
 These four envelopes are everything a harness needs. The rest of
 the CLI surface is text output to humans.
@@ -2536,10 +2590,12 @@ files that would be created or overwritten.
 
 Host detection for skill-pack copy:
 
-1. `--host <name>` flag if passed
+1. `--host <name>` flag if passed (`claude-code` or `codex`)
 2. Presence of `.claude/` -> Claude Code
 3. Presence of `.codex/` -> Codex
-4. Presence of `.cursor/` -> Cursor
+4. Presence of `.cursor/` -> error out with `InitError::CursorDetected`
+   (Cursor is not a supported host pack; the project must pass an
+   explicit `--host claude-code` or `--host codex` to override)
 5. Fall back to `claude-code` and print a warning
 
 The user can re-run `speccy init --host <other> --force` to swap.

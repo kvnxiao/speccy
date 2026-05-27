@@ -5,6 +5,7 @@ title: Skill pack template dedup — canonical rule bodies stop leaking into wra
 status: implemented
 created: 2026-05-27
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0049: Skill pack template dedup — canonical rule bodies stop leaking into wrappers and modules

@@ -5,6 +5,7 @@ title: "`/speccy-init` AGENTS.md bootstrap — seeds `## Speccy conventions` sec
 status: implemented
 created: 2026-05-27
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0051: `/speccy-init` AGENTS.md bootstrap — seeds `## Speccy conventions` section and refactors north star Q&A to a brainstorm-style adaptive flow
