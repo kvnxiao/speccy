@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0048
-spec_hash_at_generation: f6c236bbdb51c3f7add3c95e672a741fd0b8e553a7d9fc0f9d483ce397f386f2
-generated_at: 2026-05-27T06:04:42Z
+spec_hash_at_generation: 5298bd170e0fa9696ac01c7b316e08e9a7791bc3850d74b3165a160237fadf49
+generated_at: 2026-05-27T06:54:01Z
 ---
 # Tasks: SPEC-0048 Markdown PR body template — `/speccy-ship` assembles markdown from spec artifacts instead of piping raw REPORT.md XML
 
