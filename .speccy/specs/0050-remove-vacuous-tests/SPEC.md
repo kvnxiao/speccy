@@ -2,7 +2,7 @@
 id: SPEC-0050
 slug: remove-vacuous-tests
 title: Remove vacuous tests — delete 6 tests that gate editorial prose, file non-emptiness, or constant copies rather than behavior
-status: in-progress
+status: implemented
 created: 2026-05-27
 supersedes: []
 ---
