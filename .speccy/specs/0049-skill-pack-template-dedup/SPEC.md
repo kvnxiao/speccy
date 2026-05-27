@@ -34,6 +34,12 @@ the pointer to the canonical reference only when it needs the full
 policy table, formal definition, or worked examples. The vet skill
 keeps its full Phase 0/1/2/3 grammar because vet owns the rule.
 
+A subsequent amendment (REQ-006) also aligns the orchestrator's
+outer-loop dispatch tree with the CLI's `NextAction::{Vet, Ship}`
+kind split — friction discovered during the T-005 dogfood pass.
+The fix lives in the same orchestrator skill body the dedup work
+touches, so it is in scope for this SPEC rather than a follow-up.
+
 This is a template-edit-plus-reeject refactor: no Rust changes, no
 new lint commands, no new test infrastructure. Verification is the
 standard hygiene suite plus a dogfood pass on a fresh non-trivial
@@ -485,6 +491,90 @@ dogfood SPEC exits 0.
 
 </requirement>
 
+<requirement id="REQ-006">
+### REQ-006: Orchestrator dispatch tree separates `vet` from `ship` per CLI contract
+
+The `speccy-orchestrate` skill body's outer-loop dispatch on
+`next_action.kind` distinguishes the CLI's `vet` and `ship` kinds,
+which `speccy-core::next::compute_for_spec` emits in sequence after
+all tasks reach `state="completed"`. `Vet` is emitted when no fresh
+passing vet-gate artifact exists (no `<gate verdict="passed">` block
+in `journal/VET.md` whose `tasks_hash` matches the current TASKS.md
+SHA-256); `Ship` is emitted after a fresh passing gate lands and
+REPORT.md is absent.
+
+Today's skill body lists only `{work, review, ship, decompose}` in
+its Loop step 2 dispatch enum and binds the vet workflow under the
+`ship` kind. Against the CLI's actual contract this means: on a
+freshly task-completed SPEC the orchestrator's first
+`speccy next --json` returns `vet` and the skill body would STOP
+(kind not in the enum); on a re-query after the gate passes, CLI
+returns `ship` and the skill body would re-run the vet workflow it
+already completed. The amendment splits the dispatch.
+
+<done-when>
+- `resources/modules/skills/speccy-orchestrate.md` Loop step 2
+  dispatch enumeration lists `vet` and `ship` as distinct kinds,
+  each routed to its own dispatch section.
+- The section that runs the speccy-vet skill body inline is bound
+  to the `vet` kind (renamed from "Ship dispatch" or split from
+  it). The vet-verdict pass/fail reaction prose lives inside the
+  Vet dispatch section as the natural exit path of the vet
+  workflow.
+- A new "Ship dispatch" section is bound to the `ship` kind and
+  performs only the user-confirmation step plus the speccy-ship
+  sub-agent spawn on confirm; it does not re-run the vet workflow.
+- The Lifecycle ASCII tree at the top of the orchestrator body
+  reflects the new vet/ship split.
+- The Stop conditions section's "`next_action.kind` is not one of
+  …" enum lists `work`, `review`, `vet`, `ship`, `decompose`.
+- After `just reeject`, `.claude/skills/speccy-orchestrate/SKILL.md`
+  and `.agents/skills/speccy-orchestrate/SKILL.md` carry the
+  post-amendment dispatch tree.
+- The standard four-gate hygiene suite continues to pass.
+</done-when>
+
+<behavior>
+- Given the working tree at HEAD after this amendment lands and
+  `just reeject` has run, when an operator reads
+  `resources/modules/skills/speccy-orchestrate.md`, then Loop step
+  2's dispatch enumeration carries five kinds (`work`, `review`,
+  `vet`, `ship`, `decompose`) and the "Vet dispatch" / "Ship
+  dispatch" sections are structurally distinct.
+- Given the same tree, when `/speccy-orchestrate` runs against a
+  SPEC whose tasks are all completed with no fresh vet-gate
+  artifact, then the orchestrator dispatches on `vet`, runs the
+  speccy-vet skill body inline, and re-queries; on the re-query
+  the CLI emits `ship` and the orchestrator dispatches on `ship`
+  to ask the user.
+</behavior>
+
+<scenario id="CHK-011">
+Given the working tree at HEAD after this amendment lands and
+`just reeject` has run,
+when a reviewer reads `resources/modules/skills/speccy-orchestrate.md`,
+then Loop step 2 enumerates `vet` and `ship` as distinct dispatch
+kinds, a dedicated section runs the speccy-vet skill body inline on
+`vet` (Phase 0-3 plus the vet-verdict pass/fail reaction), and a
+separate "Ship dispatch" section asks the user and spawns
+speccy-ship on `ship` without re-running vet.
+</scenario>
+
+<scenario id="CHK-012">
+Given the same state,
+when a reviewer reads the ejected
+`.claude/skills/speccy-orchestrate/SKILL.md` and
+`.agents/skills/speccy-orchestrate/SKILL.md` files,
+then both carry the post-amendment dispatch tree: Loop step 2
+enumerates five kinds; the Vet dispatch section is bound to the
+`vet` kind and inlines the speccy-vet skill body; the Ship dispatch
+section is bound to the `ship` kind and performs only the
+user-confirmation + speccy-ship spawn; the Stop conditions enum
+lists all five kinds.
+</scenario>
+
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -617,4 +707,5 @@ via review judgment and via the dogfood pass.
 | Date       | Author              | Summary |
 |------------|---------------------|---------|
 | 2026-05-27 | claude-opus-4-7[1m] | Initial draft. Five requirements: (REQ-001) source-side dedup of canonical rule bodies (retry-shape, reconcile-policy, vet-phases) at non-canonical sites under `resources/`; (REQ-002) ejected slimming across `.claude/`, `.agents/`, and `.codex/` so non-owner ejected files carry only the DEC-002 invariant text plus a pointer at the canonical reference; (REQ-003) wrapper structural consistency — pure-include or stub-delegate per DEC-001, no inline canonical bodies; (REQ-004) standard hygiene gates pass; (REQ-005) work-review-ship dogfood pass completes. Two decisions: DEC-001 (wrapper-pattern convention) and DEC-002 (invariant wording carries the rule's trigger or formal definition inline plus a pointer; chose Option-2 from brainstorm OQ-a/b/c over minimal one-line pointer). Scope is intentionally template-edit-plus-reeject — no Rust changes, no new lint commands. Verification scenarios use reviewer-audit framing per AGENTS.md § "Conventions for AI agents specifically" no-vacuous-tests rule. AGENTS.md "Skill pack source of truth" section was added in parallel on the SPEC-0048 branch and is treated as already-on-main at SPEC start time per OQ-h. |
+| 2026-05-27 | claude-opus-4-7[1m] | Amended to add REQ-006: align orchestrator dispatch tree with CLI's `NextAction::{Vet, Ship}` kind split. Friction discovered during the T-005 dogfood pass — the skill body's Loop step 2 dispatch enum lists `{work, review, ship, decompose}` and binds the vet workflow under `ship`, but the CLI emits `vet` (no fresh gate) and `ship` (fresh gate, REPORT.md absent) as distinct kinds in sequence after all tasks reach `state="completed"`. The manual workaround during T-005 (treating `vet` as the trigger for the inline vet workflow, and `ship` as the user-confirmation step) was harmless — same end outcome — but leaves a stale dispatch tree shipped to other repos via `speccy init`. Fix is a focused edit to `resources/modules/skills/speccy-orchestrate.md` (Lifecycle tree, Loop step 2, section rename, new Ship dispatch section, Stop conditions enum, Status reporting examples) plus `just reeject`; T-001..T-005 stay completed because none of their done-when items are invalidated. The Summary gained one sentence acknowledging the amendment's broader scope. |
 </changelog>

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0049
-spec_hash_at_generation: 121256122258e93b222a710619f2fa4d6455b32767629e2af93cf3f3eee2abf8
-generated_at: 2026-05-27T08:16:49Z
+spec_hash_at_generation: 5ce2a4cb592c4a0f1f233cdcdc8e1373b59d2740c9f307ef27f6a3ddd8321155
+generated_at: 2026-05-27T20:04:05Z
 ---
 # Tasks: SPEC-0049 Skill pack template dedup — canonical rule bodies stop leaking into wrappers and modules
 
@@ -396,5 +396,127 @@ the refactor.
 Suggested files: (no source edits; the implementer's journal at
 `.speccy/specs/0049-skill-pack-template-dedup/journal/T-005.md`
 captures the dogfood evidence)
+</task-scenarios>
+</task>
+
+<task id="T-006" state="pending" covers="REQ-006">
+## Align orchestrator dispatch tree with CLI's `Vet`/`Ship` kind split
+
+Edit `resources/modules/skills/speccy-orchestrate.md` to dispatch
+on the CLI's actual `next_action.kind` enum, which emits `vet` and
+`ship` as distinct kinds in sequence after all tasks reach
+`state="completed"` (per `speccy-core::next::compute_for_spec` —
+`Vet` when no fresh passing gate exists, `Ship` after a fresh
+passing gate lands with REPORT.md absent). Today's skill body lists
+only `{work, review, ship, decompose}` and binds the vet workflow
+under the `ship` kind.
+
+Edits:
+
+1. **Lifecycle ASCII tree** (currently around lines 47-68). Split
+   the `ship → run speccy-vet inline` branch into two:
+   - `vet  → run the speccy-vet skill body inline (Phase 0-3) …`
+   - `ship → ask user, spawn speccy-ship sub-agent on confirm`
+
+2. **Loop step 2 dispatch enum** (currently around lines 165-178).
+   Add a `vet` bullet between `review` and `ship`:
+   - **`vet`** — execute the [Vet dispatch](#vet-dispatch) section
+     below.
+   - **`ship`** — execute the [Ship dispatch](#ship-dispatch)
+     section below.
+
+3. **Section rename: "Ship dispatch" → "Vet dispatch"** (currently
+   around lines 260-288). The body (run speccy-vet skill body
+   inline, Phase 0-3) stays. Rename the heading and update any
+   intra-doc anchor link from `#ship-dispatch` to `#vet-dispatch`
+   in this section's first paragraph and elsewhere as needed. The
+   existing vet-verdict pass/fail reaction prose (the bullet list
+   at the end of the section) stays inside the renamed Vet
+   dispatch section as the natural exit path of the vet workflow.
+
+4. **New "Ship dispatch" section.** After the renamed "Vet
+   dispatch" section, add a short "Ship dispatch" section bound
+   to the `ship` kind:
+   - Brief framing sentence stating that the `ship` kind is
+     emitted after a fresh passing vet-gate artifact lands and
+     REPORT.md is absent, so the vet workflow has already
+     completed and the only remaining step is user confirmation.
+   - Ask the user via `AskUserQuestion` (Claude Code host) /
+     equivalent Codex primitive whether to invoke
+     `{{ cmd_prefix }}speccy-ship`.
+   - On confirm: spawn a `speccy-ship` sub-agent (`Task` tool with
+     `subagent_type: "speccy-ship"` for `.claude`; Codex sub-agent
+     spawn against `.codex/agents/speccy-ship.toml` for `.agents`).
+     Use Jinja `{% if host == "claude-code" %}` conditional for the
+     host-specific spawn primitive, matching the pattern used in
+     the Work dispatch section.
+   - On decline: stop the outer loop.
+
+5. **Stop conditions enum** (currently around lines 290-306).
+   Update the "`next_action.kind` is not one of …" line to list
+   `work, review, vet, ship, decompose`.
+
+6. **Status reporting examples** (currently around lines 308-319).
+   Update the two ship-related example lines to reflect the
+   vet/ship split:
+   - `SPEC-NNNN → vet` (during the inline vet workflow)
+   - `SPEC-NNNN → ready to ship — confirm before proceeding?`
+     (after the gate passes and CLI returns `ship`)
+
+The wrapper `resources/agents/.claude/skills/speccy-orchestrate/SKILL.md.tmpl`
+and its `.agents` sibling are already pure-include per DEC-001(a),
+so no wrapper-level edits are required.
+
+Run `just reeject` to propagate to
+`.claude/skills/speccy-orchestrate/SKILL.md` and
+`.agents/skills/speccy-orchestrate/SKILL.md`.
+
+Audit the ejected output:
+
+- Both ejected files carry the new five-kind dispatch enum in Loop
+  step 2.
+- The Vet dispatch and Ship dispatch sections are structurally
+  distinct (Vet dispatch holds the inline speccy-vet body; Ship
+  dispatch holds only the user-confirm + speccy-ship spawn).
+- The Stop conditions enum lists `work`, `review`, `vet`, `ship`,
+  `decompose`.
+- No regression in other modules or wrappers attributable to the
+  reeject.
+
+Finally, run the standard four-gate hygiene suite and confirm each
+exits 0: `cargo test --workspace`,
+`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+`cargo +nightly fmt --all --check`, `cargo deny check`.
+
+<task-scenarios>
+Given the working tree at HEAD after this task and `just reeject`
+having run,
+when a reviewer reads `resources/modules/skills/speccy-orchestrate.md`,
+then Loop step 2 enumerates `vet` and `ship` as distinct dispatch
+kinds, a "Vet dispatch" section runs the speccy-vet skill body
+inline on `vet` (Phase 0-3 plus the vet-verdict pass/fail reaction),
+and a separate "Ship dispatch" section asks the user and spawns
+speccy-ship on `ship` without re-running vet.
+
+Given the same tree,
+when a reviewer reads
+`.claude/skills/speccy-orchestrate/SKILL.md` and
+`.agents/skills/speccy-orchestrate/SKILL.md` after the eject,
+then both files carry the post-amendment dispatch tree: Loop step
+2 enumerates five kinds; the Vet dispatch section is bound to the
+`vet` kind and inlines the speccy-vet body; the Ship dispatch
+section is bound to the `ship` kind and performs only the
+user-confirmation plus speccy-ship spawn; the Stop conditions enum
+lists all five kinds.
+
+Given the same tree,
+when an operator runs `cargo test --workspace`,
+`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+`cargo +nightly fmt --all --check`, and `cargo deny check` in
+sequence,
+then each command exits 0 with no warnings or test failures
+attributable to this edit.
+
+Suggested files: `resources/modules/skills/speccy-orchestrate.md`
 </task-scenarios>
 </task>
