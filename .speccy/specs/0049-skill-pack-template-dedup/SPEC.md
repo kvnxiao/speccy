@@ -233,6 +233,7 @@ as the canonical owner of the phase grammar. Reviewer judgment
 confirms the canonical-owner exception is preserved exactly where
 DEC-002 names it.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -323,6 +324,7 @@ then the full Phase 0/1/2/3 grammar remains present in both files —
 vet is the canonical owner per DEC-002 and retains the phase bodies
 intact across the refactor.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -392,6 +394,7 @@ speccy-review wrappers. Host-specific addenda (such as the
 `speccy-orchestrate-codex-grant.md` include in the `.agents`
 orchestrate wrapper) are allowed.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -425,6 +428,7 @@ in sequence,
 then every command exits 0 with no warnings or test failures
 attributable to this refactor.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -478,6 +482,7 @@ then the orchestrator reaches the pre-ship boundary, every emitted
 against the closed-set grammar, and `speccy verify` against the
 dogfood SPEC exits 0.
 </scenario>
+
 </requirement>
 
 ## Decisions

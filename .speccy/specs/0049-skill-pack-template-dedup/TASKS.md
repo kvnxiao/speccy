@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0049
-spec_hash_at_generation: 0c18dc9db98998ff8be01fa8c78fabc87b999f267e5a7be0827d68ff2cc1d20d
-generated_at: 2026-05-27T08:01:18Z
+spec_hash_at_generation: 121256122258e93b222a710619f2fa4d6455b32767629e2af93cf3f3eee2abf8
+generated_at: 2026-05-27T08:16:49Z
 ---
 # Tasks: SPEC-0049 Skill pack template dedup — canonical rule bodies stop leaking into wrappers and modules
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Create `modules/skills/speccy-work.md` with DEC-002 invariant body
 
 Add `resources/modules/skills/speccy-work.md` as the new

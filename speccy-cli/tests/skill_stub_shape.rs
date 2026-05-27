@@ -330,7 +330,16 @@ fn init_skill_stays_full_body_codex() {
 
 /// The phase body files exist at `resources/modules/phases/` and the
 /// old paths at `resources/modules/skills/speccy-<phase>.md` are gone
-/// (for the four phase names).
+/// (for the phase names whose skill body has not been re-introduced
+/// as a distinct file under `modules/skills/`).
+///
+/// SPEC-0049 introduces `resources/modules/skills/speccy-work.md` as
+/// the new host-neutral *skill* body (consumed by the speccy-work
+/// wrappers per DEC-001(a)), distinct from the *agent* body at
+/// `resources/modules/phases/speccy-work.md` (consumed by the pinned
+/// subagent template). Both files coexist; `work` is therefore
+/// excluded from the old-path-gone assertion. The other three phases
+/// retain T-009 CHK-010's rename invariant.
 #[test]
 fn phase_body_files_moved_to_modules_phases() {
     let root = workspace_root();
@@ -340,6 +349,11 @@ fn phase_body_files_moved_to_modules_phases() {
             new_path.exists(),
             "`resources/modules/phases/speccy-{phase}.md` must exist after the rename (T-009 CHK-010)",
         );
+        if phase == "work" {
+            // SPEC-0049: the skill-body file at this path is a distinct
+            // artifact from the phase/agent body; presence is expected.
+            continue;
+        }
         let old_path = root.join(format!("resources/modules/skills/speccy-{phase}.md"));
         assert!(
             !old_path.exists(),
