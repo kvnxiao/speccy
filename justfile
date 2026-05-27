@@ -4,6 +4,9 @@ run args:
 build:
     cargo build --workspace --release
 
+reeject: install
+    speccy init --force --host claude-code && speccy init --force --host codex
+
 install:
     cargo install --path speccy-cli
 
