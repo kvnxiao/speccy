@@ -1133,6 +1133,14 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
 }
 
 const CLAUDE_PINNED_PHASES: [&str; 3] = ["decompose", "work", "ship"];
+// SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+// stub-delegate to pure-include, so its SKILL.md body now expands
+// the full `modules/skills/speccy-work.md` body instead of a thin
+// delegation pointer. The pinned-phase agent pins (model/effort)
+// still apply to `work`; only the SKILL.md body shape changed.
+// Stub-delegate body assertions therefore cover only decompose and
+// ship, both of which remain stub-delegate per DEC-001(b).
+const CLAUDE_STUB_DELEGATE_PHASES: [&str; 2] = ["decompose", "ship"];
 const CLAUDE_OPUS_XHIGH_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
 const CLAUDE_OPUS_HIGH_REVIEWERS: [&str; 1] = ["security"];
 const CLAUDE_SONNET_MEDIUM_REVIEWERS: [&str; 2] = ["style", "docs"];
@@ -1222,7 +1230,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
     let review_fm = parse_no_pin_skill(&fx.root, ".claude/skills/speccy-review/SKILL.md")?;
     assert_no_pin_keys(".claude/skills/speccy-review/SKILL.md", &review_fm);
 
-    for phase in CLAUDE_PINNED_PHASES {
+    for phase in CLAUDE_STUB_DELEGATE_PHASES {
         let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
         let agent_path = format!(".claude/agents/speccy-{phase}.md");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
@@ -1293,7 +1301,7 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
 
     assert_codex_reviewer_pins(&fx.root)?;
 
-    for phase in CLAUDE_PINNED_PHASES {
+    for phase in CLAUDE_STUB_DELEGATE_PHASES {
         let rel = format!(".agents/skills/speccy-{phase}/SKILL.md");
         let agent_path = format!(".codex/agents/speccy-{phase}.toml");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;

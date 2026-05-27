@@ -149,7 +149,11 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 /// are pointer-only bodies. The fourth phase (`speccy-init`) keeps its
 /// full body sourced from `modules/phases/speccy-init.md` (T-009 scope
 /// explicitly excludes it from the stub transformation).
-const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-work", "speccy-ship"];
+// SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+// stub-delegate to pure-include shape, so it is no longer a "stub"
+// wrapper; only `speccy-decompose` and `speccy-ship` remain in
+// stub-delegate form.
+const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-ship"];
 
 // The current seven-verb CLI surface. This list is used as a substring
 // matcher inside SKILL.md code fences to determine whether a rendered

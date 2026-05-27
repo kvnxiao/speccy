@@ -218,7 +218,7 @@ Suggested files: `resources/modules/skills/speccy-review.md`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-002 REQ-003 REQ-004">
+<task id="T-004" state="completed" covers="REQ-002 REQ-003 REQ-004">
 ## Refactor speccy-work wrappers to pure-include, re-eject, audit ejected output, verify hygiene
 
 Edit the two speccy-work wrapper templates to take the

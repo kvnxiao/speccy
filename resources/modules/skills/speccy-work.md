@@ -8,7 +8,29 @@ Read `.codex/agents/speccy-work.toml` and follow it, or invoke
 `/agent speccy-work` for the pinned execution path.
 {%- endif %}
 
+Implements one task per invocation and exits. With an optional
+`[SPEC-NNNN/T-NNN]` selector argument, the session implements that
+specific task. Without an argument, the session resolves the next
+implementable task via `speccy next --json` (workspace form) and
+implements that one.
+
+## When to use
+
+- With a selector (`{{ cmd_prefix }}speccy-work SPEC-NNNN/T-003`):
+  when the next task to implement is already known.
+- Without an argument: when picking up wherever `TASKS.md` left
+  off. The session implements one task and exits.
+
+## Steps
+
 **Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002):** resolve the target task, read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the retry-shape invariant below, then run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill with the dirty-paths surface on stderr (today's SPEC-0045/REQ-002 behaviour, unchanged); empty stdout proceeds. **Retry shape** proceeds regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch per the reconcile-policy invariant below instead of the implementer.
+
+Resolve the target task. Without a selector, query the CLI in
+workspace form:
+
+```bash
+speccy next --json
+```
 
 **Retry shape.** A task is in retry shape iff its journal contains
 both an `<implementer>` element and a `<blockers>` element whose
