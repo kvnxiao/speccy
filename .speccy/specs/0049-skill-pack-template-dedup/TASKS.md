@@ -327,7 +327,7 @@ Suggested files: `resources/agents/.claude/skills/speccy-work/SKILL.md.tmpl`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-005">
+<task id="T-005" state="completed" covers="REQ-005">
 ## Dogfood pass — run `/speccy-orchestrate` end-to-end on a non-trivial SPEC
 
 Drive the refactored skill pack end-to-end to validate REQ-005's
