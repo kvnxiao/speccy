@@ -140,6 +140,46 @@ surface, lint codes, and implementation sequence. Read it before
 touching any code. If a design decision isn't documented, ask before
 deciding.
 
+## Skill pack source of truth
+
+Everything an agent sees as a skill, subagent, or reference file
+under `.claude/`, `.agents/`, or `.codex/` is **ejected output**, not
+source. The single source of truth lives under `resources/`:
+
+- `resources/modules/skills/*.md` — host-neutral skill bodies
+  (`speccy-orchestrate.md`, `speccy-vet.md`, …).
+- `resources/modules/skills/partials/*.md` — sharable skill fragments
+  (`vet-phases.md`, `review-fanout.md`).
+- `resources/modules/phases/*.md` — agent body templates used by
+  subagent wrappers (`speccy-work.md`, `speccy-ship.md`, …).
+- `resources/modules/personas/*.md` — reviewer/vet persona bodies
+  plus shared persona snippets (`verdict_return_contract.md`,
+  `inline_note_format.md`, `diff_fetch_command.md`,
+  `no_tasks_md_writes.md`).
+- `resources/modules/references/*.md` — shared rule files
+  (`reconcile-policy.md`, `retry-shape.md`, `evidence.md`,
+  `journal-*.md`, …).
+- `resources/agents/.<host>/…` — per-host wrappers (`*.md.tmpl` for
+  Claude Code and Codex skills; `*.toml.tmpl` for Codex subagents).
+  Wrappers carry frontmatter and pull module bodies in via MiniJinja
+  `{% include %}` directives at render time.
+
+`speccy init --force --host <host>` (or `just reeject` to refresh
+both Claude Code and Codex at once) renders every wrapper, expands
+includes, and writes the result to `.claude/`, `.agents/`, and
+`.codex/`.
+
+**Editing rule:** never edit files under `.claude/`, `.agents/`, or
+`.codex/` directly. Edit the source under `resources/` and then
+run `just reeject` to regenerate the ejected output. Any change
+made to the harness folders is overwritten on the next init.
+
+**Deduplicating snippets:** when the same text would appear in
+multiple wrappers or modules, extract it to a `resources/modules/…`
+file and `{% include %}` it from each callsite. Verbatim inlined
+copies that shadow a canonical source are a bug — replace them with
+the include.
+
 ## Authoritative references
 
 These rule files are authoritative for their domains. Load them when
@@ -179,13 +219,16 @@ Before any commit lands, all four must pass:
   belongs in skills or prompts, not in deterministic code.
 - When you hit friction caused by a stale or wrong instruction in a
   shipped skill (wrong command, missing environment variable, an
-  undocumented step), do this:
-  update the relevant skill file under `skills/` before you finish
-  the task, then call out the edit under `Procedural compliance` in
-  your `<implementer>` block. Speccy dogfoods this loop: the same
-  friction-to-skill-update pattern the shipped implementer prompt
-  asks downstream users to follow applies here, so the next
-  contributor inherits the fix instead of re-discovering it.
+  undocumented step), do this: update the relevant source module
+  under `resources/modules/` (or wrapper under `resources/agents/`)
+  before you finish the task, run `just reeject`, then call out the
+  edit under `Procedural compliance` in your `<implementer>` block.
+  Never patch the ejected file under `.claude/`, `.agents/`, or
+  `.codex/` directly — see `## Skill pack source of truth`. Speccy
+  dogfoods this loop: the same friction-to-skill-update pattern the
+  shipped implementer prompt asks downstream users to follow applies
+  here, so the next contributor inherits the fix instead of
+  re-discovering it.
 
 ## Implementer / reviewer activity records
 

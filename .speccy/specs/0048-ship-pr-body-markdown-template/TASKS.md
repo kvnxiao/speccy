@@ -46,8 +46,10 @@ prescribed by REQ-001:
     spec-local `SPEC.md`, `REPORT.md`, and `journal/` paths.
   - The footer line is the `🤖 Generated with [Claude Code]` attribution.
 - `## Filling the placeholders` section with one sub-heading per
-  placeholder (`{{ spec-dir }}`, `{{ summary }}`, `{{ coverage rows }}`)
-  naming the artifact source and any per-column derivation rule.
+  placeholder (`<spec-dir>`, `<summary>`, `<coverage-rows>` — angle-
+  bracket tokens; double-brace collides with MiniJinja's expression
+  delimiter, see SPEC.md Changelog amendment 2) naming the artifact
+  source and any per-column derivation rule.
 - `## Anti-patterns` section listing: no raw-XML paste, no fabricated
   rows, no edits to the fixed Test plan checklist, no dropping the
   generated-with-Claude-Code footer (Codex hosts swap it for the Codex
