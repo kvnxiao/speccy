@@ -157,7 +157,7 @@ Suggested files: `resources/modules/skills/speccy-orchestrate.md`
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001">
+<task id="T-003" state="completed" covers="REQ-001">
 ## Refactor `modules/skills/speccy-review.md` and `modules/phases/speccy-work.md` — remove remaining verbatim canonical bodies
 
 Edit the two remaining consuming source files to replace their
