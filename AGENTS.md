@@ -140,6 +140,55 @@ surface, lint codes, and implementation sequence. Read it before
 touching any code. If a design decision isn't documented, ask before
 deciding.
 
+## Skill pack source of truth
+
+Everything an agent sees as a skill, subagent, or reference file
+under `.claude/`, `.agents/`, or `.codex/` is **ejected output**, not
+source. The single source of truth lives under `resources/`:
+
+- `resources/modules/skills/*.md` — host-neutral skill bodies
+  (`speccy-orchestrate.md`, `speccy-vet.md`, …).
+- `resources/modules/skills/partials/*.md` — sharable skill fragments
+  (`vet-phases.md`, `review-fanout.md`).
+- `resources/modules/phases/*.md` — agent body templates used by
+  subagent wrappers (`speccy-work.md`, `speccy-ship.md`, …).
+- `resources/modules/personas/*.md` — reviewer/vet persona bodies
+  plus shared persona snippets (`verdict_return_contract.md`,
+  `inline_note_format.md`, `diff_fetch_command.md`,
+  `no_tasks_md_writes.md`).
+- `resources/modules/references/*.md` — shared rule files
+  (`reconcile-policy.md`, `retry-shape.md`, `evidence.md`,
+  `journal-*.md`, …).
+- `resources/agents/.<host>/…` — per-host wrappers (`*.md.tmpl` for
+  Claude Code and Codex skills; `*.toml.tmpl` for Codex subagents).
+  Wrappers carry frontmatter and pull module bodies in via MiniJinja
+  `{% include %}` directives at render time.
+
+`speccy init --force --host <host>` (or `just reeject` to refresh
+both Claude Code and Codex at once) renders every wrapper, expands
+includes, and writes the result to `.claude/`, `.agents/`, and
+`.codex/`.
+
+**Editing rule:** never edit files under `.claude/`, `.agents/`, or
+`.codex/` directly. Edit the source under `resources/` and then
+run `just reeject` to regenerate the ejected output. Any change
+made to the harness folders is overwritten on the next init.
+
+**Deduplicating snippets:** when the same text would appear in
+multiple wrappers or modules, extract it to a `resources/modules/…`
+file and `{% include %}` it from each callsite. Verbatim inlined
+copies that shadow a canonical source are a bug — replace them with
+the include.
+
+**Verifying prose-template changes:** frame acceptance criteria for
+prose edits around content, not size. Content checks ("does
+canonical rule text leak into non-canonical files?", "does this
+wrapper include the right module?") are fine. Mechanical size gates
+like "wrapper ≤ N lines" or "module is exactly N lines" create
+friction for legitimate prose edits without catching anything
+content checks don't — avoid them. Prose under `resources/` is
+meant to be easy to revise by humans and agents alike.
+
 ## Authoritative references
 
 These rule files are authoritative for their domains. Load them when
@@ -167,6 +216,34 @@ Before any commit lands, all four must pass:
 - Prefer narrow, well-scoped commits over sprawling ones.
 - If a test you wrote is flaky, investigate the flake — don't retry
   until green.
+- Don't write vacuous tests. A test must gate a real invariant of the
+  system under test — not editorial decisions, not its own source
+  constant, not the build's own ability to compile. Specifically, do
+  not:
+  - Substring-match human-curated prose (`AGENTS.md`, `README.md`,
+    `SPEC.md` bodies). Such tests break on legitimate rewrites and
+    gate editorial decisions, not behavior. If a concept must be
+    discoverable in docs, enforce it socially via review or via a
+    lint over a stable structural surface (section IDs, frontmatter
+    fields), not by `.contains("a specific sentence")`.
+  - Re-assert a hard-coded copy of a production constant. A test
+    that copies the source value and compares them proves only that
+    someone updated both sites in sync — it cannot fail in any
+    interesting way. Either derive a property of the constant
+    (length, ordering, prefix relation to another constant) or
+    delete the test.
+  - Assert only file existence or non-emptiness without checking any
+    property of the content. `read_to_string` failing already gates
+    readability; `assert!(!body.is_empty())` after a successful read
+    is tautological.
+  - Mock the function under test and assert the mock was called.
+  - Assert outcomes so loose any input passes — `is_ok()` on an
+    infallible function, `!is_empty()` on a function that always
+    returns non-empty.
+
+  When in doubt, ask: "If I delete this test, what real regression
+  could land that the suite no longer catches?" If the answer is
+  "none," the test is vacuous.
 - Never `unwrap()` / `expect()` / `panic!()` / `unreachable!()` /
   `todo!()` / `unimplemented!()` in production code. Tests may use
   `.expect("descriptive message")`.
@@ -177,15 +254,31 @@ Before any commit lands, all four must pass:
   when the underlying issue resolves.
 - If you're tempted to add agent-behavior knobs to the CLI, stop — that
   belongs in skills or prompts, not in deterministic code.
+- Never put real Speccy-repo identifiers in shipped template /
+  reference / skill bodies. Anything under `resources/modules/`,
+  `resources/agents/`, and the ejected packs at `.claude/`,
+  `.agents/`, `.codex/` will land in other people's repositories
+  via `speccy init`, where Speccy's own spec IDs, slugs, repo URLs,
+  and branch names are meaningless and confusing. When an
+  illustrative example needs concrete values, use obviously
+  fictional placeholders (`SPEC-0042`, `0042-example-slug`,
+  `acme/widget`, `feature/example-branch`) and label the block as
+  "illustrative example — substitute your own values." Speccy's
+  own spec artifacts under `.speccy/specs/` are a different
+  matter — those are local dogfood evidence and stay
+  Speccy-specific.
 - When you hit friction caused by a stale or wrong instruction in a
   shipped skill (wrong command, missing environment variable, an
-  undocumented step), do this:
-  update the relevant skill file under `skills/` before you finish
-  the task, then call out the edit under `Procedural compliance` in
-  your `<implementer>` block. Speccy dogfoods this loop: the same
-  friction-to-skill-update pattern the shipped implementer prompt
-  asks downstream users to follow applies here, so the next
-  contributor inherits the fix instead of re-discovering it.
+  undocumented step), do this: update the relevant source module
+  under `resources/modules/` (or wrapper under `resources/agents/`)
+  before you finish the task, run `just reeject`, then call out the
+  edit under `Procedural compliance` in your `<implementer>` block.
+  Never patch the ejected file under `.claude/`, `.agents/`, or
+  `.codex/` directly — see `## Skill pack source of truth`. Speccy
+  dogfoods this loop: the same friction-to-skill-update pattern the
+  shipped implementer prompt asks downstream users to follow applies
+  here, so the next contributor inherits the fix instead of
+  re-discovering it.
 
 ## Implementer / reviewer activity records
 

@@ -375,45 +375,6 @@ fn recipe_content_shape() {
 // SPEC-0014 helpers and fixtures
 // --------------------------------------------------------------------
 
-/// Stable phrase the friction-to-skill-update pattern reuses across
-/// the implementer persona and AGENTS.md. Changing it is a
-/// coordinated edit across both files.
-const FRICTION_PHRASE: &str = "update the relevant skill file under `skills/`";
-
-/// Returns the slice of `body` belonging to the H2 section opened by
-/// `heading` (exclusive of the heading line itself), terminated by
-/// the next `\n## ` boundary or end of file.
-fn section_body<'a>(body: &'a str, heading: &str) -> Option<&'a str> {
-    let start = body.find(heading)?;
-    let after_heading = body.get(start.checked_add(heading.len())?..)?;
-    let end = after_heading.find("\n## ").unwrap_or(after_heading.len());
-    after_heading.get(..end)
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 CHK-005
-// --------------------------------------------------------------------
-
-/// `AGENTS.md` is not part of the embedded skill bundle; it lives at
-/// the workspace root. We pull it in at compile time via `include_str!`
-/// relative to this test file so the test stays hermetic.
-const AGENTS_MD: &str = include_str!("../../AGENTS.md");
-
-#[test]
-fn agents_md_friction_paragraph() {
-    let section = section_body(AGENTS_MD, "## Conventions for AI agents specifically")
-        .expect("AGENTS.md must contain `## Conventions for AI agents specifically`");
-
-    assert!(
-        section.contains(FRICTION_PHRASE),
-        "AGENTS.md conventions section must contain the stable friction phrase `{FRICTION_PHRASE}`",
-    );
-    assert!(
-        section.contains("Procedural compliance"),
-        "AGENTS.md conventions section must reference the `Procedural compliance` handoff field",
-    );
-}
-
 // --------------------------------------------------------------------
 // Bundle layout: per-host SKILL.md.tmpl wrappers.
 // --------------------------------------------------------------------

@@ -1133,11 +1133,10 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
 }
 
 const CLAUDE_PINNED_PHASES: [&str; 3] = ["decompose", "work", "ship"];
-const CLAUDE_OPUS_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
-const CLAUDE_SONNET_HIGH_REVIEWERS: [&str; 1] = ["security"];
+const CLAUDE_OPUS_XHIGH_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
+const CLAUDE_OPUS_HIGH_REVIEWERS: [&str; 1] = ["security"];
 const CLAUDE_SONNET_MEDIUM_REVIEWERS: [&str; 2] = ["style", "docs"];
-const CODEX_HIGH_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
-const CODEX_MEDIUM_REVIEWERS: [&str; 1] = ["security"];
+const CODEX_HIGH_REVIEWERS: [&str; 4] = ["business", "tests", "architecture", "security"];
 const CODEX_LOW_REVIEWERS: [&str; 2] = ["style", "docs"];
 
 fn read_codex_toml(root: &Utf8Path, rel: &str) -> TestResult<toml::Table> {
@@ -1234,8 +1233,8 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
 
 fn assert_claude_reviewer_pins(root: &Utf8Path) -> TestResult {
     let cases: &[(&[&str], &str, &str)] = &[
-        (&CLAUDE_OPUS_REVIEWERS, "opus[1m]", "xhigh"),
-        (&CLAUDE_SONNET_HIGH_REVIEWERS, "sonnet[1m]", "high"),
+        (&CLAUDE_OPUS_XHIGH_REVIEWERS, "opus[1m]", "xhigh"),
+        (&CLAUDE_OPUS_HIGH_REVIEWERS, "opus[1m]", "high"),
         (&CLAUDE_SONNET_MEDIUM_REVIEWERS, "sonnet[1m]", "medium"),
     ];
     for (personas, expected_model, expected_effort) in cases {
@@ -1306,7 +1305,6 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
 fn assert_codex_reviewer_pins(root: &Utf8Path) -> TestResult {
     let cases: &[(&[&str], &str)] = &[
         (&CODEX_HIGH_REVIEWERS, "high"),
-        (&CODEX_MEDIUM_REVIEWERS, "medium"),
         (&CODEX_LOW_REVIEWERS, "low"),
     ];
     for (personas, expected_effort) in cases {
