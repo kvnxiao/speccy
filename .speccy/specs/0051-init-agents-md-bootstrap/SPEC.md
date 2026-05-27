@@ -283,6 +283,7 @@ each subsection meets its done-when criteria above. Reviewer
 judgment confirms language-agnostic phrasing and absence of
 vendor-specific CI configuration.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -363,6 +364,7 @@ the upstream-canonical body, the `## My project notes` section
 remains byte-identical to its pre-run state, and no second copy
 of `## Speccy conventions` is appended.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -452,6 +454,7 @@ at least one subsection from the inspected context, and presents
 the draft for user confirmation. The fixed seven-question
 script does not run.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -502,6 +505,7 @@ remains byte-identical to its pre-run state, no north-star
 Q&A questions are asked, and the skill proceeds to upsert the
 `## Speccy conventions` section.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -579,6 +583,7 @@ section) and refreshes the conventions section body — both
 seeding decisions are made independently. The post-run
 `AGENTS.md` contains both sections.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -645,6 +650,7 @@ SPEC's changes via `git diff --stat`,
 then no `.rs` files appear in the diff scoped to this SPEC.
 Reviewer judgment confirms the Rust CLI surface is unchanged.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -678,6 +684,7 @@ run in sequence,
 then every command exits 0 with no warnings or test failures
 attributable to this SPEC.
 </scenario>
+
 </requirement>
 
 ## Decisions

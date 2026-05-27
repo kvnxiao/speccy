@@ -5,7 +5,7 @@ generated_at: 2026-05-27T21:29:24Z
 ---
 # Tasks: SPEC-0051 `/speccy-init` AGENTS.md bootstrap — seeds `## Speccy conventions` section and refactors north star Q&A to a brainstorm-style adaptive flow
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Create canonical `## Speccy conventions` reference module
 
 Author a new reference module at
