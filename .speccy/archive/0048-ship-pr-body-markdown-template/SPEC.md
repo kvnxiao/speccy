@@ -5,6 +5,7 @@ title: Markdown PR body template — `/speccy-ship` assembles markdown from spec
 status: implemented
 created: 2026-05-27
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0048: Markdown PR body template — `/speccy-ship` assembles markdown from spec artifacts instead of piping raw REPORT.md XML

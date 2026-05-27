@@ -5,6 +5,7 @@ title: Remove vacuous tests — delete 6 tests that gate editorial prose, file n
 status: implemented
 created: 2026-05-27
 supersedes: []
+archived_at: 2026-05-27
 ---
 
 # SPEC-0050: Remove vacuous tests — delete 6 tests that gate editorial prose, file non-emptiness, or constant copies rather than behavior
