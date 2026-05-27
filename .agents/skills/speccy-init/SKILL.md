@@ -72,28 +72,68 @@ files in `.agents/skills/` are left alone.
    Never overwrite `## Product north star` content; the conventions
    section is the only section the skill replaces in place.
 
-4. **Q&A (states A and B).** Ask the user, one
-   question at a time, capturing the answers as bullet lists or
-   short paragraphs. Suggested questions, in order:
+4. **North-star adaptive flow (states A and B — north-star absent).**
+   Drive the `## Product north star` section as a brainstorm-style
+   adaptive iteration over its five subsections in template order:
+   opening prose (the project description and motivation paragraph),
+   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Known unknowns`. Do not run a fixed question script.
 
-   1. What are we building, and why does it matter?
-   2. Who will use it? (1–3 user archetypes.)
-   3. What does "done enough to ship v1" look like? (3–5
-      concrete deliverables.)
-   4. What constraints are we not free to violate? (Tech,
-      compliance, deadlines.)
-   5. What is explicitly **not** in scope for v1? (Non-goals.)
-   6. What does "good enough to ship" look like? (Quality bar.)
-   7. What do we expect to learn during construction? (Known
-      unknowns.)
+   **Inspect the repo first.** Before asking the user anything, read
+   the obvious context the working tree already carries: any
+   top-level `README.md`, manifest files (`Cargo.toml`,
+   `package.json`, `pyproject.toml`, `go.mod`, etc.), the top-level
+   source layout, and any prose already in `AGENTS.md`. Use the
+   inspection to gauge per-subsection legibility — which of the five
+   subsections you can plausibly draft from context, and which
+   require eliciting answers from the user.
 
-   Compose the answers into the `## Product north star` section
-   using these subheadings: `### Users`, `### V1.0 outcome`,
-   `### Quality bar`, `### Known unknowns`. Non-goals belong as
-   prose at the section root or under a `### Non-goals`
-   subsection. Constraints should reference the project's
-   existing `## Core principles` / `## Standard hygiene` if
-   present.
+   **Per-subsection draft-or-Socratic decision.** Walk the five
+   subsections in the documented order. For each one, decide
+   independently:
+
+   - **Legible from repo context → draft and confirm.** Draft the
+     subsection from the inspected context and present it to the
+     user for confirmation. Iterate on user redirects until the
+     subsection is approved.
+   - **Not legible → one-at-a-time Socratic Q&A.** Ask one question
+     at a time. Prefer multiple-choice framings when the answer
+     space is enumerable (e.g. "Is this primarily for: (a) solo
+     developers, (b) a small team, (c) a public audience, (d)
+     other — please describe?"); fall back to open prose only when
+     enumeration genuinely doesn't fit. Iterate until the
+     subsection is user-approved.
+
+   These brainstorm-style patterns — one question at a time,
+   multiple-choice when enumerable, draft-and-confirm, hard gate
+   before write — are inlined here deliberately. Do not invoke
+   `/speccy-brainstorm` or any other sub-skill from this path;
+   `/speccy-init` stays self-contained.
+
+   **Hard gate before write.** Do not write the `## Product north
+   star` section to `AGENTS.md` until every one of the five
+   subsections is explicitly user-approved. Partial drafts stay in
+   the conversation; only the fully approved composition lands on
+   disk. User redirects mid-iteration return to the relevant
+   subsection rather than restarting the whole flow.
+
+   When all five subsections are approved, compose them into the
+   `## Product north star` section under the subheadings
+   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Known unknowns`, with the opening prose at the section root.
+   Non-goals belong as prose at the section root or under an
+   optional `### Non-goals` subsection if they surfaced during
+   iteration. Constraints should reference the project's existing
+   `## Core principles` / `## Standard hygiene` if present.
+
+   **Asymmetry vs. the conventions upsert (step 5).** The north
+   star is freeze-on-first-write because its content is
+   user-authored — once the user has approved a draft and it lands,
+   re-runs of `/speccy-init` must not stomp it (step 3, State C
+   path). The `## Speccy conventions` section is the opposite:
+   canonical boilerplate sourced from upstream, safe to refresh
+   verbatim on every invocation. The asymmetry is principled —
+   each section's update policy follows from who owns its content.
 
 5. **Upsert the `## Speccy conventions` section.** After the
    north-star step completes (whether the Q&A ran or was skipped),

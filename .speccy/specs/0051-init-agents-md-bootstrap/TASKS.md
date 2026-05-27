@@ -172,7 +172,7 @@ Suggested files: `resources/modules/phases/speccy-init.md`
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-003 REQ-004">
+<task id="T-003" state="completed" covers="REQ-003 REQ-004">
 ## Refactor `/speccy-init` skill body's north-star Q&A into a brainstorm-style adaptive flow
 
 Edit `resources/modules/phases/speccy-init.md` to replace today's
