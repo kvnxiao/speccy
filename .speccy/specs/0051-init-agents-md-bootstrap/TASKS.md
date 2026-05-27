@@ -94,7 +94,7 @@ Suggested files: `resources/modules/references/agents-md-speccy-conventions.md`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002 REQ-005">
+<task id="T-002" state="completed" covers="REQ-002 REQ-005">
 ## Extend `/speccy-init` skill body with `## Speccy conventions` upsert step and state-matrix description
 
 Edit `resources/modules/phases/speccy-init.md` to add an explicit
