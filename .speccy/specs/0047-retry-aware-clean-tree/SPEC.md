@@ -2,7 +2,7 @@
 id: SPEC-0047
 slug: retry-aware-clean-tree
 title: Retry-aware clean-tree precondition — work dispatch tolerates dirty trees on review-blocked retries
-status: in-progress
+status: implemented
 created: 2026-05-26
 supersedes: []
 ---
