@@ -86,6 +86,22 @@ The spec-local directory, relative to repo root —
 Used in the three Reference docs bullets to produce repo-relative
 links GitHub renders as clickable file paths.
 
+**The Reference docs entries must be markdown links, not inline
+code.** Copy the template's `[SPEC.md](<spec-dir>/SPEC.md)` shape
+verbatim and substitute `<spec-dir>` in place — do not render the
+paths as `` `.speccy/specs/.../SPEC.md` `` (inline code). Inline
+code is not clickable on GitHub; the whole point of the section is
+to give reviewers one-click access to the spec artifacts. After
+substitution, the three bullets read:
+
+- `[SPEC.md](.speccy/specs/0048-ship-pr-body-markdown-template/SPEC.md)`
+- `[REPORT.md](.speccy/specs/0048-ship-pr-body-markdown-template/REPORT.md)`
+- `[journal/](.speccy/specs/0048-ship-pr-body-markdown-template/journal/)`
+
+GitHub resolves relative paths in PR bodies against the repo root
+on the PR's head branch, so no `https://github.com/...` prefix is
+needed.
+
 ### `<summary>`
 
 The prose body of the `## Summary` section in `SPEC.md`, copied
@@ -128,6 +144,12 @@ Example rendered rows:
   `<coverage>` element actually present in `REPORT.md`. Do not
   invent rows for requirements REPORT.md omits, and do not drop
   rows for requirements REPORT.md includes.
+- **No inline-code Reference docs paths.** The three Reference
+  docs bullets must be markdown links (`[SPEC.md](<spec-dir>/SPEC.md)`),
+  not inline code (`` `.speccy/specs/.../SPEC.md` ``). Inline code is
+  not clickable on GitHub — rendering the paths that way defeats the
+  section's purpose. Copy the template's link syntax verbatim and
+  only substitute the `<spec-dir>` placeholder.
 - **No edits to the Test plan checklist.** The five items are
   fixed: the four `AGENTS.md` "## Standard hygiene" gates plus
   `speccy verify`. They are pre-checked because the ship recipe

@@ -180,6 +180,15 @@ file and `{% include %}` it from each callsite. Verbatim inlined
 copies that shadow a canonical source are a bug — replace them with
 the include.
 
+**Verifying prose-template changes:** frame acceptance criteria for
+prose edits around content, not size. Content checks ("does
+canonical rule text leak into non-canonical files?", "does this
+wrapper include the right module?") are fine. Mechanical size gates
+like "wrapper ≤ N lines" or "module is exactly N lines" create
+friction for legitimate prose edits without catching anything
+content checks don't — avoid them. Prose under `resources/` is
+meant to be easy to revise by humans and agents alike.
+
 ## Authoritative references
 
 These rule files are authoritative for their domains. Load them when
@@ -207,6 +216,34 @@ Before any commit lands, all four must pass:
 - Prefer narrow, well-scoped commits over sprawling ones.
 - If a test you wrote is flaky, investigate the flake — don't retry
   until green.
+- Don't write vacuous tests. A test must gate a real invariant of the
+  system under test — not editorial decisions, not its own source
+  constant, not the build's own ability to compile. Specifically, do
+  not:
+  - Substring-match human-curated prose (`AGENTS.md`, `README.md`,
+    `SPEC.md` bodies). Such tests break on legitimate rewrites and
+    gate editorial decisions, not behavior. If a concept must be
+    discoverable in docs, enforce it socially via review or via a
+    lint over a stable structural surface (section IDs, frontmatter
+    fields), not by `.contains("a specific sentence")`.
+  - Re-assert a hard-coded copy of a production constant. A test
+    that copies the source value and compares them proves only that
+    someone updated both sites in sync — it cannot fail in any
+    interesting way. Either derive a property of the constant
+    (length, ordering, prefix relation to another constant) or
+    delete the test.
+  - Assert only file existence or non-emptiness without checking any
+    property of the content. `read_to_string` failing already gates
+    readability; `assert!(!body.is_empty())` after a successful read
+    is tautological.
+  - Mock the function under test and assert the mock was called.
+  - Assert outcomes so loose any input passes — `is_ok()` on an
+    infallible function, `!is_empty()` on a function that always
+    returns non-empty.
+
+  When in doubt, ask: "If I delete this test, what real regression
+  could land that the suite no longer catches?" If the answer is
+  "none," the test is vacuous.
 - Never `unwrap()` / `expect()` / `panic!()` / `unreachable!()` /
   `todo!()` / `unimplemented!()` in production code. Tests may use
   `.expect("descriptive message")`.
