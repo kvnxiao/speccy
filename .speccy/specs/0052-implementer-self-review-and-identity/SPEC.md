@@ -131,6 +131,7 @@ step and before the `in-review` flip, instructing the agent to fix
 drift in place first.
 (judgment-only: prose presence and placement confirmed on the diff.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -164,6 +165,7 @@ then each states a north star, none discloses a reviewer's detection
 tactic, and the style entry defers to the shared checklist.
 (judgment-only: confirmed on the diff.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -210,6 +212,7 @@ then both exit 0 — proving the new include resolves at render time at
 both callsites and no pack-structure test breaks.
 (hygiene)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -244,6 +247,7 @@ named as insufficient on its own.
 (judgment-only: confirmed on the diff; the originating false positive
 is patina T-015.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -277,6 +281,7 @@ the parent session's effort.
 (judgment-only / dogfooding: not CI-provable; confirmed by inspecting
 a post-change journal entry.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -311,6 +316,7 @@ verbatim, hyphens preserved.
 (judgment-only / dogfooding: confirmed by inspecting a post-change
 journal or review block.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -351,6 +357,7 @@ then it exits 0 — proving the identity-sourcing partial resolves at
 every include site.
 (hygiene)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-008">
@@ -383,6 +390,7 @@ fan-out and decompose paths, and no dot-form `claude-opus-4.8` example
 remains in the touched files.
 (judgment-only: confirmed on the diff.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-009">
@@ -418,6 +426,7 @@ then it shows a `## Changelog` / `<changelog>` worked example and lists
 (judgment-only: confirmed on the diff; the originating friction is this
 SPEC's own drafting tripping SPC-001.)
 </scenario>
+
 </requirement>
 
 ## Decisions

@@ -5,7 +5,7 @@ generated_at: 2026-05-28T23:41:47Z
 ---
 # Tasks: SPEC-0052 Implementer pre-handoff self-review and accurate model/effort recording
 
-<task id="T-001" state="pending" covers="REQ-003">
+<task id="T-001" state="completed" covers="REQ-003">
 ## Add the shared convention-checklist partial
 
 Create a new partial under `resources/modules/` (suggested
