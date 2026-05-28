@@ -215,7 +215,7 @@ done
 </task-scenarios>
 </task>
 "#;
-    let journal_body = "---\nspec: SPEC-0042\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"claude-opus-4.7[1m]/low\" round=\"1\">\nbody\n</implementer>\n";
+    let journal_body = "---\nspec: SPEC-0042\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"claude-opus-4.8[1m]/low\" round=\"1\">\nbody\n</implementer>\n";
     let dir = make_workspace("SPEC-0042", tasks, &[("T-001.md", journal_body)])?;
     let diags = run_lint(&dir)?;
     assert!(

@@ -20,10 +20,10 @@ Encode reasoning effort (when your host harness exposes an effort
 knob) as a slash-suffix on the model string itself rather than as a
 separate attribute. Examples:
 
-- `model="claude-opus-4.7[1m]/low"` — Opus 4.7 with the 1M context
+- `model="claude-opus-4.8[1m]/low"` — Opus 4.8 with the 1M context
   variant, effort `low`.
 - `model="claude-sonnet-4.7/medium"` — Sonnet 4.7, effort `medium`.
-- `model="claude-opus-4.7[1m]"` — Opus 4.7 1M, host harness did
+- `model="claude-opus-4.8[1m]"` — Opus 4.8 1M, host harness did
   not expose an effort knob (no slash suffix in that case).
 
 The slash-suffix is a convention, not a parser-enforced schema; the

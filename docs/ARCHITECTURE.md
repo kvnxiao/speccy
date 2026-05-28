@@ -567,22 +567,22 @@ task: T-002
 generated_at: 2026-05-11T18:00:00Z
 ---
 
-<implementer date="2026-05-11T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
+<implementer date="2026-05-11T18:00:00Z" model="claude-opus-4.8[1m]/low" round="1">
 Renamed existing `password` column. Added migration to hash
 plaintext rows. **Out of scope**: touched
 `tests/migration_helpers.ts` to fix a test helper assuming
 plaintext.
 </implementer>
 
-<review persona="business" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.7[1m]/high" round="1">
+<review persona="business" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.8[1m]/high" round="1">
 Matches REQ-002 intent.
 </review>
 
-<review persona="tests" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.7[1m]/medium" round="1">
+<review persona="tests" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4.8[1m]/medium" round="1">
 Hash assertion present.
 </review>
 
-<review persona="security" verdict="blocking" date="2026-05-11T19:00:00Z" model="claude-opus-4-7[1m]/high" round="1">
+<review persona="security" verdict="blocking" date="2026-05-11T19:00:00Z" model="claude-opus-4-8[1m]/high" round="1">
 bcrypt cost 10; policy requires >=12. See `src/auth/password.ts:14`.
 </review>
 
@@ -627,7 +627,7 @@ attributes in the journal schema. Attribute value rules:
   `generated_at` in frontmatter uses the same format.
 - `model` — non-empty string. The agreed skill-layer convention
   encodes effort via a slash suffix (e.g.
-  `claude-opus-4.7[1m]/low`, `claude-sonnet-4-6[1m]/medium`); the
+  `claude-opus-4.8[1m]/low`, `claude-sonnet-4-6[1m]/medium`); the
   parser does NOT validate slash-suffix internal structure — it
   only enforces non-empty.
 - `round` — positive integer (regex `^[1-9][0-9]*$`).
@@ -2002,7 +2002,7 @@ not infer it from skill-pack identity.
 
     <review persona="security" verdict="blocking"
             date="2026-05-21T19:00:00Z"
-            model="claude-opus-4-7[1m]/high" round="1">
+            model="claude-opus-4-8[1m]/high" round="1">
     bcrypt cost 10; policy requires >=12.
     See `src/auth/password.ts:14`.
     </review>

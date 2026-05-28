@@ -464,7 +464,7 @@ the change. Examples:
 
 - Lock `speccy-work` to a specific Claude version for
   reproducibility: change `model: opus[1m]` to
-  `model: claude-opus-4-7[1m]` in
+  `model: claude-opus-4-8[1m]` in
   `.claude/agents/speccy-work.md`.
 - Run a reviewer at a lighter tier in a cost-sensitive repo:
   change `model: opus[1m]` to `model: sonnet[1m]` (and adjust
