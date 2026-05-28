@@ -15,7 +15,7 @@
 //! `date` is ISO8601 with seconds and timezone designator;
 //! `round` is a positive integer; `model` is a non-empty string with a
 //! documented slash-suffix convention for effort
-//! (e.g. `claude-opus-4.7[1m]/low`) — the slash-suffix is not
+//! (e.g. `claude-opus-4.8[1m]/low`) — the slash-suffix is not
 //! parser-validated.
 
 use crate::error::ParseError;
@@ -527,7 +527,7 @@ mod tests {
     #[test]
     fn happy_path_one_implementer() {
         let src = make(indoc! {r#"
-            <implementer date="2026-05-21T18:00:00Z" model="claude-opus-4.7[1m]/low" round="1">
+            <implementer date="2026-05-21T18:00:00Z" model="claude-opus-4.8[1m]/low" round="1">
             body
             </implementer>
         "#});
@@ -540,7 +540,7 @@ mod tests {
                 date, model, round, ..
             } => {
                 assert_eq!(date, "2026-05-21T18:00:00Z");
-                assert_eq!(model, "claude-opus-4.7[1m]/low");
+                assert_eq!(model, "claude-opus-4.8[1m]/low");
                 assert_eq!(*round, 1);
             }
             other => panic!("expected implementer, got {other:?}"),
