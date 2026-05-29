@@ -1,11 +1,11 @@
 //! Reviewer persona name registry.
 //!
-//! Six personas ship: the four default fan-out personas
-//! ([`ALL`][`ALL`]`[..4]` = `business`, `tests`, `security`, `style`) plus
-//! two off-by-default personas (`architecture`, `docs`). Adding a new
-//! persona is a single-line change to [`ALL`]; SPEC-0007 consumes
-//! `&ALL[..4]` as its `DEFAULT_PERSONAS`, so the two lists are
-//! mechanically derived from one source.
+//! Seven personas ship: the five default fan-out personas
+//! ([`ALL`][`ALL`]`[..5]` = `business`, `tests`, `security`, `style`,
+//! `correctness`) plus two off-by-default personas (`architecture`,
+//! `docs`). Adding a new persona is a single-line change to [`ALL`];
+//! SPEC-0007 consumes `&ALL[..5]` as its `DEFAULT_PERSONAS`, so the two
+//! lists are mechanically derived from one source.
 //!
 //! Persona body content lives in
 //! `resources/modules/personas/reviewer-<name>.md` and is shipped to
@@ -22,16 +22,17 @@
 
 /// All reviewer personas shipped with Speccy, in declared order.
 ///
-/// The first four entries are the **default fan-out** consumed by
+/// The first five entries are the **default fan-out** consumed by
 /// SPEC-0007 (`speccy next --kind review`); the trailing two
 /// (`architecture`, `docs`) are off-by-default and only run when a
 /// reviewer explicitly passes `--persona`. SPEC-0007 must reference
-/// `&ALL[..4]` so both lists evolve together.
+/// `&ALL[..5]` so both lists evolve together.
 pub const ALL: &[&str] = &[
     "business",
     "tests",
     "security",
     "style",
+    "correctness",
     "architecture",
     "docs",
 ];
@@ -41,7 +42,7 @@ mod tests {
     use super::ALL;
 
     #[test]
-    fn all_contains_exactly_six_names_in_declared_order() {
+    fn all_contains_exactly_seven_names_in_declared_order() {
         assert_eq!(
             ALL,
             &[
@@ -49,6 +50,7 @@ mod tests {
                 "tests",
                 "security",
                 "style",
+                "correctness",
                 "architecture",
                 "docs"
             ]
@@ -57,7 +59,10 @@ mod tests {
 
     #[test]
     fn default_personas_is_prefix_of_all() {
-        let default = ALL.get(..4).expect("ALL must have at least 4 elements");
-        assert_eq!(default, &["business", "tests", "security", "style"]);
+        let default = ALL.get(..5).expect("ALL must have at least 5 elements");
+        assert_eq!(
+            default,
+            &["business", "tests", "security", "style", "correctness"]
+        );
     }
 }

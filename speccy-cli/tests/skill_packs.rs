@@ -472,6 +472,41 @@ fn shipped_descriptions_natural_language_triggers() {
     }
 }
 
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-013: `can we brainstorm` trigger phrase in the rendered
+// `speccy-brainstorm` description for both hosts.
+// --------------------------------------------------------------------
+
+#[test]
+fn brainstorm_description_lists_can_we_brainstorm_trigger() {
+    const PHRASE: &str = "can we brainstorm";
+    for (host, install_root) in [
+        (HostChoice::ClaudeCode, ".claude"),
+        (HostChoice::Codex, ".agents"),
+    ] {
+        let rendered = render_host_pack(host).unwrap_or_else(|err| {
+            panic_with_test_message(&format!("render_host_pack({host:?}) should succeed: {err}"))
+        });
+        let body = find_rendered_skill(&rendered, install_root, "speccy-brainstorm");
+        let label = format!("{install_root}/skills/speccy-brainstorm/SKILL.md");
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "rendered `{label}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "rendered `{label}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        assert!(
+            fm.description.contains(PHRASE),
+            "rendered `{label}` description must list the `{PHRASE}` trigger phrase (SPEC-0053 REQ-010); got: {:?}",
+            fm.description,
+        );
+    }
+}
+
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
 /// crate dir) by walking one level up.
 fn workspace_root() -> std::path::PathBuf {
@@ -525,9 +560,10 @@ const SPECCY_REVIEW_FANOUT_PARTIAL: &str =
     include_str!("../../resources/modules/skills/partials/review-fanout.md");
 
 /// Default reviewer fan-out used by both `/speccy-review` rendered
-/// branches: the four personas Speccy invokes per task. Other shipped
+/// branches: the five personas Speccy invokes per task. Other shipped
 /// reviewers (`architecture`, `docs`) are explicit-only.
-const DEFAULT_REVIEWER_PERSONAS: &[&str] = &["business", "tests", "security", "style"];
+const DEFAULT_REVIEWER_PERSONAS: &[&str] =
+    &["business", "tests", "security", "style", "correctness"];
 
 #[test]
 fn speccy_review_fanout_partial_has_host_divergence_block() {
@@ -945,7 +981,7 @@ fn t006_codex_wrapper_shape_and_body() {
 // as the only blank lines straddling the include site.
 // --------------------------------------------------------------------
 
-/// Six reviewer-persona names shipped by `speccy-core::personas::ALL`.
+/// Seven reviewer-persona names shipped by `speccy-core::personas::ALL`.
 /// Duplicated locally as a `const &[&str]` so the T-009 tests stay
 /// hermetic w.r.t. `personas::ALL`'s declared order.
 const REVIEWER_PERSONAS: &[&str] = &[
@@ -953,6 +989,7 @@ const REVIEWER_PERSONAS: &[&str] = &[
     "tests",
     "security",
     "style",
+    "correctness",
     "architecture",
     "docs",
 ];
@@ -966,7 +1003,7 @@ fn t009_claude_agents_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t009_claude_code_reviewer_wrappers_exactly_six() {
+fn t009_claude_code_reviewer_wrappers_exactly_seven() {
     let dir = t009_claude_agents_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -994,7 +1031,7 @@ fn t009_claude_code_reviewer_wrappers_exactly_six() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly six Claude Code reviewer wrappers must exist, one per shipped reviewer persona",
+        "exactly seven Claude Code reviewer wrappers must exist, one per shipped reviewer persona",
     );
 }
 
@@ -1083,8 +1120,8 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
         .collect();
     assert_eq!(
         agent_files.len(),
-        6,
-        "claude-code host pack should render six reviewer subagent files under .claude/agents/reviewer-*.md; got {}",
+        7,
+        "claude-code host pack should render seven reviewer subagent files under .claude/agents/reviewer-*.md; got {}",
         agent_files.len(),
     );
 
@@ -1144,6 +1181,311 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
 }
 
 // --------------------------------------------------------------------
+// SPEC-0053 T-001 (CHK-001, CHK-002): the `reviewer-correctness`
+// persona renders for both hosts with all `{% include %}` directives
+// expanded, and the rendered body names the four deferral targets as
+// out-of-scope and carries the literal confidence threshold `80`.
+// --------------------------------------------------------------------
+
+/// Returns the rendered body of the named agent for the given host,
+/// asserting the file exists.
+fn rendered_agent_body(host: HostChoice, dir: &str, name: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{dir}/agents/{name}.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!("rendered host pack must include `{rel}`"))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
+    // CHK-001: both hosts render the persona with every `{% ... %}`
+    // include directive expanded and no `<...>` placeholder left.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "reviewer-correctness", suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+        // The persona body pulls in the shared review-contract snippets
+        // via `{% include %}`; their expanded text must be present.
+        assert!(
+            body.contains("Your final message to the orchestrator"),
+            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn reviewer_correctness_body_names_deferrals_and_threshold() {
+    // CHK-002: the rendered body names all four deferral targets as
+    // out-of-scope and carries the literal confidence threshold `80`,
+    // gating a silent drop of the scope/filter on a future edit.
+    let body = rendered_agent_body(
+        HostChoice::ClaudeCode,
+        ".claude",
+        "reviewer-correctness",
+        "md",
+    );
+    // Scope the deferral-target assertion to the "Out of scope — defer"
+    // section. `security`/`style`/`business` also appear in the Focus
+    // section, so a body-wide `contains` would let three of the four
+    // targets pass even if the deferral section were deleted; only the
+    // section slice makes all four load-bearing.
+    let mut in_defer = false;
+    let mut defer_section = String::new();
+    for line in body.lines() {
+        if line.starts_with("## Out of scope") {
+            in_defer = true;
+            continue;
+        }
+        if in_defer && line.starts_with("## ") {
+            break;
+        }
+        if in_defer {
+            defer_section.push_str(line);
+            defer_section.push('\n');
+        }
+    }
+    assert!(
+        !defer_section.is_empty(),
+        "reviewer-correctness must have a non-empty out-of-scope deferral section; got:\n{body}",
+    );
+    for target in ["security", "style", "business", "tests"] {
+        assert!(
+            defer_section.contains(target),
+            "reviewer-correctness out-of-scope section must name deferral target `{target}`; got:\n{defer_section}",
+        );
+    }
+    assert!(
+        body.contains("80"),
+        "rendered reviewer-correctness must state the confidence->=80 reporting threshold; got:\n{body}",
+    );
+}
+
+// --------------------------------------------------------------------
+// SPEC-0053 T-002 (CHK-003): the `plan-explorer` persona renders for
+// both hosts with all `{% include %}` directives expanded, and the
+// rendered body carries the advisory, non-verdict contract — it must
+// not contain the `<review` verdict-contract marker.
+// --------------------------------------------------------------------
+
+#[test]
+fn plan_explorer_renders_with_includes_expanded_both_hosts() {
+    // CHK-003: both hosts render the persona with every `{% ... %}`
+    // include directive expanded.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "plan-explorer", suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/plan-explorer.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
+    // CHK-003: plan-explorer is advisory, not a reviewer. Its rendered
+    // body must not carry the `<review` verdict-contract marker — that
+    // would mean a verdict-contract snippet leaked in, contradicting
+    // the report-only contract. The check is host-independent: the
+    // body is identical across wrappers, but assert on both so a
+    // wrapper that accidentally inlines a verdict snippet is caught.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "plan-explorer", suffix);
+        assert!(
+            !body.contains("<review"),
+            "rendered `{dir}/agents/plan-explorer.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0053 T-003 (CHK-004): the `plan-architect` persona renders for
+// both hosts with all `{% include %}` directives expanded, carries the
+// advisory non-verdict contract (no `<review` marker), and specifies
+// that build-sequence items are agent-sized.
+// --------------------------------------------------------------------
+
+#[test]
+fn plan_architect_renders_with_includes_expanded_both_hosts() {
+    // CHK-004: both hosts render the persona with every `{% ... %}`
+    // include directive expanded.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
+    // CHK-004: plan-architect is advisory, not a reviewer. Its rendered
+    // body must not carry the `<review` verdict-contract marker — that
+    // would mean a verdict-contract snippet leaked in, contradicting the
+    // blueprint-only contract.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
+        assert!(
+            !body.contains("<review"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
+    // CHK-004 / REQ-003 <done-when>: the body must specify that the
+    // build-sequence checklist items are agent-sized (one item ≈ one
+    // task), which is what makes the checklist directly consumable as
+    // candidate tasks.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
+        // Assert on language that lives ONLY in the included persona
+        // body's build-sequence section, never in the wrapper
+        // frontmatter `description`. The description paraphrases the
+        // contract ("a build-sequence checklist whose items are
+        // agent-sized (one item ≈ one Speccy task)"), so a loose
+        // substring like "agent-sized" / "build-sequence" against the
+        // full rendered file would pass even if the body said nothing.
+        // The dedicated section heading and the explicit "one item is a
+        // plausible single Speccy task" sizing sentence appear only in
+        // the body, so this fails RED when the body language is removed.
+        assert!(
+            body.contains("## Build sequence — an agent-sized ordered checklist"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must carry the dedicated agent-sized build-sequence section heading from the persona body; got:\n{body}",
+        );
+        assert!(
+            body.contains("one item is a plausible single Speccy task"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` body must specify that each build-sequence item is agent-sized (one plausible single Speccy task); got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0053 T-005 (CHK-008 / CHK-009): the plan-time subagents are
+// wired into their host skills. `speccy-brainstorm` and `speccy-plan`
+// invoke `plan-explorer` and route its report into SPEC.md sections
+// (never a new artifact file); `speccy-decompose` invokes
+// `plan-architect`, names the build-sequence checklist as candidate
+// tasks, and promotes decisions into `### Decisions`.
+// --------------------------------------------------------------------
+
+/// Returns the rendered `speccy-decompose` body. The decompose recipe
+/// is a pinned phase-worker stub, so its full body renders into the
+/// agent wrapper at `<install_root>/agents/speccy-decompose.md`, not
+/// the SKILL.md stub.
+fn rendered_decompose_body(host: HostChoice, install_root: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{install_root}/agents/speccy-decompose.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!("rendered host pack must include `{rel}`"))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn brainstorm_and_plan_skills_invoke_plan_explorer_without_new_artifact() {
+    // CHK-008: both `speccy-brainstorm` and `speccy-plan` reference
+    // invoking the `plan-explorer` subagent, and neither directs the
+    // explorer's report into a new `*.md` artifact file — its only
+    // durable home is the existing SPEC.md routing targets.
+    //
+    // Render both hosts: the skill bodies are host-neutral but the
+    // wrappers differ, so a per-host render guards against a wiring
+    // edit that lands in only one pack.
+    for host in [HostChoice::ClaudeCode, HostChoice::Codex] {
+        let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+        let install_root = match host {
+            HostChoice::ClaudeCode => ".claude",
+            HostChoice::Codex => ".agents",
+        };
+        for verb in ["speccy-brainstorm", "speccy-plan"] {
+            let body = find_rendered_skill(&rendered, install_root, verb);
+            assert!(
+                body.contains("plan-explorer"),
+                "rendered `{install_root}/skills/{verb}/SKILL.md` must reference invoking the `plan-explorer` subagent; got:\n{body}",
+            );
+            // The routing prose must state the explorer report is
+            // ephemeral and not persisted to a new artifact file. Assert
+            // on the distinctive contiguous phrase that occurs ONLY in
+            // the no-artifact routing clause of each wiring block — the
+            // `new `*.md` artifact file` qualifier. A broad
+            // `contains("artifact")` check passes on unrelated
+            // pre-existing prose (brainstorm's `four artifacts`, plan's
+            // `## Open Questions` line), so it would stay GREEN even if
+            // the no-artifact clause were deleted while the
+            // `plan-explorer` invocation stayed. Scoping to this phrase
+            // ties the assertion to the routing sentence: deleting the
+            // clause flips it RED.
+            assert!(
+                body.contains("new `*.md` artifact file"),
+                "rendered `{install_root}/skills/{verb}/SKILL.md` must state the explorer report is not persisted to a new `*.md` artifact file (the no-artifact routing clause); got:\n{body}",
+            );
+        }
+    }
+}
+
+#[test]
+fn decompose_skill_invokes_plan_architect_with_candidate_tasks_and_decisions() {
+    // CHK-009: the `speccy-decompose` body references invoking
+    // `plan-architect`, names the build-sequence checklist as the
+    // CANDIDATE task list, and references promoting decisions into
+    // `### Decisions`.
+    for (host, install_root, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_decompose_body(host, install_root, suffix);
+        assert!(
+            body.contains("plan-architect"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference invoking the `plan-architect` subagent; got:\n{body}",
+        );
+        assert!(
+            body.contains("candidate"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must name the build-sequence checklist as the candidate task list; got:\n{body}",
+        );
+        assert!(
+            body.contains("build-sequence"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference the build-sequence checklist from plan-architect; got:\n{body}",
+        );
+        assert!(
+            body.contains("### Decisions"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must direct promoting decisions into `### Decisions`; got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
 // SPEC-0016 T-010: Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //
@@ -1171,7 +1513,7 @@ fn t010_codex_agents_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t010_codex_reviewer_wrappers_exactly_six() {
+fn t010_codex_reviewer_wrappers_exactly_seven() {
     let dir = t010_codex_agents_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -1199,7 +1541,7 @@ fn t010_codex_reviewer_wrappers_exactly_six() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly six Codex reviewer wrappers must exist, one per shipped reviewer persona",
+        "exactly seven Codex reviewer wrappers must exist, one per shipped reviewer persona",
     );
 }
 
@@ -1280,8 +1622,8 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
         .collect();
     assert_eq!(
         agent_files.len(),
-        6,
-        "codex host pack should render six reviewer subagent files under .codex/agents/reviewer-*.toml; got {}",
+        7,
+        "codex host pack should render seven reviewer subagent files under .codex/agents/reviewer-*.toml; got {}",
         agent_files.len(),
     );
 
@@ -1637,16 +1979,22 @@ fn brainstorm_rendered_outputs_use_host_specific_prefix() {
 
 // --------------------------------------------------------------------
 // SPEC-0031 REQ-005 / CHK-005: reviewer-tests persona and prompt load
-// the evidence file and stay framework-agnostic; the other five
+// the evidence file and stay framework-agnostic; the other six
 // built-in reviewer personas carry no evidence-related instruction.
 // --------------------------------------------------------------------
 
 /// Reviewer personas other than `tests`. The SPEC-0031 REQ-005
 /// asymmetry: only the `tests` persona / prompt names evidence
-/// loading; the other five anchor on diff + SPEC + `<task-scenarios>`
+/// loading; the other six anchor on diff + SPEC + `<task-scenarios>`
 /// alone.
-const NON_TESTS_REVIEWER_PERSONAS: [&str; 5] =
-    ["business", "security", "style", "architecture", "docs"];
+const NON_TESTS_REVIEWER_PERSONAS: [&str; 6] = [
+    "business",
+    "security",
+    "style",
+    "correctness",
+    "architecture",
+    "docs",
+];
 
 /// Framework-specific anchor strings the reviewer-tests persona must
 /// not name inside normative guidance. SPEC-0031 REQ-005's
@@ -1730,7 +2078,7 @@ fn reviewer_tests_persona_loads_evidence() {
 #[test]
 fn non_tests_reviewer_files_carry_no_evidence_instruction() {
     // The asymmetry is the design: only the `tests` persona names
-    // evidence loading. The other five anchor on diff + SPEC +
+    // evidence loading. The other six anchor on diff + SPEC +
     // `<task-scenarios>` alone.
     for persona in NON_TESTS_REVIEWER_PERSONAS {
         let file = format!("reviewer-{persona}.md");
@@ -1743,5 +2091,217 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
             !body.contains("evidence file"),
             "`personas/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
         );
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-006: packaging conventions for the three feature-dev
+// ports (reviewer-correctness, plan-explorer, plan-architect). Each
+// Claude wrapper declares `model: opus[1m]`, each Codex wrapper
+// declares `model = "gpt-5.5"`, none declares `sonnet`, and each
+// persona body carries a `feature-dev` attribution line.
+// --------------------------------------------------------------------
+
+/// The three personas ported from `feature-dev` in SPEC-0053
+/// T-001 / T-002 / T-003. Their packaging invariants are asserted as
+/// an aggregate here rather than per-authoring-task.
+const FEATURE_DEV_PERSONAS: &[&str] = &["reviewer-correctness", "plan-explorer", "plan-architect"];
+
+/// Look up a rendered agent wrapper body by its `rel_path` in a
+/// `render_host_pack` output vector. `rel_path` already has the
+/// `agents/` prefix and `.tmpl` suffix stripped, so the needle is the
+/// install-root-relative destination (e.g.
+/// `.claude/agents/plan-explorer.md`).
+fn find_rendered_agent<'a>(
+    rendered: &'a [speccy_cli::render::RenderedFile],
+    rel_path: &str,
+) -> &'a str {
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel_path)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!("rendered host pack must contain `{rel_path}`"))
+        });
+    file.contents.as_str()
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentModelFrontmatter {
+    model: String,
+}
+
+#[test]
+fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+    let codex = render_host_pack(HostChoice::Codex)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render codex pack: {err}")));
+
+    for persona in FEATURE_DEV_PERSONAS {
+        // Claude wrapper: YAML frontmatter, `model: opus[1m]`.
+        let claude_path = format!(".claude/agents/{persona}.md");
+        let claude_body = find_rendered_agent(&claude, &claude_path);
+        let (claude_yaml, _rest) = split_frontmatter(claude_body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{claude_path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let claude_fm: AgentModelFrontmatter =
+            serde_saphyr::from_str(claude_yaml).unwrap_or_else(|err| {
+                panic_with_test_message(&format!(
+                    "Claude wrapper `{claude_path}` frontmatter must be valid YAML: {err}"
+                ))
+            });
+        assert_eq!(
+            claude_fm.model, "opus[1m]",
+            "Claude wrapper `{claude_path}` must declare `model: opus[1m]`, got `{}`",
+            claude_fm.model,
+        );
+
+        // Codex wrapper: the whole `.toml` file is TOML; `model = "gpt-5.5"`.
+        let codex_path = format!(".codex/agents/{persona}.toml");
+        let codex_body = find_rendered_agent(&codex, &codex_path);
+        let codex_fm: AgentModelFrontmatter = toml::from_str(codex_body).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Codex wrapper `{codex_path}` must be valid TOML: {err}"
+            ))
+        });
+        assert_eq!(
+            codex_fm.model, "gpt-5.5",
+            "Codex wrapper `{codex_path}` must declare `model = \"gpt-5.5\"`, got `{}`",
+            codex_fm.model,
+        );
+
+        // Neither wrapper may declare `sonnet` anywhere.
+        assert!(
+            !claude_body.contains("sonnet"),
+            "Claude wrapper `{claude_path}` must not declare `sonnet`",
+        );
+        assert!(
+            !codex_body.contains("sonnet"),
+            "Codex wrapper `{codex_path}` must not declare `sonnet`",
+        );
+
+        // The persona body carries a `feature-dev` attribution line.
+        let persona_body = read_persona(&format!("{persona}.md"));
+        assert!(
+            persona_body.contains("feature-dev"),
+            "persona body `personas/{persona}.md` must carry a `feature-dev` attribution line",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-010 / CHK-011: read-only agents declare an explicit
+// read-only `tools:` grant in their Claude wrapper frontmatter, and
+// the writer agents are NOT narrowed by this change.
+//
+// REQ-008: the ten read-only agents grant `Read`/`Grep`/`Glob`/`LS`/
+// `Bash`/`WebFetch` and exclude `Edit`/`Write`/`NotebookEdit`; the five
+// writer agents retain full (unrestricted, no `tools:` field) access.
+// --------------------------------------------------------------------
+
+/// The ten read-only agents that must carry an explicit read-only
+/// `tools:` grant after SPEC-0053 T-006.
+const READ_ONLY_AGENTS: &[&str] = &[
+    "plan-explorer",
+    "plan-architect",
+    "reviewer-correctness",
+    "reviewer-business",
+    "reviewer-tests",
+    "reviewer-security",
+    "reviewer-style",
+    "reviewer-architecture",
+    "reviewer-docs",
+    "vet-reviewer",
+];
+
+/// The five writer agents that must retain full (unrestricted) tool
+/// access — they must NOT be narrowed by the read-only grant.
+const WRITER_AGENTS: &[&str] = &[
+    "speccy-work",
+    "speccy-decompose",
+    "speccy-ship",
+    "vet-implementer",
+    "vet-simplifier",
+];
+
+#[derive(Debug, Deserialize)]
+struct AgentToolsFrontmatter {
+    #[serde(default)]
+    tools: Option<String>,
+}
+
+#[test]
+fn read_only_agents_declare_read_only_tool_grant() {
+    // CHK-010: each read-only Claude wrapper declares a `tools:` field
+    // that includes `Read` and excludes `Edit`/`Write`/`NotebookEdit`.
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+
+    for agent in READ_ONLY_AGENTS {
+        let path = format!(".claude/agents/{agent}.md");
+        let body = find_rendered_agent(&claude, &path);
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: AgentToolsFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        let tools = fm.tools.unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "read-only Claude wrapper `{path}` must declare a `tools:` grant"
+            ))
+        });
+        assert!(
+            tools.contains("Read"),
+            "read-only wrapper `{path}` `tools:` grant must include `Read`; got `{tools}`",
+        );
+        for forbidden in ["Edit", "Write", "NotebookEdit"] {
+            assert!(
+                !tools.contains(forbidden),
+                "read-only wrapper `{path}` `tools:` grant must exclude `{forbidden}`; got `{tools}`",
+            );
+        }
+    }
+}
+
+#[test]
+fn writer_agents_are_not_narrowed_to_read_only() {
+    // CHK-011: the writer wrappers retain full tool access — they must
+    // not have been narrowed to the read-only set. A writer that grows
+    // a `tools:` field excluding `Edit`/`Write` would be an over-broad
+    // application of the read-only grant; gate that regression.
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+
+    for agent in WRITER_AGENTS {
+        let path = format!(".claude/agents/{agent}.md");
+        let body = find_rendered_agent(&claude, &path);
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: AgentToolsFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        // A writer either declares no `tools:` field (inherits full
+        // access) or, if it ever declares one, must retain write
+        // capability. Either form proves it was not narrowed to the
+        // read-only set.
+        if let Some(tools) = fm.tools {
+            assert!(
+                tools.contains("Edit") && tools.contains("Write"),
+                "writer wrapper `{path}` declares a `tools:` grant but lost `Edit`/`Write`; \
+                 the read-only grant was applied too broadly; got `{tools}`",
+            );
+        }
     }
 }

@@ -262,14 +262,14 @@ fn first_task_with_state(
 
 /// The hardcoded review fan-out.
 ///
-/// Sourced from [`crate::personas::ALL`]; the four-persona prefix is
+/// Sourced from [`crate::personas::ALL`]; the five-persona prefix is
 /// the SPEC-0007 DEC-002 default. Exposed as a function (not a `const`)
 /// so the slice keeps a `'static` lifetime borrowed from `ALL` without
 /// duplicating the literal.
 #[must_use = "the returned slice is the fan-out for review results"]
 pub fn default_personas() -> &'static [&'static str] {
     let all = personas::ALL;
-    all.get(..4).unwrap_or(all)
+    all.get(..5).unwrap_or(all)
 }
 
 #[cfg(test)]
@@ -279,10 +279,10 @@ mod tests {
     use super::last_gate_block;
 
     #[test]
-    fn default_personas_is_the_first_four_of_all() {
+    fn default_personas_is_the_first_five_of_all() {
         assert_eq!(
             default_personas(),
-            &["business", "tests", "security", "style"],
+            &["business", "tests", "security", "style", "correctness"],
         );
     }
 

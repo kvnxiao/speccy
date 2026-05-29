@@ -10,12 +10,12 @@
 use speccy_core::personas::ALL;
 
 #[test]
-fn registry_default_personas_is_first_four_prefix() {
-    let default = ALL.get(..4).expect("ALL must have at least 4 elements");
+fn registry_default_personas_is_first_five_prefix() {
+    let default = ALL.get(..5).expect("ALL must have at least 5 elements");
     assert_eq!(
         default,
-        &["business", "tests", "security", "style"],
-        "DEFAULT_PERSONAS (SPEC-0007) is mechanically derived as &ALL[..4]",
+        &["business", "tests", "security", "style", "correctness"],
+        "DEFAULT_PERSONAS (SPEC-0007) is mechanically derived as &ALL[..5]",
     );
 }
 

@@ -24,6 +24,16 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    If `tasks_md_path` is non-null, an existing TASKS.md is present
    and this is an amendment run (edit surgically; preserve
    `state="completed"` tasks unless invalidated).
+
+   Before authoring `TASKS.md`, invoke the `plan-architect` subagent
+   against the SPEC to produce an implementation blueprint. Treat its
+   build-sequence checklist as the **candidate** task list — you
+   retain final `<task>` authorship and MAY merge, split, reorder, and
+   renumber the candidates to land agent-sized tasks. Promote any
+   load-bearing design decision surfaced by the blueprint into a
+   SPEC.md `### Decisions` (DEC-NNN) block rather than burying it in
+   task prose.
+
 2. Write `TASKS.md` as Markdown with a sequence of
    `<task id="T-NNN" state="pending" covers="REQ-NNN">...</task>`
    block per task directly under the heading — no `<tasks>` wrapper
