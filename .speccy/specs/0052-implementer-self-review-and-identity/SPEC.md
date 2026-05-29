@@ -2,7 +2,7 @@
 id: SPEC-0052
 slug: implementer-self-review-and-identity
 title: Implementer pre-handoff self-review and accurate model/effort recording
-status: in-progress
+status: implemented
 created: 2026-05-28
 supersedes: []
 ---

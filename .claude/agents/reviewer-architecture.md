@@ -134,7 +134,7 @@ orchestrator applies the state transition.
 
 The verdict element in your final message:
 
-    <review persona="architecture" verdict="pass" model="claude-opus-4.8[1m]/medium">
+    <review persona="architecture" verdict="pass" model="claude-opus-4-8[1m]/medium">
     <one-line verdict>.
     <optional file:line refs and details>.
     </review>
@@ -142,7 +142,7 @@ The verdict element in your final message:
 
 ## Example
 
-    <review persona="architecture" verdict="blocking" model="claude-opus-4.8[1m]/high">
+    <review persona="architecture" verdict="blocking" model="claude-opus-4-8[1m]/high">
     SPEC-NNNN DEC-NNN fixed the parser layer as the only consumer of
     `serde-saphyr`; this diff introduces a direct `serde-saphyr` call
     in `speccy-cli` instead of going through `speccy-core::parse`.

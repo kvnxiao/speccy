@@ -235,7 +235,7 @@ orchestrator applies the state transition.
 
 The verdict element in your final message:
 
-    <review persona="tests" verdict="pass" model="claude-opus-4.8[1m]/medium">
+    <review persona="tests" verdict="pass" model="claude-opus-4-8[1m]/medium">
     <one-line verdict>.
     <optional file:line refs and details>.
     </review>
