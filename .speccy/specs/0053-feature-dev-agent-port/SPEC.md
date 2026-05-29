@@ -2,7 +2,7 @@
 id: SPEC-0053
 slug: feature-dev-agent-port
 title: Port feature-dev agents into speccy — correctness reviewer, plan-explorer, plan-architect, read-only tool hardening, brainstorm trigger phrase
-status: in-progress
+status: implemented
 created: 2026-05-29
 supersedes: []
 ---
