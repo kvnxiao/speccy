@@ -153,7 +153,7 @@ Suggested files: `resources/modules/personas/plan-architect.md`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Verify packaging: reeject idempotency, model conventions, and attribution across the three new personas
 
 The three new personas were authored in T-001/T-002/T-003. This task

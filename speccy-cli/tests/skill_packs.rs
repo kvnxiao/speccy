@@ -1991,3 +1991,101 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
         );
     }
 }
+
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-006: packaging conventions for the three feature-dev
+// ports (reviewer-correctness, plan-explorer, plan-architect). Each
+// Claude wrapper declares `model: opus[1m]`, each Codex wrapper
+// declares `model = "gpt-5.5"`, none declares `sonnet`, and each
+// persona body carries a `feature-dev` attribution line.
+// --------------------------------------------------------------------
+
+/// The three personas ported from `feature-dev` in SPEC-0053
+/// T-001 / T-002 / T-003. Their packaging invariants are asserted as
+/// an aggregate here rather than per-authoring-task.
+const FEATURE_DEV_PERSONAS: &[&str] = &["reviewer-correctness", "plan-explorer", "plan-architect"];
+
+/// Look up a rendered agent wrapper body by its `rel_path` in a
+/// `render_host_pack` output vector. `rel_path` already has the
+/// `agents/` prefix and `.tmpl` suffix stripped, so the needle is the
+/// install-root-relative destination (e.g.
+/// `.claude/agents/plan-explorer.md`).
+fn find_rendered_agent<'a>(
+    rendered: &'a [speccy_cli::render::RenderedFile],
+    rel_path: &str,
+) -> &'a str {
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel_path)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!("rendered host pack must contain `{rel_path}`"))
+        });
+    file.contents.as_str()
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentModelFrontmatter {
+    model: String,
+}
+
+#[test]
+fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+    let codex = render_host_pack(HostChoice::Codex)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render codex pack: {err}")));
+
+    for persona in FEATURE_DEV_PERSONAS {
+        // Claude wrapper: YAML frontmatter, `model: opus[1m]`.
+        let claude_path = format!(".claude/agents/{persona}.md");
+        let claude_body = find_rendered_agent(&claude, &claude_path);
+        let (claude_yaml, _rest) = split_frontmatter(claude_body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{claude_path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let claude_fm: AgentModelFrontmatter =
+            serde_saphyr::from_str(claude_yaml).unwrap_or_else(|err| {
+                panic_with_test_message(&format!(
+                    "Claude wrapper `{claude_path}` frontmatter must be valid YAML: {err}"
+                ))
+            });
+        assert_eq!(
+            claude_fm.model, "opus[1m]",
+            "Claude wrapper `{claude_path}` must declare `model: opus[1m]`, got `{}`",
+            claude_fm.model,
+        );
+
+        // Codex wrapper: the whole `.toml` file is TOML; `model = "gpt-5.5"`.
+        let codex_path = format!(".codex/agents/{persona}.toml");
+        let codex_body = find_rendered_agent(&codex, &codex_path);
+        let codex_fm: AgentModelFrontmatter =
+            toml::from_str(codex_body).unwrap_or_else(|err| {
+                panic_with_test_message(&format!(
+                    "Codex wrapper `{codex_path}` must be valid TOML: {err}"
+                ))
+            });
+        assert_eq!(
+            codex_fm.model, "gpt-5.5",
+            "Codex wrapper `{codex_path}` must declare `model = \"gpt-5.5\"`, got `{}`",
+            codex_fm.model,
+        );
+
+        // Neither wrapper may declare `sonnet` anywhere.
+        assert!(
+            !claude_body.contains("sonnet"),
+            "Claude wrapper `{claude_path}` must not declare `sonnet`",
+        );
+        assert!(
+            !codex_body.contains("sonnet"),
+            "Codex wrapper `{codex_path}` must not declare `sonnet`",
+        );
+
+        // The persona body carries a `feature-dev` attribution line.
+        let persona_body = read_persona(&format!("{persona}.md"));
+        assert!(
+            persona_body.contains("feature-dev"),
+            "persona body `personas/{persona}.md` must carry a `feature-dev` attribution line",
+        );
+    }
+}
