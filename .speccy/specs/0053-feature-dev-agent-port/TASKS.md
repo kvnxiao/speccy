@@ -85,7 +85,7 @@ Suggested files: `resources/modules/personas/reviewer-correctness.md`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002">
+<task id="T-002" state="completed" covers="REQ-002">
 ## Add the `plan-explorer` persona body and host wrappers (read-only, advisory)
 
 Write `resources/modules/personas/plan-explorer.md`: a read-only

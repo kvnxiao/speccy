@@ -1234,6 +1234,66 @@ fn reviewer_correctness_body_names_deferrals_and_threshold() {
 }
 
 // --------------------------------------------------------------------
+// SPEC-0053 T-002 (CHK-003): the `plan-explorer` persona renders for
+// both hosts with all `{% include %}` directives expanded, and the
+// rendered body carries the advisory, non-verdict contract — it must
+// not contain the `<review` verdict-contract marker.
+// --------------------------------------------------------------------
+
+/// Returns the rendered `plan-explorer` body for the given host,
+/// asserting the file exists.
+fn rendered_plan_explorer_body(host: HostChoice, dir: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{dir}/agents/plan-explorer.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "rendered host pack must include `{rel}` after T-002"
+            ))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn plan_explorer_renders_with_includes_expanded_both_hosts() {
+    // CHK-003: both hosts render the persona with every `{% ... %}`
+    // include directive expanded.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_plan_explorer_body(host, dir, suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/plan-explorer.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
+    // CHK-003: plan-explorer is advisory, not a reviewer. Its rendered
+    // body must not carry the `<review` verdict-contract marker — that
+    // would mean a verdict-contract snippet leaked in, contradicting
+    // the report-only contract. The check is host-independent: the
+    // body is identical across wrappers, but assert on both so a
+    // wrapper that accidentally inlines a verdict snippet is caught.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_plan_explorer_body(host, dir, suffix);
+        assert!(
+            !body.contains("<review"),
+            "rendered `{dir}/agents/plan-explorer.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
 // SPEC-0016 T-010: Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //
@@ -1727,7 +1787,7 @@ fn brainstorm_rendered_outputs_use_host_specific_prefix() {
 
 // --------------------------------------------------------------------
 // SPEC-0031 REQ-005 / CHK-005: reviewer-tests persona and prompt load
-// the evidence file and stay framework-agnostic; the other five
+// the evidence file and stay framework-agnostic; the other six
 // built-in reviewer personas carry no evidence-related instruction.
 // --------------------------------------------------------------------
 
@@ -1826,7 +1886,7 @@ fn reviewer_tests_persona_loads_evidence() {
 #[test]
 fn non_tests_reviewer_files_carry_no_evidence_instruction() {
     // The asymmetry is the design: only the `tests` persona names
-    // evidence loading. The other five anchor on diff + SPEC +
+    // evidence loading. The other six anchor on diff + SPEC +
     // `<task-scenarios>` alone.
     for persona in NON_TESTS_REVIEWER_PERSONAS {
         let file = format!("reviewer-{persona}.md");
