@@ -1187,18 +1187,16 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
 // out-of-scope and carries the literal confidence threshold `80`.
 // --------------------------------------------------------------------
 
-/// Returns the rendered `reviewer-correctness` body for the given host,
+/// Returns the rendered body of the named agent for the given host,
 /// asserting the file exists.
-fn rendered_correctness_body(host: HostChoice, dir: &str, suffix: &str) -> String {
+fn rendered_agent_body(host: HostChoice, dir: &str, name: &str, suffix: &str) -> String {
     let rendered = render_host_pack(host).expect("render_host_pack should succeed");
-    let rel = format!("{dir}/agents/reviewer-correctness.{suffix}");
+    let rel = format!("{dir}/agents/{name}.{suffix}");
     rendered
         .iter()
         .find(|f| f.rel_path.as_str() == rel)
         .unwrap_or_else(|| {
-            panic_with_test_message(&format!(
-                "rendered host pack must include `{rel}` after T-001"
-            ))
+            panic_with_test_message(&format!("rendered host pack must include `{rel}`"))
         })
         .contents
         .clone()
@@ -1212,7 +1210,7 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_correctness_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "reviewer-correctness", suffix);
         assert!(
             !body.contains("{%"),
             "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
@@ -1231,7 +1229,12 @@ fn reviewer_correctness_body_names_deferrals_and_threshold() {
     // CHK-002: the rendered body names all four deferral targets as
     // out-of-scope and carries the literal confidence threshold `80`,
     // gating a silent drop of the scope/filter on a future edit.
-    let body = rendered_correctness_body(HostChoice::ClaudeCode, ".claude", "md");
+    let body = rendered_agent_body(
+        HostChoice::ClaudeCode,
+        ".claude",
+        "reviewer-correctness",
+        "md",
+    );
     // Scope the deferral-target assertion to the "Out of scope — defer"
     // section. `security`/`style`/`business` also appear in the Focus
     // section, so a body-wide `contains` would let three of the four
@@ -1275,23 +1278,6 @@ fn reviewer_correctness_body_names_deferrals_and_threshold() {
 // not contain the `<review` verdict-contract marker.
 // --------------------------------------------------------------------
 
-/// Returns the rendered `plan-explorer` body for the given host,
-/// asserting the file exists.
-fn rendered_plan_explorer_body(host: HostChoice, dir: &str, suffix: &str) -> String {
-    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
-    let rel = format!("{dir}/agents/plan-explorer.{suffix}");
-    rendered
-        .iter()
-        .find(|f| f.rel_path.as_str() == rel)
-        .unwrap_or_else(|| {
-            panic_with_test_message(&format!(
-                "rendered host pack must include `{rel}` after T-002"
-            ))
-        })
-        .contents
-        .clone()
-}
-
 #[test]
 fn plan_explorer_renders_with_includes_expanded_both_hosts() {
     // CHK-003: both hosts render the persona with every `{% ... %}`
@@ -1300,7 +1286,7 @@ fn plan_explorer_renders_with_includes_expanded_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_plan_explorer_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "plan-explorer", suffix);
         assert!(
             !body.contains("{%"),
             "rendered `{dir}/agents/plan-explorer.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
@@ -1320,7 +1306,7 @@ fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_plan_explorer_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "plan-explorer", suffix);
         assert!(
             !body.contains("<review"),
             "rendered `{dir}/agents/plan-explorer.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
@@ -1335,23 +1321,6 @@ fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
 // that build-sequence items are agent-sized.
 // --------------------------------------------------------------------
 
-/// Returns the rendered `plan-architect` body for the given host,
-/// asserting the file exists.
-fn rendered_plan_architect_body(host: HostChoice, dir: &str, suffix: &str) -> String {
-    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
-    let rel = format!("{dir}/agents/plan-architect.{suffix}");
-    rendered
-        .iter()
-        .find(|f| f.rel_path.as_str() == rel)
-        .unwrap_or_else(|| {
-            panic_with_test_message(&format!(
-                "rendered host pack must include `{rel}` after T-003"
-            ))
-        })
-        .contents
-        .clone()
-}
-
 #[test]
 fn plan_architect_renders_with_includes_expanded_both_hosts() {
     // CHK-004: both hosts render the persona with every `{% ... %}`
@@ -1360,7 +1329,7 @@ fn plan_architect_renders_with_includes_expanded_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_plan_architect_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
         assert!(
             !body.contains("{%"),
             "rendered `{dir}/agents/plan-architect.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
@@ -1378,7 +1347,7 @@ fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_plan_architect_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
         assert!(
             !body.contains("<review"),
             "rendered `{dir}/agents/plan-architect.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
@@ -1396,7 +1365,7 @@ fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
         (HostChoice::ClaudeCode, ".claude", "md"),
         (HostChoice::Codex, ".codex", "toml"),
     ] {
-        let body = rendered_plan_architect_body(host, dir, suffix);
+        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
         // Assert on language that lives ONLY in the included persona
         // body's build-sequence section, never in the wrapper
         // frontmatter `description`. The description paraphrases the
