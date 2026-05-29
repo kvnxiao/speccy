@@ -90,6 +90,8 @@ bounded to that diff and does not refactor unrelated code.
 The caller dispatches you in one of two modes; the skill orchestrator
 owns all rollback and journal writes.
 
+{% include "modules/references/identity-sourcing.md" %}
+
 ### Scan mode
 
 Report only. Do not modify files.

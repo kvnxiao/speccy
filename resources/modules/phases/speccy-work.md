@@ -219,6 +219,8 @@ in place and appends `<implementer round="N+1">`.
      implementer attempt writes `round="2"`, and so on. Do not skip
      values; do not reset.
 
+   {% include "modules/references/identity-sourcing.md" %}
+
    Body content. Use the six-field handoff template the implementer
    prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
    `Evidence`, `Discovered issues`, `Procedural compliance`). The

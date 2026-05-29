@@ -126,7 +126,7 @@ Suggested files: `resources/modules/personas/reviewer-style.md`
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-005 REQ-006 REQ-007">
+<task id="T-004" state="completed" covers="REQ-005 REQ-006 REQ-007">
 ## Add the shared identity-sourcing partial and wire it into every self-record site
 
 Create a single shared partial under `resources/modules/` stating the
