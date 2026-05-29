@@ -43,7 +43,7 @@ Suggested files: `resources/modules/references/convention-checklist.md`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-002 REQ-003">
+<task id="T-002" state="completed" covers="REQ-001 REQ-002 REQ-003">
 ## Add the implementer self-review step with the persona north-star map and shared-checklist include
 
 In the implementer phase body

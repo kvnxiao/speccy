@@ -53,16 +53,7 @@ orchestrator will weigh it without forcing a retry round.
 
 ## What to look for that's easy to miss
 
-- A new helper that duplicates an existing one a few directories away
-  (sub-agents often miss the existing helper).
-- Suppression annotations added without a `reason = "..."` justifying
-  them.
-- A function exceeds the file's existing complexity ceiling and should
-  be split.
-- Inconsistent error-handling style -- e.g. `?` propagation elsewhere
-  but `unwrap()` here.
-- Imports re-ordered or split in a style that fights the project's
-  formatter.
+{% include "modules/references/convention-checklist.md" %}
 
 ## Diff-format pitfalls
 
