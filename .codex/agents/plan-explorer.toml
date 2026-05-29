@@ -51,7 +51,7 @@ Trace the slice end-to-end and ground every claim in the code. Cover:
 ## Grounding requirement — `file:line` references
 
 Every structural claim must carry a concrete `file:line` reference
-(for example, `speccy-core/src/next.rs:42`). A report that names a
+(for example, `src/widget/render.rs:42`). A report that names a
 flow or layer without pointing at the code that implements it is a
 guess, not grounding — anchor it or drop it. Prefer a precise line
 over a whole-file citation.

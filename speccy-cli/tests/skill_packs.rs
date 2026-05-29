@@ -1294,6 +1294,96 @@ fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
 }
 
 // --------------------------------------------------------------------
+// SPEC-0053 T-003 (CHK-004): the `plan-architect` persona renders for
+// both hosts with all `{% include %}` directives expanded, carries the
+// advisory non-verdict contract (no `<review` marker), and specifies
+// that build-sequence items are agent-sized.
+// --------------------------------------------------------------------
+
+/// Returns the rendered `plan-architect` body for the given host,
+/// asserting the file exists.
+fn rendered_plan_architect_body(host: HostChoice, dir: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{dir}/agents/plan-architect.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "rendered host pack must include `{rel}` after T-003"
+            ))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn plan_architect_renders_with_includes_expanded_both_hosts() {
+    // CHK-004: both hosts render the persona with every `{% ... %}`
+    // include directive expanded.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_plan_architect_body(host, dir, suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
+    // CHK-004: plan-architect is advisory, not a reviewer. Its rendered
+    // body must not carry the `<review` verdict-contract marker — that
+    // would mean a verdict-contract snippet leaked in, contradicting the
+    // blueprint-only contract.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_plan_architect_body(host, dir, suffix);
+        assert!(
+            !body.contains("<review"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
+    // CHK-004 / REQ-003 <done-when>: the body must specify that the
+    // build-sequence checklist items are agent-sized (one item ≈ one
+    // task), which is what makes the checklist directly consumable as
+    // candidate tasks.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_plan_architect_body(host, dir, suffix);
+        // Assert on language that lives ONLY in the included persona
+        // body's build-sequence section, never in the wrapper
+        // frontmatter `description`. The description paraphrases the
+        // contract ("a build-sequence checklist whose items are
+        // agent-sized (one item ≈ one Speccy task)"), so a loose
+        // substring like "agent-sized" / "build-sequence" against the
+        // full rendered file would pass even if the body said nothing.
+        // The dedicated section heading and the explicit "one item is a
+        // plausible single Speccy task" sizing sentence appear only in
+        // the body, so this fails RED when the body language is removed.
+        assert!(
+            body.contains("## Build sequence — an agent-sized ordered checklist"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` must carry the dedicated agent-sized build-sequence section heading from the persona body; got:\n{body}",
+        );
+        assert!(
+            body.contains("one item is a plausible single Speccy task"),
+            "rendered `{dir}/agents/plan-architect.{suffix}` body must specify that each build-sequence item is agent-sized (one plausible single Speccy task); got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
 // SPEC-0016 T-010: Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //

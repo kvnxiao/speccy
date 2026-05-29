@@ -120,7 +120,7 @@ Suggested files: `resources/modules/personas/plan-explorer.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-003">
+<task id="T-003" state="completed" covers="REQ-003">
 ## Add the `plan-architect` persona body and host wrappers (read-only, advisory)
 
 Write `resources/modules/personas/plan-architect.md`: a read-only
