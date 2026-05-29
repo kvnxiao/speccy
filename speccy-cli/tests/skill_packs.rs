@@ -472,6 +472,41 @@ fn shipped_descriptions_natural_language_triggers() {
     }
 }
 
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-013: `can we brainstorm` trigger phrase in the rendered
+// `speccy-brainstorm` description for both hosts.
+// --------------------------------------------------------------------
+
+#[test]
+fn brainstorm_description_lists_can_we_brainstorm_trigger() {
+    const PHRASE: &str = "can we brainstorm";
+    for (host, install_root) in [
+        (HostChoice::ClaudeCode, ".claude"),
+        (HostChoice::Codex, ".agents"),
+    ] {
+        let rendered = render_host_pack(host).unwrap_or_else(|err| {
+            panic_with_test_message(&format!("render_host_pack({host:?}) should succeed: {err}"))
+        });
+        let body = find_rendered_skill(&rendered, install_root, "speccy-brainstorm");
+        let label = format!("{install_root}/skills/speccy-brainstorm/SKILL.md");
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "rendered `{label}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "rendered `{label}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        assert!(
+            fm.description.contains(PHRASE),
+            "rendered `{label}` description must list the `{PHRASE}` trigger phrase (SPEC-0053 REQ-010); got: {:?}",
+            fm.description,
+        );
+    }
+}
+
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
 /// crate dir) by walking one level up.
 fn workspace_root() -> std::path::PathBuf {

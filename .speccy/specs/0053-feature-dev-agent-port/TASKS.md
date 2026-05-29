@@ -261,7 +261,7 @@ Suggested files: `resources/agents/.claude/agents/reviewer-*.md.tmpl`,
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-010">
+<task id="T-007" state="completed" covers="REQ-010">
 ## Add the `can we brainstorm` trigger phrase to `speccy-brainstorm`
 
 Add the phrase `can we brainstorm` to the `speccy-brainstorm` skill
