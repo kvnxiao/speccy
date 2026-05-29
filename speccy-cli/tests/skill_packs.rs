@@ -525,9 +525,10 @@ const SPECCY_REVIEW_FANOUT_PARTIAL: &str =
     include_str!("../../resources/modules/skills/partials/review-fanout.md");
 
 /// Default reviewer fan-out used by both `/speccy-review` rendered
-/// branches: the four personas Speccy invokes per task. Other shipped
+/// branches: the five personas Speccy invokes per task. Other shipped
 /// reviewers (`architecture`, `docs`) are explicit-only.
-const DEFAULT_REVIEWER_PERSONAS: &[&str] = &["business", "tests", "security", "style"];
+const DEFAULT_REVIEWER_PERSONAS: &[&str] =
+    &["business", "tests", "security", "style", "correctness"];
 
 #[test]
 fn speccy_review_fanout_partial_has_host_divergence_block() {
@@ -945,7 +946,7 @@ fn t006_codex_wrapper_shape_and_body() {
 // as the only blank lines straddling the include site.
 // --------------------------------------------------------------------
 
-/// Six reviewer-persona names shipped by `speccy-core::personas::ALL`.
+/// Seven reviewer-persona names shipped by `speccy-core::personas::ALL`.
 /// Duplicated locally as a `const &[&str]` so the T-009 tests stay
 /// hermetic w.r.t. `personas::ALL`'s declared order.
 const REVIEWER_PERSONAS: &[&str] = &[
@@ -953,6 +954,7 @@ const REVIEWER_PERSONAS: &[&str] = &[
     "tests",
     "security",
     "style",
+    "correctness",
     "architecture",
     "docs",
 ];
@@ -966,7 +968,7 @@ fn t009_claude_agents_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t009_claude_code_reviewer_wrappers_exactly_six() {
+fn t009_claude_code_reviewer_wrappers_exactly_seven() {
     let dir = t009_claude_agents_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -994,7 +996,7 @@ fn t009_claude_code_reviewer_wrappers_exactly_six() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly six Claude Code reviewer wrappers must exist, one per shipped reviewer persona",
+        "exactly seven Claude Code reviewer wrappers must exist, one per shipped reviewer persona",
     );
 }
 
@@ -1083,8 +1085,8 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
         .collect();
     assert_eq!(
         agent_files.len(),
-        6,
-        "claude-code host pack should render six reviewer subagent files under .claude/agents/reviewer-*.md; got {}",
+        7,
+        "claude-code host pack should render seven reviewer subagent files under .claude/agents/reviewer-*.md; got {}",
         agent_files.len(),
     );
 
@@ -1144,6 +1146,94 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
 }
 
 // --------------------------------------------------------------------
+// SPEC-0053 T-001 (CHK-001, CHK-002): the `reviewer-correctness`
+// persona renders for both hosts with all `{% include %}` directives
+// expanded, and the rendered body names the four deferral targets as
+// out-of-scope and carries the literal confidence threshold `80`.
+// --------------------------------------------------------------------
+
+/// Returns the rendered `reviewer-correctness` body for the given host,
+/// asserting the file exists.
+fn rendered_correctness_body(host: HostChoice, dir: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{dir}/agents/reviewer-correctness.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "rendered host pack must include `{rel}` after T-001"
+            ))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
+    // CHK-001: both hosts render the persona with every `{% ... %}`
+    // include directive expanded and no `<...>` placeholder left.
+    for (host, dir, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_correctness_body(host, dir, suffix);
+        assert!(
+            !body.contains("{%"),
+            "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
+        );
+        // The persona body pulls in the shared review-contract snippets
+        // via `{% include %}`; their expanded text must be present.
+        assert!(
+            body.contains("Your final message to the orchestrator"),
+            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract; got:\n{body}",
+        );
+    }
+}
+
+#[test]
+fn reviewer_correctness_body_names_deferrals_and_threshold() {
+    // CHK-002: the rendered body names all four deferral targets as
+    // out-of-scope and carries the literal confidence threshold `80`,
+    // gating a silent drop of the scope/filter on a future edit.
+    let body = rendered_correctness_body(HostChoice::ClaudeCode, ".claude", "md");
+    // Scope the deferral-target assertion to the "Out of scope — defer"
+    // section. `security`/`style`/`business` also appear in the Focus
+    // section, so a body-wide `contains` would let three of the four
+    // targets pass even if the deferral section were deleted; only the
+    // section slice makes all four load-bearing.
+    let mut in_defer = false;
+    let mut defer_section = String::new();
+    for line in body.lines() {
+        if line.starts_with("## Out of scope") {
+            in_defer = true;
+            continue;
+        }
+        if in_defer && line.starts_with("## ") {
+            break;
+        }
+        if in_defer {
+            defer_section.push_str(line);
+            defer_section.push('\n');
+        }
+    }
+    assert!(
+        !defer_section.is_empty(),
+        "reviewer-correctness must have a non-empty out-of-scope deferral section; got:\n{body}",
+    );
+    for target in ["security", "style", "business", "tests"] {
+        assert!(
+            defer_section.contains(target),
+            "reviewer-correctness out-of-scope section must name deferral target `{target}`; got:\n{defer_section}",
+        );
+    }
+    assert!(
+        body.contains("80"),
+        "rendered reviewer-correctness must state the confidence->=80 reporting threshold; got:\n{body}",
+    );
+}
+
+// --------------------------------------------------------------------
 // SPEC-0016 T-010: Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //
@@ -1171,7 +1261,7 @@ fn t010_codex_agents_dir() -> std::path::PathBuf {
 }
 
 #[test]
-fn t010_codex_reviewer_wrappers_exactly_six() {
+fn t010_codex_reviewer_wrappers_exactly_seven() {
     let dir = t010_codex_agents_dir();
     let mut found: Vec<String> = Vec::new();
     let entries =
@@ -1199,7 +1289,7 @@ fn t010_codex_reviewer_wrappers_exactly_six() {
     expected.sort();
     assert_eq!(
         found, expected,
-        "exactly six Codex reviewer wrappers must exist, one per shipped reviewer persona",
+        "exactly seven Codex reviewer wrappers must exist, one per shipped reviewer persona",
     );
 }
 
@@ -1280,8 +1370,8 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
         .collect();
     assert_eq!(
         agent_files.len(),
-        6,
-        "codex host pack should render six reviewer subagent files under .codex/agents/reviewer-*.toml; got {}",
+        7,
+        "codex host pack should render seven reviewer subagent files under .codex/agents/reviewer-*.toml; got {}",
         agent_files.len(),
     );
 
@@ -1643,10 +1733,16 @@ fn brainstorm_rendered_outputs_use_host_specific_prefix() {
 
 /// Reviewer personas other than `tests`. The SPEC-0031 REQ-005
 /// asymmetry: only the `tests` persona / prompt names evidence
-/// loading; the other five anchor on diff + SPEC + `<task-scenarios>`
+/// loading; the other six anchor on diff + SPEC + `<task-scenarios>`
 /// alone.
-const NON_TESTS_REVIEWER_PERSONAS: [&str; 5] =
-    ["business", "security", "style", "architecture", "docs"];
+const NON_TESTS_REVIEWER_PERSONAS: [&str; 6] = [
+    "business",
+    "security",
+    "style",
+    "correctness",
+    "architecture",
+    "docs",
+];
 
 /// Framework-specific anchor strings the reviewer-tests persona must
 /// not name inside normative guidance. SPEC-0031 REQ-005's

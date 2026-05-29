@@ -163,6 +163,7 @@ literal confidence threshold value `80` is present as the reporting
 gate — gating the regression where the scope or filter is silently
 dropped during a future edit.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -201,6 +202,7 @@ both exist with includes expanded, and a structural test asserts the
 body contains no `<review` verdict-contract marker (confirming the
 advisory, non-verdict contract).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -236,6 +238,7 @@ and the rendered `plan-architect` wrappers for both hosts are read, then
 both exist with includes expanded, and a structural test asserts the
 body contains no `<review` verdict-contract marker.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -280,6 +283,7 @@ and `plan-architect`, when a structural test reads their frontmatter,
 then each Claude wrapper's `model` is `opus[1m]`, each Codex wrapper's
 `model` is `gpt-5.5`, and no wrapper's `model` is `sonnet`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -340,6 +344,7 @@ reads a `<review persona="correctness" verdict="pass" model="x">` block,
 then it accepts the persona name as registry-valid rather than emitting
 an unknown-persona error.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -375,6 +380,7 @@ structural test confirms each references invoking the `plan-explorer`
 subagent, and neither references creating a new `*.md` report artifact
 outside the SPEC.md routing targets.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -410,6 +416,7 @@ it references invoking `plan-architect`, names the build-sequence
 checklist as candidate tasks, and references promoting decisions into
 `### Decisions`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-008">
@@ -453,6 +460,7 @@ agents' wrappers, then none has had its tool access narrowed to the
 read-only set (writers retain `Edit`/`Write` capability) — gating an
 over-broad application of the read-only grant.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-009">
@@ -487,6 +495,7 @@ location is read, then it contains an explicit statement of whether
 Codex honors per-subagent tool restriction — gating the regression of
 shipping Codex read-only grants on an unverified parity assumption.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-010">
@@ -517,6 +526,7 @@ and the rendered `speccy-brainstorm` skill description frontmatter is
 read for both hosts, then a structural test confirms the `description`
 field contains `can we brainstorm`.
 </scenario>
+
 </requirement>
 
 ## Assumptions

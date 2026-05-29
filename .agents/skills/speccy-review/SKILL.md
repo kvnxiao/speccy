@@ -90,12 +90,13 @@ same partial below so the fan-out contract has a single source of
 truth.
 
 
-Fan out four reviewer-* sub-agents in parallel against the resolved
+Fan out five reviewer-* sub-agents in parallel against the resolved
 task, one per persona. Default fan-out: `reviewer-business`,
-`reviewer-tests`, `reviewer-security`, `reviewer-style`. Two
-additional personas (`reviewer-architecture`, `reviewer-docs`) are
-off the default fan-out and are invoked explicitly when an
-architectural or documentation risk is suspected.
+`reviewer-tests`, `reviewer-security`, `reviewer-style`,
+`reviewer-correctness`. Two additional personas
+(`reviewer-architecture`, `reviewer-docs`) are off the default
+fan-out and are invoked explicitly when an architectural or
+documentation risk is suspected.
 
 The prompt for each spawn is:
 
@@ -123,12 +124,12 @@ The prompt for each spawn is:
 Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name per
 spawn.
 
-Invoke Codex's native sub-agent-spawn primitive four times in
+Invoke Codex's native sub-agent-spawn primitive five times in
 parallel against the registered Codex sub-agents
-`reviewer-business`, `reviewer-tests`, `reviewer-security`, and
-`reviewer-style`. Each persona's TOML file at
-`.codex/agents/reviewer-<persona>.toml` carries the sub-agent's
-developer instructions.
+`reviewer-business`, `reviewer-tests`, `reviewer-security`,
+`reviewer-style`, and `reviewer-correctness`. Each persona's TOML
+file at `.codex/agents/reviewer-<persona>.toml` carries the
+sub-agent's developer instructions.
 
 Canonical journal `<review>` shape:
 `.agents/speccy-references/journal-review.md`.

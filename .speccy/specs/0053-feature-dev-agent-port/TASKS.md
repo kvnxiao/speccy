@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0053
-spec_hash_at_generation: 21ee0649b42bcacd659b6a139ca19d51c8630acc7a7236e05dd00710714b342a
-generated_at: 2026-05-29T17:53:02Z
+spec_hash_at_generation: 5520172edbf5b5bfdf03f68d8cfc2272aead4fb8d359e42fc2e6e178c6034fd8
+generated_at: 2026-05-29T18:07:18Z
 ---
 # Tasks: SPEC-0053 Port feature-dev agents into speccy — correctness reviewer, plan-explorer, plan-architect, read-only tool hardening, brainstorm trigger phrase
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-005">
+<task id="T-001" state="completed" covers="REQ-001 REQ-005">
 ## Add the `reviewer-correctness` persona end-to-end (body, wrappers, core registry, default fan-out)
 
 Land the correctness reviewer as one atomic slice so the build never

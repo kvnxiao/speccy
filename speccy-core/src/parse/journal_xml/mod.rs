@@ -697,6 +697,46 @@ mod tests {
     }
 
     #[test]
+    fn correctness_review_persona_parses_as_registry_valid() {
+        // REQ-005 behavior: a `correctness` review block must be accepted
+        // as registry-valid, not rejected as an unknown persona. This is
+        // coupled to `personas::ALL` via the `PERSONAS_ALL.contains(...)`
+        // validation; reverting that check to a hardcoded four-name list
+        // would fail this test.
+        let src = make(indoc! {r#"
+            <review date="2026-05-21T18:00:00Z" model="m" persona="correctness" verdict="pass" round="1">
+            body
+            </review>
+        "#});
+        let doc = parse(&src, path()).expect("correctness review must parse");
+        let persona = doc.entries.iter().find_map(|e| match e {
+            JournalEntry::Review { persona, .. } => Some(persona.as_str()),
+            _ => None,
+        });
+        assert_eq!(persona, Some("correctness"));
+    }
+
+    #[test]
+    fn unknown_review_persona_is_rejected() {
+        // The flip side of registry-coupling: a persona name absent from
+        // `personas::ALL` must be rejected as an unknown persona.
+        let src = make(indoc! {r#"
+            <review date="2026-05-21T18:00:00Z" model="m" persona="nonsense" verdict="pass" round="1">
+            body
+            </review>
+        "#});
+        let err = parse(&src, path()).expect_err("unknown persona must fail");
+        assert!(
+            matches!(
+                err.as_ref(),
+                ParseError::InvalidJournalAttribute { attribute, value, .. }
+                    if attribute == "persona" && value == "nonsense"
+            ),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
     fn missing_frontmatter_is_rejected() {
         let src = indoc! {r#"
             <implementer date="2026-05-21T18:00:00Z" model="m" round="1">
