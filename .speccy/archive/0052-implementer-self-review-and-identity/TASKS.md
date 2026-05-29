@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0052
-spec_hash_at_generation: 1a131eab1435625e18f16bff40781c06f9fabdd0d71340e8bf4bc3894ca4b1a0
-generated_at: 2026-05-28T23:41:47Z
+spec_hash_at_generation: 2168436bed4de1067ac74d140a80079e9215d24d630b7e8960d6798a0bd75f1c
+generated_at: 2026-05-29T17:09:51Z
 ---
 # Tasks: SPEC-0052 Implementer pre-handoff self-review and accurate model/effort recording
 
