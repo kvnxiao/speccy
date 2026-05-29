@@ -3,6 +3,7 @@ name: reviewer-correctness
 description: Adversarial correctness reviewer for one task in one spec. Checks logic and control-flow errors, Option/Result mishandling, off-by-one and boundary conditions, non-security races/deadlocks, and resource leaks. Use when speccy-review fans out per-persona review prompts for a `state="in-review"` task.
 model: opus[1m]
 effort: high
+tools: Read, Grep, Glob, LS, Bash, WebFetch
 ---
 
 # Reviewer Persona: Correctness

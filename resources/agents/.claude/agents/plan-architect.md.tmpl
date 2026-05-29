@@ -3,5 +3,6 @@ name: plan-architect
 description: Read-only architecture-design agent. Analyzes existing codebase patterns and returns an implementation blueprint — component design, file map (create/modify), data flow, and a build-sequence checklist whose items are agent-sized (one item ≈ one Speccy task). Advisory only — emits no verdict and mutates no state. Use at plan time from speccy-decompose to ground the task list before authoring TASKS.md.
 model: opus[1m]
 effort: high
+tools: Read, Grep, Glob, LS, Bash, WebFetch
 ---
 {% include "modules/personas/plan-architect.md" %}

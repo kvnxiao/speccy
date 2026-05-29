@@ -189,6 +189,23 @@ friction for legitimate prose edits without catching anything
 content checks don't — avoid them. Prose under `resources/` is
 meant to be easy to revise by humans and agents alike.
 
+**Read-only agent tool grants — Claude Code vs Codex parity.** The ten
+read-only agents (`plan-explorer`, `plan-architect`,
+`reviewer-correctness`, the six `reviewer-*`, and `vet-reviewer`)
+declare an explicit read-only `tools:` grant in their Claude Code
+wrapper frontmatter (`Read`, `Grep`, `Glob`, `LS`, `Bash`, `WebFetch`;
+no `Edit`/`Write`/`NotebookEdit`). Codex does **not** honor a
+per-subagent tool restriction: its agent definition format
+(`.codex/agents/*.toml`) exposes only `config_file`, `description`, and
+`nickname_candidates` per agent, with tool gating living at MCP-server,
+app/connector, and global scope rather than on the individual agent
+(verified against the Codex config reference at
+developers.openai.com/codex/config-reference, 2026-05). The Codex
+read-only posture therefore remains **prose-enforced** through each
+persona body's advisory contract — it is not assumed to have Claude
+Code's mechanical `tools:` parity. Do not add a `tools` field to the
+Codex `.toml` wrappers expecting it to be honored.
+
 ## Authoritative references
 
 These rule files are authoritative for their domains. Load them when

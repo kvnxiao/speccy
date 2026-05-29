@@ -218,7 +218,7 @@ Suggested files: `resources/modules/skills/speccy-brainstorm.md`,
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-008 REQ-009">
+<task id="T-006" state="completed" covers="REQ-008 REQ-009">
 ## Harden read-only agents' tool grants and verify Codex parity
 
 Add an explicit read-only `tools:` grant to every read-only agent

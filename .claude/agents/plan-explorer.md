@@ -3,6 +3,7 @@ name: plan-explorer
 description: Read-only codebase-grounding agent. Traces how a feature is implemented from entry points through abstraction layers to dependencies, and returns a grounding report (entry points, execution flows, layers/patterns, dependency map) with file:line references. Advisory only — emits no verdict and mutates no state. Use at plan time from speccy-brainstorm and speccy-plan to ground a slice before writing the SPEC.
 model: opus[1m]
 effort: high
+tools: Read, Grep, Glob, LS, Bash, WebFetch
 ---
 # Plan Persona: Explorer
 

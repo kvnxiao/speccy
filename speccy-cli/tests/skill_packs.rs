@@ -2186,3 +2186,118 @@ fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
         );
     }
 }
+
+// --------------------------------------------------------------------
+// SPEC-0053 CHK-010 / CHK-011: read-only agents declare an explicit
+// read-only `tools:` grant in their Claude wrapper frontmatter, and
+// the writer agents are NOT narrowed by this change.
+//
+// REQ-008: the ten read-only agents grant `Read`/`Grep`/`Glob`/`LS`/
+// `Bash`/`WebFetch` and exclude `Edit`/`Write`/`NotebookEdit`; the five
+// writer agents retain full (unrestricted, no `tools:` field) access.
+// --------------------------------------------------------------------
+
+/// The ten read-only agents that must carry an explicit read-only
+/// `tools:` grant after SPEC-0053 T-006.
+const READ_ONLY_AGENTS: &[&str] = &[
+    "plan-explorer",
+    "plan-architect",
+    "reviewer-correctness",
+    "reviewer-business",
+    "reviewer-tests",
+    "reviewer-security",
+    "reviewer-style",
+    "reviewer-architecture",
+    "reviewer-docs",
+    "vet-reviewer",
+];
+
+/// The five writer agents that must retain full (unrestricted) tool
+/// access — they must NOT be narrowed by the read-only grant.
+const WRITER_AGENTS: &[&str] = &[
+    "speccy-work",
+    "speccy-decompose",
+    "speccy-ship",
+    "vet-implementer",
+    "vet-simplifier",
+];
+
+#[derive(Debug, Deserialize)]
+struct AgentToolsFrontmatter {
+    #[serde(default)]
+    tools: Option<String>,
+}
+
+#[test]
+fn read_only_agents_declare_read_only_tool_grant() {
+    // CHK-010: each read-only Claude wrapper declares a `tools:` field
+    // that includes `Read` and excludes `Edit`/`Write`/`NotebookEdit`.
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+
+    for agent in READ_ONLY_AGENTS {
+        let path = format!(".claude/agents/{agent}.md");
+        let body = find_rendered_agent(&claude, &path);
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: AgentToolsFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        let tools = fm.tools.unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "read-only Claude wrapper `{path}` must declare a `tools:` grant"
+            ))
+        });
+        assert!(
+            tools.contains("Read"),
+            "read-only wrapper `{path}` `tools:` grant must include `Read`; got `{tools}`",
+        );
+        for forbidden in ["Edit", "Write", "NotebookEdit"] {
+            assert!(
+                !tools.contains(forbidden),
+                "read-only wrapper `{path}` `tools:` grant must exclude `{forbidden}`; got `{tools}`",
+            );
+        }
+    }
+}
+
+#[test]
+fn writer_agents_are_not_narrowed_to_read_only() {
+    // CHK-011: the writer wrappers retain full tool access — they must
+    // not have been narrowed to the read-only set. A writer that grows
+    // a `tools:` field excluding `Edit`/`Write` would be an over-broad
+    // application of the read-only grant; gate that regression.
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
+
+    for agent in WRITER_AGENTS {
+        let path = format!(".claude/agents/{agent}.md");
+        let body = find_rendered_agent(&claude, &path);
+        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` must have a `---` frontmatter fence"
+            ))
+        });
+        let fm: AgentToolsFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Claude wrapper `{path}` frontmatter must be valid YAML: {err}"
+            ))
+        });
+        // A writer either declares no `tools:` field (inherits full
+        // access) or, if it ever declares one, must retain write
+        // capability. Either form proves it was not narrowed to the
+        // read-only set.
+        if let Some(tools) = fm.tools {
+            assert!(
+                tools.contains("Edit") && tools.contains("Write"),
+                "writer wrapper `{path}` declares a `tools:` grant but lost `Edit`/`Write`; \
+                 the read-only grant was applied too broadly; got `{tools}`",
+            );
+        }
+    }
+}
