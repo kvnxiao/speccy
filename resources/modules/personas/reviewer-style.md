@@ -51,18 +51,26 @@ specific git-state shape, surface it as a one-line aside outside
 the `<review>` block rather than as a blocking verdict; the
 orchestrator will weigh it without forcing a retry round.
 
+## Grounding a lint-driven verdict
+
+Before you raise a `verdict="blocking"` that demands a lint-driven
+change -- above all, one demanding that a suppression annotation be
+added -- confirm the underlying lint actually fires on this file
+without the demanded change. "Every sibling file carries it" is
+insufficient grounds on its own: sibling consistency is a hint about
+where to look, not proof the lint fires here. The siblings may carry
+the annotation for a reason that does not apply to this file, or carry
+it gratuitously.
+
+If you cannot confirm the lint fires -- because you cannot run it, or
+running it does not reproduce the finding -- do not block. Surface the
+demand as a one-line aside outside the `<review>` block rather than a
+blocking verdict; the orchestrator will weigh it without forcing a
+retry round.
+
 ## What to look for that's easy to miss
 
-- A new helper that duplicates an existing one a few directories away
-  (sub-agents often miss the existing helper).
-- Suppression annotations added without a `reason = "..."` justifying
-  them.
-- A function exceeds the file's existing complexity ceiling and should
-  be split.
-- Inconsistent error-handling style -- e.g. `?` propagation elsewhere
-  but `unwrap()` here.
-- Imports re-ordered or split in a style that fights the project's
-  formatter.
+{% include "modules/references/convention-checklist.md" %}
 
 ## Diff-format pitfalls
 

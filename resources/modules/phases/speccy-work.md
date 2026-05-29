@@ -102,9 +102,9 @@ in place and appends `<implementer round="N+1">`.
 3. Branch on the rule result.
 
    **First-attempt branch.** Proceed with the recipe below
-   (steps 4–8) unchanged: flip state to `in-progress`, read
-   scenarios, implement from scratch, run the hygiene gate, flip
-   to `in-review`, append `<implementer round="1">`.
+   (steps 4–9) unchanged: flip state to `in-progress`, read
+   scenarios, implement from scratch, self-review, run the hygiene
+   gate, flip to `in-review`, append `<implementer round="1">`.
 
    **Retry branch.** Enter retry mode:
 
@@ -143,7 +143,38 @@ in place and appends `<implementer round="N+1">`.
    scenarios being satisfied (it renders them, it does not run
    them).
 
-7. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+7. Self-review before handoff. Immediately after implementation and
+   **before** the exit transition's `in-review` flip, re-read your
+   own diff through the reviewers' lens and fix what you find in
+   place. This is the cheap place to catch drift: a fix here is a
+   few edits in a diff you already have open, whereas the same drift
+   caught at review is a full bounce-and-respawn round. Address the
+   findings now; do not defer them to the reviewers.
+
+   **Reviewer north-star map.** Each of the four review personas is
+   chasing one outcome. Hold your diff to all four — this is what
+   "good" looks like, not how the reviewers hunt for problems:
+
+   - **Business.** The change does what the task's covered REQs
+     actually ask for — no more, no less. Every changed line traces
+     to a requirement; nothing in scope is left undone and nothing
+     out of scope sneaks in.
+   - **Tests.** Tests drive real behaviour and assert the specific
+     contract under test, and the evidence is honest and complete —
+     each covered CHK is accounted for, red/green pairs show what
+     they claim, and nothing is glossed.
+   - **Security.** Inputs are validated, errors are handled rather
+     than swallowed, and the change introduces no unsafe shortcut
+     (no panicking on attacker-influenced input, no secret or unsafe
+     default left in).
+   - **Style.** The diff reads as though the surrounding code's
+     author wrote it and re-applies the project's own conventions.
+     For the specifics, work the shared convention-drift checklist
+     below.
+
+   {% include "modules/references/convention-checklist.md" %}
+
+8. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state="..."` attribute from `in-progress` to `in-review` in
    TASKS.md, then append one `<implementer>` block to the per-task
    journal file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (a
@@ -175,9 +206,9 @@ in place and appends `<implementer round="N+1">`.
    - `model` — the model identity that ran the implementer turn. A
      slash-suffix encodes effort / reasoning-intensity when the host
      harness exposes that knob (e.g.
-     `model="claude-opus-4.8[1m]/low"`,
-     `model="claude-opus-4.8[1m]/medium"`). Hosts without an effort
-     knob omit the suffix entirely (e.g. `model="claude-opus-4.8"`).
+     `model="claude-opus-4-8[1m]/low"`,
+     `model="claude-opus-4-8[1m]/medium"`). Hosts without an effort
+     knob omit the suffix entirely (e.g. `model="claude-opus-4-8"`).
      The slash-suffix is a documented convention; the parser
      validates `model` is non-empty but does not enforce suffix
      membership.
@@ -187,6 +218,8 @@ in place and appends `<implementer round="N+1">`.
      round blocks and the task flips back to `pending`, the next
      implementer attempt writes `round="2"`, and so on. Do not skip
      values; do not reset.
+
+   {% include "modules/references/identity-sourcing.md" %}
 
    Body content. Use the six-field handoff template the implementer
    prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
@@ -213,7 +246,7 @@ in place and appends `<implementer round="N+1">`.
        judges on the diff.
    ```
 
-8. Exit. Do not continue to the next task. If the caller wants
+9. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.
 
 After exit, the next reasonable step depends on TASKS.md state: if

@@ -153,9 +153,10 @@ block. Nothing else — no preamble, no narration, no closing notes.
 - `round` — the round number passed in by the caller.
 - `date` — full ISO8601 with seconds and timezone.
 - `model` — required. The slash-suffix on the model string encodes
-  reasoning effort when the host harness exposes that knob (e.g.,
-  `claude-opus-4.8[1m]/high`, `claude-opus-4.8[1m]/low`); hosts
+  reasoning effort when the host harness exposes that knob; hosts
   without an effort knob omit the suffix.
+
+{% include "modules/references/identity-sourcing.md" %}
 
 ### Bullet format
 

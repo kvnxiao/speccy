@@ -46,7 +46,7 @@ flips the task's `state` attribute.
 
 ## Example
 
-    <review persona="architecture" verdict="blocking" model="claude-opus-4.8[1m]/high">
+    <review persona="architecture" verdict="blocking" model="claude-opus-4-8[1m]/high">
     SPEC-NNNN DEC-NNN fixed the parser layer as the only consumer of
     `serde-saphyr`; this diff introduces a direct `serde-saphyr` call
     in `speccy-cli` instead of going through `speccy-core::parse`.
