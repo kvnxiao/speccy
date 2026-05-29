@@ -178,7 +178,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-008">
+<task id="T-005" state="completed" covers="REQ-008">
 ## Correct the misleading env-var identity guidance and dot-form example strings
 
 Replace the "sourced from the host harness's runtime model identifier
