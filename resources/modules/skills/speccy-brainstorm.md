@@ -49,6 +49,15 @@ own judgment.
    speccy status --json
    ```
 
+   When the ask touches existing code, invoke the `plan-explorer`
+   subagent to trace the relevant feature through its entry points,
+   call flows, and architecture layers. Its grounding report is
+   **ephemeral**: do NOT write it to a new `*.md` artifact file. Fold
+   the salient findings into your clarifying questions now, and route
+   them into SPEC.md's existing sections (Summary prose and
+   `<requirement>` grounding) when `{{ cmd_prefix }}speccy-plan` runs
+   next (see "Routing" below) — never into a standalone report file.
+
    Don't dump the context back at the user — use it to ground your
    clarifying questions.
 

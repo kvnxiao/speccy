@@ -1384,6 +1384,104 @@ fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
 }
 
 // --------------------------------------------------------------------
+// SPEC-0053 T-005 (CHK-008 / CHK-009): the plan-time subagents are
+// wired into their host skills. `speccy-brainstorm` and `speccy-plan`
+// invoke `plan-explorer` and route its report into SPEC.md sections
+// (never a new artifact file); `speccy-decompose` invokes
+// `plan-architect`, names the build-sequence checklist as candidate
+// tasks, and promotes decisions into `### Decisions`.
+// --------------------------------------------------------------------
+
+/// Returns the rendered `speccy-decompose` body. The decompose recipe
+/// is a pinned phase-worker stub, so its full body renders into the
+/// agent wrapper at `<install_root>/agents/speccy-decompose.md`, not
+/// the SKILL.md stub.
+fn rendered_decompose_body(host: HostChoice, install_root: &str, suffix: &str) -> String {
+    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+    let rel = format!("{install_root}/agents/speccy-decompose.{suffix}");
+    rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_test_message(&format!("rendered host pack must include `{rel}`"))
+        })
+        .contents
+        .clone()
+}
+
+#[test]
+fn brainstorm_and_plan_skills_invoke_plan_explorer_without_new_artifact() {
+    // CHK-008: both `speccy-brainstorm` and `speccy-plan` reference
+    // invoking the `plan-explorer` subagent, and neither directs the
+    // explorer's report into a new `*.md` artifact file — its only
+    // durable home is the existing SPEC.md routing targets.
+    //
+    // Render both hosts: the skill bodies are host-neutral but the
+    // wrappers differ, so a per-host render guards against a wiring
+    // edit that lands in only one pack.
+    for host in [HostChoice::ClaudeCode, HostChoice::Codex] {
+        let rendered = render_host_pack(host).expect("render_host_pack should succeed");
+        let install_root = match host {
+            HostChoice::ClaudeCode => ".claude",
+            HostChoice::Codex => ".agents",
+        };
+        for verb in ["speccy-brainstorm", "speccy-plan"] {
+            let body = find_rendered_skill(&rendered, install_root, verb);
+            assert!(
+                body.contains("plan-explorer"),
+                "rendered `{install_root}/skills/{verb}/SKILL.md` must reference invoking the `plan-explorer` subagent; got:\n{body}",
+            );
+            // The routing prose must state the explorer report is
+            // ephemeral and not persisted to a new artifact file. Assert
+            // on the distinctive contiguous phrase that occurs ONLY in
+            // the no-artifact routing clause of each wiring block — the
+            // `new `*.md` artifact file` qualifier. A broad
+            // `contains("artifact")` check passes on unrelated
+            // pre-existing prose (brainstorm's `four artifacts`, plan's
+            // `## Open Questions` line), so it would stay GREEN even if
+            // the no-artifact clause were deleted while the
+            // `plan-explorer` invocation stayed. Scoping to this phrase
+            // ties the assertion to the routing sentence: deleting the
+            // clause flips it RED.
+            assert!(
+                body.contains("new `*.md` artifact file"),
+                "rendered `{install_root}/skills/{verb}/SKILL.md` must state the explorer report is not persisted to a new `*.md` artifact file (the no-artifact routing clause); got:\n{body}",
+            );
+        }
+    }
+}
+
+#[test]
+fn decompose_skill_invokes_plan_architect_with_candidate_tasks_and_decisions() {
+    // CHK-009: the `speccy-decompose` body references invoking
+    // `plan-architect`, names the build-sequence checklist as the
+    // CANDIDATE task list, and references promoting decisions into
+    // `### Decisions`.
+    for (host, install_root, suffix) in [
+        (HostChoice::ClaudeCode, ".claude", "md"),
+        (HostChoice::Codex, ".codex", "toml"),
+    ] {
+        let body = rendered_decompose_body(host, install_root, suffix);
+        assert!(
+            body.contains("plan-architect"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference invoking the `plan-architect` subagent; got:\n{body}",
+        );
+        assert!(
+            body.contains("candidate"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must name the build-sequence checklist as the candidate task list; got:\n{body}",
+        );
+        assert!(
+            body.contains("build-sequence"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference the build-sequence checklist from plan-architect; got:\n{body}",
+        );
+        assert!(
+            body.contains("### Decisions"),
+            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must direct promoting decisions into `### Decisions`; got:\n{body}",
+        );
+    }
+}
+
+// --------------------------------------------------------------------
 // SPEC-0016 T-010: Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //
@@ -2059,12 +2157,11 @@ fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
         // Codex wrapper: the whole `.toml` file is TOML; `model = "gpt-5.5"`.
         let codex_path = format!(".codex/agents/{persona}.toml");
         let codex_body = find_rendered_agent(&codex, &codex_path);
-        let codex_fm: AgentModelFrontmatter =
-            toml::from_str(codex_body).unwrap_or_else(|err| {
-                panic_with_test_message(&format!(
-                    "Codex wrapper `{codex_path}` must be valid TOML: {err}"
-                ))
-            });
+        let codex_fm: AgentModelFrontmatter = toml::from_str(codex_body).unwrap_or_else(|err| {
+            panic_with_test_message(&format!(
+                "Codex wrapper `{codex_path}` must be valid TOML: {err}"
+            ))
+        });
         assert_eq!(
             codex_fm.model, "gpt-5.5",
             "Codex wrapper `{codex_path}` must declare `model = \"gpt-5.5\"`, got `{}`",

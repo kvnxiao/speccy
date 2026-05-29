@@ -181,7 +181,7 @@ Suggested files: `speccy-cli/tests/skill_packs.rs`, `justfile`
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-006 REQ-007">
+<task id="T-005" state="completed" covers="REQ-006 REQ-007">
 ## Wire the plan-time subagents into their host skills
 
 Update the skill bodies under `resources/modules/skills/` so the
