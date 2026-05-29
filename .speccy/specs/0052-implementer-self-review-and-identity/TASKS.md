@@ -211,7 +211,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-009">
+<task id="T-006" state="completed" covers="REQ-009">
 ## Document the required `<changelog>` element in the speccy-plan SPEC template reference
 
 In the SPEC template reference
