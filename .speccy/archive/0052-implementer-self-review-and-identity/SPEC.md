@@ -5,6 +5,7 @@ title: Implementer pre-handoff self-review and accurate model/effort recording
 status: implemented
 created: 2026-05-28
 supersedes: []
+archived_at: 2026-05-29
 ---
 
 # SPEC-0052: Implementer pre-handoff self-review and accurate model/effort recording
@@ -506,7 +507,7 @@ dogfooding across subsequent runs.
 
 ## Open Questions
 
-- [ ] a. **Self-review caught:** Does the all-four-persona north-star
+- [x] a. **Self-review caught:** Does the all-four-persona north-star
   map measurably reduce non-style first-round blocks, or is the
   business/tests/security orientation noise that should be trimmed to
   the style-only checklist (the one category with evidence)? Resolvable
