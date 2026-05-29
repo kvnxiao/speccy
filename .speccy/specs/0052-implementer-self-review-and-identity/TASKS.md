@@ -94,7 +94,7 @@ Suggested files: `resources/modules/phases/speccy-work.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-004">
+<task id="T-003" state="completed" covers="REQ-004">
 ## Add the style reviewer grounding rule against false-positive lint-suppression blocks
 
 In the style reviewer persona
