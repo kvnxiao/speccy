@@ -1116,7 +1116,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
     // Each phase has its own pin; check them individually.
     let claude_phase_pins: &[(&str, &str, &str)] = &[
         ("decompose", "opus[1m]", "medium"),
-        ("work", "opus[1m]", "low"),
+        ("work", "opus[1m]", "high"),
         ("ship", "sonnet[1m]", "medium"),
     ];
     for (phase, expected_model, expected_effort) in claude_phase_pins {

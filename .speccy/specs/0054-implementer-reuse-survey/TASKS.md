@@ -5,7 +5,7 @@ generated_at: 2026-05-31T07:33:03Z
 ---
 # Tasks: SPEC-0054 Implementer pre-implementation reuse survey, forked reuse guidance, and `speccy-work` opus/high repin
 
-<task id="T-001" state="pending" covers="REQ-004">
+<task id="T-001" state="completed" covers="REQ-004">
 ## Repin the Claude Code `speccy-work` agent from `effort: low` to `effort: high`
 
 Bump only the effort axis on the Claude Code implementer pin. The model
