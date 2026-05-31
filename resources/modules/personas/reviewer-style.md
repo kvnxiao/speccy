@@ -72,6 +72,8 @@ retry round.
 
 {% include "modules/references/convention-checklist.md" %}
 
+{% include "modules/references/reuse-hunt-reviewer.md" %}
+
 ## Diff-format pitfalls
 
 Before reporting a violation based on `git diff` output alone, verify

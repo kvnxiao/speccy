@@ -69,7 +69,7 @@ Suggested files: `resources/agents/.claude/agents/speccy-work.md.tmpl`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-003">
+<task id="T-002" state="completed" covers="REQ-001 REQ-003">
 ## Fork the reuse guidance into lifecycle variants and add the bounded pre-implementation survey step
 
 This is the atomic reuse-fork-and-survey change. Today
