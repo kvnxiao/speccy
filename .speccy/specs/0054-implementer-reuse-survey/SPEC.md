@@ -2,7 +2,7 @@
 id: SPEC-0054
 slug: implementer-reuse-survey
 title: Implementer pre-implementation reuse survey, forked reuse guidance, and `speccy-work` opus/high repin
-status: in-progress
+status: implemented
 created: 2026-05-31
 supersedes: []
 ---
