@@ -232,9 +232,10 @@ in place and appends `<implementer round="N+1">`.
 
    {% include "modules/references/identity-sourcing.md" %}
 
-   Body content. Use the six-field handoff template the implementer
-   prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
-   `Evidence`, `Discovered issues`, `Procedural compliance`). The
+   Body content. Use the seven-field handoff template the implementer
+   prompt supplies (`Reuse survey`, `Completed`, `Undone`,
+   `Hygiene checks`, `Evidence`, `Discovered issues`,
+   `Procedural compliance`). The
    `Evidence` field must include a CHK-by-CHK roll call labelling
    each CHK under the task's covered REQs as `demonstrated`,
    `hygiene`, or `judgment-only` -- see the canonical reference for

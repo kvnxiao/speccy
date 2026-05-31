@@ -164,7 +164,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-002">
+<task id="T-003" state="completed" covers="REQ-002">
 ## Record the survey in a free-form `Reuse survey` journal field
 
 Add a seventh free-form field, `Reuse survey`, to the implementer
