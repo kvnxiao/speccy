@@ -389,7 +389,7 @@ session is using.
 | Phase / persona         | Claude Code (`.claude/agents/...md`)    | Codex (`.codex/agents/...toml`)              | Agent file ships? |
 | ----------------------- | --------------------------------------- | -------------------------------------------- | ----------------- |
 | `speccy-decompose`      | `model: opus[1m]`, `effort: medium`     | `model = "gpt-5.5"`, reasoning effort medium | yes               |
-| `speccy-work`           | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort medium | yes               |
+| `speccy-work`           | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-ship`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
 | `speccy-init`           | unpinned, inherits session              | unpinned, inherits session                   | no                |
 | `speccy-review`         | unpinned, inherits session              | unpinned, inherits session                   | no                |
@@ -400,7 +400,7 @@ session is using.
 | `reviewer-style`        | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `reviewer-docs`         | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `vet-reviewer`          | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `vet-implementer`       | `model: opus[1m]`, `effort: low`        | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `vet-implementer`       | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `vet-simplifier`        | `model: opus[1m]`, `effort: medium`     | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 
 The `[1m]` suffix selects the 1M-context variant on Claude Code so

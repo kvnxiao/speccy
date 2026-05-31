@@ -149,7 +149,7 @@ fn phase_worker_agent_has_model_and_effort_frontmatter() -> TestResult {
 
     // Each phase has its own model/effort pin.
     let phase_pins: &[(&str, &str, &str)] = &[
-        ("speccy-work", "opus[1m]", "low"),
+        ("speccy-work", "opus[1m]", "high"),
         ("speccy-decompose", "opus[1m]", "medium"),
         ("speccy-ship", "sonnet[1m]", "medium"),
     ];

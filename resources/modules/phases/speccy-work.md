@@ -102,9 +102,10 @@ in place and appends `<implementer round="N+1">`.
 3. Branch on the rule result.
 
    **First-attempt branch.** Proceed with the recipe below
-   (steps 4–9) unchanged: flip state to `in-progress`, read
-   scenarios, implement from scratch, self-review, run the hygiene
-   gate, flip to `in-review`, append `<implementer round="1">`.
+   (steps 4–10) unchanged: flip state to `in-progress`, read
+   scenarios, run the bounded reuse survey, implement from scratch,
+   self-review, run the hygiene gate, flip to `in-review`, append
+   `<implementer round="1">`.
 
    **Retry branch.** Enter retry mode:
 
@@ -137,13 +138,23 @@ in place and appends `<implementer round="N+1">`.
    speccy check SPEC-NNNN/T-003
    ```
 
-6. Implement the task. Write tests first, then code. Run the
+6. Bounded reuse survey. Before writing any code, survey the
+   task-relevant area and classify the code you are about to add into
+   reuse-as-is / extend / write-fresh, so reuse is a design input
+   rather than a post-hoc cleanup. Scope the survey to the task's
+   area — its covered REQs, the suggested-files hint, and the
+   immediate module / neighbouring files — and **not** the whole repo.
+   Let the survey inform what you write in the next step.
+
+   {% include "modules/references/reuse-survey-implementer.md" %}
+
+7. Implement the task. Write tests first, then code. Run the
    project's own test command (`cargo test`, `pnpm test`, etc.)
    locally. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
    scenarios being satisfied (it renders them, it does not run
    them).
 
-7. Self-review before handoff. Immediately after implementation and
+8. Self-review before handoff. Immediately after implementation and
    **before** the exit transition's `in-review` flip, re-read your
    own diff through the reviewers' lens and fix what you find in
    place. This is the cheap place to catch drift: a fix here is a
@@ -174,7 +185,7 @@ in place and appends `<implementer round="N+1">`.
 
    {% include "modules/references/convention-checklist.md" %}
 
-8. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+9. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state="..."` attribute from `in-progress` to `in-review` in
    TASKS.md, then append one `<implementer>` block to the per-task
    journal file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (a
@@ -221,9 +232,10 @@ in place and appends `<implementer round="N+1">`.
 
    {% include "modules/references/identity-sourcing.md" %}
 
-   Body content. Use the six-field handoff template the implementer
-   prompt supplies (`Completed`, `Undone`, `Hygiene checks`,
-   `Evidence`, `Discovered issues`, `Procedural compliance`). The
+   Body content. Use the seven-field handoff template the implementer
+   prompt supplies (`Reuse survey`, `Completed`, `Undone`,
+   `Hygiene checks`, `Evidence`, `Discovered issues`,
+   `Procedural compliance`). The
    `Evidence` field must include a CHK-by-CHK roll call labelling
    each CHK under the task's covered REQs as `demonstrated`,
    `hygiene`, or `judgment-only` -- see the canonical reference for
@@ -257,7 +269,7 @@ in place and appends `<implementer round="N+1">`.
    unparseable. Re-read the appended block before exiting and confirm
    the closing tag is present.
 
-9. Exit. Do not continue to the next task. If the caller wants
+10. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.
 
 After exit, the next reasonable step depends on TASKS.md state: if

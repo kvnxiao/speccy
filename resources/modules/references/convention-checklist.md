@@ -6,11 +6,6 @@ where mechanical and convention drift slips through a green hygiene
 gate yet still costs a later review round. Catching them here — in the
 diff you already have open — is far cheaper than a bounce-and-respawn.
 
-- **Reuse over reinvent.** Before adding a new helper, type, or
-  utility, check whether one already exists — including a few
-  directories away, where it is easy to miss. Call the existing one
-  rather than introducing a parallel implementation.
-
 - **Match local conventions.** Make the diff read as though the
   surrounding code's author wrote it: follow the established naming,
   error-handling, and import-ordering patterns of the files you touch.
