@@ -23,6 +23,7 @@ pub mod spec_md;
 pub mod spec_xml;
 pub mod supersession;
 pub mod task_xml;
+pub mod vet_xml;
 pub mod xml_scanner;
 
 pub use cross_ref::CrossRef;
@@ -70,3 +71,7 @@ pub use task_xml::classify_transition;
 pub use task_xml::parse as parse_task_xml;
 pub use task_xml::render as render_task_xml;
 pub use task_xml::splice_task_state;
+pub use vet_xml::Invocation;
+pub use vet_xml::VetBlock;
+pub use vet_xml::VetDoc;
+pub use vet_xml::parse as parse_vet_xml;

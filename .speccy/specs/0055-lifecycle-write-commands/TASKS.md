@@ -149,7 +149,7 @@ Suggested files: `speccy-cli/src/main.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-004">
+<task id="T-003" state="completed" covers="REQ-004">
 ## Freeze the VET.md grammar into a `speccy-core` parser
 
 Add a `vet_xml` parser module in `speccy-core/src/parse/` (sibling to
