@@ -22,6 +22,7 @@ pub(crate) mod paths;
 pub mod render;
 pub mod status;
 pub mod status_output;
+pub mod transition;
 pub mod vacancy;
 pub mod verify;
 pub mod verify_output;

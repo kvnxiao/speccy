@@ -114,6 +114,11 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Task lifecycle commands (state transitions).
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
     /// Relocate a shipped/dropped/superseded spec into `.speccy/archive/`.
     Archive {
         /// `SPEC-NNNN` identifier of the spec to archive.
@@ -130,6 +135,37 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// `speccy task` subcommands.
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Rewrite one task's `state` attribute over the legal state graph.
+    ///
+    /// Resolves the selector with the same grammar `speccy check` uses,
+    /// enforces the closed six-edge legal graph (same-state targets are
+    /// idempotent no-ops), and splices the new state into TASKS.md
+    /// byte-surgically. An illegal edge or unresolved selector exits
+    /// non-zero with the file untouched.
+    Transition {
+        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Target state. Only the four legal task states are accepted; an
+        /// unknown value is rejected at argument-parse time.
+        #[arg(long, value_name = "STATE", value_parser = parse_task_state)]
+        to: speccy_core::parse::TaskState,
+    },
+}
+
+/// clap value parser for `--to`: accepts only the four on-disk task
+/// states, rejecting any other value at argument-parse time.
+fn parse_task_state(raw: &str) -> Result<speccy_core::parse::TaskState, String> {
+    speccy_core::parse::TaskState::parse(raw).ok_or_else(|| {
+        format!(
+            "invalid state `{raw}`; expected one of: pending, in-progress, in-review, completed",
+        )
+    })
 }
 
 fn main() -> ExitCode {
@@ -161,12 +197,63 @@ fn dispatch(command: Command) -> u8 {
         } => run_verify(include_archive, json),
         Command::Lock { spec_id } => run_lock(spec_id),
         Command::Vacancy { json } => run_vacancy(json),
+        Command::Task { command } => match command {
+            TaskCommand::Transition { selector, to } => run_transition(selector, to),
+        },
         Command::Archive {
             spec_id,
             reason,
             force,
             json,
         } => run_archive(spec_id, reason, force, json),
+    }
+}
+
+fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
+    use speccy_cli::transition::TransitionError;
+    use speccy_core::task_lookup::LookupError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy task transition: {e}");
+            return 2;
+        }
+    };
+    let result = speccy_cli::transition::run(
+        speccy_cli::transition::TransitionArgs { selector, to },
+        &cwd,
+    );
+    match result {
+        Ok(()) => 0,
+        Err(TransitionError::TaskLookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy task transition: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            1
+        }
+        Err(TransitionError::TaskLookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy task transition: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            1
+        }
+        Err(TransitionError::TaskLookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy task transition: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy task transition {spec_id}/{task_id} --to <state>");
+            }
+            1
+        }
+        Err(e) => {
+            eprintln!("speccy task transition: {e}");
+            1
+        }
     }
 }
 

@@ -5,7 +5,7 @@ generated_at: 2026-06-09T18:48:32Z
 ---
 # Tasks: SPEC-0055 Mechanical lifecycle write commands — task state transitions, validated journal appends, and direct subagent journal writes
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002">
 ## `speccy task transition` — byte-surgical state rewrite over the closed legal graph
 
 Add a `Task { transition }` subcommand to the `Command` enum in
