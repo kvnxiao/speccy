@@ -112,7 +112,10 @@ no caller flags. Add a concurrency test spawning ≥8 threads/processes
 each appending one distinct `review` block, asserting the parser
 accepts the result with no interleaving and all blocks present, plus a
 test that two concurrent round-opening appends yield distinct ordered
-round numbers.
+round numbers, plus a timeout test: a deliberately held lock causes a
+waiting append to exit non-zero after roughly the timeout interval,
+naming the journal path, with the journal byte-identical (REQ-005
+done-when).
 
 <task-scenarios>
 Given a scratch workspace with a pending task and no journal file,
@@ -132,6 +135,11 @@ distinct `review` block to the same journal,
 when all appenders finish,
 then the journal contains exactly 8 review blocks with no interleaved
 or truncated markup and the parser accepts the file (CHK-008).
+
+Given a process holding the journal lock for longer than the timeout,
+when an append runs,
+then it exits non-zero after roughly the timeout interval, the
+diagnostic names the journal path, and the journal is byte-identical.
 
 Suggested files: `speccy-cli/src/main.rs`,
 `speccy-cli/src/commands/journal.rs`,
@@ -257,6 +265,14 @@ journal file exits non-zero with a diagnostic (the known call sites
 run only after blocks exist, so absence is a loud anomaly). Add tests
 for the filter composition and the missing-file exit.
 
+Two semantics to pin down: (1) without `--json` the command renders
+the same filtered content in a human-readable text form — `--json`
+toggles representation, never content, matching the workspace-wide
+convention; (2) for VET.md, rounds reset per invocation section, so
+`--round latest|N` applies within the **last** invocation section
+(the open or most recent invocation), which is the slice the vet
+flow's call sites need.
+
 <task-scenarios>
 Given a fixture journal with two rounds and five reviews in round 2
 (one blocking),
@@ -338,8 +354,19 @@ append `<drift-review>`, `<holistic-fix>`,
 `<simplifier-scan>`/`<simplifier-apply>` respectively. Update the
 shared verdict-return partial
 (`resources/modules/personas/verdict_return_contract.md`) once so every
-wrapper inherits it. Persona/phase bodies stop instructing agents to
-compute `date`, `round`, `tasks_hash`, or invocation numbers. Then run
+wrapper inherits it, and define the thin-verdict **format** there once
+— a single parseable shape carrying persona/role, verdict, and the
+one-line rationale (e.g. one `<verdict>` element with attributes) — so
+the orchestrator parses every persona's return uniformly instead of
+six personas inventing six shapes. Update the journal reference
+templates whose worked examples currently teach agents to author
+`date`/`round` attributes —
+`resources/modules/references/journal-implementer.md`,
+`journal-review.md`, and `journal-blockers.md` — so they document the
+`journal append` invocation and mark `date`/`round` as CLI-stamped;
+left unedited they contradict REQ-008's done-when. Persona/phase
+bodies stop instructing agents to compute `date`, `round`,
+`tasks_hash`, or invocation numbers. Then run
 `just reeject` so both host ejections (`.claude/`, `.agents/`,
 `.codex/`) regenerate with the new contract — including the
 prose-enforced Codex pack. Per AGENTS.md, edit only under `resources/`
@@ -367,6 +394,9 @@ Suggested files: `resources/modules/phases/speccy-work.md`,
 `resources/modules/personas/reviewer-*.md`,
 `resources/modules/personas/vet-*.md`,
 `resources/modules/personas/verdict_return_contract.md`,
+`resources/modules/references/journal-implementer.md`,
+`resources/modules/references/journal-review.md`,
+`resources/modules/references/journal-blockers.md`,
 `.claude/` `.agents/` `.codex/` (regenerated via `just reeject`)
 </task-scenarios>
 </task>
@@ -385,12 +415,23 @@ before leaving `in-review` and the blocking-review read-back for
 (`--block review --round latest` for completeness, `--verdict blocking`
 for read-back); the consolidated `<blockers>` block — whose body stays
 orchestrator-authored semantic judgment (DEC-001 non-goal) — lands via
-`speccy journal append --block blockers`. The standalone
+`speccy journal append --block blockers`. The vet flow's terminal
+`<gate>` block — written by **every** vet exit path, including the
+Phase 0 early exits — lands via `speccy journal append --block gate`
+(the CLI computes `tasks_hash` and invocation sectioning, so the vet
+prose drops its hand-bootstrap of VET.md frontmatter and invocation
+headings entirely). The standalone
 `/speccy-work` primitive flips its own states through the transition
 command. Restate the single-writer rule: the CLI's append lock owns
 write serialization; the orchestrator remains the sole author of
 `<blockers>` bodies and of git commits. Run `just reeject`; edit only
-under `resources/`.
+under `resources/`. The serial-transcription prose to remove lives
+partly in shared partials, not only the skill bodies: the review
+fan-out partial carries the "orchestrator appends each returned
+`<review>` block serially" contract, the vet-phases partial carries
+"append the held `<drift-review>` block to VET.md", and the
+retry-shape reference instructs raw journal reads that should now go
+through `journal show`.
 
 <task-scenarios>
 Given the regenerated orchestrate skill,
@@ -416,7 +457,10 @@ Suggested files: `resources/modules/skills/speccy-orchestrate.md`,
 `resources/modules/skills/speccy-vet.md`,
 `resources/modules/skills/speccy-amend.md`,
 `resources/modules/skills/speccy-work.md`,
+`resources/modules/skills/partials/review-fanout.md`,
+`resources/modules/skills/partials/vet-phases.md`,
 `resources/modules/references/reconcile-policy.md`,
+`resources/modules/references/retry-shape.md`,
 `.claude/` `.agents/` `.codex/` (regenerated via `just reeject`)
 </task-scenarios>
 </task>

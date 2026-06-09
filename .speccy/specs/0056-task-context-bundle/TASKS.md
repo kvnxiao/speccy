@@ -69,7 +69,11 @@ selector through `task_lookup::parse_ref` then `task_lookup::find`
 (accepting `T-NNN` and `SPEC-NNNN/T-NNN`), reusing the same
 `LookupError` → exit-code/diagnostic mapping `speccy check` uses at
 `main.rs:354-368` (InvalidFormat, NotFound, Ambiguous). Selector
-failures exit non-zero with no partial stdout.
+failures exit non-zero with no partial stdout. Without `--json` the
+command renders the same bundle content in a human-readable text
+form — `--json` toggles representation, never content, per the
+workspace-wide convention (the text form needs no stability
+guarantee; agents always pass `--json`).
 
 Introduce `speccy-cli/src/context.rs` (run entry + bundle assembly)
 and `speccy-cli/src/context_output.rs` (serde `Serialize` structs)
