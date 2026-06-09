@@ -119,6 +119,11 @@ enum Command {
         #[command(subcommand)]
         command: TaskCommand,
     },
+    /// Per-task journal commands (validated block appends).
+    Journal {
+        #[command(subcommand)]
+        command: JournalCommand,
+    },
     /// Relocate a shipped/dropped/superseded spec into `.speccy/archive/`.
     Archive {
         /// `SPEC-NNNN` identifier of the spec to archive.
@@ -168,6 +173,51 @@ fn parse_task_state(raw: &str) -> Result<speccy_core::parse::TaskState, String> 
     })
 }
 
+/// `speccy journal` subcommands.
+#[derive(Subcommand)]
+enum JournalCommand {
+    /// Append one validated block to a per-task journal.
+    ///
+    /// Reads the block body from stdin and appends exactly one
+    /// `<implementer>` / `<review>` / `<blockers>` block to
+    /// `<spec-dir>/journal/<task-id>.md`, creating the file with
+    /// frontmatter on first append. The CLI stamps `date` and derives
+    /// `round`; there is no flag to override either. Validation runs before
+    /// any write, so a malformed block leaves the journal untouched.
+    Append {
+        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Block type. One of `implementer`, `review`, `blockers`; an
+        /// unknown value is rejected at argument-parse time.
+        #[arg(long, value_name = "TYPE", value_parser = parse_task_block_kind)]
+        block: speccy_core::parse::TaskBlockKind,
+        /// Model identity (required for `implementer` and `review`).
+        #[arg(long, value_name = "STRING")]
+        model: Option<String>,
+        /// Reviewer persona (required for `review`).
+        #[arg(long, value_name = "NAME")]
+        persona: Option<String>,
+        /// Review verdict, `pass` or `blocking` (required for `review`).
+        #[arg(long, value_name = "VALUE")]
+        verdict: Option<String>,
+    },
+}
+
+/// clap value parser for `--block`: accepts only the three task-journal
+/// block types, rejecting any other value at argument-parse time.
+fn parse_task_block_kind(raw: &str) -> Result<speccy_core::parse::TaskBlockKind, String> {
+    use speccy_core::parse::TaskBlockKind;
+    match raw {
+        "implementer" => Ok(TaskBlockKind::Implementer),
+        "review" => Ok(TaskBlockKind::Review),
+        "blockers" => Ok(TaskBlockKind::Blockers),
+        other => Err(format!(
+            "invalid block type `{other}`; expected one of: implementer, review, blockers"
+        )),
+    }
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     ExitCode::from(dispatch(cli.command))
@@ -199,6 +249,15 @@ fn dispatch(command: Command) -> u8 {
         Command::Vacancy { json } => run_vacancy(json),
         Command::Task { command } => match command {
             TaskCommand::Transition { selector, to } => run_transition(selector, to),
+        },
+        Command::Journal { command } => match command {
+            JournalCommand::Append {
+                selector,
+                block,
+                model,
+                persona,
+                verdict,
+            } => run_journal_append(selector, block, model, persona, verdict),
         },
         Command::Archive {
             spec_id,
@@ -252,6 +311,68 @@ fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
         }
         Err(e) => {
             eprintln!("speccy task transition: {e}");
+            1
+        }
+    }
+}
+
+fn run_journal_append(
+    selector: String,
+    block: speccy_core::parse::TaskBlockKind,
+    model: Option<String>,
+    persona: Option<String>,
+    verdict: Option<String>,
+) -> u8 {
+    use speccy_cli::journal::JournalError;
+    use speccy_core::task_lookup::LookupError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy journal append: {e}");
+            return 2;
+        }
+    };
+    let mut stdin = std::io::stdin().lock();
+    let result = speccy_cli::journal::run(
+        speccy_cli::journal::AppendArgs {
+            selector,
+            block,
+            model,
+            persona,
+            verdict,
+        },
+        &cwd,
+        &mut stdin,
+    );
+    match result {
+        Ok(()) => 0,
+        Err(JournalError::TaskLookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy journal append: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            1
+        }
+        Err(JournalError::TaskLookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy journal append: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            1
+        }
+        Err(JournalError::TaskLookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy journal append: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy journal append {spec_id}/{task_id} --block <type>");
+            }
+            1
+        }
+        Err(e) => {
+            eprintln!("speccy journal append: {e}");
             1
         }
     }

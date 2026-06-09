@@ -188,6 +188,7 @@ when `speccy task transition SPEC-0042/T-099 --to completed` runs
 against a spec with no T-099,
 then the exit code is non-zero and TASKS.md's bytes are unchanged.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -237,6 +238,7 @@ then exactly the six legal edges plus the four same-state no-ops
 succeed and the remaining six exit non-zero with both state names in
 the diagnostic.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -301,6 +303,7 @@ Given the journal from CHK-004,
 when a `review` append with `--persona not-a-persona` runs,
 then the exit code is non-zero and the journal bytes are unchanged.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -375,6 +378,7 @@ when a `simplifier-scan` append runs,
 then the block lands under a freshly opened `## Invocation 2`
 section rather than the gate-terminated first section.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -418,6 +422,7 @@ when all appenders finish,
 then the journal contains exactly 8 review blocks with no
 interleaved or truncated markup and the parser accepts the file.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -462,6 +467,7 @@ when `speccy journal show SPEC-0042/T-001 --json --round latest
 then stdout parses as JSON whose block list has length 1, persona
 and verdict matching the fixture, and `schema_version` equal to 1.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -501,6 +507,7 @@ when `speccy verify --json` runs,
 then the envelope lists a VET-001 error naming the file and the
 process exits non-zero.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-008">
@@ -550,6 +557,7 @@ when `just reeject` runs and `git status --porcelain` is checked,
 then the working tree is clean — proving the committed ejected packs
 match the updated sources.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-009">
@@ -599,6 +607,7 @@ then no lifecycle-mutation instruction bypasses the CLI verbs
 (content check performed by the reviewer; phrasing may vary, the
 invariant is the absence of file-edit-tool mutation paths).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-010">
@@ -637,6 +646,7 @@ then each describes the post-SPEC-0055 behavior with no stale
 sole-writer or no-locking claims (content check by reviewer, not
 substring assertions).
 </scenario>
+
 </requirement>
 
 ## Decisions

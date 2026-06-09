@@ -15,3 +15,6 @@ target
 
 # Rust output
 /target
+
+# Speccy advisory-lock sidecars (runtime flock artifacts beside journals)
+*.md.lock

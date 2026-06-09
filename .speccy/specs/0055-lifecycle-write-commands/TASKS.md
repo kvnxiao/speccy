@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0055
-spec_hash_at_generation: d44a68474ce87b6b36acb5130118ef1c1917275d962a249c3c1817e3fb2d2ed5
-generated_at: 2026-06-09T18:48:32Z
+spec_hash_at_generation: 620dd637497c423c47984775d4316e8bd1b851737fa70cffc0a4020b2206bc13
+generated_at: 2026-06-09T20:54:44Z
 ---
 # Tasks: SPEC-0055 Mechanical lifecycle write commands — task state transitions, validated journal appends, and direct subagent journal writes
 
@@ -73,7 +73,7 @@ Suggested files: `speccy-cli/src/main.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-003 REQ-005">
+<task id="T-002" state="completed" covers="REQ-003 REQ-005">
 ## `speccy journal append` for per-task journals with CLI-stamped attributes and an advisory file lock
 
 Add a `journal append <task-selector> --block

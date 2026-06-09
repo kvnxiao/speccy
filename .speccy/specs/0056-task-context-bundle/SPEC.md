@@ -180,6 +180,7 @@ when `speccy context SPEC-0042/T-001 --json` runs,
 then stdout parses as JSON whose first field is `schema_version`
 with value 1.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -215,6 +216,7 @@ when the bundle for one of its tasks is emitted,
 then goals, non-goals, and both decisions are present and the
 marker string is absent.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -268,6 +270,7 @@ when the shared-walk refactor lands,
 then every existing `check` test passes without fixture or
 expectation changes.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -316,6 +319,7 @@ when the bundle is emitted,
 then the exit code is 0 and the journal section carries an explicit
 absence marker with zero blocks.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -354,6 +358,7 @@ when the bundle for T-003 is emitted,
 then the sibling index has five entries with only id, state, and
 covers fields, and no sibling marker string appears in the payload.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -394,6 +399,7 @@ then both exit 0, both carry the non-ok workspace status, the
 drifted task's bundle carries only its own drift entries, and the
 undrifted task's bundle carries an empty drift list.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -434,6 +440,7 @@ when the two payloads are diffed,
 then the differences are exactly one sibling-index entry and
 nothing else.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-008">
@@ -486,6 +493,7 @@ then each opens its read procedure with the `speccy context` call
 and none instructs a full SPEC.md or TASKS.md read as entry context
 (content check by reviewer, not substring assertion).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-009">
@@ -521,6 +529,7 @@ then `speccy context` is documented with envelope and invariant,
 and no stale full-file entry-read contract remains (content check
 by reviewer, not substring assertions).
 </scenario>
+
 </requirement>
 
 ## Decisions

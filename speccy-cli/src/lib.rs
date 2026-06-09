@@ -15,6 +15,7 @@ pub mod embedded;
 pub mod git;
 pub mod host;
 pub mod init;
+pub mod journal;
 pub mod lock;
 pub mod next;
 pub mod next_output;

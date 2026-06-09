@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0056
-spec_hash_at_generation: bed490bc1dde18ac3be2ed3dcb3472cffcc8330465909a5fba137c3aba305682
-generated_at: 2026-06-09T19:52:47Z
+spec_hash_at_generation: 06d971f3d9e2001af91b324f8d585aeceae66be7e517e50e1f6bc14a93efe281
+generated_at: 2026-06-09T20:54:44Z
 ---
 # Tasks: SPEC-0056 Task-scoped context bundle — `speccy context` emits one JSON read for loop subagents
 

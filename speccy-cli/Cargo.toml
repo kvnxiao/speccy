@@ -18,6 +18,7 @@ path = "src/main.rs"
 camino = { workspace = true }
 clap = { workspace = true }
 fs-err = { workspace = true }
+fs4 = { workspace = true }
 include_dir = { workspace = true }
 jiff = { workspace = true }
 minijinja = { workspace = true }
