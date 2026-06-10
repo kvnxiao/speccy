@@ -507,6 +507,22 @@ pub enum ParseError {
         /// Human-readable explanation.
         reason: String,
     },
+
+    /// A `journal/VET.md` invocation section violated the terminal-`<gate>`
+    /// structure rule: a non-last section (or, under strict parsing, the
+    /// last section) lacks a terminal `<gate>`, a `<gate>` is not the last
+    /// block in its section, or a section holds more than one `<gate>`.
+    /// SPEC-0055 REQ-007 distinguishes this from other grammar failures so
+    /// `speccy verify` can route it to `VET-002` rather than `VET-001`.
+    #[error("vet journal {path} gate-structure violation: {reason}")]
+    VetGateStructure {
+        /// Path of the offending vet journal file.
+        path: Utf8PathBuf,
+        /// Byte offset of the offending section's first block.
+        offset: usize,
+        /// Human-readable explanation of the violation.
+        reason: String,
+    },
 }
 
 /// Convenience alias for parsers that return a boxed [`ParseError`].

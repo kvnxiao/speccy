@@ -285,9 +285,11 @@ enum LastSection {
 /// Returns [`ParseError`] when frontmatter is missing or malformed, the
 /// document holds no `## Invocation` heading, any block has a missing or
 /// unknown attribute or an out-of-domain verdict, a block falls outside
-/// any invocation section, the per-section round sequence is invalid, or
-/// a section's structural rules are violated (no terminal `gate`, a
-/// non-terminal `gate`, or a second `gate`).
+/// any invocation section, or the per-section round sequence is invalid.
+/// A section's gate-structure violation (no terminal `gate`, a
+/// non-terminal `gate`, or a second `gate`) returns the dedicated
+/// [`ParseError::VetGateStructure`] so callers can distinguish it from
+/// other grammar failures (SPEC-0055 REQ-007 routes it to `VET-002`).
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
     parse_with_mode(source, path, LastSection::MustBeGated)
 }
@@ -786,7 +788,7 @@ fn validate_section(inv: &Invocation, path: &Utf8Path, allow_open: bool) -> Pars
     match gate_positions.as_slice() {
         // An open last section (in-flight derivation) carries no gate yet.
         [] if allow_open => Ok(()),
-        [] => Err(Box::new(ParseError::MalformedMarker {
+        [] => Err(Box::new(ParseError::VetGateStructure {
             path: path.to_path_buf(),
             offset: section_offset(inv),
             reason: format!(
@@ -796,7 +798,7 @@ fn validate_section(inv: &Invocation, path: &Utf8Path, allow_open: bool) -> Pars
         })),
         [gate_idx] => {
             if *gate_idx + 1 != inv.blocks.len() {
-                return Err(Box::new(ParseError::MalformedMarker {
+                return Err(Box::new(ParseError::VetGateStructure {
                     path: path.to_path_buf(),
                     offset: section_offset(inv),
                     reason: format!(
@@ -807,7 +809,7 @@ fn validate_section(inv: &Invocation, path: &Utf8Path, allow_open: bool) -> Pars
             }
             Ok(())
         }
-        _ => Err(Box::new(ParseError::MalformedMarker {
+        _ => Err(Box::new(ParseError::VetGateStructure {
             path: path.to_path_buf(),
             offset: section_offset(inv),
             reason: format!(
@@ -1175,7 +1177,7 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("non-terminal gate must fail");
         assert!(
-            matches!(err.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("not the last block")),
+            matches!(err.as_ref(), ParseError::VetGateStructure { reason, .. } if reason.contains("not the last block")),
             "got {err:?}"
         );
     }
@@ -1195,7 +1197,7 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("two gates must fail");
         assert!(
-            matches!(err.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("exactly one is allowed")),
+            matches!(err.as_ref(), ParseError::VetGateStructure { reason, .. } if reason.contains("exactly one is allowed")),
             "got {err:?}"
         );
     }
@@ -1211,7 +1213,7 @@ mod tests {
         "#});
         let err = parse(&src, path()).expect_err("missing gate must fail");
         assert!(
-            matches!(err.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("no terminal `<gate>`")),
+            matches!(err.as_ref(), ParseError::VetGateStructure { reason, .. } if reason.contains("no terminal `<gate>`")),
             "got {err:?}"
         );
     }
@@ -1368,7 +1370,7 @@ mod tests {
         "#});
         let strict = parse(&src, path()).expect_err("strict must reject an open last section");
         assert!(
-            matches!(strict.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("no terminal `<gate>`")),
+            matches!(strict.as_ref(), ParseError::VetGateStructure { reason, .. } if reason.contains("no terminal `<gate>`")),
             "got {strict:?}"
         );
         let doc = parse_in_flight(&src, path()).expect("in-flight must accept an open section");
@@ -1416,7 +1418,7 @@ mod tests {
         "#});
         let err = parse_in_flight(&src, path()).expect_err("un-gated non-last section must fail");
         assert!(
-            matches!(err.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("invocation 1") && reason.contains("no terminal `<gate>`")),
+            matches!(err.as_ref(), ParseError::VetGateStructure { reason, .. } if reason.contains("invocation 1") && reason.contains("no terminal `<gate>`")),
             "got {err:?}"
         );
     }

@@ -309,7 +309,7 @@ Suggested files: `speccy-cli/src/main.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-007">
+<task id="T-006" state="completed" covers="REQ-007">
 ## `speccy verify` gains the `VET-*` lint family
 
 Add a `VET-*` lint family in `speccy-core/src/lint/rules/vet.rs`

@@ -40,6 +40,10 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
         // rule itself; per-task state is read from the parsed
         // TasksDoc.
         rules::jnl::lint(spec, &mut diagnostics);
+        // SPEC-0055 REQ-007: VET-* validates `journal/VET.md` against the
+        // frozen vet grammar. The lints run only when the file exists;
+        // the existence gate lives inside the rule.
+        rules::vet::lint(spec, &mut diagnostics);
     }
 
     diagnostics.sort_by(|a, b| {
