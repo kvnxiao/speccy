@@ -59,7 +59,7 @@ Suggested files: `speccy-core/src/context.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-002">
+<task id="T-002" state="completed" covers="REQ-001 REQ-002">
 ## Add the `speccy context <task-selector> --json` command emitting identity + intent
 
 Add `Command::Context { selector: String, json: bool }` to the clap
