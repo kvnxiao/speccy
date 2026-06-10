@@ -475,7 +475,7 @@ Suggested files: `resources/modules/skills/speccy-orchestrate.md`,
 </task-scenarios>
 </task>
 
-<task id="T-009" state="pending" covers="REQ-010">
+<task id="T-009" state="completed" covers="REQ-010">
 ## ARCHITECTURE.md matches the shipped behavior
 
 Update `docs/ARCHITECTURE.md` in the same change set so it reflects the
