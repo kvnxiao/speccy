@@ -404,5 +404,3 @@ invariant, and no stale full-file entry-read contract remains
 Suggested files: `docs/ARCHITECTURE.md`
 </task-scenarios>
 </task>
-</content>
-</invoke>
