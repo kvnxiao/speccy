@@ -377,7 +377,7 @@ retry-shape rule)
 </task-scenarios>
 </task>
 
-<task id="T-009" state="pending" covers="REQ-009">
+<task id="T-009" state="completed" covers="REQ-009">
 ## Document `speccy context`, its envelope, and the size invariant in ARCHITECTURE.md
 
 Add the `speccy context` entry to the CLI surface section of
