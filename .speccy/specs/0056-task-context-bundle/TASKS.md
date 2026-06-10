@@ -280,7 +280,7 @@ Suggested files: `speccy-cli/src/context.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-007">
+<task id="T-007" state="completed" covers="REQ-007">
 ## Enforce the size invariant with a property-style test
 
 Add a property-style integration test that constructs a fixture

@@ -16,7 +16,12 @@
 //! absent (REQ-004). T-005 adds the navigation aids: the sibling-task index
 //! (id/state/covers only), the repo-relative paths, and the suggested
 //! merge-base diff command (REQ-005). T-006 extends the same envelope with
-//! the consistency section; its tests land with that task.
+//! the consistency section; its tests land with that task. T-007 pins the
+//! governing size invariant (REQ-007): a property-style test emits a
+//! bundle, grows the spec around a fixed task (one uncovered requirement,
+//! one new sibling task, one foreign-task journal round, hash re-locked),
+//! re-emits, and asserts the two payloads differ by exactly one
+//! sibling-index entry once the consistency section is normalized.
 
 mod common;
 
@@ -24,6 +29,7 @@ use assert_cmd::Command;
 use camino::Utf8Path;
 use common::TestResult;
 use common::Workspace;
+use common::sha256_hex;
 use common::write_spec;
 use indoc::indoc;
 use predicates::str::contains;
@@ -1290,6 +1296,226 @@ fn three_task_drift_surfaces_only_the_selected_tasks_entries() -> TestResult {
         drift_ids,
         vec!["T-002".to_owned()],
         "exactly T-002's drift entries appear; T-001's and T-004's must not",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-010 (REQ-007): the size invariant as an executable contract. Emit a
+// bundle for a fixed task, then grow the spec in three ways that REQ-007
+// declares must NOT enlarge the bundle (one uncovered requirement) plus the
+// one that adds exactly one bounded line (one sibling task) plus one that
+// must NOT enlarge it (a journal round on a *different* task). Re-lock the
+// SPEC hash in TASKS.md frontmatter and re-emit. After normalizing the
+// consistency section (the only field the SPEC edit can perturb), the two
+// payloads must differ by exactly one added sibling-index entry and nothing
+// else.
+// ---------------------------------------------------------------------------
+
+/// A SPEC.md carrying `n_requirements` requirements (REQ-001..REQ-NNN), each
+/// with a body / done-when / behavior / one scenario, plus a goals,
+/// non-goals, and Summary block. Used by the size-invariant test to grow
+/// the spec by one uncovered requirement between emissions.
+fn spec_md_n_requirements(spec_id: &str, n_requirements: u32) -> String {
+    use std::fmt::Write as _;
+    let mut body = format!(
+        "---\nid: {spec_id}\nslug: x\ntitle: Example {spec_id}\n\
+         status: in-progress\ncreated: 2026-06-10\n---\n\n# {spec_id}\n\n\
+         ## Summary\n\nNarrative.\n\n\
+         <goals>\n- A goal.\n</goals>\n\n\
+         <non-goals>\n- A non-goal.\n</non-goals>\n\n\
+         <user-stories>\n- A story.\n</user-stories>\n\n",
+    );
+    for n in 1..=n_requirements {
+        write!(
+            body,
+            "<requirement id=\"REQ-{n:03}\">\n\
+             ### REQ-{n:03}: Requirement {n}\n\
+             Body {n}.\n\n\
+             <done-when>\n- done {n}.\n</done-when>\n\n\
+             <behavior>\n- behavior {n}.\n</behavior>\n\n\
+             <scenario id=\"CHK-{n:03}\">\n\
+             Given req {n}, when X, then Y.\n\
+             </scenario>\n\
+             </requirement>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body.push_str(
+        "## Changelog\n\n<changelog>\n| Date | Author | Summary |\n\
+         |------|--------|---------|\n| 2026-06-10 | t | init |\n</changelog>\n",
+    );
+    body
+}
+
+/// A TASKS.md whose frontmatter pins `spec_hash`, carrying the tasks in
+/// `task_specs` as `(id, state, covers)`. Bodies carry no distinctive
+/// markers — the size-invariant test asserts on structure, not body text.
+fn tasks_md_with_hash(spec_id: &str, spec_hash: &str, task_specs: &[(&str, &str, &str)]) -> String {
+    use std::fmt::Write as _;
+    let mut body = format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: {spec_hash}\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n",
+    );
+    for (id, state, covers) in task_specs {
+        write!(
+            body,
+            "<task id=\"{id}\" state=\"{state}\" covers=\"{covers}\">\n\
+             body prose for {id}.\n\n\
+             <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body
+}
+
+/// A minimal single-round per-task journal: one `<implementer>` block. Used
+/// to add a journal round on a *foreign* task (one the selected task does
+/// not read), which REQ-007 declares must not enlarge the bundle.
+fn journal_one_round(spec_id: &str, task_id: &str) -> String {
+    format!(
+        "---\nspec: {spec_id}\ntask: {task_id}\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n\
+         <implementer date=\"2026-06-10T01:00:00Z\" model=\"m/low\" round=\"1\">\n\
+         body\n</implementer>\n",
+    )
+}
+
+/// Normalize a parsed bundle in place by replacing its `consistency` section
+/// with a fixed sentinel. The consistency section is the only bundle field a
+/// SPEC.md edit can perturb (its status reflects task-state-vs-git
+/// correlation; re-locking the hash and editing requirements can shift what
+/// the workspace scan reports), so REQ-007's "differs only by one sibling
+/// entry" claim is asserted modulo this field, exactly as CHK-010 prescribes
+/// ("consistency fields normalized").
+fn normalize_consistency(value: &mut serde_json::Value) {
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("consistency".to_owned(), serde_json::json!("NORMALIZED"));
+    }
+}
+
+#[test]
+fn bundle_size_scales_with_task_not_spec() -> TestResult {
+    let ws = Workspace::new()?;
+
+    // Initial spec: three requirements, a single task T-001 covering REQ-001.
+    let spec_before = spec_md_n_requirements("SPEC-0042", 3);
+    let tasks_before = tasks_md_with_hash(
+        "SPEC-0042",
+        &sha256_hex(spec_before.as_bytes()),
+        &[("T-001", "pending", "REQ-001")],
+    );
+    let spec_dir = write_spec(&ws.root, "0042-alpha", &spec_before, Some(&tasks_before))?;
+
+    let mut before = parse_one_json(&invoke_json(&ws.root, "SPEC-0042/T-001")?);
+
+    // The pre-growth bundle has zero siblings (T-001 is the only task).
+    assert_eq!(
+        before
+            .get("siblings")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len),
+        Some(0),
+        "the single-task spec has no siblings before growth",
+    );
+
+    // Grow the spec in three ways REQ-007 enumerates:
+    //   (1) one requirement T-001 does NOT cover (REQ-004) — adds nothing;
+    //   (2) one new sibling task T-002 — adds exactly one index entry;
+    //   (3) one journal round on the foreign task T-002 — adds nothing to
+    //       T-001's bundle (each task reads only its own journal).
+    let spec_after = spec_md_n_requirements("SPEC-0042", 4);
+    let tasks_after = tasks_md_with_hash(
+        "SPEC-0042",
+        // Re-lock the hash to the edited SPEC.md, mirroring the reconcile
+        // step. The bundle does not read the hash; relocking proves the
+        // invariant is independent of the lock value.
+        &sha256_hex(spec_after.as_bytes()),
+        &[
+            ("T-001", "pending", "REQ-001"),
+            ("T-002", "pending", "REQ-002"),
+        ],
+    );
+    fs_err::write(spec_dir.join("SPEC.md").as_std_path(), &spec_after)?;
+    fs_err::write(spec_dir.join("TASKS.md").as_std_path(), &tasks_after)?;
+    write_journal(&spec_dir, "T-002", &journal_one_round("SPEC-0042", "T-002"))?;
+
+    let mut after = parse_one_json(&invoke_json(&ws.root, "SPEC-0042/T-001")?);
+
+    // Normalize the one field a SPEC edit may perturb, then diff.
+    normalize_consistency(&mut before);
+    normalize_consistency(&mut after);
+
+    // The ONLY difference is the siblings array: before has zero entries,
+    // after has exactly one (the new T-002), carrying only id/state/covers.
+    let after_siblings = after
+        .get("siblings")
+        .and_then(serde_json::Value::as_array)
+        .expect("after-growth bundle has a siblings array")
+        .clone();
+    assert_eq!(
+        after_siblings.len(),
+        1,
+        "growing the spec by one task adds exactly one sibling entry; got {after_siblings:?}",
+    );
+    let sibling = after_siblings.first().expect("the one added sibling");
+    let mut keys: Vec<&str> = sibling
+        .as_object()
+        .expect("sibling is an object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["covers", "id", "state"],
+        "the added sibling carries only id/state/covers; got {keys:?}",
+    );
+    assert_eq!(
+        sibling.get("id").and_then(serde_json::Value::as_str),
+        Some("T-002"),
+        "the added sibling is the new T-002",
+    );
+
+    // Every other field is byte-for-byte identical. Project both payloads
+    // with the siblings array removed and assert deep equality — this is the
+    // executable form of "nothing else changed": the uncovered REQ-004 and
+    // the foreign T-002 journal round left no trace in T-001's bundle.
+    let strip_siblings = |v: &serde_json::Value| -> serde_json::Value {
+        let mut obj = v.as_object().expect("bundle is an object").clone();
+        obj.remove("siblings");
+        serde_json::Value::Object(obj)
+    };
+    assert_eq!(
+        strip_siblings(&before),
+        strip_siblings(&after),
+        "outside the siblings index, the bundle is invariant to spec growth",
+    );
+
+    // Guard against a vacuous pass: the spec really did grow. REQ-004 was
+    // added (so the uncovered-requirement growth was exercised) yet must be
+    // absent from T-001's payload, and the foreign T-002 journal exists on
+    // disk yet contributes nothing to T-001's journal section.
+    assert!(
+        spec_after.contains("REQ-004"),
+        "the test actually added an uncovered REQ-004 to SPEC.md",
+    );
+    let after_str = serde_json::to_string(&after)?;
+    assert!(
+        !after_str.contains("REQ-004"),
+        "the uncovered REQ-004 must not appear in T-001's bundle; payload: {after_str}",
+    );
+    assert!(
+        spec_dir.join("journal/T-002.md").exists(),
+        "the foreign T-002 journal round was written to disk",
+    );
+    assert_eq!(
+        after
+            .get("journal")
+            .and_then(|j| j.get("exists"))
+            .and_then(serde_json::Value::as_bool),
+        Some(false),
+        "T-001's own journal section stays empty despite T-002's new journal",
     );
     Ok(())
 }
