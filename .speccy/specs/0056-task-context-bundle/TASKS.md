@@ -157,7 +157,7 @@ Suggested files: `speccy-cli/src/context.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Inline the full per-task journal; absence is an explicit empty marker, not an error
 
 Extend the envelope with a journal section. When

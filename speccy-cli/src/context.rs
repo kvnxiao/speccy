@@ -15,11 +15,15 @@
 //! with spec identity (REQ-001 / REQ-002) and the intent block (REQ-002).
 //! T-003 adds the selected task's verbatim `<task>` entry and the
 //! covering requirements — resolved through the shared core walk so
-//! `context` and `check` cannot diverge (REQ-003 / DEC-002). The command
-//! performs no writes anywhere.
+//! `context` and `check` cannot diverge (REQ-003 / DEC-002). T-004 inlines
+//! the selected task's per-task journal in full, reusing `journal show`'s
+//! block projection so the two JSON journal views cannot drift; an absent
+//! journal yields an explicit empty marker and a successful exit
+//! (REQ-004 / DEC-004). The command performs no writes anywhere.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
+use crate::context_output::BundleJournal;
 use crate::context_output::ContextBundle;
 use crate::context_output::CoveringRequirement;
 use crate::context_output::DecisionEntry;
@@ -27,10 +31,12 @@ use crate::context_output::Intent;
 use crate::context_output::ScenarioEntry;
 use crate::context_output::SpecIdentity;
 use crate::context_output::TaskEntry;
+use crate::journal_show_output::to_json_journal_block;
 use camino::Utf8Path;
 use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::SpecDoc;
+use speccy_core::parse::parse_journal_xml;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskLocation;
 use speccy_core::task_lookup::find as find_task;
@@ -62,6 +68,16 @@ pub enum ContextError {
     /// Walked up from cwd without locating a `.speccy/` directory.
     #[error(".speccy/ directory not found walking up from current directory")]
     ProjectRootNotFound,
+    /// The selected task's journal file exists but failed to parse under
+    /// the per-task journal grammar.
+    #[error("journal at {path} failed to parse; cannot assemble context bundle")]
+    JournalParse {
+        /// The unparseable journal path.
+        path: camino::Utf8PathBuf,
+        /// Underlying parse error.
+        #[source]
+        source: Box<speccy_core::error::ParseError>,
+    },
     /// JSON serialisation of the bundle failed.
     #[error("failed to serialise context bundle JSON")]
     JsonSerialise(#[from] serde_json::Error),
@@ -156,6 +172,7 @@ fn assemble_bundle(
     let intent = build_intent(spec_doc);
     let task = build_task_entry(location);
     let requirements = build_requirements(location, spec_doc);
+    let journal = build_journal(location)?;
 
     Ok(ContextBundle {
         schema_version: 1,
@@ -163,6 +180,54 @@ fn assemble_bundle(
         intent,
         task,
         requirements,
+        journal,
+    })
+}
+
+/// Inline the selected task's per-task journal into the bundle (REQ-004).
+///
+/// Resolves `<spec-dir>/journal/<task-id>.md` (the same path `speccy journal
+/// show` uses) and, when it exists, parses it via `journal_xml` and projects
+/// every block in file order through SPEC-0055's shared
+/// [`to_json_journal_block`] mapping — so `context` and `journal show`
+/// cannot drift (REQ-004 / DEC-002). When the file is absent the bundle
+/// carries an explicit `exists: false` marker with zero blocks and emission
+/// still succeeds: a round-1 implementer legitimately has no journal yet
+/// (DEC-004).
+fn build_journal(location: &TaskLocation<'_>) -> Result<BundleJournal, ContextError> {
+    let task_id = &location.task.id;
+    let journal_path = location
+        .spec_dir
+        .join("journal")
+        .join(format!("{task_id}.md"));
+
+    let src = match fs_err::read_to_string(journal_path.as_std_path()) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(BundleJournal {
+                exists: false,
+                spec: None,
+                task: None,
+                generated_at: None,
+                blocks: Vec::new(),
+            });
+        }
+        Err(e) => return Err(ContextError::Io(e)),
+    };
+
+    let doc =
+        parse_journal_xml(&src, &journal_path).map_err(|source| ContextError::JournalParse {
+            path: journal_path.clone(),
+            source,
+        })?;
+
+    let blocks = doc.entries.iter().map(to_json_journal_block).collect();
+    Ok(BundleJournal {
+        exists: true,
+        spec: Some(doc.spec),
+        task: Some(doc.task),
+        generated_at: Some(doc.generated_at),
+        blocks,
     })
 }
 
@@ -289,6 +354,29 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
                 )?;
             }
         }
+    }
+
+    if bundle.journal.exists {
+        writeln!(out, "\n## Journal")?;
+        for block in &bundle.journal.blocks {
+            let persona = block
+                .persona
+                .as_deref()
+                .map_or_else(String::new, |p| format!(" persona={p}"));
+            let verdict = block
+                .verdict
+                .as_deref()
+                .map_or_else(String::new, |v| format!(" verdict={v}"));
+            writeln!(
+                out,
+                "\n### {} round={}{persona}{verdict}\n{}",
+                block.block,
+                block.round,
+                block.body.trim_end(),
+            )?;
+        }
+    } else {
+        writeln!(out, "\n## Journal\n(none — task has no journal yet)")?;
     }
     Ok(())
 }

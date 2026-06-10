@@ -11,9 +11,10 @@
 //! T-002 establishes the command, the selector contract, and the JSON
 //! skeleton with spec identity (REQ-001 / REQ-002) and the intent block
 //! (REQ-002) populated. T-003 adds the task entry and the covering
-//! requirements via the shared core walk (REQ-003). Later tasks
-//! (T-004..T-006) extend the same envelope; tests for those sections land
-//! with their tasks.
+//! requirements via the shared core walk (REQ-003). T-004 inlines the
+//! per-task journal in full, with an explicit empty marker when the file is
+//! absent (REQ-004). Later tasks (T-005..T-006) extend the same envelope;
+//! tests for those sections land with their tasks.
 
 mod common;
 
@@ -185,6 +186,43 @@ fn tasks_md_single(spec_id: &str) -> String {
          <task id=\"T-001\" state=\"pending\" covers=\"REQ-001\">\nstub\n\n\
          <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
     )
+}
+
+/// A per-task journal for `T-001` with rounds 1–2: two `<implementer>`
+/// blocks, five `<review>` blocks, and one `<blockers>` block (eight total),
+/// laid out in a round-monotonic file order the `journal_xml` parser
+/// accepts (round 1 first, then round 2). Each block carries a distinctive
+/// body marker so the bundle's projection can be asserted against file
+/// content (REQ-004 / CHK-006).
+fn journal_two_rounds(spec_id: &str) -> String {
+    format!(
+        "---\nspec: {spec_id}\ntask: T-001\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n\
+         <implementer date=\"2026-06-10T01:00:00Z\" model=\"m/low\" round=\"1\">\n\
+         IMPL_R1_MARKER\n</implementer>\n\n\
+         <review date=\"2026-06-10T02:00:00Z\" model=\"m/low\" persona=\"business\" verdict=\"pass\" round=\"1\">\n\
+         REVIEW_R1_BUSINESS_MARKER\n</review>\n\n\
+         <review date=\"2026-06-10T02:01:00Z\" model=\"m/low\" persona=\"tests\" verdict=\"pass\" round=\"1\">\n\
+         REVIEW_R1_TESTS_MARKER\n</review>\n\n\
+         <review date=\"2026-06-10T02:02:00Z\" model=\"m/low\" persona=\"security\" verdict=\"blocking\" round=\"1\">\n\
+         REVIEW_R1_SECURITY_MARKER\n</review>\n\n\
+         <blockers date=\"2026-06-10T03:00:00Z\" round=\"1\">\n\
+         BLOCKERS_R1_MARKER\n</blockers>\n\n\
+         <implementer date=\"2026-06-10T04:00:00Z\" model=\"m/low\" round=\"2\">\n\
+         IMPL_R2_MARKER\n</implementer>\n\n\
+         <review date=\"2026-06-10T05:00:00Z\" model=\"m/low\" persona=\"security\" verdict=\"pass\" round=\"2\">\n\
+         REVIEW_R2_SECURITY_MARKER\n</review>\n\n\
+         <review date=\"2026-06-10T05:01:00Z\" model=\"m/low\" persona=\"style\" verdict=\"pass\" round=\"2\">\n\
+         REVIEW_R2_STYLE_MARKER\n</review>\n",
+    )
+}
+
+/// Write a per-task journal at `<spec-dir>/journal/<task-id>.md`.
+fn write_journal(spec_dir: &Utf8Path, task_id: &str, body: &str) -> TestResult {
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    fs_err::write(journal.join(format!("{task_id}.md")).as_std_path(), body)?;
+    Ok(())
 }
 
 fn invoke_json(root: &Utf8Path, selector: &str) -> TestResult<String> {
@@ -633,5 +671,173 @@ fn bundle_carries_task_entry_with_raw_body_and_parsed_fields() -> TestResult {
         body.contains("TASK_BODY_MARKER"),
         "raw task body bytes must appear in the entry; got: {body}",
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-006 (REQ-004): a fixture journal with rounds 1–2, five review blocks,
+// and one blockers block. The bundle's journal section contains all eight
+// blocks (2 implementer + 5 review + 1 blockers) with round attributes
+// matching the file.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_inlines_full_journal_with_all_blocks_and_rounds() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    write_journal(&spec_dir, "T-001", &journal_two_rounds("SPEC-0042"))?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let journal = value.get("journal").expect("bundle has journal section");
+    assert_eq!(
+        journal.get("exists").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "journal section marks the file present",
+    );
+
+    let blocks = journal
+        .get("blocks")
+        .and_then(serde_json::Value::as_array)
+        .expect("journal carries a blocks array");
+    assert_eq!(
+        blocks.len(),
+        8,
+        "all eight blocks (2 implementer + 5 review + 1 blockers) are inlined; got {}",
+        blocks.len(),
+    );
+
+    // The block kinds and their counts match the file.
+    let kinds: Vec<&str> = blocks
+        .iter()
+        .filter_map(|b| b.get("block").and_then(serde_json::Value::as_str))
+        .collect();
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "implementer").count(),
+        2,
+        "two implementer blocks; got kinds {kinds:?}",
+    );
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "review").count(),
+        5,
+        "five review blocks; got kinds {kinds:?}",
+    );
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "blockers").count(),
+        1,
+        "one blockers block; got kinds {kinds:?}",
+    );
+
+    // Round attributes match the file: the first five blocks are round 1
+    // (implementer + 3 reviews + blockers), the last three are round 2
+    // (implementer + 2 reviews), in file order.
+    let rounds: Vec<u64> = blocks
+        .iter()
+        .filter_map(|b| b.get("round").and_then(serde_json::Value::as_u64))
+        .collect();
+    assert_eq!(
+        rounds,
+        [1, 1, 1, 1, 1, 2, 2, 2],
+        "round attributes match the file in order; got {rounds:?}",
+    );
+
+    // The blocks-in-file-order projection preserves each block's body
+    // verbatim, so the retry context (prior handoffs, verdicts, blockers
+    // directives) is all present.
+    for marker in [
+        "IMPL_R1_MARKER",
+        "REVIEW_R1_SECURITY_MARKER",
+        "BLOCKERS_R1_MARKER",
+        "IMPL_R2_MARKER",
+        "REVIEW_R2_STYLE_MARKER",
+    ] {
+        assert!(
+            stdout.contains(marker),
+            "journal body marker {marker} must appear in the payload",
+        );
+    }
+
+    // A blocking review block carries its persona and verdict (sufficient
+    // for retry context); the security round-1 review blocked.
+    let blocking = blocks
+        .iter()
+        .find(|b| b.get("verdict").and_then(serde_json::Value::as_str) == Some("blocking"))
+        .expect("the round-1 security review is a blocking verdict");
+    assert_eq!(
+        blocking.get("persona").and_then(serde_json::Value::as_str),
+        Some("security"),
+        "the blocking review carries its persona",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-007 (REQ-004): a fixture task with no journal file. The exit code is 0
+// and the journal section carries an explicit absence marker with zero
+// blocks.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_journal_absent_yields_explicit_empty_marker_and_success() -> TestResult {
+    let ws = Workspace::new()?;
+    // No journal file is written for this task.
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+
+    // The emission itself succeeds (the `?` would propagate any error),
+    // standing in for the exit-0 contract at the library boundary.
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let journal = value.get("journal").expect("bundle has journal section");
+    assert_eq!(
+        journal.get("exists").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "absent journal is marked exists: false",
+    );
+    let blocks = journal
+        .get("blocks")
+        .and_then(serde_json::Value::as_array)
+        .expect("journal carries a blocks array even when absent");
+    assert!(
+        blocks.is_empty(),
+        "an absent journal carries zero blocks; got {}",
+        blocks.len(),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// REQ-004 / CHK-007 at the binary boundary: a task with no journal exits 0.
+// The library-level test proves the empty marker; this proves the process
+// exit code is genuinely 0 (not just an absence of a Rust error).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn binary_journal_absent_exits_zero() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+
+    Command::cargo_bin("speccy")?
+        .args(["context", "SPEC-0042/T-001", "--json"])
+        .current_dir(&ws.root)
+        .assert()
+        .success()
+        .stdout(contains("\"exists\":false"));
     Ok(())
 }

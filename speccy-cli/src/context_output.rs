@@ -13,11 +13,14 @@
 //! intent block (REQ-002's goals / non-goals / decisions) — plus the
 //! T-003 slice: the selected task's verbatim `<task>` entry and the
 //! covering requirements resolved through the shared core walk
-//! (REQ-003). Later tasks add the journal, sibling index, paths, and
-//! consistency sections.
+//! (REQ-003); and the T-004 slice: the inlined per-task journal, whose
+//! per-block JSON shape reuses `journal show`'s `JsonJournalBlock` so the
+//! two journal views cannot drift (REQ-004). Later tasks add the sibling
+//! index, paths, and consistency sections.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
+use crate::journal_show_output::JsonJournalBlock;
 use serde::Serialize;
 
 /// The `speccy context` JSON bundle envelope.
@@ -38,6 +41,9 @@ pub struct ContextBundle {
     /// The requirements the task covers, full bodies with scenarios,
     /// deduplicated in covers-list order (REQ-003).
     pub requirements: Vec<CoveringRequirement>,
+    /// The selected task's per-task journal, inlined in full when present;
+    /// an explicit empty marker when the file does not yet exist (REQ-004).
+    pub journal: BundleJournal,
 }
 
 /// Spec identity drawn from SPEC.md frontmatter (REQ-002).
@@ -123,4 +129,36 @@ pub struct ScenarioEntry {
     pub id: String,
     /// The scenario body, verbatim.
     pub body: String,
+}
+
+/// The selected task's per-task journal, inlined into the bundle (REQ-004).
+///
+/// When `<spec-dir>/journal/<task-id>.md` exists, `exists` is `true`,
+/// the frontmatter fields carry the parsed `spec` / `task` / `generated_at`,
+/// and `blocks` holds every `<implementer>` / `<review>` / `<blockers>`
+/// entry across all rounds in file order. When the file does not exist,
+/// `exists` is `false`, the frontmatter fields are absent, and `blocks` is
+/// empty — a round-1 implementer legitimately has no journal yet (DEC-004),
+/// so absence is normal and the command still exits 0.
+///
+/// The per-block JSON shape reuses SPEC-0055's [`JsonJournalBlock`] (and its
+/// `to_json_journal_block` mapping) so `context` and `journal show` cannot
+/// drift. The standalone `JsonTaskJournal` envelope is deliberately **not**
+/// nested here: its own `schema_version` would collide with the bundle's.
+#[derive(Debug, Clone, Serialize)]
+pub struct BundleJournal {
+    /// Whether the journal file exists. `false` is the explicit
+    /// empty-journal marker for a task with no journal yet.
+    pub exists: bool,
+    /// `spec:` frontmatter field; present only when the file exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+    /// `task:` frontmatter field; present only when the file exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    /// `generated_at:` frontmatter field; present only when the file exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generated_at: Option<String>,
+    /// Every journal block in file order; empty when the file is absent.
+    pub blocks: Vec<JsonJournalBlock>,
 }
