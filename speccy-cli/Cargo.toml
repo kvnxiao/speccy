@@ -17,23 +17,24 @@ path = "src/main.rs"
 [dependencies]
 camino = { workspace = true }
 clap = { workspace = true }
+const-hex = { workspace = true }
 fs-err = { workspace = true }
+fs4 = { workspace = true }
 include_dir = { workspace = true }
 jiff = { workspace = true }
 minijinja = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 speccy-core = { path = "../speccy-core", version = "1.0.0" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
-const-hex = { workspace = true }
 indoc = { workspace = true }
 predicates = { workspace = true }
 serde-saphyr = { workspace = true }
-sha2 = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 

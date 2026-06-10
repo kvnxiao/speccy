@@ -136,8 +136,11 @@ orchestrator).
 # CLI Surface
 
 A small set of flat commands. Each has one job. `--json` toggles
-representation, never content; there are no other mode flags, no
-state-transition verbs, no per-phase rendering verbs.
+representation, never content; there are no other mode flags and no
+per-phase rendering verbs. The lifecycle write commands
+(`task transition`, `journal append`) are mechanical state writes
+over a closed grammar — they record a transition or append a
+validated block, not a phase prompt.
 
 ```text
 speccy init                       Scaffold .speccy/ + host skill pack.
@@ -179,6 +182,51 @@ speccy lock SPEC-NNNN             Record SPEC.md sha256 + UTC timestamp into TAS
                                   `generated_at`). Used by `/speccy-decompose` after
                                   decomposition; replaces the old
                                   `speccy tasks --commit` sub-action.
+speccy task transition SELECTOR   Rewrite one task's `state` over the closed legal
+                                  graph (byte-surgical splice; every other byte of
+                                  TASKS.md is preserved verbatim).
+                                    --to <state>: pending | in-progress | in-review
+                                                  | completed (unknown rejected at
+                                                  argument-parse time)
+                                  Legal edges: pending→in-progress,
+                                  in-progress→in-review, in-review→completed,
+                                  in-review→pending, in-progress→pending,
+                                  completed→pending. A same-state target is an
+                                  idempotent no-op (exit 0, file byte-identical);
+                                  any other edge or an unresolved selector exits
+                                  non-zero with TASKS.md untouched.
+speccy journal append SELECTOR    Append one validated block to a journal, body from
+                                  stdin. The CLI is the sole authority for every
+                                  environment-derivable attribute — `date`, `round`,
+                                  frontmatter `generated_at`, a `gate` block's
+                                  `tasks_hash`, and VET.md invocation numbering — so
+                                  there is no flag to override any of them.
+                                    --block <type>: implementer | review | blockers
+                                                    (task journal) or drift-review |
+                                                    holistic-fix | simplifier-scan |
+                                                    simplifier-apply | gate (VET.md)
+                                    --model <s>:    identity for implementer/review and
+                                                    the round-bearing vet blocks
+                                    --persona <n>:  reviewer persona (review blocks)
+                                    --verdict <v>:  review + every vet block
+                                  Block type implies the target (DEC-004): task block
+                                  types take a task selector → `journal/<task-id>.md`;
+                                  vet block types take a bare `SPEC-NNNN` → VET.md. An
+                                  acquire-before-read advisory per-file lock (10s
+                                  timeout) serializes concurrent appenders; validation
+                                  runs before any write, so a rejected block leaves the
+                                  journal byte-identical (or still absent).
+speccy journal show SELECTOR      Parse the resolved journal and emit its frontmatter
+                                  and blocks, filtered.
+                                    --round <latest|N>: highest round, or round N
+                                                        (scoped to the last invocation
+                                                        section for VET.md)
+                                    --verdict <value>:  blocks whose verdict matches
+                                    --block <type>:     blocks of one element type
+                                    --json:             schema_version=1 envelope
+                                  Filters compose conjunctively; `--json` toggles
+                                  representation, never content. A missing journal
+                                  exits non-zero.
 speccy vacancy                    Return the next free `SPEC-NNNN`.
                                     no arg:   bare `SPEC-NNNN\n` to stdout
                                     --json:   {schema_version: 1, next_spec_id: "SPEC-NNNN"}
@@ -422,17 +470,19 @@ that specific task. Without an argument the session calls
 to resolve the next implementable task. In either case the session:
 
 - flips `state="pending"` to `state="in-progress"` on the target
-  task;
+  task via `speccy task transition`;
 - writes tests first, then code; runs the project's own test
   command locally and fails fast on red;
 - uses `speccy check SPEC-NNNN/T-NNN` only to render the scenarios
   it is satisfying;
 - appends one `<implementer>` block to
-  `.speccy/specs/NNNN-slug/journal/T-NNN.md` using the multi-field
-  handoff template the agent body supplies (the journal file is
-  created on round 1 if it does not exist; subsequent rounds
-  append);
-- flips `state="in-progress"` to `state="in-review"` and exits.
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` via
+  `speccy journal append --block implementer`, piping the multi-field
+  handoff body on stdin (the CLI stamps `date` and derives `round`,
+  creating the journal file on round 1 and appending on subsequent
+  rounds);
+- flips `state="in-progress"` to `state="in-review"` via
+  `speccy task transition` and exits.
 
 The session does not pick up another task on its way out. If two
 implementers run in parallel against different `state="pending"`
@@ -448,11 +498,15 @@ behalf.
 
 The `/speccy-review` skill is a single-task primitive. One
 invocation runs one round of adversarial review on one task and
-exits with one state transition recorded in TASKS.md. The
-orchestrator stays in the parent session (no agent file) because
-it is the sole writer to TASKS.md during the review loop and needs
-the parent session's full capacity to fan out, parse return
-messages, and consolidate verdicts atomically.
+exits with one state transition recorded in TASKS.md via
+`speccy task transition`. The orchestrator stays in the parent
+session (no agent file) because it owns the consolidated verdict
+and the single `<blockers>` directive, and needs the parent
+session's full capacity to fan out, parse the reviewers' thin
+verdict returns, and decide the state flip atomically. Write
+serialization to the journal is the CLI append lock's job, not the
+orchestrator's — each reviewer self-appends its own `<review>`
+block (DEC-006).
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session reviews
 that specific task. Without an argument the session calls
@@ -465,17 +519,19 @@ In either case the session:
   `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
   with per-persona model pins (see "Model pinning" in the README
   for the current matrix);
-- aggregates the returned `<review>` blocks and appends each to
-  `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the orchestrator
-  is the sole writer to the journal during review — reviewer
-  sub-agents return their `<review>` element to the orchestrator
-  which writes serially, preserving the existing concurrency
-  contract);
-- flips `state="in-review"` to `state="completed"` if every persona
-  `<review>` carries `verdict="pass"`; otherwise flips
-  `state="in-review"` to `state="pending"` and appends a
-  `<blockers>` block to the journal summarising the blockers, and
-  exits.
+- has each reviewer sub-agent append its own `<review>` block to
+  `.speccy/specs/NNNN-slug/journal/T-NNN.md` via
+  `speccy journal append --block review` and return a thin verdict
+  (persona, verdict, one-line rationale); the CLI's per-file append
+  lock serializes the concurrent appends, so no single session has
+  to be the journal's sole writer;
+- reads the round's verdicts back via `speccy journal show --block
+  review --round latest` and flips `state="in-review"` to
+  `state="completed"` if every persona `<review>` carries
+  `verdict="pass"`; otherwise flips `state="in-review"` to
+  `state="pending"` via `speccy task transition` and appends one
+  orchestrator-authored `<blockers>` block via `speccy journal
+  append --block blockers` summarising the blockers, and exits.
 
 The within-task fan-out is intrinsic to the primitive, not
 orchestration: adversarial diversity requires fresh contexts per
@@ -518,12 +574,23 @@ a PR via `gh` (or equivalent); Speccy itself never touches GitHub.
 Task states, carried by the `state` attribute on each `<task>`
 XML element (see "TASKS.md format" below for the full grammar).
 
-| `state` value | Meaning | Who sets it |
+Every transition between these states is written by `speccy task
+transition` (a byte-surgical splice over the closed legal graph),
+never by hand-editing the `state` attribute. The "Who sets it"
+column names the skill that *invokes* the command at each edge.
+
+| `state` value | Meaning | Who sets it (via `speccy task transition`) |
 |---|---|---|
-| `pending` | Needs work (new or retry) | Initial generation; reviewer on blocking |
+| `pending` | Needs work (new or retry) | Initial generation; reviewer/amend on blocking |
 | `in-progress` | Claimed by an implementer | Implementer when starting |
 | `in-review` | Implementation done, awaiting review | Implementer when finishing |
 | `completed` | All persona reviews passed | Reviewer skill at exit of review primitive |
+
+The closed legal graph the command enforces is: `pending→in-progress`,
+`in-progress→in-review`, `in-review→completed`, `in-review→pending`,
+`in-progress→pending`, `completed→pending`; a same-state target is an
+idempotent no-op and any other edge is rejected (see `task transition`
+in the CLI surface).
 
 A retry is just `state="pending"` with prior activity entries
 attached in the per-task journal. We do not introduce a fifth state
@@ -555,6 +622,18 @@ write (round 1 of an implementer attempt) and accumulates one
 `<implementer>` block per round plus N `<review>` blocks per round
 of fan-out plus at most one `<blockers>` block per round (when a
 reviewer blocks or an amendment flips the task back to `pending`).
+
+Every block is written by `speccy journal append`, which stamps
+`date`, derives `round`, writes the frontmatter on first append, and
+serializes concurrent appenders with a per-file advisory lock (see
+the CLI surface). Callers — the implementer phase, each reviewer
+persona, and the orchestrator's `<blockers>` directive — supply only
+identity/judgment inputs (`model`, `persona`, `verdict`) and the
+block body on stdin; they never author `date` or `round` themselves
+(DEC-001). Reviewer sub-agents append their own `<review>` blocks
+rather than returning them for a single writer to transcribe; the
+append lock, not a sole-writer convention, is what keeps concurrent
+appends from interleaving (DEC-006).
 
 Each `journal/T-NNN.md` file has YAML frontmatter binding it to its
 task plus a chronological body of bare `<implementer>`, `<review>`,
@@ -694,37 +773,52 @@ fundamental than a journal-shape issue.
 ### Lifecycle reading
 
 An implementer picking up a task reads TASKS.md to find the next
-`state="pending"` task, then reads `journal/T-NNN.md` (if it
-exists) to learn what prior rounds did, what reviewers blocked, and
-what an amendment-driven `<blockers>` directive (if any) asks the
-next round to address. The implementer then flips `state` back to
-`in-progress`, appends a new `<implementer>` block with the next
-`round` value, does the work, flips `state` to `in-review`, and
-exits.
+`state="pending"` task, then reads `journal/T-NNN.md` (directly, or
+via `speccy journal show`) to learn what prior rounds did, what
+reviewers blocked, and what an amendment-driven `<blockers>`
+directive (if any) asks the next round to address. The implementer
+then flips `state` back to `in-progress` via `speccy task
+transition`, appends a new `<implementer>` block via `speccy journal
+append` (the CLI derives the next `round` value), does the work,
+flips `state` to `in-review`, and exits.
 
 ## VET.md per-SPEC journal
 
 Pre-ship drift review (the `/speccy-vet` skill) maintains a
 single per-SPEC journal at `.speccy/specs/NNNN-slug/journal/VET.md`,
 sibling to `SPEC.md`, `TASKS.md`, and the per-task `T-NNN.md`
-journal files. The skill body is the **only writer**; sub-agents
-return verdict blocks via their final message and the skill
-transcribes them.
+journal files. Every block is written through `speccy journal
+append` against a bare `SPEC-NNNN` selector: each vet sub-agent
+appends its own `<drift-review>` / `<holistic-fix>` /
+`<simplifier-scan>` / `<simplifier-apply>` block and returns a thin
+verdict, and the skill appends the terminal `<gate>` block on exit.
+The CLI is the authority for `date`, `round`, the `gate` block's
+`tasks_hash`, and the `## Invocation N` sectioning, so callers supply
+only identity/judgment inputs and the block body; the per-file append
+lock serializes concurrent appenders (DEC-001, DEC-004, DEC-006).
 
 The file opens with YAML frontmatter (`spec`, `generated_at`),
 then one `## Invocation N — <ISO8601>` section per skill
-invocation. Each section may carry, in order of appearance:
+invocation. The CLI owns the sectioning: when the file is absent or
+its last section is already gate-terminated, `speccy journal append`
+opens the next `## Invocation N` with a CLI-stamped datetime before
+writing the block, so a non-gate block appended after a gate never
+lands in the closed section. Each section may carry, in order of
+appearance:
 
 - `<drift-review>` — output of one drift-reviewer sub-agent round.
+  Opens a round.
 - `<holistic-fix>` — output of one drift-implementer sub-agent
-  round. Pairs with the preceding `<drift-review>`.
+  round. Attaches to the current round; pairs with the preceding
+  `<drift-review>`.
 - `<simplifier-scan>` — output of the Phase 2 candidate scan
   (read-only).
 - `<simplifier-apply>` — output of the Phase 2 apply round, when
   candidates were applied.
 - `<gate>` — **terminal** block for the section. Exactly one per
-  invocation, written by every exit path before the skill returns
-  its `<orchestrator-verdict>` to its caller.
+  invocation, appended by every vet exit path (including the Phase 0
+  early exits) via `speccy journal append --block gate` before the
+  skill returns its `<orchestrator-verdict>` to its caller.
 
 The `<gate>` block carries the durable signal `speccy next` reads
 to decide whether the SPEC is freshly vetted. Shape:
@@ -741,10 +835,10 @@ Attributes:
   will carry `verdict="pass"`; `failed` otherwise (including every
   Phase 0 early-exit path).
 - `tasks_hash` — lowercase hex SHA-256 of `<spec-dir>/TASKS.md`
-  bytes, read immediately before appending the block. Anchors the
-  gate verdict to a specific TASKS.md revision so an amendment
-  after the gate passed forces a re-vet on the next
-  `speccy next` resolution.
+  bytes, computed by `speccy journal append` immediately before
+  writing the block (callers cannot supply it). Anchors the gate
+  verdict to a specific TASKS.md revision so an amendment after the
+  gate passed forces a re-vet on the next `speccy next` resolution.
 - `date` — ISO8601 datetime with seconds and timezone designator.
 
 The resolver in `speccy-core/src/next.rs` reads the **last**
@@ -761,12 +855,24 @@ step.
 `state="in-progress"` with a session marker is enough for
 `speccy next` to skip in-progress tasks via the resolver's
 state-based priority (there is no `--kind` flag — see
-`speccy next` above). If two agents race to claim the same
+`speccy next` above). If two agents race to *claim* the same
 `state="pending"` task, git will conflict on the TASKS.md edit and
-one will lose. That is acceptable for v1.
+one will lose. That is acceptable for v1: task claiming is not
+locked.
 
-A future harness may add file-locking, ticket queues, or worktree
-isolation. Speccy v1 does not.
+Journal writes, by contrast, are serialized by the CLI. Both
+`journal/T-NNN.md` and `VET.md` appends go through `speccy journal
+append`, which takes a per-file advisory lock (blocking acquire with
+a 10-second timeout) around the read→derive→validate→write sequence.
+Several reviewer or vet sub-agents can therefore append to the same
+journal concurrently without interleaving or losing blocks, and
+`round` / invocation derivation stays consistent under contention —
+the CLI's append lock, not a prose-level "sole serial writer" rule,
+is what guarantees this. This is the one place Speccy v1 takes a
+lock; it is internal to the append command, with no caller flags. A
+future harness may still add ticket queues or worktree isolation for
+the unlocked task-claim race. (See SPEC-0055's append-serialization
+decision.)
 
 ---
 
@@ -1649,32 +1755,36 @@ includes:
 - the persona's review-style guidance from the shipped persona body
 
 The reviewer sub-agent reads the prompt, performs the review, and
-returns a single `<review>` element to the orchestrator. The
-orchestrator (the `/speccy-review` skill session, sole writer to the
-journal during review) appends each returned `<review>` to
-`.speccy/specs/NNNN-slug/journal/T-NNN.md` serially. Reviewer
-sub-agents never write to TASKS.md or to the journal themselves —
-TSK-006 rejects `<review>` elements inside `<task>` bodies, and the
-journal-writer concurrency contract belongs to the orchestrator.
+appends its own `<review>` block to
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
+append --block review --persona <self> --verdict <v>` (findings on
+stdin), then returns a thin verdict (persona, verdict, one-line
+rationale) to the orchestrator (DEC-006). The CLI's per-file append
+lock serializes the parallel appends, so the journal stays
+well-formed without any one session being its sole writer. Reviewer
+sub-agents never write to TASKS.md and never author `date` / `round`
+themselves — TSK-006 rejects `<review>` elements inside `<task>`
+bodies, and the CLI stamps the environment-derivable attributes.
 
 ## State transitions
 
 Persona sub-agents **do not** flip the task's `state` attribute.
 That would create a race when the personas run in parallel. The
-`/speccy-review` skill flips state once after every persona's
-`<review>` element has been aggregated:
+`/speccy-review` skill flips state once via `speccy task transition`
+after reading every persona's verdict back through `speccy journal
+show --block review --round latest`:
 
-- All `verdict="pass"` -> `state="in-review"` becomes
-  `state="completed"`.
-- Any `verdict="blocking"` -> `state="in-review"` becomes
-  `state="pending"`, and the orchestrator appends a `<blockers>`
-  block to `journal/T-NNN.md` summarising the blocking findings
-  (`round` monotonically increasing across rounds; see the journal
-  element grammar).
+- All `verdict="pass"` -> `task transition --to completed`.
+- Any `verdict="blocking"` -> `task transition --to pending`, and
+  the orchestrator appends one `<blockers>` block via `speccy
+  journal append --block blockers` summarising the blocking findings
+  (the block body stays orchestrator-authored semantic judgment; the
+  CLI derives `round`, monotonically increasing across rounds — see
+  the journal element grammar).
 
 This puts state-mutation atomicity in one place (the orchestrator
-session) and keeps the journal the single source of truth for
-review history.
+session decides the single flip) and keeps the journal the single
+source of truth for review history.
 
 ## Why personas live in skills, not CLI
 
@@ -1967,9 +2077,10 @@ Example skeleton for `reviewer-security.md`:
 ## Role
 You are an adversarial security reviewer for one task in one spec.
 You read the SPEC.md, the task's diff, and the prior journal
-entries in `.speccy/specs/NNNN-slug/journal/T-NNN.md`. You return
-a single `<review>` element to the orchestrator, which appends it
-verbatim to the journal file.
+entries in `.speccy/specs/NNNN-slug/journal/T-NNN.md`. You append
+your own `<review>` block via `speccy journal append` and return a
+thin verdict (persona, verdict, one-line rationale) to the
+orchestrator.
 
 ## Focus
 - Authentication and authorization boundaries
@@ -1986,17 +2097,21 @@ verbatim to the journal file.
 - Missing rate limiting on auth endpoints
 
 ## Return format
-Return one `<review>` element to the orchestrator, of the shape:
+Append your `<review>` block with `speccy journal append SPEC-NNNN/T-NNN
+--block review --persona security --verdict <pass|blocking> --model
+<model-id>[/effort]`, piping the one-paragraph summary (file:line refs
+encouraged) on stdin. The CLI stamps `date` and `round` and writes the
+block in the shape:
 
     <review persona="security" verdict="pass | blocking"
             date="<ISO8601>" model="<model-id>[/effort]" round="<N>">
     <one-paragraph summary; file:line refs encouraged>
     </review>
 
-The orchestrator transcribes the element verbatim into
-`journal/T-NNN.md`. The `model` attribute is required and is
-copied verbatim from this returned element; the orchestrator does
-not infer it from skill-pack identity.
+You supply only `--persona`, `--verdict`, and `--model`; you never
+author `date` or `round`. After the append succeeds, return a thin
+verdict line to the orchestrator (persona, verdict, one-line
+rationale) so it can decide the state flip.
 
 ## Example
 
@@ -2016,10 +2131,10 @@ lives. They are upgradeable as models improve; the CLI is not.
 # JSON Interfaces
 
 A handful of commands carry stable JSON contracts: `status`,
-`next`, `vacancy`, `verify`, and `archive` (the archive receipt
-form). `--json` switches representation; the content is the same as
-the text output. Schema versions are pinned per-envelope and bumped
-only on breaking shape changes.
+`next`, `vacancy`, `verify`, `archive` (the archive receipt form),
+and `journal show`. `--json` switches representation; the content is
+the same as the text output. Schema versions are pinned per-envelope
+and bumped only on breaking shape changes.
 
 ## `speccy status --json`
 
@@ -2302,7 +2417,44 @@ detail. Diagnostics on `in-progress` / `dropped` / `superseded`
 specs are demoted to `Level::Info` so only `implemented` specs gate
 the build.
 
-These four envelopes are everything a harness needs. The rest of
+## `speccy journal show --json`
+
+For a task journal (`schema_version` first, then the frontmatter
+fields and the filtered blocks):
+
+```json
+{
+  "schema_version": 1,
+  "spec": "SPEC-0042",
+  "task": "T-001",
+  "generated_at": "2026-05-11T18:00:00Z",
+  "latest_round": 2,
+  "blocks": [
+    {
+      "block": "review",
+      "date": "2026-05-11T19:00:00Z",
+      "round": 2,
+      "model": "claude-opus-4-8[1m]/high",
+      "persona": "security",
+      "verdict": "blocking",
+      "body": "bcrypt cost 10; policy requires >=12."
+    }
+  ]
+}
+```
+
+For VET.md the envelope keeps `schema_version`, `spec`,
+`generated_at`, and `latest_round`, and replaces the top-level
+`task` / `blocks` with `invocations` (each carrying its `number`,
+`date`, and `blocks`).
+Each block object carries the attributes its type defines plus its
+`body`. The `--round` / `--verdict` / `--block` filters compose
+conjunctively over the emitted blocks; `latest_round` reports the
+highest round present after filtering. The orchestrator's
+completeness and blocking read-back call sites parse this envelope
+rather than re-scanning the journal markup.
+
+These envelopes are everything a harness needs. The rest of
 the CLI surface is text output to humans.
 
 ---
@@ -2312,8 +2464,9 @@ the CLI surface is text output to humans.
 Speccy emits a small set of deterministic lint codes. None depend
 on LLM judgment. All have stable prefixes: `SPC-` for spec
 structure, `REQ-` for requirements, `TSK-` for task structure,
-`QST-` for open questions, `RPT-` for REPORT.md proof shape, and
-`JNL-` for `journal/T-NNN.md` per-task journal proof shape.
+`QST-` for open questions, `RPT-` for REPORT.md proof shape,
+`JNL-` for `journal/T-NNN.md` per-task journal proof shape, and
+`VET-` for `journal/VET.md` per-SPEC vet journal proof shape.
 The canonical, append-only list lives in
 `speccy-core::lint::registry::REGISTRY`; the snapshot test at
 `speccy-core/tests/lint_registry.rs` pins it. The summary below
@@ -2375,6 +2528,18 @@ JNL-003  Task `state="completed"` and `journal/T-NNN.md` has a
          `state="in-progress"` or `state="in-review"` — a
          half-written journal in flight is not a lint error.
 
+VET-001  `journal/VET.md` fails the frozen `vet_xml` grammar
+         (Level::Error). Covers missing or malformed frontmatter, a
+         bad block shape, an attribute value outside its domain, and
+         an invalid per-section round sequence. Fires only when the
+         file exists; a spec with no VET.md emits no VET-* code
+         (absence is the resolver's concern, not lint's).
+VET-002  `journal/VET.md` violates the terminal-`<gate>` structure
+         (Level::Error). Fires when an invocation section other than
+         the last lacks a terminal `gate`, a `gate` is not the last
+         block in its section, or a section holds more than one
+         `gate`. Like VET-001, runs only when VET.md exists.
+
 QST-001  SPEC.md has unchecked open question (informational)
 
 RPT-001  REPORT.md present but failed to parse (Level::Error).
@@ -2430,7 +2595,7 @@ These are not v1 features. Each was considered and rejected.
 | Per-requirement delta markers (`[ADDED]`/`[MODIFIED]`/`[REMOVED]`) | SPEC.md frontmatter `status` + `supersedes` + `## Changelog` table cover lifecycle. |
 | Archive folder for completed specs | Frontmatter `status` is the indicator. Filesystem reorganization adds friction with no information gain. |
 | Task `writes` globs and scope enforcement | LLMs declare them wrong; enforcement was net-negative. |
-| Claim files / leases | No locking. `state="in-progress"` + session marker on the `<task>` element is enough. |
+| Claim files / leases for task pickup | No locking on the task-claim race: `state="in-progress"` + session marker on the `<task>` element is enough, and a git conflict resolves a double-claim. This exclusion is scoped to task claiming — it does *not* forbid append serialization. `speccy journal append` does take a per-file advisory lock around journal writes (SPEC-0055's append-serialization decision); that is internal to the append command, not a task-claim lease. |
 | TDD exception registry | Don't gate on TDD. Review's job. |
 | `critical` flag on requirements | All requirements equal. |
 | `origin` field | Brownfield context is the planner skill's responsibility, not a TOML field. |

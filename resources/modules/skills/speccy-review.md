@@ -87,14 +87,18 @@ truth.
 
 {% include "modules/skills/partials/review-fanout.md" %}
 
-Reviewers do not write to TASKS.md and do not write to
-`journal/T-NNN.md` directly; they return their verdict to this
-running session, which is the **sole writer to
-`.speccy/specs/NNNN-slug/journal/T-NNN.md`** for the review-induced
-journal appends and the **sole writer to TASKS.md** for the
-review-induced `state` transition. No `<review>` block is ever
-appended to the `<task>` body in TASKS.md — TSK-006 rejects
-journal elements there.
+Reviewers append their own `<review>` block via `speccy journal
+append` and return a thin verdict; they never edit TASKS.md or the
+journal file with file-editing tools. This running session does not
+transcribe `<review>` blocks. It drives the review-induced writes
+exclusively through the CLI verbs the partial above details:
+`speccy journal show` to verify the round's reviews are complete and
+to read back blockers, `speccy task transition` for the `in-review`
+→ `completed` / `pending` state flip, and `speccy journal append
+--block blockers` for the consolidated orchestrator-authored
+`<blockers>` block. No `<review>` or `<blockers>` block is ever
+appended to the `<task>` body in TASKS.md — TSK-006 rejects journal
+elements there.
 
 ### Exit
 

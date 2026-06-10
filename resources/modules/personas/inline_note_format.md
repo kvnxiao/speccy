@@ -1,6 +1,12 @@
-The verdict element in your final message:
+The review body you pipe on stdin to `speccy journal append`:
 
-    <review persona="{{ persona_name }}" verdict="pass" model="claude-opus-4-8[1m]/medium">
     <one-line verdict>.
     <optional file:line refs and details>.
-    </review>
+
+The CLI wraps this body in the `<review persona="{{ persona_name }}"
+verdict="..." model="..." date="..." round="...">` element and stamps
+the `date` and `round` attributes itself — your body is the inner text
+only, not the wrapping element. On a `blocking` verdict, make the body
+concrete (what was expected, what was observed, the file:line
+evidence) so the orchestrator can aggregate it into the consolidated
+`<blockers>` directive.

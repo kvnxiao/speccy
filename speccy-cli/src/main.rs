@@ -114,6 +114,16 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Task lifecycle commands (state transitions).
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
+    /// Per-task journal commands (validated block appends).
+    Journal {
+        #[command(subcommand)]
+        command: JournalCommand,
+    },
     /// Relocate a shipped/dropped/superseded spec into `.speccy/archive/`.
     Archive {
         /// `SPEC-NNNN` identifier of the spec to archive.
@@ -130,6 +140,143 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// `speccy task` subcommands.
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Rewrite one task's `state` attribute over the legal state graph.
+    ///
+    /// Resolves the selector with the same grammar `speccy check` uses,
+    /// enforces the closed six-edge legal graph (same-state targets are
+    /// idempotent no-ops), and splices the new state into TASKS.md
+    /// byte-surgically. An illegal edge or unresolved selector exits
+    /// non-zero with the file untouched.
+    Transition {
+        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Target state. Only the four legal task states are accepted; an
+        /// unknown value is rejected at argument-parse time.
+        #[arg(long, value_name = "STATE", value_parser = parse_task_state)]
+        to: speccy_core::parse::TaskState,
+    },
+}
+
+/// clap value parser for `--to`: accepts only the four on-disk task
+/// states, rejecting any other value at argument-parse time.
+fn parse_task_state(raw: &str) -> Result<speccy_core::parse::TaskState, String> {
+    speccy_core::parse::TaskState::parse(raw).ok_or_else(|| {
+        format!(
+            "invalid state `{raw}`; expected one of: pending, in-progress, in-review, completed",
+        )
+    })
+}
+
+/// `speccy journal` subcommands.
+#[derive(Subcommand)]
+enum JournalCommand {
+    /// Append one validated block to a journal.
+    ///
+    /// Reads the block body from stdin and appends exactly one block to the
+    /// journal the block type implies (DEC-004): a task block type
+    /// (`implementer` / `review` / `blockers`) routes a task selector to
+    /// `<spec-dir>/journal/<task-id>.md`; a vet block type (`drift-review` /
+    /// `holistic-fix` / `simplifier-scan` / `simplifier-apply` / `gate`)
+    /// routes a bare `SPEC-NNNN` selector to `<spec-dir>/journal/VET.md`. The
+    /// file is created with frontmatter on first append. The CLI stamps
+    /// `date`, derives `round`, manages vet invocation sections, and computes
+    /// a `gate` block's `tasks_hash`; there is no flag to override any of
+    /// these. Validation runs before any write, so a malformed block leaves
+    /// the journal untouched.
+    Append {
+        /// Selector: `T-NNN` / `SPEC-NNNN/T-NNN` for task blocks, or a bare
+        /// `SPEC-NNNN` for vet blocks.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Block type. One of `implementer`, `review`, `blockers`,
+        /// `drift-review`, `holistic-fix`, `simplifier-scan`,
+        /// `simplifier-apply`, `gate`; an unknown value is rejected at
+        /// argument-parse time.
+        #[arg(long, value_name = "TYPE", value_parser = parse_journal_block)]
+        block: speccy_cli::journal::JournalBlock,
+        /// Model identity (required for `implementer`/`review` and the
+        /// round-bearing vet blocks `drift-review`/`holistic-fix`).
+        #[arg(long, value_name = "STRING")]
+        model: Option<String>,
+        /// Reviewer persona (required for `review`).
+        #[arg(long, value_name = "NAME")]
+        persona: Option<String>,
+        /// Verdict (required for `review` and every vet block).
+        #[arg(long, value_name = "VALUE")]
+        verdict: Option<String>,
+    },
+    /// Show a journal's frontmatter and blocks, filtered.
+    ///
+    /// Parses the resolved journal (DEC-004: a task selector resolves
+    /// `<spec-dir>/journal/<task-id>.md`; a bare `SPEC-NNNN` resolves
+    /// `<spec-dir>/journal/VET.md`) and emits the blocks that survive the
+    /// three conjunctive filters. `--json` toggles representation, never
+    /// content. A missing journal exits non-zero.
+    Show {
+        /// Selector: `T-NNN` / `SPEC-NNNN/T-NNN` for a task journal, or a
+        /// bare `SPEC-NNNN` for VET.md.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Emit JSON envelope (`schema_version = 1`).
+        #[arg(long)]
+        json: bool,
+        /// Keep only the highest round (`latest`) or a specific round (`N`).
+        /// For VET.md the round dimension is scoped to the last invocation
+        /// section.
+        #[arg(long, value_name = "latest|N", value_parser = parse_round_filter)]
+        round: Option<speccy_cli::journal_show::RoundFilter>,
+        /// Keep only blocks whose verdict equals this value.
+        #[arg(long, value_name = "VALUE")]
+        verdict: Option<String>,
+        /// Keep only blocks of this element type (e.g. `review`, `gate`).
+        #[arg(long, value_name = "TYPE")]
+        block: Option<String>,
+    },
+}
+
+/// clap value parser for `--round`: accepts the literal `latest` or a
+/// positive integer, rejecting any other value at argument-parse time.
+fn parse_round_filter(raw: &str) -> Result<speccy_cli::journal_show::RoundFilter, String> {
+    use speccy_cli::journal_show::RoundFilter;
+    if raw == "latest" {
+        return Ok(RoundFilter::Latest);
+    }
+    match raw.parse::<u32>() {
+        Ok(n) if n >= 1 => Ok(RoundFilter::Exact(n)),
+        _ => Err(format!(
+            "invalid round `{raw}`; expected `latest` or a positive integer"
+        )),
+    }
+}
+
+/// clap value parser for `--block`: accepts the three task-journal block
+/// types and the five vet-journal block types, rejecting any other value at
+/// argument-parse time. The returned [`JournalBlock`] carries which journal
+/// the block targets (DEC-004).
+fn parse_journal_block(raw: &str) -> Result<speccy_cli::journal::JournalBlock, String> {
+    use speccy_cli::journal::JournalBlock;
+    use speccy_core::parse::TaskBlockKind;
+    use speccy_core::parse::VetBlockKind;
+    match raw {
+        "implementer" => Ok(JournalBlock::Task(TaskBlockKind::Implementer)),
+        "review" => Ok(JournalBlock::Task(TaskBlockKind::Review)),
+        "blockers" => Ok(JournalBlock::Task(TaskBlockKind::Blockers)),
+        "drift-review" => Ok(JournalBlock::Vet(VetBlockKind::DriftReview)),
+        "holistic-fix" => Ok(JournalBlock::Vet(VetBlockKind::HolisticFix)),
+        "simplifier-scan" => Ok(JournalBlock::Vet(VetBlockKind::SimplifierScan)),
+        "simplifier-apply" => Ok(JournalBlock::Vet(VetBlockKind::SimplifierApply)),
+        "gate" => Ok(JournalBlock::Vet(VetBlockKind::Gate)),
+        other => Err(format!(
+            "invalid block type `{other}`; expected one of: implementer, review, blockers, \
+             drift-review, holistic-fix, simplifier-scan, simplifier-apply, gate"
+        )),
+    }
 }
 
 fn main() -> ExitCode {
@@ -161,12 +308,136 @@ fn dispatch(command: Command) -> u8 {
         } => run_verify(include_archive, json),
         Command::Lock { spec_id } => run_lock(spec_id),
         Command::Vacancy { json } => run_vacancy(json),
+        Command::Task { command } => match command {
+            TaskCommand::Transition { selector, to } => run_transition(selector, to),
+        },
+        Command::Journal { command } => match command {
+            JournalCommand::Append {
+                selector,
+                block,
+                model,
+                persona,
+                verdict,
+            } => run_journal_append(selector, block, model, persona, verdict),
+            JournalCommand::Show {
+                selector,
+                json,
+                round,
+                verdict,
+                block,
+            } => run_journal_show(selector, json, round, verdict, block),
+        },
         Command::Archive {
             spec_id,
             reason,
             force,
             json,
         } => run_archive(spec_id, reason, force, json),
+    }
+}
+
+fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
+    use speccy_cli::transition::TransitionError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy task transition: {e}");
+            return 2;
+        }
+    };
+    let result = speccy_cli::transition::run(
+        speccy_cli::transition::TransitionArgs { selector, to },
+        &cwd,
+    );
+    match result {
+        Ok(()) => 0,
+        Err(TransitionError::TaskLookup(e)) => {
+            report_lookup_error("task transition", " --to <state>", &e)
+        }
+        Err(e) => {
+            eprintln!("speccy task transition: {e}");
+            1
+        }
+    }
+}
+
+fn run_journal_append(
+    selector: String,
+    block: speccy_cli::journal::JournalBlock,
+    model: Option<String>,
+    persona: Option<String>,
+    verdict: Option<String>,
+) -> u8 {
+    use speccy_cli::journal::JournalError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy journal append: {e}");
+            return 2;
+        }
+    };
+    let mut stdin = std::io::stdin().lock();
+    let result = speccy_cli::journal::run(
+        speccy_cli::journal::AppendArgs {
+            selector,
+            block,
+            model,
+            persona,
+            verdict,
+        },
+        &cwd,
+        &mut stdin,
+    );
+    match result {
+        Ok(()) => 0,
+        Err(JournalError::TaskLookup(e)) => {
+            report_lookup_error("journal append", " --block <type>", &e)
+        }
+        Err(e) => {
+            eprintln!("speccy journal append: {e}");
+            1
+        }
+    }
+}
+
+fn run_journal_show(
+    selector: String,
+    json: bool,
+    round: Option<speccy_cli::journal_show::RoundFilter>,
+    verdict: Option<String>,
+    block: Option<String>,
+) -> u8 {
+    use speccy_cli::journal_show::ShowError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy journal show: {e}");
+            return 2;
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::journal_show::run(
+        speccy_cli::journal_show::ShowArgs {
+            selector,
+            json,
+            round,
+            verdict,
+            block,
+        },
+        &cwd,
+        &mut stdout,
+    );
+    flush_best_effort(&mut stdout);
+    match result {
+        Ok(()) => 0,
+        Err(ShowError::TaskLookup(e)) => report_lookup_error("journal show", "", &e),
+        Err(e) => {
+            eprintln!("speccy journal show: {e}");
+            1
+        }
     }
 }
 
@@ -380,6 +651,47 @@ fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
             1
         }
     }
+}
+
+/// Render a task-selector `LookupError` to stderr for one of the
+/// selector-taking commands and return exit code 1.
+///
+/// `cmd` is the command name used as the message prefix and in the
+/// disambiguation examples (e.g. `"task transition"`). `disambig_suffix`
+/// is appended after the `SPEC-NNNN/T-NNN` selector in each
+/// disambiguation example line (e.g. `" --to <state>"`; `""` for
+/// commands that take no trailing argument).
+fn report_lookup_error(
+    cmd: &str,
+    disambig_suffix: &str,
+    err: &speccy_core::task_lookup::LookupError,
+) -> u8 {
+    use speccy_core::task_lookup::LookupError;
+    match err {
+        LookupError::InvalidFormat { arg } => {
+            eprintln!("speccy {cmd}: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+        }
+        LookupError::NotFound { task_ref } => {
+            eprintln!("speccy {cmd}: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+        }
+        LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        } => {
+            eprintln!(
+                "speccy {cmd}: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in candidate_specs {
+                eprintln!("  speccy {cmd} {spec_id}/{task_id}{disambig_suffix}");
+            }
+        }
+        other => eprintln!("speccy {cmd}: {other}"),
+    }
+    1
 }
 
 fn clamp_exit(code: i32) -> u8 {

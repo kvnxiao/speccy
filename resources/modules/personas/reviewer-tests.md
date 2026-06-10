@@ -10,8 +10,8 @@ and not whether some command exits zero. Speccy does not run
 project tests; comparing the diff and the tests against the
 `<behavior>` and `<scenario>` elements inside each covered
 `<requirement>` is your job. Mocks that pass without touching real code paths are your
-primary worry. You produce one inline review note; the
-orchestrating skill flips the task's `state` attribute.
+primary worry. You append one `<review>` block and return a thin
+verdict; the orchestrating skill flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
@@ -147,10 +147,16 @@ diff in front of you.
 
 ## Example
 
-    <review persona="tests" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
+Append the `<review>` block (body on stdin), then return the thin
+verdict:
+
+    speccy journal append SPEC-NNNN/T-NNN --block review \
+      --persona tests --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
     `signup.spec.ts:34` asserts `mockHash.toHaveBeenCalled()` but
     never invokes the real `hashPassword` function -- the test passes
     even if `hashPassword` is `(_) => "plaintext"`. Replace the mock
     with the real implementation and assert the persisted column is a
     hash.
-    </review>
+    EOF
+
+    <verdict persona="tests" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="signup.spec.ts:34 asserts a mock call, not real hashPassword behaviour." />

@@ -95,17 +95,27 @@ holistic loop:
 
 ### Single-writer rule
 
-This skill's session is the **only writer** to VET.md.
-Reviewer and implementer sub-agents never write to it — they return
-verdict blocks via their final message; this skill transcribes
-them. Sub-agents writing in parallel would race; single-writer
-prevents that.
+The **CLI's per-file append lock owns write serialization** for
+VET.md. Every block reaches the file through `speccy journal append`:
+the vet sub-agents (reviewer / implementer / simplifier) append their
+own `<drift-review>` / `<holistic-fix>` / `<simplifier-scan>` /
+`<simplifier-apply>` blocks, and this skill's session appends the
+terminal `<gate>` block. No actor edits VET.md with file-editing
+tools, and no actor hand-bootstraps the file — the lock serializes
+the parallel appends so there is no race, and the CLI stamps `date`,
+derives `round`, computes the gate's `tasks_hash`, and manages
+invocation sectioning. This skill's session is the sole author of the
+`<gate>` block and (when invoked under the orchestrator) of git
+commits, but it does not transcribe sub-agent blocks.
 
 ### File format
 
-YAML frontmatter created at first-ever invocation, then one
-`## Invocation N — <date>` section per skill invocation, with
-round blocks appended within the current section:
+The CLI creates VET.md with YAML frontmatter (`spec`,
+`generated_at`) on the first ever append and opens each
+`## Invocation N — <date>` section automatically when the file is
+absent or its last section is gate-terminated — the skill never
+writes the frontmatter or the invocation heading by hand. The
+resulting shape is:
 
 ```markdown
 ---
@@ -127,6 +137,10 @@ generated_at: 2026-05-21T22:00:00Z
 ...
 </drift-review>
 
+<gate verdict="passed" tasks_hash="..." date="...">
+...
+</gate>
+
 ## Invocation 2 — 2026-05-22T...
 
 <drift-review verdict="..." round="1" ...>
@@ -134,13 +148,13 @@ generated_at: 2026-05-21T22:00:00Z
 </drift-review>
 ```
 
-The `round` attribute is **per-invocation**. Round numbers reset to
-1 at the start of each invocation. `generated_at` in the frontmatter
-is the file-creation timestamp and is never rewritten.
+The `round` attribute is **per-invocation**; the CLI resets it to 1
+at the start of each invocation section. `generated_at` in the
+frontmatter is the file-creation timestamp and is never rewritten.
 
 If a prior invocation crashed mid-loop, its section is left as-is —
-the audit trail records what happened. The new invocation starts
-clean with its own section.
+the audit trail records what happened. The next append opens a fresh
+section.
 
 ## Loop
 

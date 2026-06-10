@@ -649,8 +649,11 @@ fn speccy_review_skill_prefers_native_subagents() {
 
     // Both rendered outputs must carry a spawn-prompt that references
     // the task selector (`SPEC-NNNN/T-NNN`) so the sub-agent knows
-    // which task to review. The spawn prompt asks the sub-agent to
-    // review the task directly without invoking a CLI command.
+    // which task to review. Per the T-007/T-008 self-append contract,
+    // the spawn prompt directs each reviewer to append its own
+    // `<review>` block via `speccy journal append --block review` and
+    // return a thin `<verdict persona=...>` element — not to return a
+    // full `<review>` block body.
     for (label, body) in [
         (
             "claude-code .claude/skills/speccy-review/SKILL.md",
@@ -664,9 +667,15 @@ fn speccy_review_skill_prefers_native_subagents() {
              placeholder in the spawn prompt; got:\n{body}",
         );
         assert!(
-            body.contains("<review persona="),
-            "rendered `{label}` must reference the `<review persona=` element in \
-             the spawn prompt so subagents know the expected output format; got:\n{body}",
+            body.contains("speccy journal append SPEC-NNNN/T-NNN --block review"),
+            "rendered `{label}` spawn prompt must direct the reviewer to self-append \
+             its `<review>` block via `speccy journal append ... --block review` \
+             (T-007/T-008 self-append contract); got:\n{body}",
+        );
+        assert!(
+            body.contains("<verdict persona="),
+            "rendered `{label}` spawn prompt must direct the reviewer to return a \
+             thin `<verdict persona=` element as its final message; got:\n{body}",
         );
     }
 }
@@ -1216,10 +1225,13 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
             "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
         );
         // The persona body pulls in the shared review-contract snippets
-        // via `{% include %}`; their expanded text must be present.
+        // via `{% include %}`; their expanded text must be present. The
+        // contract directs the persona to append its own `<review>`
+        // block via `speccy journal append` (SPEC-0055 REQ-008), so the
+        // expanded include carries that invocation.
         assert!(
-            body.contains("Your final message to the orchestrator"),
-            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract; got:\n{body}",
+            body.contains("speccy journal append") && body.contains("--block review"),
+            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract directing `speccy journal append ... --block review`; got:\n{body}",
         );
     }
 }

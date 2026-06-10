@@ -10,13 +10,24 @@ A real journal file lives at
 `TASKS.md`) and is parsed by `speccy verify` against the `JNL-*` lint
 family.
 
+## How the block is written
+
+The implementer does not hand-author this block or its file. It runs
+`speccy journal append SPEC-NNNN/T-NNN --block implementer --model
+<your-model>` with the seven-field body piped on stdin. The CLI
+creates the file with frontmatter on the first append, stamps the
+`date` and `generated_at` timestamps, derives the `round`, and emits
+the paired `<implementer>…</implementer>` element. The worked example
+below shows what the CLI produces — the agent supplies only the body
+text and `--model`.
+
 ---
 
 ## Full journal file shape
 
-The first journal entry on a task creates the file with YAML
-frontmatter declaring exactly three fields, then the `<implementer>`
-block beneath.
+The first append on a task creates the file with YAML frontmatter
+declaring exactly three fields (CLI-written), then the
+`<implementer>` block beneath.
 
 ```markdown
 ---
@@ -97,8 +108,8 @@ generated_at: 2026-05-21T19:45:00Z
 - Procedural compliance: This implementer entry lands directly in
   `journal/T-001.md` per the journal-file schema. No
   `<implementer-note>` block was written into TASKS.md (the parser
-  rejects that element). The TASKS.md `state="..."` attribute for
-  T-001 flips from `in-progress` to `in-review` as the final step
+  rejects that element). T-001's `state` flips from `in-progress`
+  to `in-review` via `speccy task transition` as the final step
   of this turn. No shipped skill
   bodies under `skills/` required edits during this task — the
   implementer prompt at HEAD already documents the canonical
@@ -109,25 +120,26 @@ generated_at: 2026-05-21T19:45:00Z
 
 ---
 
-## Required attributes on `<implementer>`
+## Attributes on `<implementer>`
 
-All three are required; there are no optional attributes:
+All three are present on every block. Two are CLI-stamped; you supply
+only `--model`.
 
-- `date` — full ISO8601 date-time with seconds and timezone
-  designator (e.g. `2026-05-21T19:45:00Z` or
-  `2026-05-21T19:45:00+00:00`).
-- `model` — the model identity that ran the implementer turn. A
-  slash-suffix encodes effort or reasoning-intensity when the host
-  harness exposes that knob (e.g. `claude-opus-4-8[1m]/low`,
-  `claude-opus-4-8[1m]/medium`). Hosts without an effort knob omit
-  the suffix (e.g. `model="claude-opus-4-8"`). The parser validates
-  `model` is non-empty but does not enforce suffix membership.
-- `round` — monotonic positive integer starting at 1. Increment by
-  exactly 1 on each post-blocker retry attempt. The first
-  implementer turn on a task is `round="1"`; if a review round
-  blocks and the task flips back to `pending`, the next implementer
-  attempt writes `round="2"`, and so on. Do not skip values; do not
-  reset.
+- `date` — **CLI-stamped.** Full ISO8601 date-time with seconds and
+  timezone designator (e.g. `2026-05-21T19:45:00Z`), set to UTC now
+  at append time. Do not supply or compute it; there is no flag to
+  override it.
+- `model` — the model identity that ran the implementer turn, passed
+  as `--model` to `journal append`. A slash-suffix encodes effort or
+  reasoning-intensity when the host harness exposes that knob (e.g.
+  `claude-opus-4-8[1m]/low`, `claude-opus-4-8[1m]/medium`). Hosts
+  without an effort knob omit the suffix (e.g.
+  `model="claude-opus-4-8"`). The CLI validates `--model` is
+  non-empty but does not enforce suffix membership.
+- `round` — **CLI-derived.** Monotonic positive integer starting at
+  1; the CLI computes `max existing round + 1` (or `1` on a fresh
+  file) so a round-1 turn writes `round="1"` and each post-blocker
+  retry increments by exactly 1. Do not supply or compute it.
 
 ## Seven-field handoff template
 
@@ -175,8 +187,9 @@ this order, each as a bullet line prefixed by `- <Field>:`.
 
 ## Subsequent rounds
 
-On retry after a blocking review, append a new `<implementer>`
-block after the existing journal contents — do not modify earlier
-blocks. The new block carries the next monotonic `round`. The
-`generated_at` in frontmatter stays at its original file-creation
-timestamp; do not rewrite it.
+On retry after a blocking review, run `journal append` again — the
+CLI appends the new `<implementer>` block after the existing journal
+contents (it does not modify earlier blocks), stamps the next
+monotonic `round`, and leaves the original `generated_at` frontmatter
+timestamp untouched. The agent supplies only the new body and
+`--model`.

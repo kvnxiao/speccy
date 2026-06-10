@@ -1,44 +1,67 @@
-Your final message to the orchestrator **must** be a single
-`<review persona="{{ persona_name }}" verdict="..." model="...">…</review>`
-element block — structured enough for the orchestrator to parse without
-ambiguity. On a `verdict="pass"` result, a one-line summary
-suffices. On a `verdict="blocking"` result, include the blocker
-body text you want recorded against the task so the orchestrator
-can aggregate it into the consolidated `<blockers>` element it
-appends to `.speccy/specs/NNNN-slug/journal/T-NNN.md`.
+You write your own `<review>` block to the per-task journal via
+`speccy journal append`, then return a **thin verdict** to the
+orchestrator. You do **not** return a full `<review>` block body as
+your final message, and you do **not** edit the journal file with
+file-editing tools.
 
-## The `model` attribute is required
+## Step 1 — append your `<review>` block via the CLI
 
-Every returned `<review>` element **must** carry a `model`
-attribute identifying the reviewer subagent that produced the
-verdict. This is non-optional. Reviewer personas can pin different
-model tiers, so the orchestrator cannot infer per-reviewer model
-identity from skill-pack identity alone — it has to read the value
-off your reply.
+The orchestrator's prompt gives you the task selector
+(`SPEC-NNNN/T-NNN`). Pipe your review body on stdin to:
 
-Encode reasoning effort (when your host harness exposes an effort
-knob) as a slash-suffix on the model string itself rather than as a
-separate attribute. The slash-suffix is a convention, not a
-parser-enforced schema; the orchestrator copies whatever string you
-put in `model` verbatim into the per-task journal entry.
+```bash
+speccy journal append SPEC-NNNN/T-NNN --block review \
+  --persona {{ persona_name }} --verdict <pass|blocking> --model <your-model> <<'EOF'
+<your review body — see "Review body" below>
+EOF
+```
+
+The CLI is the sole authority for the block's `date` and `round`
+attributes — it stamps `date` (UTC now) and derives `round` from the
+journal's current implementer round. **Do not compute, supply, or
+mention `date` or `round`** — there is no flag to override them, and
+the append is rejected if no `<implementer>` block exists yet for the
+round you are reviewing. Validation runs before any write; a malformed
+body leaves the journal byte-identical. The CLI's per-file lock
+serializes concurrent appends, so every reviewer can append in
+parallel without interleaving.
+
+## The `--model` value is required
+
+The `journal append` invocation requires `--model` for a `review`
+block, identifying the reviewer subagent that produced the verdict.
+Reviewer personas can pin different model tiers, so the value cannot
+be inferred from skill-pack identity — you supply it. Encode reasoning
+effort (when your host harness exposes an effort knob) as a
+slash-suffix on the model string itself; the slash-suffix is a
+convention, not a parser-enforced schema.
 
 {% include "modules/references/identity-sourcing.md" %}
 
-## Orchestrator-side transcription rule
+## Step 2 — return a thin verdict
 
-When the orchestrator transcribes your returned `<review>` block
-into `.speccy/specs/NNNN-slug/journal/T-NNN.md`, it copies the
-`model` attribute **verbatim** from your reply into the journal
-entry. The orchestrator does not infer a model value from the
-skill-pack identity, the persona name, or any other source.
+After the append succeeds, your final message to the orchestrator
+**must** be a single self-closing `<verdict>` element — the one
+parseable shape every persona returns, so the orchestrator parses all
+returns uniformly:
 
-## No-substitute clause
+```
+<verdict persona="{{ persona_name }}" verdict="pass|blocking" model="<your-model>" rationale="<one line>" />
+```
 
-If a reviewer subagent returns a `<review>` element without a
-`model` attribute, the orchestrator surfaces the contract
-violation (e.g. by halting the review fan-out and reporting the
-non-conforming persona) rather than inventing a model value to
-transcribe into the journal. Missing `model` is a hard error on
-the return contract — the orchestrator will not paper over it.
+- `persona` — your persona name (`{{ persona_name }}`).
+- `verdict` — `pass` or `blocking`, matching the `--verdict` you
+  appended.
+- `model` — the same model string you passed to `--model`, verbatim.
+- `rationale` — a single line. On `pass`, a one-line summary of what
+  you checked. On `blocking`, a one-line statement of the blocker —
+  the full blocker detail lives in the `<review>` body you already
+  appended, which the orchestrator reads back via `speccy journal show
+  --verdict blocking` when consolidating `<blockers>`.
+
+Do not restate the full review body in the thin verdict — the body is
+already in the journal. The thin verdict exists so the orchestrator
+can narrate progress and decide whether to consolidate blockers
+without re-reading every block.
 
 {% include "modules/personas/no_tasks_md_writes.md" %}

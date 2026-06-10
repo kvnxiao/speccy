@@ -18,6 +18,10 @@ clap = { version = "4", features = ["derive"] }
 comrak = { version = "0.52", default-features = false }
 const-hex = "1.19"
 fs-err = "3.3"
+# Advisory, per-file, same-host file lock serializing journal appends
+# (SPEC-0055 REQ-005 / DEC-007). MIT OR Apache-2.0; clears `cargo deny check`.
+# The `sync` feature is the blocking std-File API; async runtimes are off.
+fs4 = { version = "1.1", default-features = false, features = ["sync"] }
 include_dir = "0.7"
 jiff = { version = "0.2", default-features = false, features = ["std", "serde"] }
 minijinja = "2"

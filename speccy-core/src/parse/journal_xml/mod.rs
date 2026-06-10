@@ -18,6 +18,8 @@
 //! (e.g. `claude-opus-4.8[1m]/low`) — the slash-suffix is not
 //! parser-validated.
 
+pub mod serialize;
+
 use crate::error::ParseError;
 use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;

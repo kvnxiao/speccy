@@ -106,6 +106,14 @@ impl TaskState {
         }
     }
 
+    /// Parse a state from its on-disk string form.
+    ///
+    /// Returns `None` for any string outside [`ALLOWED_TASK_STATES`].
+    #[must_use = "the parsed state must be inspected"]
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::from_str(s)
+    }
+
     fn from_str(s: &str) -> Option<Self> {
         match s {
             "pending" => Some(TaskState::Pending),
@@ -115,6 +123,128 @@ impl TaskState {
             _ => None,
         }
     }
+}
+
+/// The closed set of legal state-graph edges (REQ-002).
+///
+/// Each pair is `(from, to)`. Same-state edges are not listed here; they
+/// are handled separately as idempotent no-ops (DEC-003).
+pub const LEGAL_TRANSITION_EDGES: &[(TaskState, TaskState)] = &[
+    (TaskState::Pending, TaskState::InProgress),
+    (TaskState::InProgress, TaskState::InReview),
+    (TaskState::InReview, TaskState::Completed),
+    (TaskState::InReview, TaskState::Pending),
+    (TaskState::InProgress, TaskState::Pending),
+    (TaskState::Completed, TaskState::Pending),
+];
+
+/// Outcome of classifying a requested `(from, to)` transition against the
+/// legal state graph (REQ-002, DEC-003).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitionKind {
+    /// `to` differs from `from` and the edge is in [`LEGAL_TRANSITION_EDGES`].
+    /// The caller should splice the new state and write.
+    Legal,
+    /// `to` equals `from`: an idempotent no-op that exits 0 and leaves the
+    /// file byte-identical (DEC-003).
+    NoOp,
+    /// `to` differs from `from` and the edge is not in the legal graph.
+    /// The caller should refuse and exit non-zero.
+    Illegal,
+}
+
+/// Classify a requested `from -> to` transition against the legal state
+/// graph (REQ-002).
+///
+/// A target equal to the current state is a [`TransitionKind::NoOp`]
+/// (DEC-003). Otherwise the edge is [`TransitionKind::Legal`] iff it
+/// appears in [`LEGAL_TRANSITION_EDGES`]; every other edge is
+/// [`TransitionKind::Illegal`].
+#[must_use = "the classification decides whether to write or refuse"]
+pub fn classify_transition(from: TaskState, to: TaskState) -> TransitionKind {
+    if from == to {
+        return TransitionKind::NoOp;
+    }
+    if LEGAL_TRANSITION_EDGES.contains(&(from, to)) {
+        TransitionKind::Legal
+    } else {
+        TransitionKind::Illegal
+    }
+}
+
+/// Failure mode of [`splice_task_state`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum SpliceError {
+    /// The task's open-tag span did not contain a `state="..."` attribute,
+    /// so there was nothing to rewrite. A well-formed parsed [`Task`]
+    /// always carries one, so this signals corruption between parse and
+    /// splice.
+    #[error("task `{task_id}` open tag carries no `state` attribute to rewrite")]
+    NoStateAttribute {
+        /// Id of the task whose open tag lacked a `state` attribute.
+        task_id: String,
+    },
+}
+
+/// Byte-surgically rewrite one task's `state` attribute value in `raw`.
+///
+/// `raw` is the verbatim TASKS.md source; `task` is the parsed [`Task`]
+/// whose [`Task::span`] locates its `<task>` open tag. Only the bytes of
+/// the `state="..."` attribute *value* are replaced; every other byte of
+/// `raw` — frontmatter, bodies, whitespace, and line endings — is
+/// preserved verbatim. This does **not** round-trip through [`render`],
+/// which reformats and strips nested blocks.
+///
+/// # Errors
+///
+/// Returns [`SpliceError::NoStateAttribute`] when the open-tag span does
+/// not contain a `state="..."` attribute (a corrupt parse).
+pub fn splice_task_state(
+    raw: &str,
+    task: &Task,
+    new_state: TaskState,
+) -> Result<String, SpliceError> {
+    // The open tag is the byte range [span.start, span.end). Locate the
+    // `state="..."` attribute value's byte range *within* that range so a
+    // `state=...` substring appearing in the body (after span.end) can
+    // never match.
+    let open_tag = raw.get(task.span.start..task.span.end).unwrap_or("");
+    let (val_start_in_tag, val_end_in_tag) =
+        state_value_range(open_tag).ok_or_else(|| SpliceError::NoStateAttribute {
+            task_id: task.id.clone(),
+        })?;
+
+    let val_start = task.span.start.saturating_add(val_start_in_tag);
+    let val_end = task.span.start.saturating_add(val_end_in_tag);
+
+    let mut out = String::with_capacity(raw.len());
+    out.push_str(raw.get(..val_start).unwrap_or(""));
+    out.push_str(new_state.as_str());
+    out.push_str(raw.get(val_end..).unwrap_or(""));
+    Ok(out)
+}
+
+/// Locate the byte range of the `state="..."` attribute *value* (the
+/// bytes between the quotes, excluding the quotes) within an open-tag
+/// slice. Returns `(value_start, value_end)` offsets relative to
+/// `open_tag`, or `None` when no `state="..."` attribute is present.
+fn state_value_range(open_tag: &str) -> Option<(usize, usize)> {
+    let caps = state_attr_regex().captures(open_tag)?;
+    let value = caps.get(1)?;
+    Some((value.start(), value.end()))
+}
+
+#[expect(
+    clippy::unwrap_used,
+    reason = "compile-time literal regex; covered by unit tests"
+)]
+fn state_attr_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    // Match `state`, optional whitespace, `=`, optional whitespace, a
+    // double quote, then capture the value bytes up to the closing quote.
+    // Tolerates unusual-but-legal attribute spacing inside the open tag.
+    CELL.get_or_init(|| Regex::new(r#"state\s*=\s*"([^"]*)""#).unwrap())
 }
 
 /// One task block (`<task>`).
@@ -818,7 +948,10 @@ mod tests {
     use super::ALLOWED_TASK_STATES;
     use super::TASKS_ELEMENT_NAMES;
     use super::TaskState;
+    use super::TransitionKind;
+    use super::classify_transition;
     use super::parse;
+    use super::splice_task_state;
     use crate::error::ParseError;
     use crate::parse::xml_scanner::HTML5_ELEMENT_NAMES;
     use camino::Utf8Path;
@@ -1015,5 +1148,137 @@ mod tests {
                 "TASKS element `{name}` collides with HTML5 element name set",
             );
         }
+    }
+
+    /// CHK-001: a fixture with a multi-line body, unusual-but-legal
+    /// attribute spacing, and CRLF line endings rewrites byte-surgically.
+    /// The result differs from the source only in the state value's bytes.
+    #[test]
+    fn splice_rewrites_only_the_state_value_crlf_multiline_unusual_spacing() {
+        // Build a CRLF source with unusual-but-legal spacing around the
+        // `state` attribute (`state  =  "pending"`). Two tasks so the
+        // splice must hit exactly the first task's attribute.
+        let src = concat!(
+            "---\r\n",
+            "spec: SPEC-0042\r\n",
+            "generated_at: 2026-06-09T18:00:00Z\r\n",
+            "---\r\n",
+            "\r\n",
+            "# Tasks: SPEC-0042\r\n",
+            "\r\n",
+            "<task id=\"T-001\"   state=\"pending\"   covers=\"REQ-001\">\r\n",
+            "First line of body.\r\n",
+            "\r\n",
+            "Second line mentioning state=\"completed\" inside prose.\r\n",
+            "\r\n",
+            "<task-scenarios>\r\n",
+            "Given X, when Y, then Z (T-001).\r\n",
+            "</task-scenarios>\r\n",
+            "</task>\r\n",
+            "\r\n",
+            "<task id=\"T-002\" state=\"pending\" covers=\"REQ-002\">\r\n",
+            "Body two.\r\n",
+            "\r\n",
+            "<task-scenarios>\r\n",
+            "Given A, when B, then C (T-002).\r\n",
+            "</task-scenarios>\r\n",
+            "</task>\r\n",
+        );
+        let doc = parse(src, path()).expect("CRLF fixture should parse");
+        let t1 = doc.tasks.first().expect("two tasks parsed");
+        assert_eq!(t1.state, TaskState::Pending);
+
+        let rewritten = splice_task_state(src, t1, TaskState::InProgress)
+            .expect("splice should locate the state attribute");
+
+        // The only byte difference is `pending` -> `in-progress` at the
+        // first task's state value. Reconstruct the expectation by
+        // replacing exactly that one occurrence in the open-tag span.
+        let expected = src.replacen(
+            "id=\"T-001\"   state=\"pending\"",
+            "id=\"T-001\"   state=\"in-progress\"",
+            1,
+        );
+        assert_eq!(rewritten, expected);
+
+        // The prose-embedded `state="completed"` and the second task's
+        // `state="pending"` are untouched.
+        assert!(rewritten.contains("state=\"completed\" inside prose"));
+        assert!(
+            rewritten.contains("<task id=\"T-002\" state=\"pending\""),
+            "second task's state must be untouched",
+        );
+        // Re-parsing confirms the surgical edit took on the right task.
+        let reparsed = parse(&rewritten, path()).expect("rewritten source re-parses");
+        assert_eq!(
+            reparsed.tasks.first().expect("task one").state,
+            TaskState::InProgress,
+        );
+        assert_eq!(
+            reparsed.tasks.get(1).expect("task two").state,
+            TaskState::Pending,
+        );
+    }
+
+    /// CHK-003: every ordered state pair (16 combinations). Exactly the
+    /// six legal edges plus the four same-state no-ops succeed; the other
+    /// six are illegal.
+    #[test]
+    fn classify_covers_all_sixteen_ordered_pairs() {
+        let states = [
+            TaskState::Pending,
+            TaskState::InProgress,
+            TaskState::InReview,
+            TaskState::Completed,
+        ];
+        let legal: &[(TaskState, TaskState)] = &[
+            (TaskState::Pending, TaskState::InProgress),
+            (TaskState::InProgress, TaskState::InReview),
+            (TaskState::InReview, TaskState::Completed),
+            (TaskState::InReview, TaskState::Pending),
+            (TaskState::InProgress, TaskState::Pending),
+            (TaskState::Completed, TaskState::Pending),
+        ];
+
+        let mut legal_count = 0;
+        let mut noop_count = 0;
+        let mut illegal_count = 0;
+        for from in states {
+            for to in states {
+                match classify_transition(from, to) {
+                    TransitionKind::NoOp => {
+                        assert_eq!(from, to, "no-op only when from == to");
+                        noop_count += 1;
+                    }
+                    TransitionKind::Legal => {
+                        assert!(
+                            legal.contains(&(from, to)),
+                            "{from:?} -> {to:?} classified Legal but is not a legal edge",
+                        );
+                        legal_count += 1;
+                    }
+                    TransitionKind::Illegal => {
+                        assert_ne!(from, to);
+                        assert!(
+                            !legal.contains(&(from, to)),
+                            "{from:?} -> {to:?} classified Illegal but is a legal edge",
+                        );
+                        illegal_count += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(legal_count, 6, "exactly six legal edges");
+        assert_eq!(noop_count, 4, "exactly four same-state no-ops");
+        assert_eq!(illegal_count, 6, "the remaining six are illegal");
+    }
+
+    #[test]
+    fn state_parse_rejects_unknown_and_accepts_known() {
+        for s in ALLOWED_TASK_STATES {
+            assert!(TaskState::parse(s).is_some(), "`{s}` should parse");
+        }
+        assert!(TaskState::parse("shipped").is_none());
+        assert!(TaskState::parse("").is_none());
     }
 }
