@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0055
-spec_hash_at_generation: 620dd637497c423c47984775d4316e8bd1b851737fa70cffc0a4020b2206bc13
-generated_at: 2026-06-09T20:54:44Z
+spec_hash_at_generation: a11469f03bab48c58f7daa764a74f21ef2ddcafd5e744f17c11074cc650e30b9
+generated_at: 2026-06-10T01:06:00Z
 ---
 # Tasks: SPEC-0055 Mechanical lifecycle write commands — task state transitions, validated journal appends, and direct subagent journal writes
 
@@ -194,7 +194,7 @@ Suggested files: `speccy-core/src/parse/vet_xml/mod.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Route `journal append` vet block types to VET.md with mechanical invocation/round/tasks_hash management
 
 Extend `journal append` to accept the vet block types
@@ -219,6 +219,16 @@ with no preceding `drift-review` in the open section exits non-zero
 with VET.md untouched. The per-file lock and validation-before-write
 discipline from T-002 apply to the VET journal too. Confirm a produced
 gate block is accepted by `speccy next`'s freshness check.
+
+Per DEC-008, derive invocation/round state from the parser, not a
+parallel text scan: add an in-flight parse mode to the `vet_xml`
+parser (relaxing only the last section's terminal-gate rule so the
+open mid-vet-run section parses, the block grammar otherwise frozen),
+derive the append plan from that typed parse of the existing file
+(as the per-task path derives `round` from `parse_journal_xml`), and
+re-parse the would-be-new file through the parser before any write so
+the parser is the single authority for both derivation and body
+inertness — no hand-rolled tolerant scan or body-markup guard.
 
 <task-scenarios>
 Given a scratch spec with all tasks completed and no VET.md,

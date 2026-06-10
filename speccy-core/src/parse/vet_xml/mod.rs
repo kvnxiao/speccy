@@ -28,6 +28,8 @@
 //! read path for the freshness check; both are expected to agree on the
 //! final passing gate.
 
+pub mod serialize;
+
 use crate::error::ParseError;
 use crate::error::ParseResult;
 use crate::parse::frontmatter::Split;
@@ -250,7 +252,33 @@ struct HeadingMatch {
     date: String,
 }
 
-/// Parse a VET.md source into a [`VetDoc`].
+/// Whether the document's *last* invocation section is required to end in
+/// a terminal `<gate>`, or may be left open.
+///
+/// The two parse entry points ([`parse`] and [`parse_in_flight`]) differ
+/// only by this flag (DEC-008): strict parsing rejects an un-gated last
+/// section (the complete-file grammar `speccy verify` / `journal show` /
+/// the freshness check rely on), while in-flight parsing tolerates it (the
+/// shape that exists mid-vet-run, after a `drift-review` and before its
+/// `gate`). Every other rule — frontmatter, tag/heading scanning, block
+/// assembly, round sequencing, and the gate rules for *non-last* sections —
+/// is identical between the two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LastSection {
+    /// The last section must end in a terminal `<gate>` (strict grammar).
+    MustBeGated,
+    /// The last section may lack a `<gate>` (in-flight derivation).
+    MayBeOpen,
+}
+
+/// Parse a *complete* VET.md source into a [`VetDoc`] under the strict
+/// grammar: every invocation section, including the last, must end in a
+/// terminal `<gate>`.
+///
+/// This is the authority for complete files — `speccy verify`, `journal
+/// show`, and `speccy next`'s freshness check. For deriving append state
+/// from an in-flight file whose last section is still open, use
+/// [`parse_in_flight`].
 ///
 /// # Errors
 ///
@@ -261,6 +289,41 @@ struct HeadingMatch {
 /// a section's structural rules are violated (no terminal `gate`, a
 /// non-terminal `gate`, or a second `gate`).
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
+    parse_with_mode(source, path, LastSection::MustBeGated)
+}
+
+/// Parse an *in-flight* VET.md source into a [`VetDoc`], tolerating an
+/// open (un-gated) last invocation section (DEC-008).
+///
+/// Identical to [`parse`] in every respect except that the last section is
+/// allowed to lack a terminal `<gate>` — the shape a VET.md has mid-vet-run
+/// after a `drift-review` is appended but before its `gate`. Used by
+/// `journal append`'s vet path to derive invocation/round state from the
+/// existing file and to validate the would-be-new file before writing, so
+/// the parser is the single authority over both derivation and what may
+/// land on disk (no separate tolerant scan or body-markup guard).
+///
+/// A *complete* (fully gated) file parses identically under this function
+/// and [`parse`]: the relaxation only ever exempts an un-gated last
+/// section, so a gated last section is validated in full.
+///
+/// # Errors
+///
+/// Returns the same [`ParseError`]s as [`parse`], except that an un-gated
+/// *last* section is accepted. An un-gated *non-last* section, a
+/// non-terminal or duplicate `gate` in any section, and every other
+/// grammar violation are still rejected.
+pub fn parse_in_flight(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
+    parse_with_mode(source, path, LastSection::MayBeOpen)
+}
+
+/// Shared parse pipeline behind [`parse`] and [`parse_in_flight`]; see
+/// [`LastSection`] for the single behavioural difference.
+fn parse_with_mode(
+    source: &str,
+    path: &Utf8Path,
+    last_section: LastSection,
+) -> ParseResult<VetDoc> {
     let split = split_frontmatter(source, path)?;
     let (yaml_raw, body, body_offset) = match split {
         Split::Some { yaml, body } => {
@@ -318,7 +381,7 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
     // and not inside a vet block body (`assembled.body_ranges`). This mirrors the
     // fence-awareness `reject_unknown_block_tags` already has.
     let headings = collect_invocation_headings(source, &code_fence_ranges, &assembled.body_ranges);
-    let invocations = partition_into_sections(&headings, assembled.blocks, path)?;
+    let invocations = partition_into_sections(&headings, assembled.blocks, path, last_section)?;
 
     Ok(VetDoc {
         spec,
@@ -647,6 +710,7 @@ fn partition_into_sections(
     headings: &[HeadingMatch],
     blocks: Vec<VetBlock>,
     path: &Utf8Path,
+    last_section: LastSection,
 ) -> ParseResult<Vec<Invocation>> {
     let Some(first) = headings.first() else {
         return Err(Box::new(ParseError::MalformedMarker {
@@ -690,13 +754,23 @@ fn partition_into_sections(
         }
     }
 
-    for inv in &invocations {
-        validate_section(inv, path)?;
+    let last_idx = invocations.len().saturating_sub(1);
+    for (idx, inv) in invocations.iter().enumerate() {
+        // Only the final section may be left open, and only in in-flight mode.
+        let allow_open = idx == last_idx && matches!(last_section, LastSection::MayBeOpen);
+        validate_section(inv, path, allow_open)?;
     }
     Ok(invocations)
 }
 
-fn validate_section(inv: &Invocation, path: &Utf8Path) -> ParseResult<()> {
+/// Validate one section's round sequence and gate placement.
+///
+/// `allow_open` exempts a section with *no* `<gate>` from the
+/// "no terminal gate" error — set only for the last section in in-flight
+/// mode (DEC-008). A section that *does* carry a gate is validated in full
+/// regardless (the gate must be terminal and unique), so the relaxation
+/// never weakens the gate rules for a closed section.
+fn validate_section(inv: &Invocation, path: &Utf8Path, allow_open: bool) -> ParseResult<()> {
     // Round sequence: the rounds carried by drift-review / holistic-fix
     // blocks reset per section, start at 1, and advance monotonically
     // with no skips.
@@ -710,6 +784,8 @@ fn validate_section(inv: &Invocation, path: &Utf8Path) -> ParseResult<()> {
         .filter_map(|(i, b)| matches!(b, VetBlock::Gate { .. }).then_some(i))
         .collect();
     match gate_positions.as_slice() {
+        // An open last section (in-flight derivation) carries no gate yet.
+        [] if allow_open => Ok(()),
         [] => Err(Box::new(ParseError::MalformedMarker {
             path: path.to_path_buf(),
             offset: section_offset(inv),
@@ -1275,6 +1351,101 @@ mod tests {
         assert!(
             matches!(err.as_ref(), ParseError::InvalidJournalAttribute { attribute, .. } if attribute == "date"),
             "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn in_flight_accepts_open_trailing_section() {
+        // The mid-vet-run shape: one section with a drift-review and no gate
+        // yet. Strict parse rejects it; in-flight parse accepts it (DEC-008),
+        // so `journal append` can derive state from it.
+        let src = make(indoc! {r#"
+            ## Invocation 1 — 2026-05-21T18:00:00Z
+
+            <drift-review verdict="blocking" round="1" date="2026-05-21T18:00:00Z" model="m">
+            drift found, no gate yet
+            </drift-review>
+        "#});
+        let strict = parse(&src, path()).expect_err("strict must reject an open last section");
+        assert!(
+            matches!(strict.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("no terminal `<gate>`")),
+            "got {strict:?}"
+        );
+        let doc = parse_in_flight(&src, path()).expect("in-flight must accept an open section");
+        assert_eq!(doc.invocations.len(), 1);
+        let inv = doc.invocations.first().expect("one invocation");
+        assert_eq!(inv.number, 1);
+        assert_eq!(inv.blocks.len(), 1);
+        assert!(matches!(
+            inv.blocks.first(),
+            Some(VetBlock::DriftReview { round, .. }) if *round == 1
+        ));
+    }
+
+    #[test]
+    fn in_flight_matches_strict_on_a_complete_file() {
+        // A fully gate-terminated file parses identically under both entry
+        // points: the in-flight relaxation only ever exempts an *un-gated*
+        // last section, so a gated one is validated in full.
+        let src = full_grammar_fixture();
+        let strict = parse(&src, path()).expect("strict parses a complete file");
+        let in_flight = parse_in_flight(&src, path()).expect("in-flight parses a complete file");
+        assert_eq!(
+            strict, in_flight,
+            "a complete file parses identically under parse and parse_in_flight"
+        );
+    }
+
+    #[test]
+    fn in_flight_rejects_open_non_last_section() {
+        // Only the LAST section may be open. An un-gated *earlier* section is
+        // still rejected even in in-flight mode — a real VET.md never has an
+        // open section followed by a later one.
+        let src = make(indoc! {r#"
+            ## Invocation 1 — 2026-05-21T18:00:00Z
+
+            <drift-review verdict="pass" round="1" date="2026-05-21T18:00:00Z" model="m">
+            first section never gated
+            </drift-review>
+
+            ## Invocation 2 — 2026-05-21T19:00:00Z
+
+            <drift-review verdict="pass" round="1" date="2026-05-21T19:00:00Z" model="m">
+            open second section
+            </drift-review>
+        "#});
+        let err = parse_in_flight(&src, path()).expect_err("un-gated non-last section must fail");
+        assert!(
+            matches!(err.as_ref(), ParseError::MalformedMarker { reason, .. } if reason.contains("invocation 1") && reason.contains("no terminal `<gate>`")),
+            "got {err:?}"
+        );
+    }
+
+    #[test]
+    fn line_isolated_vet_tag_in_body_is_rejected() {
+        // A body line that *is* a vet open tag is read as a nested block by the
+        // shared scanner (vet blocks must not nest), so the file is rejected by
+        // both parse and parse_in_flight. This is the body-inertness invariant
+        // the append path's write-time round-trip relies on (DEC-008): a body
+        // smuggling a structural line cannot produce a parseable file, so no
+        // separate body-markup guard is needed.
+        let src = make(indoc! {r#"
+            ## Invocation 1 — 2026-05-21T18:00:00Z
+
+            <drift-review verdict="pass" round="1" date="2026-05-21T18:00:00Z" model="m">
+            intro
+            <gate verdict="passed">
+            tail
+            </drift-review>
+        "#});
+        let strict = parse(&src, path()).expect_err("nested vet open tag in body must fail");
+        assert!(
+            matches!(strict.as_ref(), ParseError::MalformedMarker { .. }),
+            "got {strict:?}"
+        );
+        assert!(
+            parse_in_flight(&src, path()).is_err(),
+            "in-flight parse must reject the same body-smuggled tag"
         );
     }
 }

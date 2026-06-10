@@ -713,6 +713,37 @@ exclusion. Block bodies arrive via stdin to avoid shell-quoting
 multi-line markdown through argv.
 </decision>
 
+<decision id="DEC-008">
+The VET.md parser is the single authority for `journal append`'s vet
+path — there is no parallel hand-rolled text scan or body-markup
+guard. The parser exposes two entry points over one shared pipeline
+(frontmatter split, `xml_scanner` tag scan, block assembly, body-range
+and heading exclusion, per-section round-sequence validation): the
+strict `parse` requires every invocation section to end in a terminal
+`<gate>` — the complete-file grammar `speccy verify`, `journal show`,
+and `speccy next`'s freshness check rely on, behaviourally unchanged —
+and an in-flight `parse_in_flight` that relaxes only the terminal-gate
+rule for the *last* section, so the open trailing section that exists
+mid-vet-run (after a `drift-review`, before its `gate`) parses. The
+append path derives invocation/round state from the typed in-flight
+parse of the existing file (mirroring the per-task journal path, which
+already derives `round` from a typed `parse`), and validates the
+would-be-new file by re-parsing it through the same parser before any
+byte is written: any body that would make the produced file
+unparseable is refused at write time, with VET.md left byte-identical
+or still absent.
+
+Refines DEC-005: the block grammar stays frozen and byte-for-byte
+unchanged — this adds a parse *mode*, not a grammar change, so it does
+not reopen the frozen-grammar contract. Rationale: the original
+implementation derived state from a separate tolerant text scan plus a
+body-inertness guard that each re-implemented the parser's
+tag/heading/body-range definitions; the two readers diverged from the
+parser needle by needle (a tag-boundary or whitespace class one
+honoured and the other missed). Collapsing to one parser removes the
+divergence class by construction.
+</decision>
+
 ## Notes
 
 Rejected framings from the brainstorm session:
@@ -744,4 +775,5 @@ explicitly out of scope here.
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-09 | claude-fable-5[1m] | Initial SPEC: mechanical lifecycle write commands. REQ-001/002: `speccy task transition` byte-surgical state rewrite over a closed six-edge legal graph with same-state no-ops. REQ-003: validated `journal append` for per-task journals with CLI-stamped date/round and frontmatter-on-create. REQ-004: VET.md grammar frozen into speccy-core (five block types, invocation sections, gate tasks_hash) and served by append with mechanical invocation management. REQ-005: advisory per-file lock, blocking acquire, 10s timeout. REQ-006: `journal show` filtered JSON (round/verdict/block). REQ-007: VET-001/VET-002 lint family in verify. REQ-008: subagents self-append blocks, return thin verdicts. REQ-009: orchestrator/reconcile flows adopt transition + show + append; blockers body stays orchestrator-authored. REQ-010: ARCHITECTURE.md updated (commands, state model, concurrency contract, narrowed claim-files exclusion, VET lints). Seven decisions DEC-001..DEC-007. Follow-up spec: read-side `speccy context` bundle. |
+| 2026-06-09 | claude-opus-4-8[1m] | Added DEC-008 (refines DEC-005) mid-implementation of T-004. The VET.md parser becomes the single authority for the vet `journal append` path: a new in-flight parse mode relaxes only the last section's terminal-gate rule so the open mid-vet-run section parses, the append derives invocation/round state from the typed in-flight parse (mirroring the per-task path), and the would-be-new file is re-parsed before any write. Removes the parallel tolerant text scan + body-markup guard, whose independent re-implementations of the parser's tag/heading/body-range definitions diverged from it across seven review rounds. No block-grammar change; no observable contract change to REQ-004. |
 </changelog>

@@ -176,44 +176,63 @@ fn parse_task_state(raw: &str) -> Result<speccy_core::parse::TaskState, String> 
 /// `speccy journal` subcommands.
 #[derive(Subcommand)]
 enum JournalCommand {
-    /// Append one validated block to a per-task journal.
+    /// Append one validated block to a journal.
     ///
-    /// Reads the block body from stdin and appends exactly one
-    /// `<implementer>` / `<review>` / `<blockers>` block to
-    /// `<spec-dir>/journal/<task-id>.md`, creating the file with
-    /// frontmatter on first append. The CLI stamps `date` and derives
-    /// `round`; there is no flag to override either. Validation runs before
-    /// any write, so a malformed block leaves the journal untouched.
+    /// Reads the block body from stdin and appends exactly one block to the
+    /// journal the block type implies (DEC-004): a task block type
+    /// (`implementer` / `review` / `blockers`) routes a task selector to
+    /// `<spec-dir>/journal/<task-id>.md`; a vet block type (`drift-review` /
+    /// `holistic-fix` / `simplifier-scan` / `simplifier-apply` / `gate`)
+    /// routes a bare `SPEC-NNNN` selector to `<spec-dir>/journal/VET.md`. The
+    /// file is created with frontmatter on first append. The CLI stamps
+    /// `date`, derives `round`, manages vet invocation sections, and computes
+    /// a `gate` block's `tasks_hash`; there is no flag to override any of
+    /// these. Validation runs before any write, so a malformed block leaves
+    /// the journal untouched.
     Append {
-        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        /// Selector: `T-NNN` / `SPEC-NNNN/T-NNN` for task blocks, or a bare
+        /// `SPEC-NNNN` for vet blocks.
         #[arg(value_name = "SELECTOR")]
         selector: String,
-        /// Block type. One of `implementer`, `review`, `blockers`; an
-        /// unknown value is rejected at argument-parse time.
-        #[arg(long, value_name = "TYPE", value_parser = parse_task_block_kind)]
-        block: speccy_core::parse::TaskBlockKind,
-        /// Model identity (required for `implementer` and `review`).
+        /// Block type. One of `implementer`, `review`, `blockers`,
+        /// `drift-review`, `holistic-fix`, `simplifier-scan`,
+        /// `simplifier-apply`, `gate`; an unknown value is rejected at
+        /// argument-parse time.
+        #[arg(long, value_name = "TYPE", value_parser = parse_journal_block)]
+        block: speccy_cli::journal::JournalBlock,
+        /// Model identity (required for `implementer`/`review` and the
+        /// round-bearing vet blocks `drift-review`/`holistic-fix`).
         #[arg(long, value_name = "STRING")]
         model: Option<String>,
         /// Reviewer persona (required for `review`).
         #[arg(long, value_name = "NAME")]
         persona: Option<String>,
-        /// Review verdict, `pass` or `blocking` (required for `review`).
+        /// Verdict (required for `review` and every vet block).
         #[arg(long, value_name = "VALUE")]
         verdict: Option<String>,
     },
 }
 
-/// clap value parser for `--block`: accepts only the three task-journal
-/// block types, rejecting any other value at argument-parse time.
-fn parse_task_block_kind(raw: &str) -> Result<speccy_core::parse::TaskBlockKind, String> {
+/// clap value parser for `--block`: accepts the three task-journal block
+/// types and the five vet-journal block types, rejecting any other value at
+/// argument-parse time. The returned [`JournalBlock`] carries which journal
+/// the block targets (DEC-004).
+fn parse_journal_block(raw: &str) -> Result<speccy_cli::journal::JournalBlock, String> {
+    use speccy_cli::journal::JournalBlock;
     use speccy_core::parse::TaskBlockKind;
+    use speccy_core::parse::VetBlockKind;
     match raw {
-        "implementer" => Ok(TaskBlockKind::Implementer),
-        "review" => Ok(TaskBlockKind::Review),
-        "blockers" => Ok(TaskBlockKind::Blockers),
+        "implementer" => Ok(JournalBlock::Task(TaskBlockKind::Implementer)),
+        "review" => Ok(JournalBlock::Task(TaskBlockKind::Review)),
+        "blockers" => Ok(JournalBlock::Task(TaskBlockKind::Blockers)),
+        "drift-review" => Ok(JournalBlock::Vet(VetBlockKind::DriftReview)),
+        "holistic-fix" => Ok(JournalBlock::Vet(VetBlockKind::HolisticFix)),
+        "simplifier-scan" => Ok(JournalBlock::Vet(VetBlockKind::SimplifierScan)),
+        "simplifier-apply" => Ok(JournalBlock::Vet(VetBlockKind::SimplifierApply)),
+        "gate" => Ok(JournalBlock::Vet(VetBlockKind::Gate)),
         other => Err(format!(
-            "invalid block type `{other}`; expected one of: implementer, review, blockers"
+            "invalid block type `{other}`; expected one of: implementer, review, blockers, \
+             drift-review, holistic-fix, simplifier-scan, simplifier-apply, gate"
         )),
     }
 }
@@ -318,7 +337,7 @@ fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
 
 fn run_journal_append(
     selector: String,
-    block: speccy_core::parse::TaskBlockKind,
+    block: speccy_cli::journal::JournalBlock,
     model: Option<String>,
     persona: Option<String>,
     verdict: Option<String>,
