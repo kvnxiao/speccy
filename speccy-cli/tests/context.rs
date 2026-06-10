@@ -10,8 +10,10 @@
 //!
 //! T-002 establishes the command, the selector contract, and the JSON
 //! skeleton with spec identity (REQ-001 / REQ-002) and the intent block
-//! (REQ-002) populated. Later tasks (T-003..T-006) extend the same
-//! envelope; tests for those sections land with their tasks.
+//! (REQ-002) populated. T-003 adds the task entry and the covering
+//! requirements via the shared core walk (REQ-003). Later tasks
+//! (T-004..T-006) extend the same envelope; tests for those sections land
+//! with their tasks.
 
 mod common;
 
@@ -100,6 +102,79 @@ fn spec_md_intent_markers(spec_id: &str) -> String {
         </changelog>
     "#};
     template.replace("__ID__", spec_id)
+}
+
+/// A SPEC.md with five requirements, each carrying a distinctive marker
+/// in its body, done-when, behavior, and one scenario. The task covers
+/// only two of them, so the bundle must surface exactly those two and
+/// none of the other three (REQ-003 / CHK-004).
+///
+/// `__ID__` substitutes the spec id.
+fn spec_md_five_requirements(spec_id: &str) -> String {
+    use std::fmt::Write as _;
+    let mut body = String::from(indoc! {r"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: in-progress
+        created: 2026-06-10
+        ---
+
+        # __ID__
+
+        <goals>
+        - A goal.
+        </goals>
+
+        <non-goals>
+        - A non-goal.
+        </non-goals>
+
+        <user-stories>
+        - A story.
+        </user-stories>
+
+    "});
+    for n in 1..=5 {
+        write!(
+            body,
+            "<requirement id=\"REQ-{n:03}\">\n\
+             ### REQ-{n:03}: Requirement {n}\n\
+             REQ{n:03}_BODY_MARKER: requirement {n} prose body.\n\
+             \n\
+             <done-when>\n- REQ{n:03}_DONEWHEN_MARKER.\n</done-when>\n\
+             \n\
+             <behavior>\n- REQ{n:03}_BEHAVIOR_MARKER.\n</behavior>\n\
+             \n\
+             <scenario id=\"CHK-{n:03}\">\n\
+             REQ{n:03}_SCENARIO_MARKER: given req {n}, when X, then Y.\n\
+             </scenario>\n\
+             </requirement>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body.push_str(indoc! {r"
+        ## Changelog
+
+        <changelog>
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-06-10 | t | init |
+        </changelog>
+    "});
+    body.replace("__ID__", spec_id)
+}
+
+/// A TASKS.md with a single task T-001 covering the given requirement ids.
+fn tasks_md_covering(spec_id: &str, covers: &str) -> String {
+    format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n\n\n\
+         <task id=\"T-001\" state=\"pending\" covers=\"{covers}\">\n\
+         TASK_BODY_MARKER: the task body prose.\n\n\
+         <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
+    )
 }
 
 /// A minimal TASKS.md with a single task T-001 covering REQ-001.
@@ -408,6 +483,155 @@ fn invalid_selector_format_surfaces_lookup_invalid_format() -> TestResult {
             ContextError::TaskLookup(LookupError::InvalidFormat { arg }) if arg == "NOT-A-SELECTOR",
         ),
         "expected InvalidFormat carrying the raw selector; got {err:?}",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-004 (REQ-003): a five-requirement spec, a task covering two of them.
+// The two covered requirements appear with done-when, behavior, and
+// scenario content; none of the other three requirement ids appear
+// anywhere in the payload.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_carries_only_the_two_covered_requirements_with_full_content() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001 REQ-003")),
+    )?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let requirements = value
+        .get("requirements")
+        .and_then(serde_json::Value::as_array)
+        .expect("bundle has requirements array");
+
+    // Exactly the two covered requirements, in covers-list order.
+    let req_ids: Vec<&str> = requirements
+        .iter()
+        .filter_map(|r| r.get("id").and_then(serde_json::Value::as_str))
+        .collect();
+    assert_eq!(
+        req_ids,
+        ["REQ-001", "REQ-003"],
+        "covered requirements resolve in covers-list order; got {req_ids:?}",
+    );
+
+    // Each covered requirement carries its done-when, behavior, and
+    // scenario content.
+    for (req, n) in requirements.iter().zip([1_u32, 3]) {
+        let done_when = req
+            .get("done_when")
+            .and_then(serde_json::Value::as_str)
+            .expect("done_when present");
+        assert!(
+            done_when.contains(&format!("REQ{n:03}_DONEWHEN_MARKER")),
+            "REQ-{n:03} done-when content must appear; got: {done_when}",
+        );
+        let behavior = req
+            .get("behavior")
+            .and_then(serde_json::Value::as_str)
+            .expect("behavior present");
+        assert!(
+            behavior.contains(&format!("REQ{n:03}_BEHAVIOR_MARKER")),
+            "REQ-{n:03} behavior content must appear; got: {behavior}",
+        );
+        let scenarios = req
+            .get("scenarios")
+            .and_then(serde_json::Value::as_array)
+            .expect("scenarios array present");
+        let scenario_ids: Vec<&str> = scenarios
+            .iter()
+            .filter_map(|s| s.get("id").and_then(serde_json::Value::as_str))
+            .collect();
+        assert_eq!(
+            scenario_ids,
+            [format!("CHK-{n:03}")],
+            "REQ-{n:03} carries its own scenario; got {scenario_ids:?}",
+        );
+        let scenario_body = scenarios
+            .first()
+            .and_then(|s| s.get("body"))
+            .and_then(serde_json::Value::as_str)
+            .expect("scenario body present");
+        assert!(
+            scenario_body.contains(&format!("REQ{n:03}_SCENARIO_MARKER")),
+            "REQ-{n:03} scenario content must appear; got: {scenario_body}",
+        );
+    }
+
+    // None of the three uncovered requirements' ids or content appear
+    // anywhere in the payload.
+    for n in [2_u32, 4, 5] {
+        assert!(
+            !stdout.contains(&format!("REQ-{n:03}")),
+            "uncovered REQ-{n:03} id must be absent from the payload; payload: {stdout}",
+        );
+        assert!(
+            !stdout.contains(&format!("REQ{n:03}_BODY_MARKER")),
+            "uncovered REQ-{n:03} body must be absent from the payload",
+        );
+        assert!(
+            !stdout.contains(&format!("CHK-{n:03}")),
+            "uncovered CHK-{n:03} must be absent from the payload",
+        );
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// REQ-003 behavior: the task's raw `<task>` body bytes appear alongside
+// the parsed id, state, and covers.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_carries_task_entry_with_raw_body_and_parsed_fields() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001 REQ-003")),
+    )?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let task = value.get("task").expect("bundle has task entry");
+    assert_eq!(
+        task.get("id").and_then(serde_json::Value::as_str),
+        Some("T-001"),
+    );
+    assert_eq!(
+        task.get("state").and_then(serde_json::Value::as_str),
+        Some("pending"),
+    );
+    let covers: Vec<&str> = task
+        .get("covers")
+        .and_then(serde_json::Value::as_array)
+        .expect("covers array present")
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    assert_eq!(
+        covers,
+        ["REQ-001", "REQ-003"],
+        "parsed covers in source order; got {covers:?}",
+    );
+    // The raw `<task>` body bytes appear in the entry.
+    let body = task
+        .get("body")
+        .and_then(serde_json::Value::as_str)
+        .expect("task body present");
+    assert!(
+        body.contains("TASK_BODY_MARKER"),
+        "raw task body bytes must appear in the entry; got: {body}",
     );
     Ok(())
 }

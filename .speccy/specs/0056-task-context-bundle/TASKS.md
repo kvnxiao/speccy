@@ -121,7 +121,7 @@ Suggested files: `speccy-cli/src/main.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-003">
+<task id="T-003" state="completed" covers="REQ-003">
 ## Populate the bundle's task entry and covering requirements via the shared walk
 
 Extend the `speccy context` envelope to carry the selected task's

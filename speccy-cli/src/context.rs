@@ -10,18 +10,25 @@
 //! produce the same selector diagnostics) and bundle assembly. The
 //! envelope's `Serialize` shape lives in [`crate::context_output`].
 //!
-//! SPEC-0056 grows the bundle across tasks T-002..T-006. This task
-//! (T-002) establishes the command, the selector contract, and the JSON
-//! skeleton with spec identity (REQ-001 / REQ-002) and the intent block
-//! (REQ-002) populated. The command performs no writes anywhere.
+//! SPEC-0056 grows the bundle across tasks T-002..T-006. T-002
+//! established the command, the selector contract, and the JSON skeleton
+//! with spec identity (REQ-001 / REQ-002) and the intent block (REQ-002).
+//! T-003 adds the selected task's verbatim `<task>` entry and the
+//! covering requirements — resolved through the shared core walk so
+//! `context` and `check` cannot diverge (REQ-003 / DEC-002). The command
+//! performs no writes anywhere.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
 use crate::context_output::ContextBundle;
+use crate::context_output::CoveringRequirement;
 use crate::context_output::DecisionEntry;
 use crate::context_output::Intent;
+use crate::context_output::ScenarioEntry;
 use crate::context_output::SpecIdentity;
+use crate::context_output::TaskEntry;
 use camino::Utf8Path;
+use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::SpecDoc;
 use speccy_core::task_lookup::LookupError;
@@ -79,9 +86,10 @@ pub struct ContextArgs {
 ///
 /// Resolves the selector through `task_lookup::parse_ref` then
 /// `task_lookup::find` (REQ-001), assembles the identity + intent bundle
-/// (REQ-002), and serialises it. Selector failures and parse failures
-/// return an error without writing any partial bundle to `out`. The
-/// command performs no writes anywhere in the workspace.
+/// (REQ-002) along with the selected task entry and its covering
+/// requirements (REQ-003), and serialises it. Selector failures and parse
+/// failures return an error without writing any partial bundle to `out`.
+/// The command performs no writes anywhere in the workspace.
 ///
 /// # Errors
 ///
@@ -120,8 +128,9 @@ pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     Ok(())
 }
 
-/// Assemble the T-002 bundle slice (identity + intent) from a resolved
-/// task location.
+/// Assemble the context bundle (identity + intent from REQ-002; task
+/// entry and covering requirements from REQ-003) from a resolved task
+/// location.
 fn assemble_bundle(
     ws: &Workspace,
     location: &TaskLocation<'_>,
@@ -145,12 +154,54 @@ fn assemble_bundle(
         status: spec_md.frontmatter.status.as_str().to_owned(),
     };
     let intent = build_intent(spec_doc);
+    let task = build_task_entry(location);
+    let requirements = build_requirements(location, spec_doc);
 
     Ok(ContextBundle {
         schema_version: 1,
         spec: identity,
         intent,
+        task,
+        requirements,
     })
+}
+
+/// Project the resolved task's `<task>` entry into the bundle: the parsed
+/// `id`, `state`, and `covers` alongside the verbatim body bytes (REQ-003).
+fn build_task_entry(location: &TaskLocation<'_>) -> TaskEntry {
+    let task = location.task;
+    TaskEntry {
+        id: task.id.clone(),
+        state: task.state.as_str().to_owned(),
+        covers: task.covers.clone(),
+        body: task.body.clone(),
+    }
+}
+
+/// Resolve the task's covering requirements through the shared core walk
+/// (so `context` and `check` cannot diverge — REQ-003 / DEC-002) and
+/// project each into the bundle with its done-when, behavior, and
+/// scenarios. Requirements arrive deduplicated in covers-list order; a
+/// `covers` token referencing a missing requirement is skipped by the
+/// shared walk exactly as `speccy check` reports it.
+fn build_requirements(location: &TaskLocation<'_>, spec_doc: &SpecDoc) -> Vec<CoveringRequirement> {
+    resolve_covering_requirements(location.task, spec_doc)
+        .into_iter()
+        .map(|req| CoveringRequirement {
+            id: req.id.clone(),
+            body: req.body.clone(),
+            done_when: req.done_when.clone(),
+            behavior: req.behavior.clone(),
+            scenarios: req
+                .scenarios
+                .iter()
+                .map(|s| ScenarioEntry {
+                    id: s.id.clone(),
+                    body: s.body.clone(),
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 /// Project the SPEC.md element tree's intent surfaces into the bundle:
@@ -205,6 +256,38 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
         writeln!(out, "\n## Decisions")?;
         for dec in &bundle.intent.decisions {
             writeln!(out, "\n### {}\n{}", dec.id, dec.body.trim_end())?;
+        }
+    }
+
+    writeln!(
+        out,
+        "\n## Task {} [{}] covers: {}",
+        bundle.task.id,
+        bundle.task.state,
+        if bundle.task.covers.is_empty() {
+            "(none)".to_owned()
+        } else {
+            bundle.task.covers.join(" ")
+        },
+    )?;
+    writeln!(out, "{}", bundle.task.body.trim_end())?;
+
+    if bundle.requirements.is_empty() {
+        writeln!(out, "\n## Covering requirements\n(none)")?;
+    } else {
+        writeln!(out, "\n## Covering requirements")?;
+        for req in &bundle.requirements {
+            writeln!(out, "\n### {}\n{}", req.id, req.body.trim_end())?;
+            writeln!(out, "\n#### done-when\n{}", req.done_when.trim_end())?;
+            writeln!(out, "\n#### behavior\n{}", req.behavior.trim_end())?;
+            for scenario in &req.scenarios {
+                writeln!(
+                    out,
+                    "\n#### scenario {}\n{}",
+                    scenario.id,
+                    scenario.body.trim_end()
+                )?;
+            }
         }
     }
     Ok(())
