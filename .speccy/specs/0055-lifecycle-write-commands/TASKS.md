@@ -254,7 +254,7 @@ Suggested files: `speccy-cli/src/commands/journal.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-006">
+<task id="T-005" state="completed" covers="REQ-006">
 ## `speccy journal show` — schema-versioned filtered JSON
 
 Add a `journal show <selector> --json` subcommand that parses the

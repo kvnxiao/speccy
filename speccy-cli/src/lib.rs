@@ -16,6 +16,8 @@ pub mod git;
 pub mod host;
 pub mod init;
 pub mod journal;
+pub mod journal_show;
+pub mod journal_show_output;
 pub mod lock;
 pub mod next;
 pub mod next_output;

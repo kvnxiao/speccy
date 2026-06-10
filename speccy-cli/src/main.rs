@@ -211,6 +211,48 @@ enum JournalCommand {
         #[arg(long, value_name = "VALUE")]
         verdict: Option<String>,
     },
+    /// Show a journal's frontmatter and blocks, filtered.
+    ///
+    /// Parses the resolved journal (DEC-004: a task selector resolves
+    /// `<spec-dir>/journal/<task-id>.md`; a bare `SPEC-NNNN` resolves
+    /// `<spec-dir>/journal/VET.md`) and emits the blocks that survive the
+    /// three conjunctive filters. `--json` toggles representation, never
+    /// content. A missing journal exits non-zero.
+    Show {
+        /// Selector: `T-NNN` / `SPEC-NNNN/T-NNN` for a task journal, or a
+        /// bare `SPEC-NNNN` for VET.md.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Emit JSON envelope (`schema_version = 1`).
+        #[arg(long)]
+        json: bool,
+        /// Keep only the highest round (`latest`) or a specific round (`N`).
+        /// For VET.md the round dimension is scoped to the last invocation
+        /// section.
+        #[arg(long, value_name = "latest|N", value_parser = parse_round_filter)]
+        round: Option<speccy_cli::journal_show::RoundFilter>,
+        /// Keep only blocks whose verdict equals this value.
+        #[arg(long, value_name = "VALUE")]
+        verdict: Option<String>,
+        /// Keep only blocks of this element type (e.g. `review`, `gate`).
+        #[arg(long, value_name = "TYPE")]
+        block: Option<String>,
+    },
+}
+
+/// clap value parser for `--round`: accepts the literal `latest` or a
+/// positive integer, rejecting any other value at argument-parse time.
+fn parse_round_filter(raw: &str) -> Result<speccy_cli::journal_show::RoundFilter, String> {
+    use speccy_cli::journal_show::RoundFilter;
+    if raw == "latest" {
+        return Ok(RoundFilter::Latest);
+    }
+    match raw.parse::<u32>() {
+        Ok(n) if n >= 1 => Ok(RoundFilter::Exact(n)),
+        _ => Err(format!(
+            "invalid round `{raw}`; expected `latest` or a positive integer"
+        )),
+    }
 }
 
 /// clap value parser for `--block`: accepts the three task-journal block
@@ -277,6 +319,13 @@ fn dispatch(command: Command) -> u8 {
                 persona,
                 verdict,
             } => run_journal_append(selector, block, model, persona, verdict),
+            JournalCommand::Show {
+                selector,
+                json,
+                round,
+                verdict,
+                block,
+            } => run_journal_show(selector, json, round, verdict, block),
         },
         Command::Archive {
             spec_id,
@@ -392,6 +441,69 @@ fn run_journal_append(
         }
         Err(e) => {
             eprintln!("speccy journal append: {e}");
+            1
+        }
+    }
+}
+
+fn run_journal_show(
+    selector: String,
+    json: bool,
+    round: Option<speccy_cli::journal_show::RoundFilter>,
+    verdict: Option<String>,
+    block: Option<String>,
+) -> u8 {
+    use speccy_cli::journal_show::ShowError;
+    use speccy_core::task_lookup::LookupError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy journal show: {e}");
+            return 2;
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::journal_show::run(
+        speccy_cli::journal_show::ShowArgs {
+            selector,
+            json,
+            round,
+            verdict,
+            block,
+        },
+        &cwd,
+        &mut stdout,
+    );
+    flush_best_effort(&mut stdout);
+    match result {
+        Ok(()) => 0,
+        Err(ShowError::TaskLookup(LookupError::InvalidFormat { arg })) => {
+            eprintln!("speccy journal show: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+            1
+        }
+        Err(ShowError::TaskLookup(LookupError::NotFound { task_ref })) => {
+            eprintln!("speccy journal show: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+            1
+        }
+        Err(ShowError::TaskLookup(LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        })) => {
+            eprintln!(
+                "speccy journal show: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in &candidate_specs {
+                eprintln!("  speccy journal show {spec_id}/{task_id}");
+            }
+            1
+        }
+        Err(e) => {
+            eprintln!("speccy journal show: {e}");
             1
         }
     }
