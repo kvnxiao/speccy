@@ -32,8 +32,8 @@ terminal, the `/loop` skill, or a future orchestrator).
 spec hash must have been committed before this skill runs.
 
 The agent automatically detects retry shape from the per-task
-journal at `<spec-dir>/journal/T-NNN.md` and switches modes
-accordingly — the caller does not pass a flag. A first-attempt
+journal carried in the `speccy context` bundle's journal section and
+switches modes accordingly — the caller does not pass a flag. A first-attempt
 task (no journal, or no `<blockers>` matching the highest
 `<implementer>` round) runs today's recipe unchanged. A retry-shape
 task (the latest `<blockers>` round equals the highest
@@ -54,7 +54,7 @@ incremented round).
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, (ii) read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the retry-shape rule summarized at step 2 (canonical statement at `.claude/speccy-references/retry-shape.md`), (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `.claude/speccy-references/reconcile-policy.md`) rather than the normal implementer flow.
+**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `.claude/speccy-references/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `.claude/speccy-references/reconcile-policy.md`) rather than the normal implementer flow.
 
 **Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `.claude/speccy-references/reconcile-policy.md` for the full policy table.
 
@@ -90,12 +90,13 @@ incremented round).
      halt and surface the stderr line. Only parse JSON when exit
      code is 0.
 
-2. Read `<spec-dir>/journal/T-NNN.md` (if it exists) and apply the
-   REQ-001 retry-shape rule summarized immediately below. The rule
-   reads only the journal file — no git, no `speccy next`, no
-   other CLI subcommand. Compute the result (first-attempt shape
-   or retry shape); the rest of the recipe branches on this
-   result.
+2. Apply the REQ-001 retry-shape rule summarized immediately below
+   against the journal section of the bundle returned by the
+   `speccy context` call in step 1 (no separate journal-file read).
+   The rule inspects only that journal content — it makes no further
+   git, `speccy next`, or other CLI call. Compute the result
+   (first-attempt shape or retry shape); the rest of the recipe
+   branches on this result.
 
    **Retry shape.** A task is in retry shape iff its journal
    contains both an `<implementer>` element and a `<blockers>`
@@ -116,11 +117,12 @@ incremented round).
 
    **Retry branch.** Enter retry mode:
 
-   - Read the most recent `<implementer>` block in the journal to
-     understand the prior pass's stated `Completed` work.
+   - Read the most recent `<implementer>` block from the bundle's
+     journal section to understand the prior pass's stated `Completed`
+     work.
    - Read the latest `<blockers>` block (the one whose `round`
-     matches the highest `<implementer>` round) for the specific
-     feedback to address.
+     matches the highest `<implementer>` round) from that same
+     journal section for the specific feedback to address.
    - Amend the existing WIP in the working tree to address the
      blockers. Do not run `git restore`, `git clean`, or
      `git checkout` against the dirty paths; do not rewrite the
@@ -150,11 +152,12 @@ incremented round).
    attribute byte-surgically; an illegal edge or unresolved selector
    exits non-zero with the file untouched.
 
-5. Read the task scenarios to understand what must be implemented:
-
-   ```bash
-   speccy check SPEC-NNNN/T-003
-   ```
+5. Read the task scenarios to understand what must be implemented
+   from the bundle's covering-requirements section returned by the
+   `speccy context` call in step 1 — its `requirements` carry each
+   covered REQ's `<done-when>`, `<behavior>`, and `<scenario>`
+   blocks. No separate entry read of SPEC.md, TASKS.md, or `speccy
+   check` is needed here.
 
 6. Bounded reuse survey. Before writing any code, survey the
    task-relevant area and classify the code you are about to add into

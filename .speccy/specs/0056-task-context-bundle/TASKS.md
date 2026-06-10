@@ -313,7 +313,7 @@ Suggested files: `speccy-cli/tests/context.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-008" state="pending" covers="REQ-008">
+<task id="T-008" state="completed" covers="REQ-008">
 ## Migrate implementer phase and six reviewer personas to open with one `speccy context` call
 
 PRECONDITION — satisfied. SPEC-0055 (lifecycle-write-commands) has
