@@ -14,6 +14,7 @@ use crate::check_selector::CheckSelector;
 use crate::check_selector::SelectorError;
 use crate::check_selector::parse_selector;
 use camino::Utf8Path;
+use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::Scenario;
 use speccy_core::parse::SpecStatus;
@@ -293,26 +294,21 @@ fn run_task(
 
     let label = spec.display_label();
 
-    // Accumulate scenarios in declared requirement order, deduplicating
-    // on first occurrence. Scenarios are owned by exactly one
-    // requirement today, so the dedup is defensive symmetry rather than
-    // a load-bearing constraint.
-    let mut collected: Vec<CollectedCheck> = Vec::new();
-    let mut seen_ids: Vec<String> = Vec::new();
-    for req_id in &location.task.covers {
-        let Some(req) = spec_doc.requirements.iter().find(|r| &r.id == req_id) else {
-            continue;
-        };
-        for scenario in &req.scenarios {
-            if !seen_ids.iter().any(|s| s == &scenario.id) {
-                seen_ids.push(scenario.id.clone());
-                collected.push(CollectedCheck {
-                    spec_id: label.clone(),
-                    entry: scenario.clone(),
-                });
-            }
-        }
-    }
+    // Resolve the covering requirements through the shared core walk so
+    // `check` and `context` cannot diverge (SPEC-0056 REQ-003). The walk
+    // returns the covering requirements deduplicated in covers-list
+    // order; flattening each requirement's scenarios reproduces the prior
+    // inlined scenario accumulation. Scenarios are owned by exactly one
+    // requirement, so no cross-requirement scenario dedup is needed.
+    let collected: Vec<CollectedCheck> = resolve_covering_requirements(location.task, spec_doc)
+        .into_iter()
+        .flat_map(|req| {
+            req.scenarios.iter().map(|scenario| CollectedCheck {
+                spec_id: label.clone(),
+                entry: scenario.clone(),
+            })
+        })
+        .collect();
 
     if collected.is_empty() {
         writeln!(out, "No checks defined.")?;

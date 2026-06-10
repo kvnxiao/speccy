@@ -5,7 +5,7 @@ generated_at: 2026-06-10T20:24:43Z
 ---
 # Tasks: SPEC-0056 Task-scoped context bundle — `speccy context` emits one JSON read for loop subagents
 
-<task id="T-001" state="pending" covers="REQ-003">
+<task id="T-001" state="completed" covers="REQ-003">
 ## Extract the covers → requirements → scenarios walk into a shared `speccy-core` function
 
 Lift the resolution walk currently inlined in `check::run_task`
