@@ -37,18 +37,29 @@ not task count. This is what makes large specs viable; small specs
 still gain one tool roundtrip instead of three or four, and shorter
 persona prose.
 
-Grounding (traced in-session): the resolution this command needs
-already exists for `speccy check` — `task_lookup::parse_ref` /
-`task_lookup::find` resolve qualified and unqualified task
-selectors, and `check::run_task` walks `task.covers` →
-`SpecDoc.requirements` → `req.scenarios`
-(`speccy-cli/src/check.rs:265-323`). That walk moves to a shared
-`speccy-core` function so `check` and `context` cannot drift apart.
-Consistency drift detection already produces per-task drift entries
-with `task_id`, and the merge-base git probe used by `speccy next`
-covers the suggested-diff-command computation. The JSON envelope
-follows the existing convention (`schema_version: 1` first field,
-per-command serialize struct).
+Grounding (traced in-session; re-verified against the code after
+SPEC-0055 landed): the resolution this command needs already exists
+for `speccy check` — `task_lookup::parse_ref` / `task_lookup::find`
+resolve qualified and unqualified task selectors, and
+`check::run_task` walks `task.covers` → `SpecDoc.requirements` →
+`req.scenarios` (`speccy-cli/src/check.rs:265-323`). That walk moves
+to a shared `speccy-core` function so `check` and `context` cannot
+drift apart. Consistency drift detection already produces per-task
+drift entries with `task_id` (`consistency::detect` →
+`DriftEntry.task_id`). The suggested-diff command, however, is **not**
+covered by existing machinery: `speccy-cli/src/git.rs` exposes only
+`repo_sha` (HEAD), and the consistency probe correlates tasks to
+commits by title prefix (`first_commit_sha_with_title_prefix`), never
+by merge-base — nothing today computes the default branch or a
+merge-base. REQ-005 therefore adds a small, best-effort default-branch
++ merge-base probe to `git.rs` (see its Assumption). SPEC-0055 (now
+landed) also leaves two reuse seams this command should consume rather
+than re-derive: `journal show`'s public JSON block structs
+(`JsonJournalBlock` in `journal_show_output.rs`) for the
+inlined-journal projection (REQ-004), and the `report_lookup_error`
+selector-diagnostic helper for REQ-001. The JSON envelope follows the
+existing convention (`schema_version: 1` first field, per-command
+serialize struct).
 
 This is the second SPEC of an agreed pair. SPEC-0055
 (lifecycle-write-commands) owns the write side; this SPEC depends on
@@ -127,12 +138,17 @@ SPEC-0055's pack-migration tasks touch — see Notes for sequencing.
 - Intent prose (`<goals>`, `<non-goals>`, `<decision>` blocks) is
   bounded by authorship discipline, not by task count, so carrying
   it whole does not break the size invariant.
-- The merge-base git probe already used for consistency checking is
-  sufficient to compute the suggested diff command; no new git
-  machinery is needed.
-- SPEC-0055's pack migration lands before or together with this
-  SPEC's persona migration; the two edit the same persona modules
-  and must not be authored against divergent baselines.
+- The suggested diff command needs net-new git machinery: no
+  merge-base probe exists today (the consistency check correlates
+  tasks to commits by commit-title prefix, and `git.rs` exposes only
+  `repo_sha`). REQ-005 adds a best-effort default-branch + merge-base
+  probe to `git.rs` following its existing non-fatal shell-out
+  convention — git unavailability degrades the field, never errors the
+  bundle.
+- SPEC-0055's pack migration has landed (merged ahead of this SPEC),
+  so REQ-008's persona migration builds on the post-0055
+  fan-out/persona modules rather than racing them. The divergent-
+  baseline risk the original draft guarded against is resolved.
 </assumptions>
 
 ## Requirements
@@ -145,7 +161,12 @@ The command resolves the task via the same selector grammar as
 `SPEC-NNNN/T-NNN`, then `task_lookup::find`, with the same
 ambiguity and not-found diagnostics) and prints a single JSON
 envelope to stdout whose first field is `schema_version` pinned to
-`1`. Selector failures exit non-zero without partial output.
+`1`. Selector failures exit non-zero without partial output. The
+selector-failure diagnostics reuse SPEC-0055's `report_lookup_error`
+helper (already shared by `task transition`, `journal append`, and
+`journal show`) provided its rendered output matches the diagnostic
+class `speccy check` produces — parity with `check` is the contract,
+and the helper is the DRY path to it.
 
 <done-when>
 - Qualified and unqualified selectors resolve; ambiguous unqualified
@@ -283,7 +304,14 @@ their attributes. When the journal does not exist, the envelope
 carries an explicit empty journal section (e.g. an `exists: false`
 marker with no blocks) and the command still exits 0 — a round-1
 implementer legitimately has no journal yet, so absence here is
-normal rather than anomalous.
+normal rather than anomalous. The journal-to-JSON projection reuses
+SPEC-0055's `journal show` block-level structs (`JsonJournalBlock` in
+`journal_show_output.rs`) rather than a parallel re-derivation, so the
+two JSON views of a journal cannot drift — the same anti-drift
+discipline DEC-002 applies to `check`/`context`. The standalone
+`JsonTaskJournal` envelope is not nested wholesale (its
+`schema_version` belongs to the standalone command); only the block
+structs and frontmatter fields are reused.
 
 <done-when>
 - A journal with three rounds appears in the envelope with all
@@ -447,20 +475,38 @@ nothing else.
 ### REQ-008: Loop personas open with one `speccy context` call
 
 The skill-pack source modules change the entry-read contract for the
-task-scoped roles: the `speccy-work` implementer phase and the six
-reviewer personas begin from a single `speccy context
-SPEC-NNNN/T-NNN --json` invocation. Persona prose stops instructing
-full-file SPEC.md or TASKS.md reads, and stops invoking `speccy
-check`, for per-task scoping; targeted follow-up reads via the
-bundle's paths remain legitimate when a persona needs something
-outside the bundle (e.g. the evidence file). Vet personas are
-untouched. Both host ejections regenerate from source.
+task-scoped roles. For reviewers, the concrete entry-read recipe lives
+in the shared fan-out spawn prompt
+(`resources/modules/skills/partials/review-fanout.md`), which today
+instructs each persona to run `speccy check`, read the `<task>` body
+in TASKS.md, and read the journal — this prompt is the primary edit
+target and is rewritten to dispatch a single `speccy context
+SPEC-NNNN/T-NNN --json` call. The six reviewer persona bodies carry
+only abstract "read the SPEC, the diff, and implementer notes" framing
+and need no per-file-read removal. For the implementer, the
+`speccy-work` phase opens its per-task context read with `speccy
+context`; on the no-selector path `speccy next --json` still runs
+first to resolve the task (the selector is unknown until then), and
+the retry-shape rule — today a pure journal-file read — reads its
+journal from the bundle instead, accepting that the bundle read also
+runs `context`'s git/consistency probe. Targeted follow-up reads via
+the bundle's paths remain legitimate when a role needs something
+outside the bundle (e.g. the evidence file). Two carve-outs: the
+migration removes `speccy check` only as the entry-scoping read — it
+does **not** remove `reviewer-tests`'s caveat that `speccy check` exit
+codes are not test evidence (that warning stays valid, since `speccy
+check` still exists); and vet personas are untouched. Both host
+ejections regenerate from source.
 
 <done-when>
-- No reviewer persona or implementer phase module under
-  `resources/modules/` instructs reading SPEC.md or TASKS.md in
-  full or invoking `speccy check` as the entry read; each opens
-  with the `speccy context` call.
+- The reviewer fan-out spawn prompt (`review-fanout.md`) and the
+  `speccy-work` implementer phase open their per-task context read
+  with `speccy context`, not a full SPEC.md / TASKS.md read or a
+  `speccy check` entry call. (`speccy next` may still precede
+  `context` on the implementer's no-selector path.)
+- Removing `speccy check` as the entry-scoping read does not touch
+  `reviewer-tests`'s separate caveat that `speccy check` exit codes
+  are not test evidence; that prose remains intact.
 - Follow-up targeted reads (evidence file, bundle-listed paths) are
   still permitted by the prose where the role needs them.
 - Vet persona modules are byte-identical before and after this
@@ -470,10 +516,11 @@ untouched. Both host ejections regenerate from source.
 </done-when>
 
 <behavior>
-- Given the regenerated packs, when a reviewer persona body is
-  read, then its entry procedure names one `speccy context` call
-  and references bundle fields (task, requirements, scenarios,
-  journal, diff command) rather than file-read steps.
+- Given the regenerated packs, when the reviewer fan-out spawn
+  prompt is read, then it dispatches one `speccy context` call and
+  references bundle fields (task, requirements, scenarios, journal,
+  diff command) rather than a `speccy check` entry call plus
+  file-read steps.
 - Given the regenerated packs, when the vet persona bodies are
   diffed against the prior commit, then they are unchanged.
 </behavior>
@@ -487,11 +534,13 @@ the updated sources.
 
 <scenario id="CHK-012">
 Given the updated module sources,
-when the reviewer reads each task-scoped persona and the implementer
-phase module,
-then each opens its read procedure with the `speccy context` call
-and none instructs a full SPEC.md or TASKS.md read as entry context
-(content check by reviewer, not substring assertion).
+when the reviewer reads the fan-out spawn prompt (`review-fanout.md`)
+and the implementer phase module,
+then each opens its per-task read with the `speccy context` call and
+neither instructs a full SPEC.md / TASKS.md read or a `speccy check`
+entry call as entry context, while `reviewer-tests`'s `speccy check`
+exit-code caveat remains intact (content check by reviewer, not
+substring assertion).
 </scenario>
 
 </requirement>
@@ -599,14 +648,17 @@ Rejected framings from the brainstorm session:
   re-creating the relay tax in reverse: the bundle transits the
   orchestrator context once per persona instead of zero times.
 
-**Sequencing against SPEC-0055.** This SPEC's CLI work (REQ-001..
-REQ-007) is independent of SPEC-0055 — `speccy context` is a pure
-read command. The persona migration (REQ-008) edits the same module
-files as SPEC-0055's pack-migration tasks (T-007/T-008 there).
-Decompose should order this SPEC's prose tasks after SPEC-0055's
-pack migration lands, or the two edits must be authored against a
-coordinated baseline; landing them against divergent baselines will
-produce conflicting persona bodies.
+**Sequencing against SPEC-0055 (resolved).** SPEC-0055
+(lifecycle-write-commands) has merged ahead of this SPEC, so the
+sequencing risk is closed: REQ-008's persona migration now builds on
+the post-0055 fan-out/persona modules, which already route journal
+writes through `speccy journal append` and read-backs through `speccy
+journal show`. The REQ-008 edit must stay surgical — it rewrites only
+the entry-read step of `review-fanout.md` and the `speccy-work`
+implementer phase, leaving SPEC-0055's append/verdict/commit contract
+in those same files intact. (This SPEC's CLI work, REQ-001..REQ-007,
+was always independent of SPEC-0055 — `speccy context` is a pure read
+command.)
 
 ## Changelog
 
@@ -614,4 +666,5 @@ produce conflicting persona bodies.
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-09 | claude-fable-5[1m] | Initial SPEC: task-scoped read bundle. REQ-001: `speccy context <task-selector> --json` with check's selector grammar and schema_version 1 envelope. REQ-002: identity + goals/non-goals/decisions intent slice (Summary, user stories, non-covered requirements excluded). REQ-003: task entry + covering requirements + scenarios via a shared speccy-core walk extracted from check::run_task, check output byte-stable. REQ-004: full journal inlined, absence = explicit empty + exit 0. REQ-005: sibling index (id/state/covers only), file paths, suggested merge-base diff command. REQ-006: workspace consistency status + task-scoped drifts only, never refuses on drift. REQ-007: size invariant (bundle scales with task, not spec) enforced by property test. REQ-008: implementer phase + six reviewer personas open with one context call; vet personas untouched; packs re-ejected. REQ-009: ARCHITECTURE.md documents command, envelope, invariant. Six decisions DEC-001..DEC-006. Companion to SPEC-0055 (write side); persona-module sequencing noted. |
+| 2026-06-10 | claude-opus-4-8[1m] | Grounding correction after SPEC-0055 landed (no requirement intent changed; all 9 tasks still pending). (A) Fixed the false claim that a merge-base git probe already exists: `git.rs` has only `repo_sha`, consistency correlates by commit-title prefix, so REQ-005's suggested-diff command requires net-new best-effort default-branch + merge-base machinery (Summary grounding + Assumptions). (B) Recorded the two reuse seams SPEC-0055 now provides: REQ-004 reuses `journal show`'s public `JsonJournalBlock` structs (anti-drift, per DEC-002 logic; envelope not nested wholesale); REQ-001 reuses the `report_lookup_error` helper. (C) Corrected REQ-008 scope: the reviewer entry-read recipe lives in the shared `review-fanout.md` spawn prompt (primary target), not the six persona bodies; added carve-outs to keep `reviewer-tests`'s `speccy check` exit-code caveat and to note `speccy next` still precedes `context` on the implementer's no-selector path plus the retry-shape→bundle interaction (REQ-008 body, done-when, behavior, CHK-012). (D) Marked the SPEC-0055 sequencing risk resolved (Assumptions + Notes). |
 </changelog>

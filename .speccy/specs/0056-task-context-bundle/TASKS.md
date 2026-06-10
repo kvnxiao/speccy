@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0056
-spec_hash_at_generation: 06d971f3d9e2001af91b324f8d585aeceae66be7e517e50e1f6bc14a93efe281
-generated_at: 2026-06-09T20:54:44Z
+spec_hash_at_generation: b54cc204a49f72a083ff9874c06c88a64f59a73ababeacb3700d16909e2c5f61
+generated_at: 2026-06-10T20:24:43Z
 ---
 # Tasks: SPEC-0056 Task-scoped context bundle — `speccy context` emits one JSON read for loop subagents
 
@@ -66,10 +66,14 @@ Add `Command::Context { selector: String, json: bool }` to the clap
 enum in `speccy-cli/src/main.rs:60-133` and wire its dispatch arm in
 `main.rs:140-170`, following the existing command shape. Resolve the
 selector through `task_lookup::parse_ref` then `task_lookup::find`
-(accepting `T-NNN` and `SPEC-NNNN/T-NNN`), reusing the same
-`LookupError` → exit-code/diagnostic mapping `speccy check` uses at
-`main.rs:354-368` (InvalidFormat, NotFound, Ambiguous). Selector
-failures exit non-zero with no partial stdout. Without `--json` the
+(accepting `T-NNN` and `SPEC-NNNN/T-NNN`), reusing SPEC-0055's shared
+`report_lookup_error` helper (`speccy-cli/src/main.rs:664-695`) for the
+`LookupError` → exit-code/diagnostic rendering. That helper already
+backs `task transition`, `journal append`, and `journal show`, and
+covers InvalidFormat, NotFound, and Ambiguous; routing `context`
+through it keeps the diagnostic CLASS at parity with `speccy check`
+(the contract) via the DRY path rather than re-deriving an inline
+mapping. Selector failures exit non-zero with no partial stdout. Without `--json` the
 command renders the same bundle content in a human-readable text
 form — `--json` toggles representation, never content, per the
 workspace-wide convention (the text form needs no stability
@@ -162,13 +166,23 @@ Extend the envelope with a journal section. When
 and inline its full content: the frontmatter fields plus every
 `<implementer>` / `<review>` / `<blockers>` entry across all rounds
 in file order, each with its attributes (`date`, `model`, `round`,
-and for review `persona`/`verdict`). The journal content must be
-sufficient for retry context — prior implementer handoffs, review
-verdicts, and blockers directives all present. When the journal file
-does not exist, the envelope carries an explicit empty-journal marker
-(e.g. an `exists: false` field with zero entries) and the command
-still exits 0: a round-1 implementer legitimately has no journal yet
-(DEC-004).
+and for review `persona`/`verdict`). Project each entry through
+SPEC-0055's public `journal show` block structs — `JsonJournalBlock`
+in `speccy-cli/src/journal_show_output.rs:125` (and its
+`to_json_journal_block` mapping) — rather than re-deriving a parallel
+journal-to-JSON shape, so `context` and `journal show` cannot drift.
+This is the same anti-drift discipline DEC-002 applies to
+`check`/`context`. Caveat: do NOT nest the standalone
+`JsonTaskJournal` envelope (`journal_show_output.rs:78`) wholesale —
+its `schema_version` belongs to the standalone `journal show` command
+and would collide with the bundle's own `schema_version`. Reuse the
+block structs plus the frontmatter fields only. The journal content
+must be sufficient for retry context — prior implementer handoffs,
+review verdicts, and blockers directives all present. When the journal
+file does not exist, the envelope carries an explicit empty-journal
+marker (e.g. an `exists: false` field with zero entries) and the
+command still exits 0: a round-1 implementer legitimately has no
+journal yet (DEC-004).
 
 <task-scenarios>
 Given a fixture journal with rounds 1–2, five review blocks, and one
@@ -199,12 +213,18 @@ Repo-relative paths to SPEC.md, TASKS.md, and the task's journal file
 for follow-up targeted reads, resolved from the spec directory. (3) A
 suggested diff command string in merge-base form against the repo's
 default branch, computed by the CLI from git state and runnable
-as-is from the repo root. The merge-base computation is new ground —
-`speccy-cli/src/git.rs` today exposes only `repo_sha`
-(`git.rs:21`); add a best-effort default-branch + merge-base probe in
-the same module following its non-fatal shell-out convention
-(`git.rs:1-22`), reusing the assumption from DEC-003 that no new git
-machinery beyond the existing probe pattern is needed.
+as-is from the repo root. This needs NET-NEW git machinery: no
+merge-base probe exists today. `speccy-cli/src/git.rs` exposes only
+`repo_sha` (`git.rs:21`), and the consistency probe correlates tasks
+to commits by commit-title prefix
+(`first_commit_sha_with_title_prefix`, in
+`speccy-core/src/consistency.rs:177` — NOT git.rs and never by
+merge-base); nothing today computes the default branch. Add a
+best-effort default-branch probe (e.g. `git symbolic-ref
+refs/remotes/origin/HEAD`, falling back to `main`) plus a `git
+merge-base` call to `git.rs`, following its existing non-fatal
+shell-out convention (`git.rs:1-22`) — git unavailability degrades
+the diff-command field, never errors the bundle.
 
 <task-scenarios>
 Given a fixture spec with six tasks whose bodies each contain a
@@ -296,38 +316,52 @@ Suggested files: `speccy-cli/tests/context.rs`,
 <task id="T-008" state="pending" covers="REQ-008">
 ## Migrate implementer phase and six reviewer personas to open with one `speccy context` call
 
-PRECONDITION — coordinate with SPEC-0055 before authoring this task.
-Per the SPEC Notes "Sequencing against SPEC-0055" and Assumption on
-pack migration: SPEC-0055 (lifecycle-write-commands, in-progress, not
-yet implemented) edits the same persona module files in its own
-T-007/T-008. Author this task only after SPEC-0055's pack migration
-has landed, or against a coordinated baseline shared with it —
-landing the two against divergent baselines produces conflicting
-persona bodies. If SPEC-0055's pack migration has not landed when
-this task is picked up, surface the conflict and stop rather than
-editing against a divergent baseline.
+PRECONDITION — satisfied. SPEC-0055 (lifecycle-write-commands) has
+merged ahead of this SPEC (commit dff9f33), so the sequencing risk
+the original draft guarded against is resolved: this edit lands on
+top of the post-0055 fan-out/persona modules, which already route
+journal writes through `speccy journal append` and read-backs through
+`speccy journal show`. Keep SPEC-0055's append/verdict/commit contract
+in those files intact — this task touches only the entry-read step,
+leaving the journal-write and commit prose untouched.
 
 Edit the host-neutral source modules under `resources/modules/`
 (never the ejected `.claude/`, `.agents/`, `.codex/` copies — see
-AGENTS.md "Skill pack source of truth"): the `speccy-work`
-implementer phase and the six reviewer personas begin their entry
-read with a single `speccy context SPEC-NNNN/T-NNN --json`
-invocation. Persona prose stops instructing full-file SPEC.md or
-TASKS.md reads and stops invoking `speccy check` for per-task
-scoping; it references the bundle fields (task, requirements,
-scenarios, journal, diff command). Follow-up targeted reads via the
-bundle's listed paths (e.g. the evidence file) remain legitimate
-where a role needs them. Vet persona modules are left byte-identical.
-Run `just reeject` to regenerate both host packs and confirm a clean
-tree against the committed ejections.
+AGENTS.md "Skill pack source of truth"). The PRIMARY reviewer edit
+target is the shared fan-out spawn prompt
+`resources/modules/skills/partials/review-fanout.md`: its spawn
+prompt today instructs each persona to run `speccy check
+SPEC-NNNN/T-NNN`, read the bare `<task>` body in TASKS.md, and read
+the journal file — rewrite that entry-read step to dispatch a single
+`speccy context SPEC-NNNN/T-NNN --json` call and reference the bundle
+fields (task, requirements, scenarios, journal, diff command). The
+six reviewer persona bodies carry only abstract "read the SPEC, the
+diff, and implementer notes" framing and need no per-file-read
+removal — do NOT touch them for entry-scoping. For the implementer,
+the `speccy-work` phase opens its per-task context read with `speccy
+context`; on the no-selector path `speccy next --json` still runs
+first to resolve the task (the selector is unknown until then), and
+the retry-shape rule (today a pure journal-file read) reads its
+journal from the bundle instead.
+
+Carve-outs to honour: (1) do NOT remove `reviewer-tests`'s caveat
+that `speccy check` exit codes are not test evidence
+(`resources/modules/personas/reviewer-tests.md:37`) — that is not an
+entry-read instruction, and `speccy check` still exists. (2) Leave
+vet persona modules byte-identical. (3) Follow-up targeted reads via
+the bundle's listed paths (e.g. the evidence file) remain legitimate
+where a role needs them. Run `just reeject` to regenerate both host
+packs and confirm a clean tree against the committed ejections.
 
 <task-scenarios>
 Given the updated module sources,
-when the reviewer reads each task-scoped persona and the implementer
-phase module,
-then each opens its read procedure with the `speccy context` call
-and none instructs a full SPEC.md or TASKS.md read as entry context
-(content check by reviewer, not substring assertion) (CHK-012).
+when the reviewer reads the fan-out spawn prompt
+(`review-fanout.md`) and the implementer phase module,
+then each opens its per-task read with the `speccy context` call and
+neither instructs a full SPEC.md / TASKS.md read or a `speccy check`
+entry call as entry context, while `reviewer-tests`'s `speccy check`
+exit-code caveat remains intact (content check by reviewer, not
+substring assertion) (CHK-012).
 
 Given a clean checkout after this task lands,
 when `just reeject` runs and `git status --porcelain` is checked,
@@ -336,10 +370,10 @@ the updated sources, and the vet persona bodies are unchanged from
 the prior commit (CHK-011).
 
 Suggested files:
-`resources/modules/phases/speccy-work.md`,
-`resources/modules/personas/*.md` (six reviewer personas),
-`resources/modules/skills/partials/review-fanout.md` (if it carries
-the entry-read prose)
+`resources/modules/skills/partials/review-fanout.md` (primary
+reviewer entry-read target),
+`resources/modules/phases/speccy-work.md` (implementer entry read +
+retry-shape rule)
 </task-scenarios>
 </task>
 
