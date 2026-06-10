@@ -18,13 +18,15 @@
 //! two journal views cannot drift (REQ-004); and the T-005 slice: the
 //! navigation aids — a sibling-task index (id/state/covers only), the
 //! repo-relative SPEC.md / TASKS.md / journal paths, and a suggested
-//! merge-base diff command (REQ-005). Later tasks add the consistency
-//! section.
+//! merge-base diff command (REQ-005); and the T-006 slice: the
+//! consistency section carrying the workspace-level status plus only the
+//! drift entries scoped to the selected task (REQ-006).
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
 use crate::journal_show_output::JsonJournalBlock;
 use serde::Serialize;
+use speccy_core::consistency::ConsistencyBlock;
 
 /// The `speccy context` JSON bundle envelope.
 ///
@@ -56,6 +58,14 @@ pub struct ContextBundle {
     /// A suggested `git diff` command string in merge-base form against the
     /// repo's default branch, runnable as-is from the repo root (REQ-005).
     pub diff_command: String,
+    /// Workspace consistency status plus only the drift entries scoped to
+    /// the selected task — other tasks' drifts never appear (REQ-006). The
+    /// `status` is the same workspace-level classification `speccy next`
+    /// computes; the `drifts` list is filtered to the selected task. A
+    /// clean workspace yields `status == ok` with zero entries. Reuses
+    /// `speccy next`'s [`ConsistencyBlock`] verbatim so the two
+    /// consistency views cannot drift (DEC-002 / DEC-005).
+    pub consistency: ConsistencyBlock,
 }
 
 /// Spec identity drawn from SPEC.md frontmatter (REQ-002).

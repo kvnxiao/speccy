@@ -213,6 +213,72 @@ fn tasks_md_six(spec_id: &str) -> String {
     body
 }
 
+/// A TASKS.md whose tasks carry the given per-task states, in order from
+/// `T-001`. Used by the consistency tests (REQ-006): a task `completed` in
+/// TASKS.md with no matching `[SPEC/T-NNN]:` commit in git log surfaces a
+/// `state_completed_no_commit` blocking drift, so marking several tasks
+/// `completed` in a fresh repo (no per-task commits) drifts exactly those.
+fn tasks_md_states(spec_id: &str, states: &[&str]) -> String {
+    use std::fmt::Write as _;
+    let mut body = format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n",
+    );
+    for (idx, state) in states.iter().enumerate() {
+        let n = idx + 1;
+        write!(
+            body,
+            "<task id=\"T-{n:03}\" state=\"{state}\" covers=\"REQ-001\">\n\
+             body prose for task {n}.\n\n\
+             <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body
+}
+
+/// Stand up a real git repo at `root` with one initial commit on `main`
+/// and no `[SPEC/T-NNN]:`-prefixed commits. Returns `Ok(false)` (skip) when
+/// git is unavailable, mirroring the live merge-base test's skip path.
+fn init_repo_no_task_commits(root: &Utf8Path) -> TestResult<bool> {
+    if run_git(root, &["init", "-q", "-b", "main"]).is_err() {
+        eprintln!("git unavailable; skipping live consistency test");
+        return Ok(false);
+    }
+    run_git(root, &["config", "user.email", "t@example.com"])?;
+    run_git(root, &["config", "user.name", "t"])?;
+    run_git(root, &["config", "commit.gpgsign", "false"])?;
+    run_git(root, &["add", "-A"])?;
+    run_git(root, &["commit", "-q", "-m", "base"])?;
+    Ok(true)
+}
+
+/// Extract the consistency block from a parsed bundle: the `status` string
+/// and the list of `task_id`s appearing in `drifts`.
+fn consistency_of(value: &serde_json::Value) -> (String, Vec<String>) {
+    let consistency = value
+        .get("consistency")
+        .expect("bundle carries a consistency section");
+    let status = consistency
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .expect("consistency carries a status string")
+        .to_owned();
+    let drift_task_ids = consistency
+        .get("drifts")
+        .and_then(serde_json::Value::as_array)
+        .expect("consistency carries a drifts array")
+        .iter()
+        .map(|d| {
+            d.get("task_id")
+                .and_then(serde_json::Value::as_str)
+                .expect("each drift carries a task_id")
+                .to_owned()
+        })
+        .collect();
+    (status, drift_task_ids)
+}
+
 /// A minimal TASKS.md with a single task T-001 covering REQ-001.
 fn tasks_md_single(spec_id: &str) -> String {
     format!(
@@ -1112,6 +1178,118 @@ fn diff_command_uses_resolved_default_branch_and_runs_from_repo_root() -> TestRe
     assert!(
         diff_text.contains("feature change"),
         "the diff covers the feature branch's change; got: {diff_text}",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-009 (REQ-006): a fixture workspace with drift affecting two tasks.
+// Bundles for one drifted task and one undrifted task both exit 0, both
+// carry the non-ok workspace status, the drifted task's bundle carries only
+// its own drift entries, and the undrifted task's bundle carries an empty
+// drift list.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn drifted_and_undrifted_bundles_share_status_but_scope_drifts_to_self() -> TestResult {
+    let ws = Workspace::new()?;
+    // Six tasks: T-001 and T-002 `completed` (no matching commit → each
+    // drifts `state_completed_no_commit`); the rest `pending` (no drift).
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_states(
+            "SPEC-0042",
+            &[
+                "completed",
+                "completed",
+                "pending",
+                "pending",
+                "pending",
+                "pending",
+            ],
+        )),
+    )?;
+
+    if !init_repo_no_task_commits(&ws.root)? {
+        return Ok(());
+    }
+
+    // Drifted task: T-001 carries its own drift only.
+    let drifted = parse_one_json(&invoke_json(&ws.root, "SPEC-0042/T-001")?);
+    let (drifted_status, drifted_ids) = consistency_of(&drifted);
+    assert_ne!(
+        drifted_status, "ok",
+        "two completed tasks without commits make the workspace non-ok; got {drifted_status}",
+    );
+    assert_eq!(
+        drifted_ids,
+        vec!["T-001".to_owned()],
+        "the drifted task's bundle carries only its own drift entry; T-002's must not appear",
+    );
+
+    // Undrifted task: T-003 (pending) carries the same non-ok workspace
+    // status but an empty drift list.
+    let undrifted = parse_one_json(&invoke_json(&ws.root, "SPEC-0042/T-003")?);
+    let (undrifted_status, undrifted_ids) = consistency_of(&undrifted);
+    assert_eq!(
+        undrifted_status, drifted_status,
+        "both bundles carry the same workspace-level status",
+    );
+    assert!(
+        undrifted_ids.is_empty(),
+        "the undrifted task's bundle carries an empty drift list; got {undrifted_ids:?}",
+    );
+
+    // Both emissions exit 0 — `speccy context` never refuses on drift. The
+    // library `run` returning `Ok` (asserted by `invoke_json`'s `?`) is the
+    // exit-0 contract; the binary path confirms the process exit code.
+    Command::cargo_bin("speccy")?
+        .args(["context", "SPEC-0042/T-001", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+    Command::cargo_bin("speccy")?
+        .args(["context", "SPEC-0042/T-003", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// REQ-006 behavior: drift affecting three tasks including T-002. The bundle
+// for T-002 carries a non-ok status and exactly T-002's drift entries, with
+// no other task's drift entries present.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn three_task_drift_surfaces_only_the_selected_tasks_entries() -> TestResult {
+    let ws = Workspace::new()?;
+    // T-001, T-002, T-004 `completed` (drift); T-003, T-005 `pending` (no
+    // drift). Three tasks drift, one of them is the selected T-002.
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_states(
+            "SPEC-0042",
+            &["completed", "completed", "pending", "completed", "pending"],
+        )),
+    )?;
+
+    if !init_repo_no_task_commits(&ws.root)? {
+        return Ok(());
+    }
+
+    let value = parse_one_json(&invoke_json(&ws.root, "SPEC-0042/T-002")?);
+    let (status, drift_ids) = consistency_of(&value);
+    assert_ne!(status, "ok", "three drifting tasks make the status non-ok");
+    assert_eq!(
+        drift_ids,
+        vec!["T-002".to_owned()],
+        "exactly T-002's drift entries appear; T-001's and T-004's must not",
     );
     Ok(())
 }

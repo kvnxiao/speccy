@@ -23,8 +23,13 @@
 //! index (id/state/covers only), the repo-relative SPEC.md / TASKS.md /
 //! journal paths, and a best-effort suggested merge-base diff command
 //! computed from git state — git unavailability degrades the diff command
-//! to a `main`-baseline fallback, never errors the bundle (REQ-005). The
-//! command performs no writes anywhere.
+//! to a `main`-baseline fallback, never errors the bundle (REQ-005). T-006
+//! adds the consistency section: the workspace-level status `speccy next`
+//! computes (via the shared `consistency::detect` through `ShellGitProbe`)
+//! plus only the drift entries scoped to the selected task — other tasks'
+//! drifts never appear. `speccy context` is a read command and never
+//! refuses on drift; surfacing the status at read time is the feedback
+//! mechanism (REQ-006 / DEC-005). The command performs no writes anywhere.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
@@ -41,6 +46,9 @@ use crate::context_output::TaskEntry;
 use crate::journal_show_output::to_json_journal_block;
 use crate::paths::to_repo_relative;
 use camino::Utf8Path;
+use speccy_core::consistency::ConsistencyBlock;
+use speccy_core::consistency::ShellGitProbe;
+use speccy_core::consistency::detect as detect_consistency;
 use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::SpecDoc;
@@ -191,6 +199,7 @@ fn assemble_bundle(
     let siblings = build_siblings(location);
     let paths = build_paths(location, &journal_path, project_root);
     let diff_command = crate::git::suggested_diff_command(cwd);
+    let consistency = build_consistency(spec, &location.spec_id, &location.task.id, project_root);
 
     Ok(ContextBundle {
         schema_version: 1,
@@ -202,7 +211,35 @@ fn assemble_bundle(
         siblings,
         paths,
         diff_command,
+        consistency,
     })
+}
+
+/// Build the consistency section: the same workspace-level status
+/// `speccy next` computes (via the shared [`detect_consistency`] through a
+/// [`ShellGitProbe`] rooted at the project root, exactly as `next.rs`
+/// does), with the drift list filtered to the selected task only — other
+/// tasks' drifts never appear regardless of count (REQ-006). The
+/// aggregate `status` is preserved verbatim from the workspace scan: a
+/// task with no drift of its own still surfaces a non-ok status when other
+/// tasks drift, so the read-time feedback is honest (DEC-005). `speccy
+/// context` never refuses on drift, so this never affects the exit code.
+fn build_consistency(
+    spec: &ParsedSpec,
+    spec_id: &str,
+    task_id: &str,
+    project_root: &Utf8Path,
+) -> ConsistencyBlock {
+    let probe = ShellGitProbe::new(project_root);
+    let block = detect_consistency(spec_id, spec, &probe);
+    ConsistencyBlock {
+        status: block.status,
+        drifts: block
+            .drifts
+            .into_iter()
+            .filter(|d| d.task_id == task_id)
+            .collect(),
+    }
 }
 
 /// Resolve `<spec-dir>/journal/<task-id>.md` — the canonical per-task
@@ -457,5 +494,33 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
     writeln!(out, "- journal: {}", bundle.paths.journal)?;
 
     writeln!(out, "\n## Suggested diff command\n{}", bundle.diff_command)?;
+    render_consistency(&bundle.consistency, out)?;
+    Ok(())
+}
+
+/// Render the task-scoped consistency section in the text form: the
+/// workspace-level status plus one line per drift entry scoped to the
+/// selected task (REQ-006). Enum values are rendered through their serde
+/// `snake_case` form so the text and JSON labels agree.
+fn render_consistency(
+    consistency: &ConsistencyBlock,
+    out: &mut dyn Write,
+) -> Result<(), ContextError> {
+    let status = serde_json::to_value(consistency.status)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    writeln!(out, "\n## Consistency\nstatus: {status}")?;
+    if consistency.drifts.is_empty() {
+        writeln!(out, "drifts: (none for this task)")?;
+    } else {
+        for drift in &consistency.drifts {
+            let kind = serde_json::to_value(drift.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            writeln!(out, "- {} {} [{}]", drift.task_id, kind, drift.tasks_state)?;
+        }
+    }
     Ok(())
 }

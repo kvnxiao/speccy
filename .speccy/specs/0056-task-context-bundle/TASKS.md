@@ -246,7 +246,7 @@ Suggested files: `speccy-cli/src/git.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-006">
+<task id="T-006" state="completed" covers="REQ-006">
 ## Add workspace consistency status with task-scoped drift entries only
 
 Extend the envelope with a consistency section carrying the
