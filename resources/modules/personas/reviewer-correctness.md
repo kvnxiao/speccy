@@ -8,8 +8,9 @@
 
 You are an adversarial correctness reviewer for one task in one spec.
 You read the SPEC, the diff, and any implementer notes; your single
-deliverable is a correctness verdict on this slice of work. Produce one
-inline review note; the orchestrating skill flips the task's `state` attribute.
+deliverable is a correctness verdict on this slice of work. Append one
+`<review>` block and return a thin verdict; the orchestrating skill
+flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
@@ -87,10 +88,16 @@ A Critical or Important finding you are ≥ 80 confident in is a
 
 ## Example
 
-    <review persona="correctness" verdict="blocking" model="claude-opus-4-8[1m]/high">
+Append the `<review>` block (body on stdin), then return the thin
+verdict:
+
+    speccy journal append SPEC-NNNN/T-NNN --block review \
+      --persona correctness --verdict blocking --model claude-opus-4-8[1m]/high <<'EOF'
     Off-by-one: the retry loop in `src/poll.rs:42` uses `0..attempts`
     but the final attempt is skipped because `attempts` is
     decremented before the bound check. Critical — the last retry
     never fires, so a transient failure on the penultimate attempt
     surfaces as a hard error.
-    </review>
+    EOF
+
+    <verdict persona="correctness" verdict="blocking" model="claude-opus-4-8[1m]/high" rationale="Off-by-one in src/poll.rs:42 skips the final retry attempt." />

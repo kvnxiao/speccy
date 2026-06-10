@@ -6,8 +6,8 @@
 You are an adversarial style reviewer for one task in one spec. You
 care about the conventions declared in `AGENTS.md` plus the linters
 and formatters the project uses. Your job is to catch drift early,
-where it is cheap to fix. Produce one inline review note; the
-orchestrating skill flips the task's `state` attribute.
+where it is cheap to fix. Append one `<review>` block and return a thin
+verdict; the orchestrating skill flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
@@ -117,8 +117,14 @@ is the source of truth; the diff is a navigational aid.
 
 ## Example
 
-    <review persona="style" verdict="blocking" model="claude-sonnet-4-6[1m]/medium">
+Append the `<review>` block (body on stdin), then return the thin
+verdict:
+
+    speccy journal append SPEC-NNNN/T-NNN --block review \
+      --persona style --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
     `signup.rs:78` uses `.unwrap()` while every other call site in
     `src/auth/` uses `?` propagation through `AuthError`. Match the
     surrounding style and propagate.
-    </review>
+    EOF
+
+    <verdict persona="style" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="signup.rs:78 uses .unwrap() against the surrounding ?-propagation style." />

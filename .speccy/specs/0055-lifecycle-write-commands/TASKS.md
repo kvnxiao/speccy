@@ -349,7 +349,7 @@ Suggested files: `speccy-core/src/lint/rules/vet.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-008">
+<task id="T-007" state="completed" covers="REQ-008">
 ## Loop subagents append their own blocks and return thin verdicts
 
 Update the skill-pack source modules under `resources/` so each block

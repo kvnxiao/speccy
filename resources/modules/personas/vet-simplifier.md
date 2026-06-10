@@ -87,42 +87,63 @@ bounded to that diff and does not refactor unrelated code.
 
 ## Verdict return contract
 
-The caller dispatches you in one of two modes; the skill orchestrator
-owns all rollback and journal writes.
+The caller dispatches you in one of two modes. In each, you append
+your own block to VET.md via `speccy journal append` (the caller's
+prompt gives you the `SPEC-NNNN` selector), then return a thin
+verdict. The CLI stamps the block's `date` and manages VET.md's
+invocation sectioning; the simplifier blocks carry no `round` —
+**do not compute, supply, or mention `date`, `round`, or invocation
+numbers**. The skill orchestrator owns all code-state rollback. Do
+not edit code-state files for rollback purposes (`git stash` /
+`reset` / `restore` / `clean`).
 
 {% include "modules/references/identity-sourcing.md" %}
 
 ### Scan mode
 
-Report only. Do not modify files.
+Report only. Do not modify code files. Append the scan block (body
+on stdin), then return the thin verdict:
 
-```
-<simplifier-scan verdict="clean|candidates">
+```bash
+speccy journal append SPEC-NNNN --block simplifier-scan \
+  --verdict <clean|candidates> <<'EOF'
 <one-line summary>
 [optional bullets, each with file:line + proposed change]
-</simplifier-scan>
+EOF
+```
+
+```
+<verdict role="simplifier-scan" verdict="clean|candidates" rationale="<one line>" />
 ```
 
 - `verdict="clean"` — no candidates worth applying.
-- `verdict="candidates"` — at least one candidate; list each as a
-  bullet with `file:line` and a one-line description of the change.
+- `verdict="candidates"` — at least one candidate; list each in the
+  appended body as a bullet with `file:line` and a one-line
+  description of the change.
 
 ### Apply mode
 
 Apply the candidates the caller passes you. After applying, run the
-project's standard hygiene suite per `AGENTS.md`.
+project's standard hygiene suite per `AGENTS.md`. Append the apply
+block (body on stdin), then return the thin verdict:
+
+```bash
+speccy journal append SPEC-NNNN --block simplifier-apply \
+  --verdict <applied|blocking> <<'EOF'
+<one-line summary>
+EOF
+```
 
 ```
-<simplifier-apply verdict="applied|blocking">
-<one-line summary>
-</simplifier-apply>
+<verdict role="simplifier-apply" verdict="applied|blocking" rationale="<one line>" />
 ```
 
 - `verdict="applied"` — all candidates applied and hygiene is green.
 - `verdict="blocking"` — at least one candidate failed to apply or
   hygiene failed. Do **not** attempt to revert yourself. The skill
-  orchestrator owns the rollback. State in the one-line summary
-  what failed.
+  orchestrator owns the rollback. State what failed in the
+  rationale.
 
-Do not write to `VET.md`, `TASKS.md`, or per-task journal files
-yourself. Return one block; the orchestrator transcribes it.
+Your only VET.md write is the `journal append` above — the CLI's
+per-file lock owns serialization. Do not write to `TASKS.md` or
+per-task journal files.

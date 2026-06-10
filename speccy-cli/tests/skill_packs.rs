@@ -1216,10 +1216,13 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
             "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
         );
         // The persona body pulls in the shared review-contract snippets
-        // via `{% include %}`; their expanded text must be present.
+        // via `{% include %}`; their expanded text must be present. The
+        // contract directs the persona to append its own `<review>`
+        // block via `speccy journal append` (SPEC-0055 REQ-008), so the
+        // expanded include carries that invocation.
         assert!(
-            body.contains("Your final message to the orchestrator"),
-            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract; got:\n{body}",
+            body.contains("speccy journal append") && body.contains("--block review"),
+            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract directing `speccy journal append ... --block review`; got:\n{body}",
         );
     }
 }
