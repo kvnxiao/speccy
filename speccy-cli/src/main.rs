@@ -338,7 +338,6 @@ fn dispatch(command: Command) -> u8 {
 
 fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
     use speccy_cli::transition::TransitionError;
-    use speccy_core::task_lookup::LookupError;
 
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
@@ -353,29 +352,8 @@ fn run_transition(selector: String, to: speccy_core::parse::TaskState) -> u8 {
     );
     match result {
         Ok(()) => 0,
-        Err(TransitionError::TaskLookup(LookupError::InvalidFormat { arg })) => {
-            eprintln!("speccy task transition: invalid task reference `{arg}`");
-            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
-            1
-        }
-        Err(TransitionError::TaskLookup(LookupError::NotFound { task_ref })) => {
-            eprintln!("speccy task transition: task `{task_ref}` not found in any spec");
-            eprintln!("  run `speccy status` to list specs and their tasks");
-            1
-        }
-        Err(TransitionError::TaskLookup(LookupError::Ambiguous {
-            task_id,
-            candidate_specs,
-        })) => {
-            eprintln!(
-                "speccy task transition: {task_id} is ambiguous; matches in {count} specs.",
-                count = candidate_specs.len(),
-            );
-            eprintln!("Disambiguate with one of:");
-            for spec_id in &candidate_specs {
-                eprintln!("  speccy task transition {spec_id}/{task_id} --to <state>");
-            }
-            1
+        Err(TransitionError::TaskLookup(e)) => {
+            report_lookup_error("task transition", " --to <state>", &e)
         }
         Err(e) => {
             eprintln!("speccy task transition: {e}");
@@ -392,7 +370,6 @@ fn run_journal_append(
     verdict: Option<String>,
 ) -> u8 {
     use speccy_cli::journal::JournalError;
-    use speccy_core::task_lookup::LookupError;
 
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
@@ -415,29 +392,8 @@ fn run_journal_append(
     );
     match result {
         Ok(()) => 0,
-        Err(JournalError::TaskLookup(LookupError::InvalidFormat { arg })) => {
-            eprintln!("speccy journal append: invalid task reference `{arg}`");
-            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
-            1
-        }
-        Err(JournalError::TaskLookup(LookupError::NotFound { task_ref })) => {
-            eprintln!("speccy journal append: task `{task_ref}` not found in any spec");
-            eprintln!("  run `speccy status` to list specs and their tasks");
-            1
-        }
-        Err(JournalError::TaskLookup(LookupError::Ambiguous {
-            task_id,
-            candidate_specs,
-        })) => {
-            eprintln!(
-                "speccy journal append: {task_id} is ambiguous; matches in {count} specs.",
-                count = candidate_specs.len(),
-            );
-            eprintln!("Disambiguate with one of:");
-            for spec_id in &candidate_specs {
-                eprintln!("  speccy journal append {spec_id}/{task_id} --block <type>");
-            }
-            1
+        Err(JournalError::TaskLookup(e)) => {
+            report_lookup_error("journal append", " --block <type>", &e)
         }
         Err(e) => {
             eprintln!("speccy journal append: {e}");
@@ -454,7 +410,6 @@ fn run_journal_show(
     block: Option<String>,
 ) -> u8 {
     use speccy_cli::journal_show::ShowError;
-    use speccy_core::task_lookup::LookupError;
 
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
@@ -478,30 +433,7 @@ fn run_journal_show(
     flush_best_effort(&mut stdout);
     match result {
         Ok(()) => 0,
-        Err(ShowError::TaskLookup(LookupError::InvalidFormat { arg })) => {
-            eprintln!("speccy journal show: invalid task reference `{arg}`");
-            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
-            1
-        }
-        Err(ShowError::TaskLookup(LookupError::NotFound { task_ref })) => {
-            eprintln!("speccy journal show: task `{task_ref}` not found in any spec");
-            eprintln!("  run `speccy status` to list specs and their tasks");
-            1
-        }
-        Err(ShowError::TaskLookup(LookupError::Ambiguous {
-            task_id,
-            candidate_specs,
-        })) => {
-            eprintln!(
-                "speccy journal show: {task_id} is ambiguous; matches in {count} specs.",
-                count = candidate_specs.len(),
-            );
-            eprintln!("Disambiguate with one of:");
-            for spec_id in &candidate_specs {
-                eprintln!("  speccy journal show {spec_id}/{task_id}");
-            }
-            1
-        }
+        Err(ShowError::TaskLookup(e)) => report_lookup_error("journal show", "", &e),
         Err(e) => {
             eprintln!("speccy journal show: {e}");
             1
@@ -719,6 +651,47 @@ fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
             1
         }
     }
+}
+
+/// Render a task-selector `LookupError` to stderr for one of the
+/// selector-taking commands and return exit code 1.
+///
+/// `cmd` is the command name used as the message prefix and in the
+/// disambiguation examples (e.g. `"task transition"`). `disambig_suffix`
+/// is appended after the `SPEC-NNNN/T-NNN` selector in each
+/// disambiguation example line (e.g. `" --to <state>"`; `""` for
+/// commands that take no trailing argument).
+fn report_lookup_error(
+    cmd: &str,
+    disambig_suffix: &str,
+    err: &speccy_core::task_lookup::LookupError,
+) -> u8 {
+    use speccy_core::task_lookup::LookupError;
+    match err {
+        LookupError::InvalidFormat { arg } => {
+            eprintln!("speccy {cmd}: invalid task reference `{arg}`");
+            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
+        }
+        LookupError::NotFound { task_ref } => {
+            eprintln!("speccy {cmd}: task `{task_ref}` not found in any spec");
+            eprintln!("  run `speccy status` to list specs and their tasks");
+        }
+        LookupError::Ambiguous {
+            task_id,
+            candidate_specs,
+        } => {
+            eprintln!(
+                "speccy {cmd}: {task_id} is ambiguous; matches in {count} specs.",
+                count = candidate_specs.len(),
+            );
+            eprintln!("Disambiguate with one of:");
+            for spec_id in candidate_specs {
+                eprintln!("  speccy {cmd} {spec_id}/{task_id}{disambig_suffix}");
+            }
+        }
+        other => eprintln!("speccy {cmd}: {other}"),
+    }
+    1
 }
 
 fn clamp_exit(code: i32) -> u8 {

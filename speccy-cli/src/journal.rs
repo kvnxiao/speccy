@@ -60,8 +60,9 @@ use std::time::Instant;
 use thiserror::Error;
 
 /// Regex matching a bare `SPEC-NNNN` selector (4+ digits) with no trailing
-/// task component. Used to route vet block appends to VET.md.
-fn bare_spec_selector_regex() -> &'static regex::Regex {
+/// task component — the DEC-004 routing discriminant. Shared with
+/// `journal show` to keep both commands' target inference in lockstep.
+pub(crate) fn bare_spec_selector_regex() -> &'static regex::Regex {
     use std::sync::OnceLock;
     static CELL: OnceLock<regex::Regex> = OnceLock::new();
     #[expect(

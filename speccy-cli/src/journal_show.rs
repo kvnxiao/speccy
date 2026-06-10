@@ -23,6 +23,7 @@
 //! missing journal file exits non-zero (the known call sites run only after
 //! blocks exist, so absence is a loud anomaly).
 
+use crate::journal::bare_spec_selector_regex;
 use crate::journal_show_output::FilteredInvocation;
 use crate::journal_show_output::FilteredJournal;
 use crate::journal_show_output::render_json;
@@ -44,19 +45,6 @@ use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
 use std::io::Write;
 use thiserror::Error;
-
-/// Regex matching a bare `SPEC-NNNN` selector (4+ digits) with no trailing
-/// task component — the DEC-004 routing discriminant shared with
-/// `journal append`.
-fn bare_spec_selector_regex() -> &'static regex::Regex {
-    use std::sync::OnceLock;
-    static CELL: OnceLock<regex::Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by tests"
-    )]
-    CELL.get_or_init(|| regex::Regex::new(r"^SPEC-\d{4,}$").unwrap())
-}
 
 /// The `--round` filter: keep the highest round, or a specific round.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

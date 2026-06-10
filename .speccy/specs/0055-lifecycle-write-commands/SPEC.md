@@ -2,7 +2,7 @@
 id: SPEC-0055
 slug: lifecycle-write-commands
 title: Mechanical lifecycle write commands — task state transitions, validated journal appends, and direct subagent journal writes
-status: in-progress
+status: implemented
 created: 2026-06-09
 supersedes: []
 ---
