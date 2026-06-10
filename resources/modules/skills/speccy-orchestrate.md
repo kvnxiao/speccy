@@ -50,9 +50,11 @@ which spec to drive and exit without looping.
 outer:    speccy-orchestrate dispatch loop  ← this skill's session
             └── on `next_action.kind`:
                   ├── work   → spawn ONE speccy-work sub-agent
-                  ├── review → fan out 4 reviewer-* sub-agents
+                  ├── review → fan out reviewer-* sub-agents
                   │             in parallel from this session
-                  │             (follows the speccy-review skill body)
+                  │             (each self-appends its <review> via
+                  │              `speccy journal append`; orchestrator
+                  │              flips state via `speccy task transition`)
                   ├── vet    → run the speccy-vet skill body inline
                   │             in this session, spawning
                   │             vet-reviewer / vet-implementer /
@@ -70,11 +72,15 @@ inner-3:  simplifier polish — described in speccy-vet, run inline
 ```
 
 The orchestrator owns the outer loop, the per-task retry counter,
-the review consolidation step (journal append + TASKS.md state
-flip), and the vet round counter / snapshot management. Only the
-leaf work (one implementer pass, one persona review, one drift
-review, one drift fix, one simplifier scan / apply) lives in a
-spawned sub-agent.
+the review consolidation step (verify completeness via `speccy
+journal show`, flip state via `speccy task transition`, append the
+consolidated `<blockers>` via `speccy journal append`), and the vet
+round counter / snapshot management. Only the leaf work (one
+implementer pass, one persona review, one drift review, one drift
+fix, one simplifier scan / apply) lives in a spawned sub-agent. All
+lifecycle writes the orchestrator performs go through the CLI verbs
+(`task transition`, `journal append`, `journal show`); it never edits
+TASKS.md `state` attributes or journal files with file-editing tools.
 
 ## Context discipline
 
@@ -182,10 +188,12 @@ Repeat until a stop condition fires:
      verbatim so the user can react.
 
 3. After the dispatch settles (the one `speccy-work` sub-agent
-   returns; or the four reviewer-* personas have all returned and
-   this orchestrator has written the journal + TASKS.md; or the
-   inline vet workflow has written its `<gate>` block), re-query
-   `speccy next SPEC-NNNN --json` and loop from step 1.
+   returns; or the reviewer-* personas have all returned, the
+   orchestrator has verified completeness via `speccy journal show`
+   and flipped state via `speccy task transition`; or the inline vet
+   workflow has appended its `<gate>` block via `speccy journal
+   append`), re-query `speccy next SPEC-NNNN --json` and loop from
+   step 1.
 
 ## Work dispatch
 

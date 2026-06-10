@@ -37,14 +37,19 @@ applies one action per entry per the table below.
 
 ## Policy table
 
+All `state` flips in the actions below run through `speccy task
+transition SPEC-NNNN/T-NNN --to <state>` — the CLI enforces the legal
+state graph and rewrites the `state` attribute byte-surgically. Never
+edit a `state` attribute in TASKS.md with file-editing tools.
+
 | `kind` | `severity` | Action |
 |---|---|---|
-| `commit_without_state` | `auto_fixable` | Edit TASKS.md: flip the task's `state` attribute to `completed` (deterministic write). |
+| `commit_without_state` | `auto_fixable` | `speccy task transition SPEC-NNNN/T-NNN --to completed`. |
 | `state_completed_no_commit` (dirty tree, `details.working_tree_dirty == true`) | `blocking` | Run `git add -A` followed by `git commit` using the REQ-004 message format (title `[SPEC-NNNN/T-NNN]: <task title>`; body extracted from the latest `<implementer>` block's `Completed` field in `journal/T-NNN.md`; `Co-Authored-By` trailer per host). |
-| `state_completed_no_commit` (clean tree, `details.working_tree_dirty == false`) | `blocking` | Edit TASKS.md: roll the task's `state` back to `in-review`. Journal file is preserved intact as evidence for the next reviewer round. |
-| `state_in_progress_orphaned` | `blocking` | Run `git restore .` and `git clean -fd` to discard the partial implementer work, then edit TASKS.md to flip the task's `state` to `pending`. The orchestrator's per-task retry budget will redo the work. |
-| `state_in_progress_clean` (`details.working_tree_dirty == false`) | `blocking` | Edit TASKS.md: roll the task's `state` back to `pending`. No git mutation — the tree is already clean, so there is no partial work to discard. The orchestrator's per-task retry budget will redo the work. |
-| `journal_xml_malformed` | `blocking` | Truncate the journal file at `details.journal_path` to `details.last_well_formed_byte_offset` bytes. Reset the corresponding TASKS.md `state` to whatever the truncated journal implies (if the last well-formed element is `<implementer>`, state goes to `in-review`; if a closing `<review>` block survived and all four personas passed, the per-task journal already reflects a passing round and state may flip to `completed` via the standard commit step). |
+| `state_completed_no_commit` (clean tree, `details.working_tree_dirty == false`) | `blocking` | `speccy task transition SPEC-NNNN/T-NNN --to in-review` to roll the task back. Journal file is preserved intact as evidence for the next reviewer round. |
+| `state_in_progress_orphaned` | `blocking` | Run `git restore .` and `git clean -fd` to discard the partial implementer work, then `speccy task transition SPEC-NNNN/T-NNN --to pending`. The orchestrator's per-task retry budget will redo the work. |
+| `state_in_progress_clean` (`details.working_tree_dirty == false`) | `blocking` | `speccy task transition SPEC-NNNN/T-NNN --to pending` to roll the task back. No git mutation — the tree is already clean, so there is no partial work to discard. The orchestrator's per-task retry budget will redo the work. |
+| `journal_xml_malformed` | `blocking` | Truncate the journal file at `details.journal_path` to `details.last_well_formed_byte_offset` bytes — a corruption-recovery truncation, the one journal mutation with no `journal append` equivalent. Then run `speccy task transition` to reset the corresponding TASKS.md `state` to whatever the truncated journal implies (if the last well-formed element is `<implementer>`, `--to in-review`; if a closing `<review>` block survived and all spawned personas passed, the per-task journal already reflects a passing round and state may flip `--to completed` via the standard commit step). |
 
 ## Post-dispatch re-query discipline
 
@@ -82,8 +87,9 @@ The reconcile pass holds three properties by construction:
 
 3. **Idempotent.** Each policy action is a no-op when applied to
    already-converged state. Re-running `git add -A && git commit`
-   on a clean tree produces no commit; re-running a TASKS.md state
-   flip when the state is already at the target value is a no-op;
+   on a clean tree produces no commit; re-running `speccy task
+   transition … --to <state>` when the state is already at the target
+   value is a same-state no-op (exit 0, file byte-identical);
    truncating a journal at its current length is a no-op.
    Successive session crashes during reconciliation converge to the
    same eventual state.

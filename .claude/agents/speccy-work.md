@@ -126,9 +126,12 @@ incremented round).
      `git checkout` against the dirty paths; do not rewrite the
      touched files from scratch; do not reset state. The dirty
      tree is the prior pass's WIP — iterate on it in place.
-   - Flip state to `in-progress` and continue through the same
-     hygiene gate and `in-review` flip the first-attempt branch
-     uses (the SPEC-0045/REQ-001 hygiene gate runs unchanged).
+   - Flip state to `in-progress` via `speccy task transition
+     SPEC-NNNN/T-NNN --to in-progress` and continue through the same
+     hygiene gate and `speccy task transition … --to in-review` flip
+     the first-attempt branch uses (the SPEC-0045/REQ-001 hygiene gate
+     runs unchanged). Never edit the `state` attribute in TASKS.md
+     directly.
    - Append the next `<implementer>` block via `speccy journal
      append` (step 9); the CLI derives and stamps the incremented
      round. The retry-mode `Completed` field describes the amend
@@ -136,7 +139,16 @@ incremented round).
      restatement of the cumulative task work.
 
 4. Flip the target task's `state` from `pending` to `in-progress`
-   by editing TASKS.md.
+   through the transition command — never by editing the `state`
+   attribute in TASKS.md directly:
+
+   ```bash
+   speccy task transition SPEC-NNNN/T-NNN --to in-progress
+   ```
+
+   The CLI enforces the legal state graph and rewrites the `state`
+   attribute byte-surgically; an illegal edge or unresolved selector
+   exits non-zero with the file untouched.
 
 5. Read the task scenarios to understand what must be implemented:
 
@@ -267,8 +279,15 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
 
 
 9. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
-   `state="..."` attribute from `in-progress` to `in-review` in
-   TASKS.md, then append one `<implementer>` block to the per-task
+   `state` from `in-progress` to `in-review` through the transition
+   command — never by editing the `state` attribute in TASKS.md
+   directly:
+
+   ```bash
+   speccy task transition SPEC-NNNN/T-NNN --to in-review
+   ```
+
+   Then append one `<implementer>` block to the per-task
    journal via `speccy journal append`. Do NOT inline an
    `<implementer-note>` inside the `<task>` body in TASKS.md — the
    parser rejects that element. The journal file is the canonical

@@ -108,8 +108,8 @@ generated_at: 2026-05-21T19:45:00Z
 - Procedural compliance: This implementer entry lands directly in
   `journal/T-001.md` per the journal-file schema. No
   `<implementer-note>` block was written into TASKS.md (the parser
-  rejects that element). The TASKS.md `state="..."` attribute for
-  T-001 flips from `in-progress` to `in-review` as the final step
+  rejects that element). T-001's `state` flips from `in-progress`
+  to `in-review` via `speccy task transition` as the final step
   of this turn. No shipped skill
   bodies under `skills/` required edits during this task — the
   implementer prompt at HEAD already documents the canonical

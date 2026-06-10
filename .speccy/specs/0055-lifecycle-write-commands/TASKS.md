@@ -411,7 +411,7 @@ Suggested files: `resources/modules/phases/speccy-work.md`,
 </task-scenarios>
 </task>
 
-<task id="T-008" state="pending" covers="REQ-009">
+<task id="T-008" state="completed" covers="REQ-009">
 ## Orchestrator and reconcile flows consume transition + show + append
 
 Update the orchestrate, review, vet, and amend/reconcile module

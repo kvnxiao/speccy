@@ -101,44 +101,49 @@ reconciliation are not forgotten.
      prose, or restructures sections that the amendment did not
      touch is out-of-scope and should be reverted inline.
 
-4. Reconcile TASKS.md: preserve `state="completed"` tasks unless the
-   SPEC change invalidated them (those flip their `state` back to
-   `pending`, and the amendment appends a
-   `<blockers date="..." round="N">spec amended; ...</blockers>`
-   element to `.speccy/specs/NNNN-slug/journal/T-NNN.md` — the
-   per-task journal file sibling to `SPEC.md` and `TASKS.md` — rather
-   than into the `<task>` body in TASKS.md, which now unconditionally
-   rejects journal elements); add new `<task>` elements for newly
-   added requirements; remove `<task>` elements for dropped
-   requirements.
+4. Reconcile TASKS.md. Three kinds of reconciliation:
 
-   The `<blockers>` element has two required attributes: `date` (the
-   amendment timestamp, ISO 8601 UTC) and `round`. Pick the `round`
-   value by reading the existing journal:
+   - **Structural edits** — add new `<task>` elements for newly
+     added requirements and remove `<task>` elements for dropped
+     requirements. These are structural TASKS.md edits, not `state`
+     mutations, so edit TASKS.md directly.
+   - **State invalidation** — preserve `state="completed"` tasks
+     unless the SPEC change invalidated them. For each invalidated
+     task, flip `completed` → `pending` through the transition
+     command, never by editing the `state` attribute directly:
 
-   - If the task already has a journal file with rounds up to N
-     (i.e. the highest `round="N"` across its existing
-     `<implementer>` / `<review>` / `<blockers>` blocks), use
-     `round="N"` matching the round of the implementer attempt the
-     amend invalidates. The next implementer attempt will continue
-     at round `N+1` when it writes its own `<implementer>` block.
-   - If the task has no prior journal file (it was completed in a
-     single round without prior blockers and the journal was never
-     created, or the journal exists but has no rounds yet), use
-     `round="1"`. If the journal file does not exist, create it
-     with the standard frontmatter (`spec`, `task`, `generated_at`)
-     before appending. In practice this branch is unreachable for
-     amendment-driven blockers — a task being amend-invalidated is
-     already `state="completed"` and therefore has ≥1 prior
-     `<implementer>` round in its journal — so the `round="1"`
-     fallback is informational.
+     ```bash
+     speccy task transition SPEC-NNNN/T-NNN --to pending
+     ```
+
+   - **Blocker directive** — for each invalidated task, append an
+     amendment-driven `<blockers>` block to the per-task journal at
+     `.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
+     append`, never by editing the journal file directly and never
+     into the `<task>` body in TASKS.md (the parser rejects journal
+     elements there):
+
+     ```bash
+     speccy journal append SPEC-NNNN/T-NNN --block blockers <<'EOF'
+     spec amended; <what changed in SPEC and what the next
+     implementer attempt must address>.
+     EOF
+     ```
+
+   The `<blockers>` body stays amendment-authored semantic judgment:
+   name what changed in SPEC and what the next implementer attempt
+   must address. The CLI is the sole authority for the block's `date`
+   and `round` — it stamps `date` (UTC now), derives `round` (matching
+   the current implementer round so the next attempt continues at
+   `N+1`), creates the journal with frontmatter if it is somehow
+   absent, and emits the paired `<blockers>…</blockers>` element.
+   **Do not compute, supply, or hand-author `date`, `round`, or the
+   open/close tags**; the body you pipe is the inner text only.
 
    Canonical journal `<blockers>` shape: `{{ speccy_references_path }}/journal-blockers.md`.
 
-   The `<blockers>` body is an amendment-driven blocker directive:
-   name what changed in SPEC and what the next implementer attempt
-   must address. The `completed` → `pending` state flip on the
-   affected task is part of the same amendment turn.
+   The `completed` → `pending` transition and the `<blockers>` append
+   on the affected task are part of the same amendment turn.
 5. Record the new spec hash:
 
    ```bash

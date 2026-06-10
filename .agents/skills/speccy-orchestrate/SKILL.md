@@ -54,9 +54,11 @@ which spec to drive and exit without looping.
 outer:    speccy-orchestrate dispatch loop  ← this skill's session
             └── on `next_action.kind`:
                   ├── work   → spawn ONE speccy-work sub-agent
-                  ├── review → fan out 4 reviewer-* sub-agents
+                  ├── review → fan out reviewer-* sub-agents
                   │             in parallel from this session
-                  │             (follows the speccy-review skill body)
+                  │             (each self-appends its <review> via
+                  │              `speccy journal append`; orchestrator
+                  │              flips state via `speccy task transition`)
                   ├── vet    → run the speccy-vet skill body inline
                   │             in this session, spawning
                   │             vet-reviewer / vet-implementer /
@@ -74,11 +76,15 @@ inner-3:  simplifier polish — described in speccy-vet, run inline
 ```
 
 The orchestrator owns the outer loop, the per-task retry counter,
-the review consolidation step (journal append + TASKS.md state
-flip), and the vet round counter / snapshot management. Only the
-leaf work (one implementer pass, one persona review, one drift
-review, one drift fix, one simplifier scan / apply) lives in a
-spawned sub-agent.
+the review consolidation step (verify completeness via `speccy
+journal show`, flip state via `speccy task transition`, append the
+consolidated `<blockers>` via `speccy journal append`), and the vet
+round counter / snapshot management. Only the leaf work (one
+implementer pass, one persona review, one drift review, one drift
+fix, one simplifier scan / apply) lives in a spawned sub-agent. All
+lifecycle writes the orchestrator performs go through the CLI verbs
+(`task transition`, `journal append`, `journal show`); it never edits
+TASKS.md `state` attributes or journal files with file-editing tools.
 
 ## Context discipline
 
@@ -186,10 +192,12 @@ Repeat until a stop condition fires:
      verbatim so the user can react.
 
 3. After the dispatch settles (the one `speccy-work` sub-agent
-   returns; or the four reviewer-* personas have all returned and
-   this orchestrator has written the journal + TASKS.md; or the
-   inline vet workflow has written its `<gate>` block), re-query
-   `speccy next SPEC-NNNN --json` and loop from step 1.
+   returns; or the reviewer-* personas have all returned, the
+   orchestrator has verified completeness via `speccy journal show`
+   and flipped state via `speccy task transition`; or the inline vet
+   workflow has appended its `<gate>` block via `speccy journal
+   append`), re-query `speccy next SPEC-NNNN --json` and loop from
+   step 1.
 
 ## Work dispatch
 
@@ -266,13 +274,17 @@ The prompt for each spawn is:
 > to load the task scenarios, read the bare `<task>` body in
 > TASKS.md and the prior activity in
 > `.speccy/specs/NNNN-slug/journal/T-NNN.md`, and apply your
-> persona's review criteria. Return your verdict as your final
-> message as a
-> `<review persona="<persona>" verdict="..." model="...">…</review>`
-> element block. The `model` attribute is required and must
-> identify the model that produced the verdict (with the optional
-> slash-suffix effort convention from the verdict-return contract).
-> Do not edit TASKS.md and do not edit the journal file.
+> persona's review criteria. Append your own `<review>` block to the
+> per-task journal by running
+> `speccy journal append SPEC-NNNN/T-NNN --block review --persona <persona> --verdict <pass|blocking> --model <your-model>`
+> with the review body on stdin, then return a thin self-closing
+> `<verdict persona="<persona>" verdict="..." model="..." rationale="..." />`
+> element as your final message (per the verdict-return contract). The
+> `--model` value is required and must identify the model that produced
+> the verdict (with the optional slash-suffix effort convention from the
+> verdict-return contract). Do not edit TASKS.md. The journal write goes
+> through `speccy journal append` — do not use file-editing tools on the
+> journal.
 >
 > The working tree may be dirty: the implementer leaves changes
 > uncommitted on purpose, and the orchestrator (not the implementer)
@@ -299,64 +311,94 @@ Canonical journal `<review>` shape:
 Canonical journal `<blockers>` shape:
 `.agents/speccy-references/journal-blockers.md`.
 
-After all spawned sub-agents return, **consolidate** the `<review>`
-element blocks from each reviewer's final message and append them
-to `.speccy/specs/NNNN-slug/journal/T-NNN.md` **serially in the
-running session** — do not delegate the write back to a reviewer
-sub-agent, and do not write to TASKS.md.
+Each reviewer sub-agent appends its own `<review>` block to
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
+append --block review` before returning a thin `<verdict>` element
+(see `resources/modules/personas/verdict_return_contract.md`). The
+CLI's per-file lock serializes those parallel appends, so the
+running session never transcribes `<review>` blocks itself and never
+edits the journal with file-editing tools. The orchestrator's job
+after the fan-out settles is to **verify completeness, read back any
+blockers, then drive the state flip through the CLI verbs**.
 
-When transcribing each returned `<review>` into the journal:
+### Step 1 — verify the round's reviews are complete
 
-- Copy the `model` attribute **verbatim** from the reviewer's reply
-  per `resources/modules/personas/verdict_return_contract.md`. Do
-  not infer a model value from the persona name, the host
-  skill-pack identity, or any other source. If a returned
-  `<review>` is missing `model`, halt the fan-out and surface the
-  non-conforming persona rather than inventing a value.
-- Ensure each appended `<review>` carries the full required
-  attribute set: `date` (ISO8601 with seconds and timezone),
-  `model` (verbatim from the reviewer), `persona`, `verdict`
-  (`pass` or `blocking`), and `round` (positive integer matching
-  the implementer round under review). All five are required.
-- If `journal/T-NNN.md` does not exist yet (a task can reach
-  `in-review` only after the implementer wrote its round-1
-  `<implementer>` block, so this should be rare — but if the file
-  is somehow missing, surface that as an error rather than
-  silently creating one without the implementer entry).
+Read back the appended `<review>` blocks for the round under review
+through the CLI rather than trusting the returned thin verdicts:
 
-Apply the state transition to **TASKS.md serially in the running
-session** (separate write from the journal append):
+```bash
+speccy journal show SPEC-NNNN/T-NNN --json --block review --round latest
+```
 
-- If every spawned reviewer's `<review verdict="...">` is
-  `verdict="pass"`, flip the task's `state="..."` attribute from
-  `in-review` to `completed`.
+Confirm every persona you spawned appears in the result for the
+latest round. If a persona is missing (its append failed, or its
+sub-agent errored before appending), halt the fan-out and surface
+the missing persona rather than flipping state on an incomplete
+round. Do not parse the journal file by hand — `journal show` is the
+read-back authority.
+
+### Step 2 — drive the state flip through `speccy task transition`
+
+Decide pass vs blocking from the verdicts the reviewers appended,
+then flip the task's `state` with the transition command — never by
+editing the `state` attribute in TASKS.md directly:
+
+- If every spawned reviewer's appended `<review verdict="...">` is
+  `verdict="pass"`, flip `in-review` → `completed`:
+
+      speccy task transition SPEC-NNNN/T-NNN --to completed
+
 - If any spawned reviewer's `<review verdict="...">` is
-  `verdict="blocking"`, flip `state="..."` from `in-review` to
-  `pending`, and append a single consolidated
-  `<blockers>…</blockers>` element block to `journal/T-NNN.md`
-  that aggregates all failing reviewers' feedback — not one
-  `<blockers>` per reviewer, not a partial write. The block
-  carries required attributes `date` and `round` (matching the
-  round of the `<review>` blocks just appended) and has the form:
+  `verdict="blocking"`, flip `in-review` → `pending`:
 
-      <blockers date="2026-05-21T22:10:00Z" round="1">
-      <one-line summary of what to change before the next
-      implementer pass>.
-      <optional bullets enumerating each persona's blocker>.
-      </blockers>
+      speccy task transition SPEC-NNNN/T-NNN --to pending
 
-This serial write in the running session eliminates the
-parallel-write race that would occur if each reviewer sub-agent
-wrote to the journal or TASKS.md directly (per DEC-008). Per-task
-journal files do not introduce parallel writes from reviewer
-sub-agents — the running session remains the sole journal writer
-during review.
+  then append a single consolidated `<blockers>` block (step 3).
+
+### Step 3 — consolidate blockers via `speccy journal append`
+
+On a blocking round, read back the failing reviews and write **one**
+consolidated `<blockers>` block — not one per reviewer, not a partial
+write. Read the blocking review bodies through the CLI:
+
+```bash
+speccy journal show SPEC-NNNN/T-NNN --json --verdict blocking --round latest
+```
+
+The `<blockers>` **body is orchestrator-authored semantic judgment**
+(DEC-001 non-goal: the CLI never synthesizes blocker prose). Compose
+the body from the blocking reviews you just read back, then append it
+with the body on stdin:
+
+```bash
+speccy journal append SPEC-NNNN/T-NNN --block blockers <<'EOF'
+<one-line summary of what to change before the next implementer pass>.
+<optional bullets enumerating each persona's blocker>.
+EOF
+```
+
+The CLI is the sole authority for the block's `date` and `round` and
+emits the paired `<blockers>…</blockers>` element — **do not compute,
+supply, or hand-author `date`, `round`, or the open/close tags**.
+There is no flag to override them; the body you pipe is the inner
+text only. Validation runs before any write; a malformed body leaves
+the journal byte-identical.
+
+The single-writer rule holds: the CLI's append lock owns write
+serialization across the parallel reviewer appends and this
+consolidated `<blockers>` append, and the orchestrator remains the
+sole author of `<blockers>` bodies (and, per the commit step below,
+of git commits). The running session issues only CLI verbs — `journal
+show`, `journal append`, `task transition` — for the review-induced
+journal and state writes; it never edits TASKS.md or the journal file
+with file-editing tools.
 
 ### Atomic commit on review pass (REQ-003, REQ-004)
 
 When every spawned reviewer returned `verdict="pass"` and the
-journal append + TASKS.md flip to `completed` are written, the
-running session performs the commit step:
+`speccy task transition … --to completed` flip has run (the reviewer
+`<review>` appends already landed via the CLI during the fan-out),
+the running session performs the commit step:
 
 1. Run `git status --porcelain`. If stdout is empty, **skip the
    commit step silently** (no surface to the user, no error). This
