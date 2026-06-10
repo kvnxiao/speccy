@@ -202,7 +202,7 @@ Suggested files: `speccy-cli/src/context.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-005">
+<task id="T-005" state="completed" covers="REQ-005">
 ## Add the sibling index, file paths, and a suggested merge-base diff command
 
 Extend the envelope with three navigation aids. (1) A sibling-task

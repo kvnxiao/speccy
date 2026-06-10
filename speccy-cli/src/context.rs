@@ -19,19 +19,27 @@
 //! the selected task's per-task journal in full, reusing `journal show`'s
 //! block projection so the two JSON journal views cannot drift; an absent
 //! journal yields an explicit empty marker and a successful exit
-//! (REQ-004 / DEC-004). The command performs no writes anywhere.
+//! (REQ-004 / DEC-004). T-005 adds the navigation aids: a sibling-task
+//! index (id/state/covers only), the repo-relative SPEC.md / TASKS.md /
+//! journal paths, and a best-effort suggested merge-base diff command
+//! computed from git state — git unavailability degrades the diff command
+//! to a `main`-baseline fallback, never errors the bundle (REQ-005). The
+//! command performs no writes anywhere.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
 use crate::context_output::BundleJournal;
+use crate::context_output::BundlePaths;
 use crate::context_output::ContextBundle;
 use crate::context_output::CoveringRequirement;
 use crate::context_output::DecisionEntry;
 use crate::context_output::Intent;
 use crate::context_output::ScenarioEntry;
+use crate::context_output::SiblingEntry;
 use crate::context_output::SpecIdentity;
 use crate::context_output::TaskEntry;
 use crate::journal_show_output::to_json_journal_block;
+use crate::paths::to_repo_relative;
 use camino::Utf8Path;
 use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
@@ -132,7 +140,7 @@ pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     let ws = scan_with_archive(&project_root, false);
 
     let location = find_task(&ws, &task_ref)?;
-    let bundle = assemble_bundle(&ws, &location)?;
+    let bundle = assemble_bundle(&ws, &location, &project_root, cwd)?;
 
     if json {
         let mut text = serde_json::to_string(&bundle)?;
@@ -145,11 +153,17 @@ pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
 }
 
 /// Assemble the context bundle (identity + intent from REQ-002; task
-/// entry and covering requirements from REQ-003) from a resolved task
-/// location.
+/// entry and covering requirements from REQ-003; inlined journal from
+/// REQ-004; sibling index, paths, and suggested diff command from REQ-005)
+/// from a resolved task location.
+///
+/// `project_root` relativises the surfaced file paths; `cwd` roots the
+/// best-effort git probe for the suggested diff command.
 fn assemble_bundle(
     ws: &Workspace,
     location: &TaskLocation<'_>,
+    project_root: &Utf8Path,
+    cwd: &Utf8Path,
 ) -> Result<ContextBundle, ContextError> {
     let spec = resolve_spec(ws, &location.spec_id)?;
 
@@ -172,7 +186,11 @@ fn assemble_bundle(
     let intent = build_intent(spec_doc);
     let task = build_task_entry(location);
     let requirements = build_requirements(location, spec_doc);
-    let journal = build_journal(location)?;
+    let journal_path = journal_path(location);
+    let journal = build_journal(&journal_path)?;
+    let siblings = build_siblings(location);
+    let paths = build_paths(location, &journal_path, project_root);
+    let diff_command = crate::git::suggested_diff_command(cwd);
 
     Ok(ContextBundle {
         schema_version: 1,
@@ -181,7 +199,53 @@ fn assemble_bundle(
         task,
         requirements,
         journal,
+        siblings,
+        paths,
+        diff_command,
     })
+}
+
+/// Resolve `<spec-dir>/journal/<task-id>.md` — the canonical per-task
+/// journal path, shared by the journal section (REQ-004) and the surfaced
+/// journal path field (REQ-005), so the two cannot disagree.
+fn journal_path(location: &TaskLocation<'_>) -> camino::Utf8PathBuf {
+    location
+        .spec_dir
+        .join("journal")
+        .join(format!("{}.md", location.task.id))
+}
+
+/// Build the sibling-task index: every other task in the spec as
+/// id/state/covers only — never any body text — in TASKS.md declared order,
+/// excluding the selected task (REQ-005).
+fn build_siblings(location: &TaskLocation<'_>) -> Vec<SiblingEntry> {
+    let selected = &location.task.id;
+    location
+        .tasks_md
+        .tasks
+        .iter()
+        .filter(|t| &t.id != selected)
+        .map(|t| SiblingEntry {
+            id: t.id.clone(),
+            state: t.state.as_str().to_owned(),
+            covers: t.covers.clone(),
+        })
+        .collect()
+}
+
+/// Build the repo-relative path triple — SPEC.md, TASKS.md, and the task's
+/// journal file — for follow-up targeted reads (REQ-005). The journal path
+/// is surfaced whether or not the file exists yet.
+fn build_paths(
+    location: &TaskLocation<'_>,
+    journal_path: &Utf8Path,
+    project_root: &Utf8Path,
+) -> BundlePaths {
+    BundlePaths {
+        spec_md: to_repo_relative(&location.spec_dir.join("SPEC.md"), project_root),
+        tasks_md: to_repo_relative(&location.spec_dir.join("TASKS.md"), project_root),
+        journal: to_repo_relative(journal_path, project_root),
+    }
 }
 
 /// Inline the selected task's per-task journal into the bundle (REQ-004).
@@ -194,13 +258,7 @@ fn assemble_bundle(
 /// carries an explicit `exists: false` marker with zero blocks and emission
 /// still succeeds: a round-1 implementer legitimately has no journal yet
 /// (DEC-004).
-fn build_journal(location: &TaskLocation<'_>) -> Result<BundleJournal, ContextError> {
-    let task_id = &location.task.id;
-    let journal_path = location
-        .spec_dir
-        .join("journal")
-        .join(format!("{task_id}.md"));
-
+fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError> {
     let src = match fs_err::read_to_string(journal_path.as_std_path()) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -216,8 +274,8 @@ fn build_journal(location: &TaskLocation<'_>) -> Result<BundleJournal, ContextEr
     };
 
     let doc =
-        parse_journal_xml(&src, &journal_path).map_err(|source| ContextError::JournalParse {
-            path: journal_path.clone(),
+        parse_journal_xml(&src, journal_path).map_err(|source| ContextError::JournalParse {
+            path: journal_path.to_path_buf(),
             source,
         })?;
 
@@ -378,5 +436,26 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
     } else {
         writeln!(out, "\n## Journal\n(none — task has no journal yet)")?;
     }
+
+    if bundle.siblings.is_empty() {
+        writeln!(out, "\n## Sibling tasks\n(none)")?;
+    } else {
+        writeln!(out, "\n## Sibling tasks")?;
+        for sib in &bundle.siblings {
+            let covers = if sib.covers.is_empty() {
+                "(none)".to_owned()
+            } else {
+                sib.covers.join(" ")
+            };
+            writeln!(out, "- {} [{}] covers: {covers}", sib.id, sib.state)?;
+        }
+    }
+
+    writeln!(out, "\n## Paths")?;
+    writeln!(out, "- SPEC.md: {}", bundle.paths.spec_md)?;
+    writeln!(out, "- TASKS.md: {}", bundle.paths.tasks_md)?;
+    writeln!(out, "- journal: {}", bundle.paths.journal)?;
+
+    writeln!(out, "\n## Suggested diff command\n{}", bundle.diff_command)?;
     Ok(())
 }

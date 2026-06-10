@@ -15,8 +15,11 @@
 //! covering requirements resolved through the shared core walk
 //! (REQ-003); and the T-004 slice: the inlined per-task journal, whose
 //! per-block JSON shape reuses `journal show`'s `JsonJournalBlock` so the
-//! two journal views cannot drift (REQ-004). Later tasks add the sibling
-//! index, paths, and consistency sections.
+//! two journal views cannot drift (REQ-004); and the T-005 slice: the
+//! navigation aids — a sibling-task index (id/state/covers only), the
+//! repo-relative SPEC.md / TASKS.md / journal paths, and a suggested
+//! merge-base diff command (REQ-005). Later tasks add the consistency
+//! section.
 //!
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
@@ -44,6 +47,15 @@ pub struct ContextBundle {
     /// The selected task's per-task journal, inlined in full when present;
     /// an explicit empty marker when the file does not yet exist (REQ-004).
     pub journal: BundleJournal,
+    /// Every other task in the spec as id/state/covers only — never any
+    /// body text — in TASKS.md declared order (REQ-005).
+    pub siblings: Vec<SiblingEntry>,
+    /// Repo-relative paths to SPEC.md, TASKS.md, and the task's journal
+    /// file for follow-up targeted reads (REQ-005).
+    pub paths: BundlePaths,
+    /// A suggested `git diff` command string in merge-base form against the
+    /// repo's default branch, runnable as-is from the repo root (REQ-005).
+    pub diff_command: String,
 }
 
 /// Spec identity drawn from SPEC.md frontmatter (REQ-002).
@@ -161,4 +173,40 @@ pub struct BundleJournal {
     pub generated_at: Option<String>,
     /// Every journal block in file order; empty when the file is absent.
     pub blocks: Vec<JsonJournalBlock>,
+}
+
+/// One sibling task projected into the bundle's navigation index (REQ-005).
+///
+/// Carries only the parsed `id`, `state`, and `covers` — never any body
+/// text. The index lets an implementer's reuse survey see which adjacent
+/// slices already landed without reading TASKS.md, while keeping the bundle
+/// size bounded to one line per task (the only field that grows with task
+/// count, per REQ-007).
+#[derive(Debug, Clone, Serialize)]
+pub struct SiblingEntry {
+    /// The sibling's `T-NNN` id.
+    pub id: String,
+    /// The sibling's state in its on-disk string form (e.g. `completed`).
+    pub state: String,
+    /// The sibling's `covers` requirement ids in source order.
+    pub covers: Vec<String>,
+}
+
+/// Repo-relative paths to the spec's files for follow-up targeted reads
+/// (REQ-005).
+///
+/// All paths are forward-slash strings relative to the project root, so a
+/// consumer can read SPEC.md, TASKS.md, or the journal directly when it
+/// needs something outside the bundle. The journal path is surfaced even
+/// when the file does not yet exist — it is the path a round-1 implementer
+/// will write to.
+#[derive(Debug, Clone, Serialize)]
+pub struct BundlePaths {
+    /// Repo-relative forward-slash path to the spec's `SPEC.md`.
+    pub spec_md: String,
+    /// Repo-relative forward-slash path to the spec's `TASKS.md`.
+    pub tasks_md: String,
+    /// Repo-relative forward-slash path to the task's journal file under
+    /// `<spec-dir>/journal/<task-id>.md`, whether or not it exists yet.
+    pub journal: String,
 }

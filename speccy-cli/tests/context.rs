@@ -13,8 +13,10 @@
 //! (REQ-002) populated. T-003 adds the task entry and the covering
 //! requirements via the shared core walk (REQ-003). T-004 inlines the
 //! per-task journal in full, with an explicit empty marker when the file is
-//! absent (REQ-004). Later tasks (T-005..T-006) extend the same envelope;
-//! tests for those sections land with their tasks.
+//! absent (REQ-004). T-005 adds the navigation aids: the sibling-task index
+//! (id/state/covers only), the repo-relative paths, and the suggested
+//! merge-base diff command (REQ-005). T-006 extends the same envelope with
+//! the consistency section; its tests land with that task.
 
 mod common;
 
@@ -29,6 +31,7 @@ use speccy_cli::context::ContextArgs;
 use speccy_cli::context::ContextError;
 use speccy_cli::context::run;
 use speccy_core::task_lookup::LookupError;
+use std::process::Command as StdCommand;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -176,6 +179,38 @@ fn tasks_md_covering(spec_id: &str, covers: &str) -> String {
          TASK_BODY_MARKER: the task body prose.\n\n\
          <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n",
     )
+}
+
+/// A TASKS.md with six tasks T-001..T-006, each body carrying a
+/// distinctive `SIBLING_BODY_MARKER_N` string. The sibling index for any
+/// one task must surface the other five as id/state/covers only — no body
+/// marker may leak into the payload (REQ-005 / CHK-008). Each task has a
+/// distinct state so the index's state field can be asserted.
+fn tasks_md_six(spec_id: &str) -> String {
+    use std::fmt::Write as _;
+    let states = [
+        "completed",
+        "completed",
+        "in-progress",
+        "pending",
+        "pending",
+        "pending",
+    ];
+    let mut body = format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n",
+    );
+    for (idx, state) in states.iter().enumerate() {
+        let n = idx + 1;
+        write!(
+            body,
+            "<task id=\"T-{n:03}\" state=\"{state}\" covers=\"REQ-001\">\n\
+             SIBLING_BODY_MARKER_{n}: body prose for task {n}.\n\n\
+             <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body
 }
 
 /// A minimal TASKS.md with a single task T-001 covering REQ-001.
@@ -840,4 +875,257 @@ fn binary_journal_absent_exits_zero() -> TestResult {
         .success()
         .stdout(contains("\"exists\":false"));
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-008 (REQ-005): a six-task spec whose bodies each carry a distinctive
+// marker. The bundle for T-003 carries a sibling index of the other five
+// tasks (T-001, T-002, T-004, T-005, T-006) with only id/state/covers
+// fields, and no sibling body marker appears anywhere in the payload.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_sibling_index_carries_id_state_covers_only_no_bodies() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_six("SPEC-0042")),
+    )?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-003")?;
+    let value = parse_one_json(&stdout);
+
+    let siblings = value
+        .get("siblings")
+        .and_then(serde_json::Value::as_array)
+        .expect("bundle has a siblings array");
+
+    // Exactly the five non-selected tasks, in TASKS.md declared order.
+    let sib_ids: Vec<&str> = siblings
+        .iter()
+        .filter_map(|s| s.get("id").and_then(serde_json::Value::as_str))
+        .collect();
+    assert_eq!(
+        sib_ids,
+        ["T-001", "T-002", "T-004", "T-005", "T-006"],
+        "the sibling index excludes the selected T-003 and keeps declared order; got {sib_ids:?}",
+    );
+
+    // Each sibling entry carries exactly id, state, and covers — no body
+    // field, and the state reflects the fixture's per-task state.
+    let t001 = siblings.first().expect("first sibling is T-001");
+    assert_eq!(
+        t001.get("state").and_then(serde_json::Value::as_str),
+        Some("completed"),
+        "T-001 sibling state matches the fixture",
+    );
+    let t001_covers: Vec<&str> = t001
+        .get("covers")
+        .and_then(serde_json::Value::as_array)
+        .expect("sibling covers array present")
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    assert_eq!(t001_covers, ["REQ-001"], "sibling covers surfaced");
+    for sib in siblings {
+        let obj = sib.as_object().expect("each sibling is a JSON object");
+        let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            ["covers", "id", "state"],
+            "a sibling entry carries only id/state/covers; got {keys:?}",
+        );
+    }
+
+    // No sibling task body marker leaks into the payload. The five
+    // siblings of T-003 (T-001/2/4/5/6) must be body-free; the selected
+    // task T-003's own body legitimately appears in the `task` entry
+    // (REQ-003), so its marker is excluded from this check.
+    for n in [1, 2, 4, 5, 6] {
+        assert!(
+            !stdout.contains(&format!("SIBLING_BODY_MARKER_{n}")),
+            "sibling body marker for task {n} must not appear in the payload; payload: {stdout}",
+        );
+    }
+    // Sanity: the selected task's own body marker *is* present (it is the
+    // `task` entry), proving the absence above is sibling-scoped, not a
+    // vacuous all-absent assertion.
+    assert!(
+        stdout.contains("SIBLING_BODY_MARKER_3"),
+        "the selected task's own body marker is present in the task entry",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// REQ-005: the three repo-relative paths resolve to the actual files from
+// the repo root, and the suggested diff command is in merge-base form
+// against the default branch.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_carries_repo_relative_paths_and_diff_command() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let paths = value.get("paths").expect("bundle has a paths section");
+    assert_eq!(
+        paths.get("spec_md").and_then(serde_json::Value::as_str),
+        Some(".speccy/specs/0042-alpha/SPEC.md"),
+        "SPEC.md path is repo-relative with forward slashes",
+    );
+    assert_eq!(
+        paths.get("tasks_md").and_then(serde_json::Value::as_str),
+        Some(".speccy/specs/0042-alpha/TASKS.md"),
+        "TASKS.md path is repo-relative with forward slashes",
+    );
+    assert_eq!(
+        paths.get("journal").and_then(serde_json::Value::as_str),
+        Some(".speccy/specs/0042-alpha/journal/T-001.md"),
+        "journal path is repo-relative and surfaced even when absent",
+    );
+
+    // The paths resolve to the actual files from the repo root: SPEC.md and
+    // TASKS.md were just written by the fixture and must exist; the journal
+    // file legitimately does not (round-1 task), so its presence is not
+    // asserted.
+    assert!(
+        ws.root.join(".speccy/specs/0042-alpha/SPEC.md").exists(),
+        "the surfaced SPEC.md path resolves to a real file",
+    );
+    assert!(
+        ws.root.join(".speccy/specs/0042-alpha/TASKS.md").exists(),
+        "the surfaced TASKS.md path resolves to a real file",
+    );
+    // `spec_dir` is the directory the paths are anchored to.
+    assert_eq!(spec_dir, ws.root.join(".speccy/specs/0042-alpha"));
+
+    // The diff command is in merge-base (triple-dot) form against a default
+    // branch and ends at HEAD. Outside a git repo the default-branch probe
+    // falls back to `main`, so the command is the runnable
+    // `git diff main...HEAD`.
+    let diff = value
+        .get("diff_command")
+        .and_then(serde_json::Value::as_str)
+        .expect("bundle has a diff_command string");
+    assert_eq!(
+        diff, "git diff main...HEAD",
+        "diff command is merge-base form against the fallback default branch",
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// REQ-005 behavior: on a real git feature branch with an `origin/HEAD`
+// pointing at the default branch, the suggested diff command names the
+// resolved default branch in merge-base form and runs as-is from the repo
+// root. This exercises the live default-branch + merge-base git machinery
+// rather than only the fallback path.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn diff_command_uses_resolved_default_branch_and_runs_from_repo_root() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+
+    // Stand up a real repo: an initial commit on `main`, a simulated
+    // `origin/HEAD -> origin/main` remote-tracking ref, then a feature
+    // branch with its own commit. If git is unavailable, skip — the
+    // fallback path is covered by the unit test in `git.rs` and the
+    // library test above.
+    if run_git(&ws.root, &["init", "-q", "-b", "main"]).is_err() {
+        eprintln!("git unavailable; skipping live merge-base test");
+        return Ok(());
+    }
+    run_git(&ws.root, &["config", "user.email", "t@example.com"])?;
+    run_git(&ws.root, &["config", "user.name", "t"])?;
+    // Disable commit signing locally so the test does not depend on a
+    // host's global signing config (which would fail the commit).
+    run_git(&ws.root, &["config", "commit.gpgsign", "false"])?;
+    run_git(&ws.root, &["add", "-A"])?;
+    run_git(&ws.root, &["commit", "-q", "-m", "base"])?;
+    // Create a remote-tracking ref + symbolic-ref so the default-branch
+    // probe resolves `origin/main` rather than falling back.
+    let head_sha = String::from_utf8(
+        StdCommand::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(ws.root.as_std_path())
+            .output()?
+            .stdout,
+    )?;
+    run_git(
+        &ws.root,
+        &["update-ref", "refs/remotes/origin/main", head_sha.trim()],
+    )?;
+    run_git(
+        &ws.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    )?;
+    run_git(&ws.root, &["checkout", "-q", "-b", "feature/example"])?;
+    fs_err::write(ws.root.join("change.txt").as_std_path(), "feature change\n")?;
+    run_git(&ws.root, &["add", "-A"])?;
+    run_git(&ws.root, &["commit", "-q", "-m", "feature commit"])?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+    let diff = value
+        .get("diff_command")
+        .and_then(serde_json::Value::as_str)
+        .expect("bundle has a diff_command string");
+
+    // The command names the resolved default branch in merge-base form.
+    assert_eq!(
+        diff, "git diff origin/main...HEAD",
+        "diff command names the resolved origin/main in merge-base form; got {diff}",
+    );
+
+    // It runs as-is from the repo root and surfaces the feature change.
+    let out = StdCommand::new("git")
+        .args(["diff", "origin/main...HEAD"])
+        .current_dir(ws.root.as_std_path())
+        .output()?;
+    assert!(
+        out.status.success(),
+        "the suggested diff command must run as-is from the repo root",
+    );
+    let diff_text = String::from_utf8(out.stdout)?;
+    assert!(
+        diff_text.contains("feature change"),
+        "the diff covers the feature branch's change; got: {diff_text}",
+    );
+    Ok(())
+}
+
+/// Run a git subcommand in `cwd`, returning an error when git is missing or
+/// the command fails. Used by the live merge-base test to stand up a repo.
+fn run_git(cwd: &Utf8Path, args: &[&str]) -> TestResult {
+    let status = StdCommand::new("git")
+        .args(args)
+        .current_dir(cwd.as_std_path())
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("git {args:?} failed with {status}").into())
+    }
 }
