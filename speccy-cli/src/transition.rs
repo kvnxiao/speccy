@@ -124,6 +124,21 @@ pub fn run(args: TransitionArgs, cwd: &Utf8Path) -> Result<(), TransitionError> 
                     source,
                 }
             })?;
+            // SPEC-0058 REQ-001 / REQ-003: the `--to completed` edge is a
+            // terminal lifecycle boundary, so after the state rewrite lands
+            // reap the task journal's advisory-lock sidecar. The reap is
+            // guarded by a `try_lock` and is infallible by design (it runs
+            // only after the load-bearing TASKS.md write succeeded), so a
+            // held or absent sidecar is a safe no-op and never fails the
+            // command. No other transition edge touches the sidecar, and the
+            // journal `.md` itself is never opened.
+            if to == TaskState::Completed {
+                let lock_path = location
+                    .spec_dir
+                    .join("journal")
+                    .join(format!("{}.md.lock", location.task.id));
+                crate::journal::reap_lock_sidecar(&lock_path);
+            }
             Ok(())
         }
     }

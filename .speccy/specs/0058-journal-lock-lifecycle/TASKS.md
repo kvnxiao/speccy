@@ -138,7 +138,7 @@ Suggested files: `speccy-cli/src/journal.rs`, `speccy-cli/Cargo.toml`
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001 REQ-003">
+<task id="T-003" state="completed" covers="REQ-001 REQ-003">
 ## Reap the task lock sidecar on the `--to completed` transition
 
 Wire `reap_lock_sidecar` into `speccy-cli/src/transition.rs`. In the

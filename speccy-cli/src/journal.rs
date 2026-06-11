@@ -723,15 +723,6 @@ impl Drop for LockGuard {
 /// other than `NotFound`, a `try_lock` `Error`, or a `remove_file` error —
 /// emits exactly one `WARN` naming the sidecar path (REQ-005, DEC-005) and
 /// still returns.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "shared reap helper; call sites are wired into `task \
-                  transition` and `journal append --block gate` in later \
-                  SPEC-0058 tasks"
-    )
-)]
 pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path) {
     let file = match fs_err::OpenOptions::new()
         .read(true)
