@@ -204,7 +204,7 @@ Suggested files: `speccy-core/src/lint/rules/xml.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-006">
+<task id="T-004" state="completed" covers="REQ-006">
 ## Lock raw-source retention on `SpecDoc` / `TasksDoc` / `ReportDoc` with a regression test
 
 The `XML-001` lint depends on each parsed document retaining its full raw
