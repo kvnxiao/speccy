@@ -5,7 +5,7 @@ generated_at: 2026-06-11T01:05:32Z
 ---
 # Tasks: SPEC-0057 Unbalanced foreign-tag lint — `speccy verify` flags leaked orphan XML tags in parsed artifacts
 
-<task id="T-001" state="pending" covers="REQ-002 REQ-003">
+<task id="T-001" state="completed" covers="REQ-002 REQ-003">
 ## Add the `VOID_ELEMENT_NAMES` set and the `scan_foreign_tags` scanner helper
 
 Lay the mechanical foundation the `XML-001` lint consumes (SPEC DEC-004).

@@ -144,6 +144,7 @@ Given a fixture artifact whose body contains a balanced foreign pair
 when the lint engine runs,
 then no `XML-001` diagnostic is produced for that artifact.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -172,6 +173,7 @@ when the lint engine runs over both,
 then the void-element fixture produces no `XML-001` diagnostic and the
 non-void fixture produces exactly one.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -199,6 +201,7 @@ foreign close tag is inside a fenced code block,
 when the lint engine runs,
 then no `XML-001` diagnostic is produced for that artifact.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -236,6 +239,7 @@ when the lint engine runs,
 then exactly one `XML-001` diagnostic is produced whose file is that
 journal file.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -265,6 +269,7 @@ when `speccy verify` runs against it,
 then the process exits non-zero and the rendered output names the
 artifact path and the orphan tag's 1-indexed line.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -291,6 +296,7 @@ when each is parsed,
 then each parsed document's `raw` field is byte-identical to its source
 string.
 </scenario>
+
 </requirement>
 
 ## Decisions
