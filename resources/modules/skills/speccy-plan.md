@@ -124,7 +124,49 @@ is already agreed.
    signals an over-scoped session — 26 open questions is a scope smell,
    not a format limitation.
 
-5. Suggest the next step: `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` to
+5. Branch-guard, then commit `SPEC.md` alone. After the self-review
+   pass completes, commit the just-written `SPEC.md` so a
+   `{{ cmd_prefix }}speccy-plan` run-then-stop leaves `SPEC.md` already
+   committed. The commit covers only the spec's `SPEC.md` —
+   `TASKS.md` is committed by `{{ cmd_prefix }}speccy-decompose`, not
+   here, so the new-spec path lands two separate commits (one per
+   skill). The step uses narrow file-list staging (never `git add -A`
+   or `git add .`), so any unrelated dirty paths outside `<spec-dir>/`
+   remain in the working tree untouched. The step is idempotent:
+   re-running plan on an already-committed `SPEC.md` produces no new
+   commit.
+
+   First run the branch-guard prelude so the commit lands on a feature
+   branch rather than the repository's default branch. Supply the
+   prelude's one parameter — the **spec directory** (`<spec-dir>/`,
+   i.e. the path that holds `SPEC.md`) — and run it:
+
+{% include "modules/references/branch-guard.md" %}
+
+   Then run the shared commit recipe, supplying its two
+   behaviour-varying parameters as follows:
+
+   - **Staging breadth: narrow `git add <spec-dir>/SPEC.md`.** Stage
+     exactly the spec's `SPEC.md` and nothing else. Do not use
+     `git add -A` or `git add .`. Staging unchanged content is a no-op,
+     so passing the path unconditionally is safe regardless of whether
+     `SPEC.md` was already committed.
+   - **Title and body.**
+     - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
+       substituted for the resolved spec id.
+     - **Body:** the trimmed value of the `title:` field from SPEC.md's
+       YAML frontmatter (the one-line title slug, not the full document
+       heading).
+
+   With those two parameters fixed, run the shared recipe — it defines
+   the no-git short-circuit, the unified stage-then-`git diff --cached
+   --quiet` idempotency check (an unchanged `SPEC.md` skips the commit
+   silently), the `Co-Authored-By` trailer, and the HEREDOC commit
+   mechanics:
+
+{% include "modules/references/commit-recipe.md" %}
+
+6. Suggest the next step: `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` to
    decompose into `TASKS.md`.
 
 This recipe does not loop.

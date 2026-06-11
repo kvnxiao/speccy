@@ -2,15 +2,18 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001, T-002, T-003, and T-004: the shared
+//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, and T-005: the shared
 //! authoring reference modules at
 //! `resources/modules/references/commit-recipe.md` and
 //! `resources/modules/references/branch-guard.md`, the
 //! behaviour-preserving rewrite of the review-pass commit step in
 //! `resources/modules/skills/partials/review-fanout.md` onto the shared
-//! commit recipe, and the decompose-phase rewrite of the step-4
+//! commit recipe, the decompose-phase rewrite of the step-4
 //! bootstrap commit in `resources/modules/phases/speccy-decompose.md`
-//! onto the shared recipe behind the branch-guard prelude.
+//! onto the shared recipe behind the branch-guard prelude, and the new
+//! `speccy-plan` commit step in
+//! `resources/modules/skills/speccy-plan.md` that commits `SPEC.md`
+//! alone behind the branch-guard prelude.
 //!
 //! T-001 — `commit-recipe.md` — checks the three properties the task's
 //! scenarios assert over the embedded `RESOURCES` bundle:
@@ -84,6 +87,24 @@
 //! - [`rendered_decompose_agent_fully_expands_includes`]: the ejected
 //!   `.claude/agents/speccy-decompose.md` has both includes fully expanded with
 //!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
+//!   --cached --quiet` text.
+//!
+//! T-005 — `speccy-plan.md` commit step — checks the new commit step that
+//! commits `SPEC.md` alone behind the branch-guard prelude (REQ-003, CHK-004):
+//!
+//! - [`plan_includes_shared_commit_recipe_and_branch_guard`]: the plan skill
+//!   pulls both the shared commit recipe and the branch-guard prelude via `{%
+//!   include %}` (CHK-004 recipe property, REQ-003).
+//! - [`plan_stages_spec_md_alone_with_create_spec_title_after_self_review`][]:
+//!   the commit step titles the commit `[SPEC-NNNN]: create spec`, stages
+//!   `<spec-dir>/SPEC.md` narrowly (no `git add -A`/`git add .`, no TASKS.md in
+//!   the staging set), and runs after the step-3 self-review pass (CHK-004).
+//! - [`plan_retains_vacancy_id_allocation`]: the ID-allocation step still
+//!   invokes `speccy vacancy --json` (the prior CHK-015 invariant is
+//!   preserved).
+//! - [`rendered_plan_skill_fully_expands_includes`]: the ejected
+//!   `.claude/skills/speccy-plan/SKILL.md` has both includes fully expanded
+//!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 
 use speccy_cli::embedded::RESOURCES;
@@ -543,5 +564,135 @@ fn rendered_decompose_agent_fully_expands_includes() {
         file.contents.contains("git diff --cached --quiet"),
         "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
          check, proving the commit-recipe include expanded into the decompose agent body",
+    );
+}
+
+/// Read the `speccy-plan.md` skill body from the embedded RESOURCES bundle,
+/// panicking with a clear message if it is missing.
+fn plan_body() -> &'static str {
+    RESOURCES
+        .get_file("modules/skills/speccy-plan.md")
+        .and_then(|f| f.contents_utf8())
+        .unwrap_or_else(|| {
+            panic_with_message("RESOURCES bundle must contain `modules/skills/speccy-plan.md`")
+        })
+}
+
+/// The new commit step pulls both the shared commit recipe and the branch-guard
+/// prelude via `{% include %}` (CHK-004 recipe property, REQ-003).
+#[test]
+fn plan_includes_shared_commit_recipe_and_branch_guard() {
+    let body = plan_body();
+
+    let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
+    assert!(
+        body.contains(recipe_include),
+        "speccy-plan.md must pull the shared commit recipe via `{recipe_include}` \
+         (CHK-004); the SPEC.md commit step must delegate to the shared recipe",
+    );
+
+    let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
+    assert!(
+        body.contains(guard_include),
+        "speccy-plan.md must run the branch-guard prelude via `{guard_include}` \
+         ahead of the commit so SPEC.md lands on a feature branch (REQ-003)",
+    );
+}
+
+/// The commit step titles the commit `[SPEC-NNNN]: create spec`, stages
+/// `<spec-dir>/SPEC.md` narrowly (no `git add -A`/`git add .`, no TASKS.md in
+/// the staging set), and runs after the step-3 self-review pass (CHK-004).
+#[test]
+fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
+    let body = plan_body();
+
+    assert!(
+        body.contains("[SPEC-NNNN]: create spec"),
+        "speccy-plan.md must title the commit `[SPEC-NNNN]: create spec` (CHK-004)",
+    );
+
+    // Narrow staging of SPEC.md alone — the staging command names the path.
+    assert!(
+        body.contains("git add <spec-dir>/SPEC.md"),
+        "speccy-plan.md must stage the spec's SPEC.md narrowly via \
+         `git add <spec-dir>/SPEC.md` (CHK-004)",
+    );
+
+    // The whole-tree staging forms are forbidden in the commit step. The
+    // surrounding prose may legitimately *forbid* them by name, so anchor the
+    // negative assertion on a staging *command* — `git add -A`/`git add .` as
+    // an executable line would only appear if the step used the broad form.
+    // We assert TASKS.md is never staged here: it is committed by
+    // speccy-decompose, not the plan commit (DEC-005).
+    assert!(
+        !body.contains("git add <spec-dir>/TASKS.md"),
+        "speccy-plan.md must not stage TASKS.md — it is committed by speccy-decompose, \
+         not the plan commit (DEC-005, CHK-004)",
+    );
+
+    // The commit runs after the step-3 self-review pass: the self-review
+    // heading precedes the commit recipe include in document order.
+    let self_review_pos = body
+        .find("Self-review pass")
+        .expect("speccy-plan.md must still carry the step-3 self-review pass");
+    let recipe_pos = body
+        .find(r#"{% include "modules/references/commit-recipe.md" %}"#)
+        .expect("speccy-plan.md must include the commit recipe");
+    assert!(
+        self_review_pos < recipe_pos,
+        "speccy-plan.md must run the self-review pass before the commit recipe (CHK-004)",
+    );
+}
+
+/// The ID-allocation step still invokes `speccy vacancy --json` (the prior
+/// CHK-015 invariant is preserved — the commit step must not displace it).
+#[test]
+fn plan_retains_vacancy_id_allocation() {
+    let body = plan_body();
+
+    assert!(
+        body.contains("speccy vacancy --json"),
+        "speccy-plan.md must still allocate the spec id via `speccy vacancy --json`; \
+         the new commit step must not displace the vacancy-not-status invariant \
+         (CHK-015, REQ-003 task constraint)",
+    );
+    assert!(
+        !body.contains("speccy status --json"),
+        "speccy-plan.md must not allocate the id via `speccy status --json`; the \
+         vacancy-not-status invariant requires `speccy vacancy --json` (CHK-015)",
+    );
+}
+
+/// The ejected `.claude/skills/speccy-plan/SKILL.md` fully expands both
+/// includes: no residual `MiniJinja` markup, and the recipe's
+/// `git diff --cached --quiet` text is present in the rendered output.
+#[test]
+fn rendered_plan_skill_fully_expands_includes() {
+    let rendered = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+
+    let rel = ".claude/skills/speccy-plan/SKILL.md";
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_message(&format!(
+                "rendered claude-code pack must include `{rel}`; \
+                 speccy-plan includes the commit-recipe and branch-guard modules",
+            ))
+        });
+
+    for marker in ["{{", "{%", "{#"] {
+        assert!(
+            !file.contents.contains(marker),
+            "rendered `{rel}` must not contain MiniJinja markup `{marker}`; \
+             the commit-recipe and branch-guard includes must be fully expanded at render time",
+        );
+    }
+
+    assert!(
+        file.contents.contains("git diff --cached --quiet"),
+        "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
+         check, proving the commit-recipe include expanded into the plan skill body",
     );
 }

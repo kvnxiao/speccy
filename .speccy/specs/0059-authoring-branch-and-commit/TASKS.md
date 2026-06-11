@@ -221,7 +221,7 @@ Suggested files: `resources/modules/phases/speccy-decompose.md`,
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-003">
+<task id="T-005" state="completed" covers="REQ-003">
 ## speccy-plan commits SPEC.md after the self-review pass, behind the branch-guard
 
 Add a commit step to `resources/modules/skills/speccy-plan.md`
