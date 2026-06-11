@@ -51,7 +51,7 @@ test for stdout cleanliness)
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-003 REQ-004 REQ-005">
+<task id="T-002" state="completed" covers="REQ-003 REQ-004 REQ-005">
 ## Add the guarded, idempotent `reap_lock_sidecar` helper
 
 Add `pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path)` to
