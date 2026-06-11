@@ -61,7 +61,7 @@ unchanged), `speccy-cli/tests/authoring_commit.rs`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-002 REQ-010">
+<task id="T-002" state="completed" covers="REQ-001 REQ-002 REQ-010">
 ## Create the shared branch-guard prelude module
 
 Create `resources/modules/references/branch-guard.md` defining the
