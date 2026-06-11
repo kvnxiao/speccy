@@ -5,7 +5,7 @@ generated_at: 2026-06-11T06:41:43Z
 ---
 # Tasks: SPEC-0059 Branch-guard and consolidated git commits for the authoring skills (plan / decompose / amend)
 
-<task id="T-001" state="pending" covers="REQ-006 REQ-010">
+<task id="T-001" state="completed" covers="REQ-006 REQ-010">
 ## Create the shared commit-recipe reference module
 
 Create `resources/modules/references/commit-recipe.md` defining the

@@ -163,6 +163,7 @@ then it creates `spec-NNNN-slug` when HEAD is the default branch or
 detached, reuses the current branch otherwise, and the creation notice
 is emitted only on the create path.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -200,6 +201,7 @@ then they specify the three-tier chain in order — `origin/HEAD`, then
 `git config init.defaultBranch`, then a `{main, master}` name match —
 with each tier used only when the prior one does not resolve.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -234,6 +236,7 @@ then it invokes the shared commit recipe with the title
 `[SPEC-NNNN]: create spec` and a staging set limited to the spec's
 `SPEC.md`, and it runs after the self-review pass.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -271,6 +274,7 @@ then it invokes the shared commit recipe with the title
 `TASKS.md`, runs after `speccy lock`, and the string
 `create spec and decompose tasks` is absent from the source.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -325,6 +329,7 @@ when the amend commit step's staging set is read,
 then it tolerates the absent `TASKS.md` (commits SPEC.md and any journal
 files) rather than requiring the tasks file to exist.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -366,6 +371,7 @@ then exactly one shared module defines the stage →
 set and message, and delegating the trailer to the identity-sourcing
 rule.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -419,6 +425,7 @@ then the commit title format `[SPEC-NNNN/T-NNN]: <task title>`, the
 `git add -A` staging, and the single-parent commit shape are all
 retained verbatim.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-008">
@@ -455,6 +462,7 @@ then the branch-guard module is included by exactly the plan, decompose,
 and amend sources and by no others, and the review-pass commit retains
 its unguarded "lands on whatever HEAD is" statement.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-009">
@@ -491,6 +499,7 @@ when their commit and branch-guard steps are inspected,
 then each stages a narrow spec-artifact path list (no `git add -A` /
 `git add .`) and none contains a clean-tree refusal gate.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-010">
@@ -521,6 +530,7 @@ when their preconditions are read,
 then both specify a no-git-repository short-circuit that skips the
 branch/commit steps without erroring.
 </scenario>
+
 </requirement>
 
 ## Assumptions
