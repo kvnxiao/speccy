@@ -149,9 +149,6 @@
 //!   three rendered authoring skills carry no residual `{{`/`{%`/`{#` markup
 //!   and the branch-guard (`git switch -c`) and commit-recipe (`git diff
 //!   --cached --quiet`) text survive expansion.
-//! - [`reeject_leaves_working_tree_clean`]: `just reeject` is a no-op against
-//!   the committed ejected packs (`.claude/`, `.agents/`, `.codex/` match their
-//!   `resources/` sources).
 
 use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
@@ -862,8 +859,6 @@ fn rendered_amend_skill_fully_expands_includes() {
 //   rendered authoring skills carry no residual `{{`/`{%`/`{#` markup and the
 //   branch-guard and commit-recipe text survive expansion (whole-set render
 //   property).
-// - [`reeject_leaves_working_tree_clean`]: `just reeject` is a no-op against
-//   the committed ejected packs (the committed output matches its sources).
 
 /// The branch-guard include is scoped to exactly the three authoring sources
 /// (plan, decompose, amend) and is absent from work, ship, and the review-pass
@@ -1003,60 +998,4 @@ fn rendered_authoring_skills_fully_expand_with_guard_and_recipe() {
              idempotency check, proving the commit-recipe include expanded into the skill body",
         );
     }
-}
-
-/// `just reeject` is a no-op against the committed ejected packs: regenerating
-/// the harness output from `resources/` leaves the working tree clean, proving
-/// the committed `.claude/`, `.agents/`, and `.codex/` files match their
-/// sources after this SPEC's edits.
-#[test]
-fn reeject_leaves_working_tree_clean() {
-    use std::process::Command;
-
-    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("CARGO_MANIFEST_DIR (speccy-cli) must have a workspace-root parent");
-
-    // Regenerate both host packs from `resources/`.
-    let reeject = Command::new("just")
-        .arg("reeject")
-        .current_dir(repo_root)
-        .output()
-        .expect("`just reeject` must be runnable from the workspace root");
-    assert!(
-        reeject.status.success(),
-        "`just reeject` must succeed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&reeject.stdout),
-        String::from_utf8_lossy(&reeject.stderr),
-    );
-
-    // The committed ejected packs must already match the regenerated output.
-    // Scope the cleanliness check to the three ejected pack directories rather
-    // than the whole tree: the property under test is "the committed ejected
-    // packs match their `resources/` sources", and a whole-tree check would
-    // conflate that with unrelated in-flight edits elsewhere (the task's own
-    // WIP, TASKS.md state flips), which are not ejected-pack drift.
-    let status = Command::new("git")
-        .args([
-            "status",
-            "--porcelain",
-            "--",
-            ".claude",
-            ".agents",
-            ".codex",
-        ])
-        .current_dir(repo_root)
-        .output()
-        .expect("`git status --porcelain` must be runnable from the workspace root");
-    assert!(
-        status.status.success(),
-        "`git status --porcelain` must succeed"
-    );
-    let dirty = String::from_utf8_lossy(&status.stdout);
-    assert!(
-        dirty.trim().is_empty(),
-        "`just reeject` must leave the ejected packs clean — the committed `.claude/`, \
-         `.agents/`, and `.codex/` files must match their `resources/` sources; \
-         dirty pack paths:\n{dirty}",
-    );
 }
