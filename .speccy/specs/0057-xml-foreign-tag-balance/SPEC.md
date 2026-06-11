@@ -2,7 +2,7 @@
 id: SPEC-0057
 slug: xml-foreign-tag-balance
 title: Unbalanced foreign-tag lint — `speccy verify` flags leaked orphan XML tags in parsed artifacts
-status: in-progress
+status: implemented
 created: 2026-06-10
 supersedes: []
 ---

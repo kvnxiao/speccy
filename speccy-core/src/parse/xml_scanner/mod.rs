@@ -292,7 +292,18 @@ pub fn scan_foreign_tags(
 fn classify_foreign_line(line: &str, line_no: u32, whitelist: &[&str], out: &mut Vec<ForeignTag>) {
     let line_for_regex = line.trim_start().trim_end();
 
-    if let Some(caps) = open_tag_regex().captures(line_for_regex) {
+    // Open is tried before close; the two regexes are mutually exclusive on a
+    // given line, so resolving once preserves the open-before-close order.
+    let resolved = open_tag_regex()
+        .captures(line_for_regex)
+        .map(|caps| (caps, false))
+        .or_else(|| {
+            close_tag_regex()
+                .captures(line_for_regex)
+                .map(|caps| (caps, true))
+        });
+
+    if let Some((caps, is_close)) = resolved {
         let name = caps
             .get(1)
             .map(|m| m.as_str().to_owned())
@@ -300,19 +311,7 @@ fn classify_foreign_line(line: &str, line_no: u32, whitelist: &[&str], out: &mut
         if !whitelist.contains(&name.as_str()) {
             out.push(ForeignTag {
                 name,
-                is_close: false,
-                line: line_no,
-            });
-        }
-    } else if let Some(caps) = close_tag_regex().captures(line_for_regex) {
-        let name = caps
-            .get(1)
-            .map(|m| m.as_str().to_owned())
-            .unwrap_or_default();
-        if !whitelist.contains(&name.as_str()) {
-            out.push(ForeignTag {
-                name,
-                is_close: true,
+                is_close,
                 line: line_no,
             });
         }
