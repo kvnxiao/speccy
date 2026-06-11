@@ -331,6 +331,24 @@ the `JNL-*` path-derivation pattern instead of adding a journal field to
 `ParsedSpec`.
 </decision>
 
+<decision id="DEC-004">
+The lint consumes a new mechanical scanner helper rather than
+re-implementing the tag-shape grammar. `scan_foreign_tags` is added to
+`speccy-core/src/parse/xml_scanner` as the inverse of the existing
+`scan_tags`: it walks lines with the same fence-awareness
+(`collect_code_fence_byte_ranges` / `range_inside_any_fence`) and the same
+open/close tag-shape regexes, but yields the **non-whitelisted** (foreign)
+tag occurrences — each with `is_close` and a 1-indexed source line —
+instead of the whitelisted structural tags `scan_tags` keeps. This keeps
+DEC-001 intact: the scanner gains no balance logic and emits no
+diagnostics; it only exposes the foreign-tag view, and the SPEC-0020
+DEC-002 passthrough used by the parsers is untouched. All balance
+computation and `XML-001` emission live in the lint engine. Forking the
+open/close regexes and fence-walk into the lint was rejected: it would
+duplicate the tag grammar away from its single source in the scanner, so a
+future grammar tweak could silently desync the lint from the parsers.
+</decision>
+
 ## Notes
 
 A strict-whitelist framing (disallow every non-whitelisted tag) was
@@ -352,4 +370,5 @@ still present on the trunk. The evidence-file leak is out of scope here
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-10 | kevin | Initial SPEC: XML-001 unbalanced-foreign-tag lint over parsed artifacts; lint-layer detection, void exemption, fence exemption, raw-retention lock. |
+| 2026-06-10 | claude-opus-4-8[1m] | Decompose: added DEC-004 pinning the `scan_foreign_tags` reuse seam (lint consumes a mechanical scanner helper; tag-shape regexes stay single-sourced in the scanner). |
 </changelog>
