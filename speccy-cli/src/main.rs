@@ -91,6 +91,22 @@ enum Command {
         #[arg(long)]
         include_archive: bool,
     },
+    /// Emit a task-scoped context bundle for loop subagents (one JSON read).
+    ///
+    /// Resolves the task with the same selector grammar `speccy check`
+    /// uses (`T-NNN` or `SPEC-NNNN/T-NNN`) and prints a single
+    /// schema-versioned bundle scoped to that task. `--json` toggles
+    /// representation, never content; agents always pass `--json`. The
+    /// command performs no writes anywhere. Selector failures exit
+    /// non-zero with no partial stdout.
+    Context {
+        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        #[arg(value_name = "SELECTOR")]
+        selector: String,
+        /// Emit JSON envelope (`schema_version = 1`).
+        #[arg(long)]
+        json: bool,
+    },
     /// CI gate: proof-shape validation with a binary exit code.
     Verify {
         /// Also include specs under `.speccy/archive/` in the gate, so
@@ -302,6 +318,7 @@ fn dispatch(command: Command) -> u8 {
             selector,
             include_archive,
         } => run_check(selector, include_archive),
+        Command::Context { selector, json } => run_context(selector, json),
         Command::Verify {
             include_archive,
             json,
@@ -648,6 +665,35 @@ fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
         }
         Err(e) => {
             eprintln!("speccy check: {e}");
+            1
+        }
+    }
+}
+
+fn run_context(selector: String, json: bool) -> u8 {
+    use speccy_cli::context::ContextError;
+
+    let cwd = match speccy_cli::cwd::resolve() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("speccy context: {e}");
+            return 2;
+        }
+    };
+    let mut stdout = std::io::stdout().lock();
+    let result = speccy_cli::context::run(
+        speccy_cli::context::ContextArgs { selector, json },
+        &cwd,
+        &mut stdout,
+    );
+    flush_best_effort(&mut stdout);
+    match result {
+        Ok(()) => 0,
+        // Route selector failures through the shared helper so the
+        // diagnostic class matches `speccy check` (SPEC-0056 REQ-001).
+        Err(ContextError::TaskLookup(e)) => report_lookup_error("context", "", &e),
+        Err(e) => {
+            eprintln!("speccy context: {e}");
             1
         }
     }

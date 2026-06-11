@@ -171,6 +171,57 @@ speccy check [SELECTOR]           Render check scenarios (no execution).
                                     CHK-NNN:             every spec's CHK-NNN
                                     T-NNN:               scenarios covering an unqualified task
                                     --include-archive:   also scan `.speccy/archive/`
+speccy context TASK-SELECTOR      Emit one task-scoped JSON bundle for a loop subagent's
+                                  entry read — the single call that replaces the old
+                                  full-SPEC + full-TASKS + journal + `speccy check`
+                                  recipe. Resolves the selector with the same grammar
+                                  as `speccy check` (`T-NNN` and `SPEC-NNNN/T-NNN`, via
+                                  `task_lookup::parse_ref` then `find`) and the same
+                                  ambiguity / not-found diagnostic classes (the shared
+                                  `report_lookup_error` helper); selector failures exit
+                                  non-zero with no partial stdout. A pure read command:
+                                  performs no writes anywhere.
+                                    --json:              schema_version=1 envelope (first field).
+                                                         `--json` toggles representation, never
+                                                         content; agents always pass it. There is no
+                                                         bare-spec form and no content-mode flag.
+                                  Envelope sections (one superset payload; roles ignore
+                                  fields they do not need):
+                                    identity     spec frontmatter id, title, status
+                                    intent       <goals>, <non-goals>, every <decision>
+                                                 with its DEC id + body (Summary,
+                                                 user-stories, notes, and non-covered
+                                                 requirement bodies excluded)
+                                    task         the selected task's verbatim <task> body
+                                                 bytes plus parsed id, state, covers
+                                    requirements each covering requirement in full
+                                                 (title, body, done-when, behavior,
+                                                 scenarios), resolved via the same shared
+                                                 speccy-core walk `speccy check` uses,
+                                                 deduplicated in declared order
+                                    journal      the full per-task journal inlined — all
+                                                 <implementer>/<review>/<blockers> blocks
+                                                 across rounds; absent journal is an
+                                                 explicit empty marker, not an error
+                                                 (exit 0)
+                                    siblings     every other task as id, state, covers
+                                                 only — never bodies
+                                    paths        repo-relative SPEC.md, TASKS.md, journal
+                                                 paths for follow-up targeted reads
+                                    diff_command suggested merge-base diff string against
+                                                 the default branch, runnable as-is from
+                                                 the repo root; git unavailability
+                                                 degrades this field, never errors
+                                    consistency  workspace status plus only the drift
+                                                 entries matching the selected task;
+                                                 never refuses on drift
+                                  Size invariant (contract, not implementation detail):
+                                  the bundle scales with the task, not the spec. For a
+                                  fixed task, growing the spec changes the bundle only in
+                                  bounded ways — one added sibling adds exactly one
+                                  `siblings` entry; an uncovered requirement adds
+                                  nothing; a journal round on another task adds nothing.
+                                  Enforced by a property-style test, not left as prose.
 speccy verify                     CI gate: proof-shape validation only.
                                     --include-archive:   also scan `.speccy/archive/`
                                     --json:              schema_version=1 envelope
@@ -467,14 +518,21 @@ body at `.claude/agents/speccy-work.md` (pinned `model: opus[1m]`,
 With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
 that specific task. Without an argument the session calls
 `speccy next --json` and filters for `next_action.kind == "work"`
-to resolve the next implementable task. In either case the session:
+to resolve the next implementable task (the selector is unknown
+until then, so `speccy next` still precedes `context` on this path).
+In either case the session:
 
+- opens its per-task context with one `speccy context SPEC-NNNN/T-NNN
+  --json` call — the bundle carries the task entry, covering
+  requirements with scenarios, the full journal (the retry-shape rule
+  reads its journal from the bundle), the sibling index for the reuse
+  survey, and the suggested diff command; it replaces the former
+  recipe of reading full SPEC.md, full TASKS.md, and the journal and
+  invoking `speccy check` for scenarios;
 - flips `state="pending"` to `state="in-progress"` on the target
   task via `speccy task transition`;
 - writes tests first, then code; runs the project's own test
   command locally and fails fast on red;
-- uses `speccy check SPEC-NNNN/T-NNN` only to render the scenarios
-  it is satisfying;
 - appends one `<implementer>` block to
   `.speccy/specs/NNNN-slug/journal/T-NNN.md` via
   `speccy journal append --block implementer`, piping the multi-field
@@ -518,7 +576,16 @@ In either case the session:
   within this single task; each sub-agent's body is loaded from
   `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
   with per-persona model pins (see "Model pinning" in the README
-  for the current matrix);
+  for the current matrix). Each persona opens its per-task read with
+  one `speccy context SPEC-NNNN/T-NNN --json` call (dispatched from
+  the shared fan-out spawn prompt), not a full SPEC.md / TASKS.md
+  read or a `speccy check` entry call — the bundle hands it the task,
+  its requirements and scenarios, the journal, and the suggested diff
+  command in a single roundtrip. (`reviewer-tests` keeps its separate
+  caveat that `speccy check` exit codes are not test evidence —
+  that is unrelated to the entry read.) Vet personas are excluded:
+  their review is whole-SPEC holistic scope, which a task-scoped
+  bundle cannot serve, so they keep their full reads;
 - has each reviewer sub-agent append its own `<review>` block to
   `.speccy/specs/NNNN-slug/journal/T-NNN.md` via
   `speccy journal append --block review` and return a thin verdict

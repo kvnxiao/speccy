@@ -10,6 +10,8 @@
 pub mod archive;
 pub mod check;
 pub mod check_selector;
+pub mod context;
+pub mod context_output;
 pub mod cwd;
 pub mod embedded;
 pub mod git;

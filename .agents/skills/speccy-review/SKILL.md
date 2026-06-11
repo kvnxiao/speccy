@@ -100,11 +100,16 @@ documentation risk is suspected.
 
 The prompt for each spawn is:
 
-> Review task `SPEC-NNNN/T-NNN`. Run `speccy check SPEC-NNNN/T-NNN`
-> to load the task scenarios, read the bare `<task>` body in
-> TASKS.md and the prior activity in
-> `.speccy/specs/NNNN-slug/journal/T-NNN.md`, and apply your
-> persona's review criteria. Append your own `<review>` block to the
+> Review task `SPEC-NNNN/T-NNN`. Open your per-task context read with a
+> single `speccy context SPEC-NNNN/T-NNN --json` call — the bundle
+> carries the task entry, its covering requirements and scenarios, the
+> full per-task journal (prior implementer handoffs, review verdicts,
+> and blockers), the sibling index, the file paths, and a suggested
+> merge-base diff command. Read the diff with that command, then apply
+> your persona's review criteria. Targeted follow-up reads via the
+> bundle's listed paths (e.g. the evidence file) remain legitimate
+> where your persona needs something outside the bundle. Append your
+> own `<review>` block to the
 > per-task journal by running
 > `speccy journal append SPEC-NNNN/T-NNN --block review --persona <persona> --verdict <pass|blocking> --model <your-model>`
 > with the review body on stdin, then return a thin self-closing

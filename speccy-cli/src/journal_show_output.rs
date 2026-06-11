@@ -223,7 +223,13 @@ pub enum JournalShowJson {
     Vet(JsonVetJournal),
 }
 
-fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
+/// Project one parsed [`JournalEntry`] into its flat [`JsonJournalBlock`]
+/// JSON shape. Shared so `speccy context`'s inlined-journal section
+/// (SPEC-0056 REQ-004) reuses this exact mapping rather than re-deriving a
+/// parallel journal-to-JSON projection — the same anti-drift discipline the
+/// SPEC applies to `check`/`context`.
+#[must_use = "the projected block is the journal section of the bundle / show envelope"]
+pub fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
     match entry {
         JournalEntry::Implementer {
             date,
