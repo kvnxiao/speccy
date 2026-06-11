@@ -2,8 +2,8 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, T-005, and T-006: the shared
-//! authoring reference modules at
+//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, T-005, T-006, and T-007: the
+//! shared authoring reference modules at
 //! `resources/modules/references/commit-recipe.md` and
 //! `resources/modules/references/branch-guard.md`, the
 //! behaviour-preserving rewrite of the review-pass commit step in
@@ -131,6 +131,27 @@
 //!   `.claude/skills/speccy-amend/SKILL.md` has both includes fully expanded
 //!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
+//!
+//! T-007 — whole-set scoping and narrow-staging invariants — checks the
+//! cross-set properties that only hold once T-003..T-006 have all landed
+//! (REQ-008, REQ-009, CHK-011, CHK-012, CHK-001):
+//!
+//! - [`branch_guard_included_by_exactly_the_three_authoring_sources`][]: the
+//!   `branch-guard.md` include appears in exactly the plan, decompose, and
+//!   amend sources and is absent from work, ship, and `review-fanout.md`, which
+//!   retains its unguarded "lands on whatever HEAD is" statement (REQ-008,
+//!   CHK-011, CHK-001).
+//! - [`authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate`]: each of
+//!   the three authoring bodies carries its own narrow `git add <path>` staging
+//!   command and none contains a `git stash` clean-tree refusal gate (REQ-009,
+//!   CHK-012).
+//! - [`rendered_authoring_skills_fully_expand_with_guard_and_recipe`][]: the
+//!   three rendered authoring skills carry no residual `{{`/`{%`/`{#` markup
+//!   and the branch-guard (`git switch -c`) and commit-recipe (`git diff
+//!   --cached --quiet`) text survive expansion.
+//! - [`reeject_leaves_working_tree_clean`]: `just reeject` is a no-op against
+//!   the committed ejected packs (`.claude/`, `.agents/`, `.codex/` match their
+//!   `resources/` sources).
 
 use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
@@ -877,5 +898,239 @@ fn rendered_amend_skill_fully_expands_includes() {
         file.contents.contains("git diff --cached --quiet"),
         "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
          check, proving the commit-recipe include expanded into the amend skill body",
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T-007 — whole-set scoping and narrow-staging invariants
+// ---------------------------------------------------------------------------
+//
+// These assertions can only be checked once all four callsites
+// (T-003..T-006) have landed. They gate genuine regressions over a stable
+// structural surface — the branch-guard include graph and the per-callsite
+// staging tokens — in the spirit of the existing `persona_snippets.rs` and
+// `skill_body_discovery.rs` suites; they do not substring-match curated prose
+// sentences.
+//
+// - [`branch_guard_included_by_exactly_the_three_authoring_sources`]: the
+//   `branch-guard.md` include appears in exactly `skills/speccy-plan.md`,
+//   `phases/speccy-decompose.md`, and `skills/speccy-amend.md`, and is absent
+//   from `phases/speccy-work.md`, `phases/speccy-ship.md`, and
+//   `skills/partials/review-fanout.md`; the review-pass commit retains its
+//   unguarded "lands on whatever HEAD is" statement (REQ-008, CHK-011,
+//   CHK-001).
+// - [`authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate`]: each of
+//   the three authoring bodies carries its own narrow `git add <path>` staging
+//   command and none contains a `git stash` clean-tree refusal gate (REQ-009,
+//   CHK-012).
+// - [`rendered_authoring_skills_fully_expand_with_guard_and_recipe`]: the three
+//   rendered authoring skills carry no residual `{{`/`{%`/`{#` markup and the
+//   branch-guard and commit-recipe text survive expansion (whole-set render
+//   property).
+// - [`reeject_leaves_working_tree_clean`]: `just reeject` is a no-op against
+//   the committed ejected packs (the committed output matches its sources).
+
+/// Read an arbitrary module body from the embedded `RESOURCES` bundle by its
+/// bundle-relative path, panicking with a clear message if it is missing.
+fn module_body(rel: &str) -> &'static str {
+    RESOURCES
+        .get_file(rel)
+        .and_then(|f| f.contents_utf8())
+        .unwrap_or_else(|| panic_with_message(&format!("RESOURCES bundle must contain `{rel}`")))
+}
+
+/// The branch-guard include is scoped to exactly the three authoring sources
+/// (plan, decompose, amend) and is absent from work, ship, and the review-pass
+/// partial; the review-pass commit retains its unguarded statement (REQ-008,
+/// CHK-011, CHK-001).
+#[test]
+fn branch_guard_included_by_exactly_the_three_authoring_sources() {
+    let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
+
+    // The three authoring sources guard the branch.
+    for rel in [
+        "modules/skills/speccy-plan.md",
+        "modules/phases/speccy-decompose.md",
+        "modules/skills/speccy-amend.md",
+    ] {
+        assert!(
+            module_body(rel).contains(guard_include),
+            "`{rel}` must include the branch-guard prelude via `{guard_include}` \
+             (REQ-008, CHK-011); the branch-guard is scoped to the authoring skills",
+        );
+    }
+
+    // No other skill/phase source guards the branch — in particular the
+    // work and ship phases and the review-pass partial.
+    for rel in [
+        "modules/phases/speccy-work.md",
+        "modules/phases/speccy-ship.md",
+        "modules/skills/partials/review-fanout.md",
+    ] {
+        assert!(
+            !module_body(rel).contains(guard_include),
+            "`{rel}` must NOT include the branch-guard prelude (REQ-008, CHK-011); \
+             only the plan, decompose, and amend sources are branch-guarded",
+        );
+    }
+
+    // The review-pass commit retains its unguarded "lands on whatever HEAD is"
+    // statement (CHK-001 review side).
+    assert!(
+        module_body("modules/skills/partials/review-fanout.md")
+            .contains("Commits land on whatever HEAD is"),
+        "review-fanout.md must retain its unguarded \"Commits land on whatever HEAD is\" \
+         statement (REQ-008, CHK-011); the review-pass commit is not branch-guarded",
+    );
+}
+
+/// Each authoring body stages a narrow spec-artifact path list (its own
+/// `git add <path>` staging command) and none contains a clean-tree refusal
+/// gate (asserted against the stable `git stash` token rather than a free-text
+/// sentence) (REQ-009, CHK-012).
+#[test]
+fn authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate() {
+    // Narrow-staging command per callsite. Anchoring on the positive narrow
+    // `git add <path>` command (rather than asserting raw absence of the
+    // `git add -A` substring) is deliberate: all three bodies legitimately
+    // *forbid* `git add -A` / `git add .` by name in prohibition prose, so a
+    // bare `!contains("git add -A")` check would false-match that prohibition.
+    // The narrow command is the observable property the broad forms would
+    // violate.
+    let narrow_staging = [
+        (
+            "modules/skills/speccy-plan.md",
+            "git add <spec-dir>/SPEC.md",
+        ),
+        (
+            "modules/phases/speccy-decompose.md",
+            "git add <spec-dir>/TASKS.md",
+        ),
+        ("modules/skills/speccy-amend.md", "git add <paths>"),
+    ];
+    for (rel, staging_cmd) in narrow_staging {
+        let body = module_body(rel);
+        assert!(
+            body.contains(staging_cmd),
+            "`{rel}` must stage its spec artifacts narrowly via `{staging_cmd}` \
+             (REQ-009, CHK-012); the commit must not stage the whole tree",
+        );
+    }
+
+    // No clean-tree refusal gate: none of the three authoring bodies stashes
+    // or refuses on a dirty tree. `git stash` is the stable token a stash-based
+    // gate would carry; its absence (with the SPEC's non-goal of "no stashing
+    // or refusal on a dirty working tree") proves there is no clean-tree gate.
+    for rel in [
+        "modules/skills/speccy-plan.md",
+        "modules/phases/speccy-decompose.md",
+        "modules/skills/speccy-amend.md",
+    ] {
+        assert!(
+            !module_body(rel).contains("git stash"),
+            "`{rel}` must not stash on a dirty tree (REQ-009, CHK-012); the authoring \
+             skills proceed on a dirty tree and carry unrelated changes onto the new branch",
+        );
+    }
+}
+
+/// The three rendered authoring skills fully expand their includes — no
+/// residual `MiniJinja` markup — and the branch-guard and commit-recipe text
+/// survive expansion (whole-set render property over the three skills at once).
+#[test]
+fn rendered_authoring_skills_fully_expand_with_guard_and_recipe() {
+    let rendered = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+
+    // The branch-guard module's `git switch -c` create command and the
+    // commit-recipe module's `git diff --cached --quiet` idempotency check are
+    // distinctive lines that exist only inside the two included modules; their
+    // presence in the rendered skill proves both includes expanded in place.
+    for rel in [
+        ".claude/skills/speccy-plan/SKILL.md",
+        ".claude/agents/speccy-decompose.md",
+        ".claude/skills/speccy-amend/SKILL.md",
+    ] {
+        let file = rendered
+            .iter()
+            .find(|f| f.rel_path.as_str() == rel)
+            .unwrap_or_else(|| {
+                panic_with_message(&format!("rendered claude-code pack must include `{rel}`"))
+            });
+
+        for marker in ["{{", "{%", "{#"] {
+            assert!(
+                !file.contents.contains(marker),
+                "rendered `{rel}` must not contain MiniJinja markup `{marker}`; \
+                 the branch-guard and commit-recipe includes must be fully expanded",
+            );
+        }
+
+        assert!(
+            file.contents.contains("git switch -c"),
+            "rendered `{rel}` must carry the branch-guard's `git switch -c` create \
+             command, proving the branch-guard include expanded into the skill body",
+        );
+        assert!(
+            file.contents.contains("git diff --cached --quiet"),
+            "rendered `{rel}` must carry the commit-recipe's `git diff --cached --quiet` \
+             idempotency check, proving the commit-recipe include expanded into the skill body",
+        );
+    }
+}
+
+/// `just reeject` is a no-op against the committed ejected packs: regenerating
+/// the harness output from `resources/` leaves the working tree clean, proving
+/// the committed `.claude/`, `.agents/`, and `.codex/` files match their
+/// sources after this SPEC's edits.
+#[test]
+fn reeject_leaves_working_tree_clean() {
+    use std::process::Command;
+
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("CARGO_MANIFEST_DIR (speccy-cli) must have a workspace-root parent");
+
+    // Regenerate both host packs from `resources/`.
+    let reeject = Command::new("just")
+        .arg("reeject")
+        .current_dir(repo_root)
+        .output()
+        .expect("`just reeject` must be runnable from the workspace root");
+    assert!(
+        reeject.status.success(),
+        "`just reeject` must succeed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&reeject.stdout),
+        String::from_utf8_lossy(&reeject.stderr),
+    );
+
+    // The committed ejected packs must already match the regenerated output.
+    // Scope the cleanliness check to the three ejected pack directories rather
+    // than the whole tree: the property under test is "the committed ejected
+    // packs match their `resources/` sources", and a whole-tree check would
+    // conflate that with unrelated in-flight edits elsewhere (the task's own
+    // WIP, TASKS.md state flips), which are not ejected-pack drift.
+    let status = Command::new("git")
+        .args([
+            "status",
+            "--porcelain",
+            "--",
+            ".claude",
+            ".agents",
+            ".codex",
+        ])
+        .current_dir(repo_root)
+        .output()
+        .expect("`git status --porcelain` must be runnable from the workspace root");
+    assert!(
+        status.status.success(),
+        "`git status --porcelain` must succeed"
+    );
+    let dirty = String::from_utf8_lossy(&status.stdout);
+    assert!(
+        dirty.trim().is_empty(),
+        "`just reeject` must leave the ejected packs clean — the committed `.claude/`, \
+         `.agents/`, and `.codex/` files must match their `resources/` sources; \
+         dirty pack paths:\n{dirty}",
     );
 }

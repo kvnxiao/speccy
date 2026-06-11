@@ -317,7 +317,7 @@ Suggested files: `resources/modules/skills/speccy-amend.md`,
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-008 REQ-009">
+<task id="T-007" state="completed" covers="REQ-008 REQ-009">
 ## Lock the whole-set scoping and narrow-staging invariants
 
 Add the cross-set invariant assertions to
