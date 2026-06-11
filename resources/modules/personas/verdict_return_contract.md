@@ -16,15 +16,13 @@ speccy journal append SPEC-NNNN/T-NNN --block review \
 EOF
 ```
 
-The CLI is the sole authority for the block's `date` and `round`
-attributes — it stamps `date` (UTC now) and derives `round` from the
-journal's current implementer round. **Do not compute, supply, or
-mention `date` or `round`** — there is no flag to override them, and
-the append is rejected if no `<implementer>` block exists yet for the
-round you are reviewing. Validation runs before any write; a malformed
-body leaves the journal byte-identical. The CLI's per-file lock
-serializes concurrent appends, so every reviewer can append in
-parallel without interleaving.
+{% include "modules/references/cli-stamps.md" %}
+
+Here `round` is the journal's current implementer round; the append
+is rejected if no `<implementer>` block exists yet for the round you
+are reviewing. The CLI's per-file lock serializes concurrent
+appends, so every reviewer can append in parallel without
+interleaving.
 
 ## The `--model` value is required
 

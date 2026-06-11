@@ -155,13 +155,12 @@ speccy journal append SPEC-NNNN --block drift-review \
 EOF
 ```
 
-The CLI is the sole authority for the block's `date`, `round`, and
-the invocation sectioning of VET.md — it stamps `date` (UTC now),
-derives `round` (a `drift-review` opens a round), and opens a new
-`## Invocation N` section when needed. **Do not compute, supply, or
-mention `date`, `round`, or invocation numbers** — there is no flag
-to override them. Validation runs before any write; a malformed body
-leaves VET.md byte-identical.
+{% include "modules/references/cli-stamps.md" %}
+
+Here the journal is VET.md: a `drift-review` opens a round, and the
+CLI opens a new `## Invocation N` section when needed. Do not
+compute or mention invocation numbers either — the CLI owns the
+sectioning.
 
 - `verdict="pass"` — the diff satisfies SPEC.md as a unit. One-line
   summary suffices. Bullets may be omitted entirely.

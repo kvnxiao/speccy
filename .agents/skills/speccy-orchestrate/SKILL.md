@@ -15,7 +15,7 @@ that exit when done.
 
 **Why fan-outs run inline in this skill's session.** Sub-agents
 cannot spawn sub-agents. The persona fan-out in `speccy-review`
-(four reviewer personas in parallel) and the drift-fix loop in
+(five reviewer personas in parallel) and the drift-fix loop in
 `speccy-vet` (reviewer + implementer + simplifier sub-agents across
 up to three rounds) therefore cannot be delegated to a single
 "wrapper" sub-agent that follows the skill body — the wrapper would
@@ -23,7 +23,8 @@ fail to spawn its leaf sub-agents. Instead, this orchestrator
 follows the `speccy-review` and `speccy-vet` skill bodies **inline
 in its own session** and spawns the leaf sub-agents directly. Only
 `speccy-work` (which never fans out) is delegated to a single
-sub-agent.
+sub-agent. Later sections reference this rule as "Why fan-outs run
+inline"; it is stated once here.
 
 ## When to use
 
@@ -92,16 +93,14 @@ TASKS.md `state` attributes or journal files with file-editing tools.
 implementer pass is single-shot and does not need to spawn its own
 sub-agents. Its final message comes back as a short status hint.
 
-`speccy-review` and `speccy-vet` cannot be delegated to a single
-wrapper sub-agent because they themselves fan out — and sub-agents
-cannot spawn sub-agents. This orchestrator follows their skill
-bodies inline in its own session and spawns the leaf sub-agents
-(`reviewer-business`, `reviewer-tests`, `reviewer-security`,
-`reviewer-style`, `vet-reviewer`, `vet-implementer`,
-`vet-simplifier`) directly. The leaf sub-agents each return one
-short verdict block as their final message; only those final
-messages — not the per-persona reasoning — flow back into the
-orchestrator's context.
+`speccy-review` and `speccy-vet` run inline in this session per
+"Why fan-outs run inline" above; this orchestrator spawns their
+leaf sub-agents (`reviewer-business`, `reviewer-tests`,
+`reviewer-security`, `reviewer-style`, `reviewer-correctness`,
+`vet-reviewer`, `vet-implementer`, `vet-simplifier`) directly. The
+leaf sub-agents each return one short verdict block as their final
+message; only those final messages — not the per-persona
+reasoning — flow back into the orchestrator's context.
 
 Sub-agent final messages are **status hints, not state**. The
 orchestrator always re-queries `speccy next SPEC-NNNN --json` after a
@@ -117,36 +116,14 @@ when exit code is 0.
 Before entering the dispatch loop, run one one-time sanity check
 to catch state left by a crashed prior session.
 
-**Reconcile-pass dispatch (REQ-007, REQ-008).** The very first
-`speccy next SPEC-NNNN --json` of the session — the same one that
-resolves the spec directory in step 1 below — may return
-`next_action.kind == "reconcile"` when the CLI's consistency check
-flags drift from a prior crashed session. When it does, dispatch the
-reconcile pass per the **Reconcile policy** summary below (canonical
-policy at `.agents/speccy-references/reconcile-policy.md`)
-**before** entering the dispatch loop. Apply the per-drift action
-for every entry in `consistency.drifts[]`, then re-query
-`speccy next SPEC-NNNN --json`. Only when the re-query returns
-`consistency.status == "ok"` does this orchestrator proceed to the
-dispatch loop. The reconcile pass is autonomous — no
-`AskUserQuestion`, no "press enter to continue" surface, anywhere
-in the dispatch path. Each subsequent loop iteration's
-`speccy next SPEC-NNNN --json` (step 1 of the [Loop](#loop) section
-below) re-runs the same check: if a per-task operation leaves
-drift, the next iteration catches it and dispatches the reconcile
-pass before continuing to the normal `work` / `review` / `ship`
-dispatch. The reconcile pass owns every drift kind in REQ-006's
-enum — including `state_in_progress_orphaned` (dirty tree) and
-`state_in_progress_clean` (clean tree) — so the orchestrator no
-longer scans TASKS.md for `state="in-progress"` itself.
+**Reconcile policy.** When `speccy next --json` (in either per-spec
+or workspace form) returns `next_action.kind == "reconcile"`, iterate
+`consistency.drifts[]` and apply the table action per entry, then
+re-query before proceeding. See
+`.agents/speccy-references/reconcile-policy.md` for the full
+policy table and the three properties the dispatch holds by
+construction (autonomous / rollback-biased / idempotent).
 
-**Reconcile policy.** When `speccy next SPEC-NNNN --json` returns
-`next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and
-apply the table action per entry, then re-query before proceeding.
-See `.agents/speccy-references/reconcile-policy.md` for the full
-policy table, the three properties the dispatch holds by construction
-(autonomous / rollback-biased / idempotent), and the extension
-protocol for adding new drift kinds.
 
 1. Resolve the spec directory from `speccy next SPEC-NNNN --json`:
    take the `spec_md_path` field and strip the trailing `/SPEC.md`
@@ -154,10 +131,22 @@ protocol for adding new drift kinds.
    stderr line and stop — the SPEC is in a terminal state. If the
    command reports the spec is unknown, stop and report.
 
-2. If `next_action.kind == "reconcile"`, run the reconcile pass per
-   the **Reconcile policy** summary above (canonical policy at
-   `.agents/speccy-references/reconcile-policy.md`), then re-query
-   and continue. Otherwise proceed directly to the dispatch loop.
+2. If that first query returned `next_action.kind == "reconcile"`
+   (REQ-007, REQ-008 — the CLI's consistency check flags drift from
+   a prior crashed session), run the reconcile pass per the
+   **Reconcile policy** above, then re-query; enter the dispatch
+   loop only when `consistency.status == "ok"`. The pass is
+   autonomous — no `AskUserQuestion`, no "press enter to continue"
+   surface, anywhere in the dispatch path — and it owns every drift
+   kind in REQ-006's enum, including `state_in_progress_orphaned`
+   (dirty tree) and `state_in_progress_clean` (clean tree), so the
+   orchestrator never scans TASKS.md for `state="in-progress"`
+   itself. Each subsequent loop iteration's
+   `speccy next SPEC-NNNN --json` (step 1 of the [Loop](#loop)
+   section below) re-runs the same check: if a per-task operation
+   leaves drift, the next iteration catches it and dispatches the
+   reconcile pass before continuing to the normal `work` / `review`
+   / `ship` dispatch.
 
 ## Loop
 
@@ -251,332 +240,34 @@ registered `speccy-work` sub-agent at
 
 ## Review dispatch
 
-Run the `speccy-review` skill body **inline in this orchestrator
-session** (do NOT wrap it in a single general-purpose sub-agent —
-that wrapper would need to spawn the four persona leaves, and
-sub-agents cannot spawn sub-agents). The shared partial below is
-the single source of truth, included by both this orchestrator's
-review dispatch and the `speccy-review` skill
-body.
-
-
-Fan out five reviewer-* sub-agents in parallel against the resolved
-task, one per persona. Default fan-out: `reviewer-business`,
-`reviewer-tests`, `reviewer-security`, `reviewer-style`,
-`reviewer-correctness`. Two additional personas
-(`reviewer-architecture`, `reviewer-docs`) are off the default
-fan-out and are invoked explicitly when an architectural or
-documentation risk is suspected.
-
-The prompt for each spawn is:
-
-> Review task `SPEC-NNNN/T-NNN`. Open your per-task context read with a
-> single `speccy context SPEC-NNNN/T-NNN --json` call — the bundle
-> carries the task entry, its covering requirements and scenarios, the
-> full per-task journal (prior implementer handoffs, review verdicts,
-> and blockers), the sibling index, the file paths, and a suggested
-> merge-base diff command. Read the diff with that command, then apply
-> your persona's review criteria. Targeted follow-up reads via the
-> bundle's listed paths (e.g. the evidence file) remain legitimate
-> where your persona needs something outside the bundle. Append your
-> own `<review>` block to the
-> per-task journal by running
-> `speccy journal append SPEC-NNNN/T-NNN --block review --persona <persona> --verdict <pass|blocking> --model <your-model>`
-> with the review body on stdin, then return a thin self-closing
-> `<verdict persona="<persona>" verdict="..." model="..." rationale="..." />`
-> element as your final message (per the verdict-return contract). The
-> `--model` value is required and must identify the model that produced
-> the verdict (with the optional slash-suffix effort convention from the
-> verdict-return contract). Do not edit TASKS.md. The journal write goes
-> through `speccy journal append` — do not use file-editing tools on the
-> journal.
->
-> The working tree may be dirty: the implementer leaves changes
-> uncommitted on purpose, and the orchestrator (not the implementer)
-> owns the single atomic commit on review pass per REQ-003/REQ-004.
-> On retry rounds the dirty tree is the prior pass's WIP that the
-> retry implementer amended in place per the retry-shape contract.
-> Do not flag uncommitted state, commit timing, or "changes not
-> committed before the in-review flip" -- those are out of scope
-> for per-task review.
-
-Substitute the resolved `SPEC-NNNN/T-NNN` and the persona name per
-spawn.
-
-Invoke Codex's native sub-agent-spawn primitive five times in
-parallel against the registered Codex sub-agents
-`reviewer-business`, `reviewer-tests`, `reviewer-security`,
-`reviewer-style`, and `reviewer-correctness`. Each persona's TOML
-file at `.codex/agents/reviewer-<persona>.toml` carries the
-sub-agent's developer instructions.
-
-Canonical journal `<review>` shape:
-`.agents/speccy-references/journal-review.md`.
-
-Canonical journal `<blockers>` shape:
-`.agents/speccy-references/journal-blockers.md`.
-
-Each reviewer sub-agent appends its own `<review>` block to
-`.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
-append --block review` before returning a thin `<verdict>` element
-(see `resources/modules/personas/verdict_return_contract.md`). The
-CLI's per-file lock serializes those parallel appends, so the
-running session never transcribes `<review>` blocks itself and never
-edits the journal with file-editing tools. The orchestrator's job
-after the fan-out settles is to **verify completeness, read back any
-blockers, then drive the state flip through the CLI verbs**.
-
-### Step 1 — verify the round's reviews are complete
-
-Read back the appended `<review>` blocks for the round under review
-through the CLI rather than trusting the returned thin verdicts:
-
-```bash
-speccy journal show SPEC-NNNN/T-NNN --json --block review --round latest
-```
-
-Confirm every persona you spawned appears in the result for the
-latest round. If a persona is missing (its append failed, or its
-sub-agent errored before appending), halt the fan-out and surface
-the missing persona rather than flipping state on an incomplete
-round. Do not parse the journal file by hand — `journal show` is the
-read-back authority.
-
-### Step 2 — drive the state flip through `speccy task transition`
-
-Decide pass vs blocking from the verdicts the reviewers appended,
-then flip the task's `state` with the transition command — never by
-editing the `state` attribute in TASKS.md directly:
-
-- If every spawned reviewer's appended `<review verdict="...">` is
-  `verdict="pass"`, flip `in-review` → `completed`:
-
-      speccy task transition SPEC-NNNN/T-NNN --to completed
-
-- If any spawned reviewer's `<review verdict="...">` is
-  `verdict="blocking"`, flip `in-review` → `pending`:
-
-      speccy task transition SPEC-NNNN/T-NNN --to pending
-
-  then append a single consolidated `<blockers>` block (step 3).
-
-### Step 3 — consolidate blockers via `speccy journal append`
-
-On a blocking round, read back the failing reviews and write **one**
-consolidated `<blockers>` block — not one per reviewer, not a partial
-write. Read the blocking review bodies through the CLI:
-
-```bash
-speccy journal show SPEC-NNNN/T-NNN --json --verdict blocking --round latest
-```
-
-The `<blockers>` **body is orchestrator-authored semantic judgment**
-(DEC-001 non-goal: the CLI never synthesizes blocker prose). Compose
-the body from the blocking reviews you just read back, then append it
-with the body on stdin:
-
-```bash
-speccy journal append SPEC-NNNN/T-NNN --block blockers <<'EOF'
-<one-line summary of what to change before the next implementer pass>.
-<optional bullets enumerating each persona's blocker>.
-EOF
-```
-
-The CLI is the sole authority for the block's `date` and `round` and
-emits the paired `<blockers>…</blockers>` element — **do not compute,
-supply, or hand-author `date`, `round`, or the open/close tags**.
-There is no flag to override them; the body you pipe is the inner
-text only. Validation runs before any write; a malformed body leaves
-the journal byte-identical.
-
-The single-writer rule holds: the CLI's append lock owns write
-serialization across the parallel reviewer appends and this
-consolidated `<blockers>` append, and the orchestrator remains the
-sole author of `<blockers>` bodies (and, per the commit step below,
-of git commits). The running session issues only CLI verbs — `journal
-show`, `journal append`, `task transition` — for the review-induced
-journal and state writes; it never edits TASKS.md or the journal file
-with file-editing tools.
-
-### Atomic commit on review pass (REQ-003, REQ-004)
-
-When every spawned reviewer returned `verdict="pass"` and the
-`speccy task transition … --to completed` flip has run (the reviewer
-`<review>` appends already landed via the CLI during the fan-out),
-the running session performs the commit step using the shared commit
-recipe below. The commit captures the implementer's code changes, the
-TASKS.md state flip, and the journal append in a single atomic commit
-(parent count = 1).
-
-Supply the recipe's two behaviour-varying parameters as follows:
-
-- **Staging breadth: `git add -A`.** Stage everything in the working
-  tree. Do not stage selectively — `git add -A` is sound under the
-  clean-tree precondition (REQ-002) that fires at the start of work
-  dispatch, which guarantees every dirty path at commit time is
-  task-scoped.
-- **Title and body.**
-  - **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
-    read verbatim from the `<task>` element's `## ` heading in
-    TASKS.md (the one-line H2 immediately after the `<task ...>`
-    opening tag). Substitute the resolved spec and task IDs. This
-    title prefix is the sole task-identity link in git history; the
-    consistency check correlates commits to tasks by grepping for it.
-  - **Body:** the trimmed content of the `Completed` field from the
-    latest `<implementer>` block in the per-task journal file. Extract
-    mechanically as the bytes between the `- Completed:` bullet marker
-    and the next `- <Field>:` bullet marker (one of `Undone`,
-    `Hygiene checks`, `Evidence`, `Discovered issues`,
-    `Procedural compliance`). Trim leading and trailing whitespace.
-
-With those two parameters fixed, run the shared recipe — it defines
-the no-git short-circuit, the unified stage-then-`git diff --cached
---quiet` idempotency check (a clean working tree skips the commit
-silently, matching the prior behaviour), the `Co-Authored-By` trailer,
-and the HEREDOC commit mechanics:
-
-## Shared commit recipe
-
-This module is the single source of truth for how a skill turns a
-just-written artifact into a git commit. Each callsite pulls it in with
-a MiniJinja `include` directive naming
-`modules/references/commit-recipe.md`; there is no verbatim copy of this
-recipe in any individual skill body.
-
-The caller supplies two — and only two — behaviour-varying parameters:
-
-- **Staging breadth.** Either `git add -A` (stage everything in the
-  working tree) or a narrow `git add <paths>` list (stage exactly the
-  named paths, leaving unrelated dirty paths untouched). The caller's
-  prose states which form applies and why.
-- **Title and body.** The commit message title line and body, built by
-  the caller from its own artifact (e.g. a `[SPEC-NNNN]:`-prefixed
-  title and a body drawn from the artifact's frontmatter or journal).
-
-Everything else — the no-git short-circuit, the idempotency check, the
-trailer, and the HEREDOC mechanics — is identical for every caller and
-is defined once here.
-
-### No-git short-circuit
-
-Before staging anything, check whether the working directory is inside
-a git repository:
-
-```bash
-git rev-parse --is-inside-work-tree
-```
-
-If this exits non-zero (the project is not a git repository), **skip
-the entire commit step without erroring**. The just-written artifact is
-left in place on disk; no commit is attempted and no git failure is
-surfaced. This preserves Speccy's "works identically in any project
-state" property for non-git projects.
-
-### Stage, then skip-if-empty, then commit
-
-When a git repository is present:
-
-1. **Stage** using the caller's chosen breadth — `git add -A` or the
-   narrow `git add <paths>` list. Staging unchanged content is a no-op,
-   so a narrow caller may pass its full path set unconditionally
-   regardless of whether some of those paths were already committed.
-
-2. **Idempotency check** — run the single unified form:
-
-   ```bash
-   git diff --cached --quiet
-   ```
-
-   If exit code is 0 (nothing staged), **skip the commit silently** —
-   the configured paths are already committed at their current content.
-   No surface to the user, no error. This is the only idempotency
-   check; do not substitute a pre-stage `git status --porcelain`
-   variant. If exit code is non-zero, proceed to the commit.
-
-3. **Commit** with the caller's title and body, passing the message via
-   a HEREDOC so newlines and any special characters survive verbatim:
-
-   ```bash
-   git commit -m "$(cat <<'EOF'
-   <caller title>
-
-   <caller body>
-
-   Co-Authored-By: <model> <noreply@anthropic.com>
-   EOF
-   )"
-   ```
-
-   The commit is single-parent (parent count = 1). The skill body does
-   not check or change the current git branch; the commit lands on
-   whatever HEAD is.
-
-### Trailer
-
-The `Co-Authored-By` trailer is resolved by the identity-sourcing rule,
-not restated here:
-
-## Sourcing your recorded identity
-
-When you record your own identity in a `model="..."` attribute, build
-the value from two independently sourced parts: the model segment and
-the optional effort suffix. Do not infer either from the skill-pack
-name, the persona name, or an inherited environment variable.
-
-- **Model segment — from the host's in-context identifier, verbatim.**
-  Use the resolved long-form model identifier your host states
-  in-context (for example, a host line such as
-  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
-  preserving version punctuation as the host writes it — keep the
-  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
-  (`claude-opus-4.8`), and never substitute a configured alias. Where a
-  host states no resolved identifier in-context, fall back to the
-  `model:` value in your own agent definition file.
-
-- **Effort suffix — from your own definition file.** When your host
-  exposes a reasoning-effort knob, read the effort from your own
-  sub-agent definition file (`effort:` on Claude Code,
-  `model_reasoning_effort` on Codex) and append it as a slash-suffix
-  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
-  `CLAUDE_EFFORT` or any other inherited environment variable: a
-  sub-agent pinned to a low effort that is dispatched from a
-  higher-effort parent session still records its own definition-file
-  effort. A host with no effort knob omits the suffix entirely.
-
-- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
-  override is deliberately not read. A run that sets it still records
-  the effort declared in the agent definition file, not the override
-  value.
-
-
-Apply that rule to fill the `<model>` segment of the trailer line. When
-the host states no resolved identifier in-context, use the documented
-fallback string
-`Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
-
-
-The skill body does not check the current git branch; it trusts the
-caller / host to have placed the working tree on a feature branch.
-Commits land on whatever HEAD is.
-
+Run the `speccy-review` fan-out **inline in this orchestrator
+session** (see "Why fan-outs run inline" above). The fan-out
+grammar lives canonically in the `speccy-review`
+skill body; this site carries only a pointer summary so the two
+invocation paths stay in sync without duplicating the grammar.
+
+**Review fan-out.** Spawn the five reviewer personas in parallel
+(each appends its own `<review>` block via `speccy journal append`
+and returns a thin `<verdict>`); verify the round is complete via
+`speccy journal show`; flip state via `speccy task transition`
+(`completed` on all-pass, `pending` on any blocking verdict); on a
+blocking round append one consolidated `<blockers>` block via
+`speccy journal append`; on a passing round perform the atomic
+commit. See
+`.agents/skills/speccy-review/SKILL.md` § "Run the
+persona fan-out and consolidation" for the full grammar (the spawn
+prompt, the completeness / state-flip / consolidation steps, and
+the commit recipe).
 
 After the write settles, increment the per-task retry counter if
 the task flipped back to `pending` (this is what feeds the
 5-round stop condition below). Then re-query
 `speccy next SPEC-NNNN --json`.
 
-The `speccy-review` skill remains independently invocable as
-`speccy-review`; this orchestrator's review
-dispatch shares the same fan-out contract via the partial above so
-behaviour stays in sync across invocation paths.
-
 ## Vet dispatch
 
 Run the `speccy-vet` skill body **inline in this orchestrator
-session** (do NOT wrap it in a single general-purpose sub-agent —
-that wrapper would need to spawn the vet-reviewer /
-vet-implementer / vet-simplifier leaves across up to three rounds,
-and sub-agents cannot spawn sub-agents). The vet-phases grammar
+session** (see "Why fan-outs run inline" above). The vet-phases grammar
 lives canonically in the `speccy-vet` skill body
 (which includes the `modules/skills/partials/vet-phases.md`
 partial); this site carries only a pointer summary so the two
@@ -664,8 +355,7 @@ them in the status line.
   dispatch-shape level. The skill body of
   `speccy-vet` remains the source of truth for
   Phase 0–3 semantics — phase grammar bugs and `<gate>` block shape
-  bugs get fixed there, not here. The orchestrator inlines the
-  fan-out only because sub-agents cannot spawn sub-agents.
+  bugs get fixed there, not here.
 - This skill does not pick a different persona fan-out for review,
   retry blocked tasks with a different model, or split tasks
   automatically. Those are judgment calls; surfacing the stuck

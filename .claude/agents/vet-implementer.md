@@ -165,13 +165,21 @@ Side discoveries:
 EOF
 ```
 
-The CLI is the sole authority for the block's `date` and `round` and
-for VET.md's invocation sectioning — it stamps `date` (UTC now) and
-attaches the `holistic-fix` to the current open round. **Do not
-compute, supply, or mention `date`, `round`, or invocation
-numbers** — there is no flag to override them. A `holistic-fix` with
-no preceding `drift-review` in the open section is rejected with
-VET.md untouched. Validation runs before any write.
+The CLI is the sole authority for the appended block's `date` and
+`round` attributes and for the journal's structural scaffolding
+(creating the file with frontmatter, sectioning where the journal
+has it). **Do not compute, supply, or hand-author `date`, `round`,
+or the block's open/close tags** — there is no flag to override
+them; the body you pipe on stdin is the inner text only, and the
+CLI emits the paired element. Validation runs before any write; a
+malformed body leaves the journal byte-identical.
+
+
+Here the journal is VET.md: the CLI attaches the `holistic-fix` to
+the current open round, and a `holistic-fix` with no preceding
+`drift-review` in the open section is rejected with VET.md
+untouched. Do not compute or mention invocation numbers either —
+the CLI owns the sectioning.
 
 Verdict semantics:
 
@@ -199,35 +207,24 @@ knob; hosts without an effort knob omit the suffix.
 
 ## Sourcing your recorded identity
 
-When you record your own identity in a `model="..."` attribute, build
-the value from two independently sourced parts: the model segment and
-the optional effort suffix. Do not infer either from the skill-pack
-name, the persona name, or an inherited environment variable.
+Build the `model="..."` value from two independently sourced parts;
+never infer either from the skill-pack name, the persona name, or an
+inherited environment variable.
 
-- **Model segment — from the host's in-context identifier, verbatim.**
-  Use the resolved long-form model identifier your host states
-  in-context (for example, a host line such as
-  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
-  preserving version punctuation as the host writes it — keep the
-  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
-  (`claude-opus-4.8`), and never substitute a configured alias. Where a
-  host states no resolved identifier in-context, fall back to the
-  `model:` value in your own agent definition file.
-
-- **Effort suffix — from your own definition file.** When your host
-  exposes a reasoning-effort knob, read the effort from your own
-  sub-agent definition file (`effort:` on Claude Code,
+- **Model segment** — the resolved long-form identifier your host
+  states in-context (e.g. `claude-opus-4-8[1m]`), transcribed
+  verbatim: keep the host's version punctuation (`claude-opus-4-8`,
+  never `claude-opus-4.8`), never substitute a configured alias.
+  When the host states no resolved identifier in-context, fall back
+  to the `model:` value in your own agent definition file.
+- **Effort suffix** — when the host exposes a reasoning-effort knob,
+  read it from your own definition file (`effort:` on Claude Code,
   `model_reasoning_effort` on Codex) and append it as a slash-suffix
-  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
-  `CLAUDE_EFFORT` or any other inherited environment variable: a
-  sub-agent pinned to a low effort that is dispatched from a
-  higher-effort parent session still records its own definition-file
-  effort. A host with no effort knob omits the suffix entirely.
-
-- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
-  override is deliberately not read. A run that sets it still records
-  the effort declared in the agent definition file, not the override
-  value.
+  (e.g. `claude-opus-4-8[1m]/low`). Never read `CLAUDE_EFFORT` or
+  the `CLAUDE_CODE_EFFORT_LEVEL` runtime override — a sub-agent
+  records its definition-file effort even when dispatched from a
+  higher-effort parent session. A host with no effort knob omits
+  the suffix entirely.
 
 
 Why the body is structured: round N+1's reviewer reads VET.md

@@ -54,16 +54,23 @@ incremented round).
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `.claude/speccy-references/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `.claude/speccy-references/reconcile-policy.md`) rather than the normal implementer flow.
+**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `.claude/speccy-references/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below rather than the normal implementer flow.
 
-**Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `.claude/speccy-references/reconcile-policy.md` for the full policy table.
+**Reconcile policy.** When `speccy next --json` (in either per-spec
+or workspace form) returns `next_action.kind == "reconcile"`, iterate
+`consistency.drifts[]` and apply the table action per entry, then
+re-query before proceeding. See
+`.claude/speccy-references/reconcile-policy.md` for the full
+policy table and the three properties the dispatch holds by
+construction (autonomous / rollback-biased / idempotent).
+
 
 1. Resolve the target task.
 
    - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
    - Otherwise, query the CLI in workspace form (no SPEC selector
      is known on this no-selector invocation path — we must walk
-     the active tree to find an implementable task):
+     the active tree to find the next implementable task):
 
      ```bash
      # workspace form: no SPEC-NNNN known yet; scan the active tree.
@@ -78,9 +85,9 @@ incremented round).
      error.
 
      On exit code 0, if the resulting `specs` array has no entry
-     with `next_action.kind == "work"`, exit and report that no
-     implementable tasks remain. Otherwise, construct the
-     disambiguated `<spec>/<task>` form from the JSON's `spec_id`
+     with `next_action.kind == "work"`, exit and report
+     that no implementable tasks remain. Otherwise, construct
+     the disambiguated `<spec>/<task>` form from the JSON's `spec_id`
      and `next_action.task_id` fields (the bare task ID is
      ambiguous across specs — every spec has its own `T-001`).
 
@@ -89,6 +96,7 @@ incremented round).
      exits non-zero means the SPEC has reached a terminal state —
      halt and surface the stderr line. Only parse JSON when exit
      code is 0.
+
 
 2. Apply the REQ-001 retry-shape rule summarized immediately below
    against the journal section of the bundle returned by the
@@ -311,19 +319,21 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
    EOF
    ```
 
-   The CLI is the sole authority for the block's `date` and `round`
-   and for creating the journal file with frontmatter on the first
-   append — it stamps `date` (UTC now), derives `round`
-   (`max existing round + 1`, or `1` on a fresh file), writes the
-   three-field frontmatter when creating the file, and emits the
-   paired `<implementer>…</implementer>` element with a correct
-   closing tag. **Do not compute, supply, or mention `date`,
-   `round`, `generated_at`, or hand-author the block's open/close
-   tags** — there is no flag to override them, and the body you pipe
-   is the inner text only. Validation runs before any write; a
-   malformed body leaves the journal byte-identical (or still
-   absent). On a retry round the same command appends after the
-   existing journal contents and increments `round` for you.
+   The CLI is the sole authority for the appended block's `date` and
+`round` attributes and for the journal's structural scaffolding
+(creating the file with frontmatter, sectioning where the journal
+has it). **Do not compute, supply, or hand-author `date`, `round`,
+or the block's open/close tags** — there is no flag to override
+them; the body you pipe on stdin is the inner text only, and the
+CLI emits the paired element. Validation runs before any write; a
+malformed body leaves the journal byte-identical.
+
+
+   Here `round` derives as `max existing round + 1` (or `1` on a
+   fresh file, where the same append also creates the journal with
+   its three-field frontmatter). On a retry round the same command
+   appends after the existing journal contents and increments
+   `round` for you.
 
    `--model` is required. Encode reasoning effort (when your host
    harness exposes an effort knob) as a slash-suffix on the model
@@ -332,38 +342,27 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
 
    ## Sourcing your recorded identity
 
-When you record your own identity in a `model="..."` attribute, build
-the value from two independently sourced parts: the model segment and
-the optional effort suffix. Do not infer either from the skill-pack
-name, the persona name, or an inherited environment variable.
+Build the `model="..."` value from two independently sourced parts;
+never infer either from the skill-pack name, the persona name, or an
+inherited environment variable.
 
-- **Model segment — from the host's in-context identifier, verbatim.**
-  Use the resolved long-form model identifier your host states
-  in-context (for example, a host line such as
-  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
-  preserving version punctuation as the host writes it — keep the
-  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
-  (`claude-opus-4.8`), and never substitute a configured alias. Where a
-  host states no resolved identifier in-context, fall back to the
-  `model:` value in your own agent definition file.
-
-- **Effort suffix — from your own definition file.** When your host
-  exposes a reasoning-effort knob, read the effort from your own
-  sub-agent definition file (`effort:` on Claude Code,
+- **Model segment** — the resolved long-form identifier your host
+  states in-context (e.g. `claude-opus-4-8[1m]`), transcribed
+  verbatim: keep the host's version punctuation (`claude-opus-4-8`,
+  never `claude-opus-4.8`), never substitute a configured alias.
+  When the host states no resolved identifier in-context, fall back
+  to the `model:` value in your own agent definition file.
+- **Effort suffix** — when the host exposes a reasoning-effort knob,
+  read it from your own definition file (`effort:` on Claude Code,
   `model_reasoning_effort` on Codex) and append it as a slash-suffix
-  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
-  `CLAUDE_EFFORT` or any other inherited environment variable: a
-  sub-agent pinned to a low effort that is dispatched from a
-  higher-effort parent session still records its own definition-file
-  effort. A host with no effort knob omits the suffix entirely.
-
-- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
-  override is deliberately not read. A run that sets it still records
-  the effort declared in the agent definition file, not the override
-  value.
+  (e.g. `claude-opus-4-8[1m]/low`). Never read `CLAUDE_EFFORT` or
+  the `CLAUDE_CODE_EFFORT_LEVEL` runtime override — a sub-agent
+  records its definition-file effort even when dispatched from a
+  higher-effort parent session. A host with no effort knob omits
+  the suffix entirely.
 
 
-   Canonical journal `<implementer>` shape: `references/journal-implementer.md`.
+   Canonical journal `<implementer>` shape: `.claude/speccy-references/journal-implementer.md`.
 
    Canonical evidence file shape: `.claude/speccy-references/evidence.md`.
 

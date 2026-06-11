@@ -96,7 +96,14 @@ restores prior-round **code** from the stash with a tracked-only
 `git checkout 'stash@{0}' -- ':!…/journal/'`, which never touches the
 stash's untracked journal copy, then drops the stash. The live on-disk
 journal — with every block appended since the snapshot — is left
-untouched throughout. The reusable revert sequence is:
+untouched throughout.
+
+This is the **journal-safe revert sequence**. Every rollback in
+Phases 1 and 2 runs these four commands verbatim — the restore and
+clean undo sub-agent edits to tracked files and remove files it
+added, the tracked-only checkout restores pre-sub-agent code from
+the snapshot, and the drop discards it; all four exclude the journal
+directory:
 
 ```bash
 # Revert code to the pre-sub-agent snapshot; never touch the journal.
@@ -219,25 +226,10 @@ git stash drop
         verifies the implementer's claims against the now-updated
         diff.
 
-      - **`stuck`**: revert the implementer's **code** edits while
-        preserving the journal audit trail:
-
-        ```bash
-        git restore -- ':!.speccy/specs/*/journal/'
-        git clean -fd -e '.speccy/specs/*/journal/'
-        git checkout 'stash@{0}' -- ':!.speccy/specs/*/journal/'
-        git stash drop
-        ```
-
-        The journal-scoped restore/clean undo implementer edits to
-        tracked files and remove new files the implementer added; the
-        tracked-only `git checkout 'stash@{0}'` then restores the
-        pre-implementer code from the snapshot and `git stash drop`
-        discards it. All four steps exclude the journal directory, so
-        the `<drift-review>` and `<holistic-fix>` blocks in VET.md stay
-        intact. Do **not** `git stash pop` — it would collide on the
-        swept-in untracked journal (see "Protect the journal from
-        rollback" above). Return a `fail` verdict.
+      - **`stuck`**: run the journal-safe revert sequence (see
+        "Protect the journal from rollback" above). The
+        `<drift-review>` and `<holistic-fix>` blocks in VET.md stay
+        intact. Return a `fail` verdict.
 
       - **Sub-agent error or missing/malformed `<verdict>`**: treat
         as `stuck`. Revert the code as above. The vet-implementer
@@ -339,26 +331,12 @@ the return block.
         `simplifier="applied"` for the return block.
 
       - **`blocking`** (hygiene failed), sub-agent error, or
-        missing/malformed verdict: roll back the **code** while
-        preserving the journal audit trail.
-
-        ```bash
-        git restore -- ':!.speccy/specs/*/journal/'
-        git clean -fd -e '.speccy/specs/*/journal/'
-        git checkout 'stash@{0}' -- ':!.speccy/specs/*/journal/'
-        git stash drop
-        ```
-
-        The journal-scoped restore/clean wipe simplifier changes from
-        tracked files and remove untracked files the simplifier
-        created; the tracked-only `git checkout 'stash@{0}'` then
-        restores the pre-simplifier code and `git stash drop` discards
-        the snapshot. All four steps exclude the journal directory, so
-        the `<simplifier-apply>` block in VET.md stays intact. Do
-        **not** `git stash pop` — see "Protect the journal from
-        rollback" above. If the sub-agent errored before appending,
-        append a synthesized `<simplifier-apply>` recording the failure
-        via `speccy journal append SPEC-NNNN --block simplifier-apply
+        missing/malformed verdict: run the journal-safe revert
+        sequence (see "Protect the journal from rollback" above). The
+        `<simplifier-apply>` block in VET.md stays intact. If the
+        sub-agent errored before appending, append a synthesized
+        `<simplifier-apply>` recording the failure via `speccy
+        journal append SPEC-NNNN --block simplifier-apply
         --verdict blocking` so the trail is complete. Record
         `simplifier="reverted"`.
 

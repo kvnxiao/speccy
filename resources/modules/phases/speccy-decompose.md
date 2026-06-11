@@ -44,7 +44,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    The file must open with a YAML frontmatter block followed immediately
    by a level-1 heading.
 
-   Canonical TASKS.md shape: `references/tasks.md`.
+   Canonical TASKS.md shape: `{{ skill_install_path }}/speccy-decompose/references/tasks.md`.
 
    Key constraints:
    - The `# Tasks: SPEC-` heading must appear on the line immediately

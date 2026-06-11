@@ -40,12 +40,6 @@ it's first-attempt shape — the strict clean-tree gate applies. See
 statement, read-only scope, worked examples, and the
 "implementer awaiting review" edge case.
 
-**Reconcile policy.** When `speccy next --json` returns
-`next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and
-apply the table action per entry, then re-query before proceeding.
-See `{{ speccy_references_path }}/reconcile-policy.md` for the full
-policy table, the three properties the dispatch holds by construction
-(autonomous / rollback-biased / idempotent), and the extension
-protocol for adding new drift kinds.
+{% include "modules/references/reconcile-summary.md" %}
 
 **Hygiene gate (REQ-001):** after the implementer turn, before flipping `state` from `in-progress` to `in-review`, run `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, the appended `<implementer>` block's `Hygiene checks` field carries one line per gate naming its exit code.

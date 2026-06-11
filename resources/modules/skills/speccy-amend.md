@@ -132,13 +132,12 @@ reconciliation are not forgotten.
 
    The `<blockers>` body stays amendment-authored semantic judgment:
    name what changed in SPEC and what the next implementer attempt
-   must address. The CLI is the sole authority for the block's `date`
-   and `round` — it stamps `date` (UTC now), derives `round` (matching
-   the current implementer round so the next attempt continues at
-   `N+1`), creates the journal with frontmatter if it is somehow
-   absent, and emits the paired `<blockers>…</blockers>` element.
-   **Do not compute, supply, or hand-author `date`, `round`, or the
-   open/close tags**; the body you pipe is the inner text only.
+   must address.
+
+   {% include "modules/references/cli-stamps.md" %}
+
+   Here `round` matches the current implementer round, so the next
+   attempt continues at `N+1`.
 
    Canonical journal `<blockers>` shape: `{{ speccy_references_path }}/journal-blockers.md`.
 

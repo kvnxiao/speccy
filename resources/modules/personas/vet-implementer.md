@@ -159,13 +159,13 @@ Side discoveries:
 EOF
 ```
 
-The CLI is the sole authority for the block's `date` and `round` and
-for VET.md's invocation sectioning — it stamps `date` (UTC now) and
-attaches the `holistic-fix` to the current open round. **Do not
-compute, supply, or mention `date`, `round`, or invocation
-numbers** — there is no flag to override them. A `holistic-fix` with
-no preceding `drift-review` in the open section is rejected with
-VET.md untouched. Validation runs before any write.
+{% include "modules/references/cli-stamps.md" %}
+
+Here the journal is VET.md: the CLI attaches the `holistic-fix` to
+the current open round, and a `holistic-fix` with no preceding
+`drift-review` in the open section is rejected with VET.md
+untouched. Do not compute or mention invocation numbers either —
+the CLI owns the sectioning.
 
 Verdict semantics:
 

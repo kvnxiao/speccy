@@ -2082,8 +2082,8 @@ no separate manifest declares it. The mapping:
 | TASKS.md                        | `resources/modules/references/tasks.md`               | `.claude/skills/speccy-decompose/references/tasks.md`             | `.agents/skills/speccy-decompose/references/tasks.md`               | skill-local |
 | REPORT.md                       | `resources/modules/references/report.md`              | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                   | skill-local |
 | PR body template                | `resources/modules/references/pr-body.md`             | `.claude/skills/speccy-ship/references/pr-body.md`                | `.agents/skills/speccy-ship/references/pr-body.md`                  | skill-local |
-| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`    | `.agents/skills/speccy-work/references/journal-implementer.md`      | skill-local |
-| journal `<review>` block        | `resources/modules/references/journal-review.md`      | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`         | skill-local |
+| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/speccy-references/journal-implementer.md`                | `.agents/speccy-references/journal-implementer.md`                  | host-shared |
+| journal `<review>` block        | `resources/modules/references/journal-review.md`      | `.claude/speccy-references/journal-review.md`                     | `.agents/speccy-references/journal-review.md`                       | host-shared |
 | evidence file (`evidence/T-NNN.md`) | `resources/modules/references/evidence.md`        | `.claude/speccy-references/evidence.md`                           | `.agents/speccy-references/evidence.md`                             | host-shared |
 | journal `<blockers>` block      | `resources/modules/references/journal-blockers.md`    | `.claude/speccy-references/journal-blockers.md`                   | `.agents/speccy-references/journal-blockers.md`                     | host-shared |
 | reconcile policy table          | `resources/modules/references/reconcile-policy.md`    | `.claude/speccy-references/reconcile-policy.md`                   | `.agents/speccy-references/reconcile-policy.md`                     | host-shared |
@@ -2100,10 +2100,18 @@ imports the same canonical text. `evidence.md` is referenced by
 `/speccy-review`, and `/speccy-orchestrate` (all of which dispatch
 on `consistency.drifts[]`); `retry-shape.md` is referenced by
 `/speccy-work` (deciding whether the strict clean-tree gate applies)
-and by reviewer sub-agents (recognising retry-shape attempts).
+and by reviewer sub-agents (recognising retry-shape attempts);
+`journal-implementer.md` is referenced by the `speccy-work` agent
+body and by `evidence.md` (the roll-call coverage rule);
+`journal-review.md` is referenced by the review fan-out partial,
+which lands in both `/speccy-review` and `/speccy-orchestrate`.
 Skill-local rows have exactly one consuming body each (or two in
 the case of `pr-body.md` and `report.md`, both consumed by
-`/speccy-ship`).
+`/speccy-ship`). Agent bodies eject as flat files with no sibling
+`references/` directory, so a skill-local file consumed from an
+agent body is pointed at via its host-rooted skill path
+(`<skill_install_path>/<skill>/references/<file>.md`), never a
+bare `references/…` relative path.
 
 SPEC-0038 REQ-002 is the source of truth. The
 `chkNNN_no_orphan_references` test in
@@ -2492,16 +2500,20 @@ new drift kind is a two-change procedure:
 
 1. Add the variant + detection logic in the Rust source (the
    `DriftKind` enum in `speccy-core` and its detection branch in
-   the consistency check).
+   the consistency check). Detection must stay read-only: no
+   mutating git commands, no writes to TASKS.md or the journal.
 2. Add the matching row to the policy table in
-   `.claude/speccy-references/reconcile-policy.md` and re-sync the
-   three inlined copies in the `speccy-work`, `speccy-review`,
-   and `speccy-orchestrate` skill bodies.
+   `resources/modules/references/reconcile-policy.md`, then run
+   `just reeject` to re-render the ejected host-shared copies at
+   `<host>/speccy-references/reconcile-policy.md`.
 
-The reconcile-policy partial is the single source of truth for
-what each drift kind means at the dispatch layer — see
-`.claude/speccy-references/reconcile-policy.md` for the policy
-table that maps each `kind` to its concrete action.
+No other site needs to change: the consuming skill bodies carry only
+a summary plus a pointer to the ejected file, so they pick up new
+rows without editing. The CLI knows what it *detected*; the policy
+file knows what to *do*. The reconcile-policy file is the single
+source of truth for what each drift kind means at the dispatch
+layer — see `.claude/speccy-references/reconcile-policy.md` for the
+policy table that maps each `kind` to its concrete action.
 
 ## `speccy vacancy --json`
 
