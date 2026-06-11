@@ -14,6 +14,8 @@ flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
+{% include "modules/personas/no_working_tree_mutation.md" %}
+
 ## Focus
 
 Your lane is logic and control-flow defects — the bugs that make the
