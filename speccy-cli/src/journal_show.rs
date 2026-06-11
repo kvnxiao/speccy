@@ -6,8 +6,9 @@
 //! DEC-004, identical to `journal append`: a task selector
 //! (`T-NNN` / `SPEC-NNNN/T-NNN`) resolves the per-task journal at
 //! `<spec-dir>/journal/<task-id>.md` (parsed by `journal_xml`); a bare
-//! `SPEC-NNNN` selector resolves `<spec-dir>/journal/VET.md` (parsed by
-//! `vet_xml`).
+//! `SPEC-NNNN` selector resolves `<spec-dir>/journal/VET.md` (parsed
+//! in-flight by `vet_xml`, so a mid-vet-run VET.md whose last invocation
+//! section is still open — no terminal `<gate>` yet — reads cleanly).
 //!
 //! The filters compose conjunctively: `--round latest|N` keeps the blocks
 //! of the highest (or named) round; `--verdict V` keeps blocks whose
@@ -35,7 +36,7 @@ use camino::Utf8PathBuf;
 use speccy_core::parse::JournalEntry;
 use speccy_core::parse::VetBlock;
 use speccy_core::parse::parse_journal_xml;
-use speccy_core::parse::parse_vet_xml;
+use speccy_core::parse::parse_vet_in_flight;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskRef;
 use speccy_core::task_lookup::find as find_task;
@@ -254,7 +255,14 @@ fn resolve_vet(
         }
         Err(source) => return Err(ShowError::Io { source }),
     };
-    let doc = parse_vet_xml(&src, &journal_path).map_err(|source| ShowError::Parse {
+    // In-flight parse: `journal show` is a read command and its known call
+    // sites run mid-vet-run, when the last invocation section is still open
+    // (a `drift-review` / `simplifier-scan` has landed but its terminal
+    // `<gate>` has not). The strict parser would reject that legitimate
+    // shape, so the parser the vet flow's reads need is the in-flight one.
+    // A complete (gated) file parses identically under both, and structural
+    // corruption is still rejected — only an open *last* section is tolerated.
+    let doc = parse_vet_in_flight(&src, &journal_path).map_err(|source| ShowError::Parse {
         path: journal_path.clone(),
         source,
     })?;

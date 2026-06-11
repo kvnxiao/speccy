@@ -910,6 +910,107 @@ fn report_md_dangling_scenario_fires_rpt_003() -> TestResult {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// SPEC-0057 CHK-008: an unbalanced foreign tag in a parsed artifact gates
+// verify (exit non-zero) and the rendered output names the artifact path and
+// the orphan tag's 1-indexed line.
+// ---------------------------------------------------------------------------
+
+/// SPEC.md (status injected) carrying a dangling foreign open tag
+/// (`<orphan>`) in its requirement body with no matching close.
+fn spec_md_dangling_foreign_tag(spec_id: &str, status: &str) -> String {
+    let template = indoc! {r#"
+        ---
+        id: __ID__
+        slug: x
+        title: Example __ID__
+        status: __STATUS__
+        created: 2026-05-11
+        ---
+
+        # __ID__
+
+        <goals>
+        Example goals.
+        </goals>
+
+        <non-goals>
+        Example non-goals.
+        </non-goals>
+
+        <user-stories>
+        - Example user story.
+        </user-stories>
+
+        <requirement id="REQ-001">
+        ### REQ-001: First
+        Body.
+        <orphan>
+
+        <done-when>
+        - placeholder.
+        </done-when>
+
+        <behavior>
+        - placeholder.
+        </behavior>
+
+        <scenario id="CHK-001">
+        Given REQ-001, when the suite runs, then it covers REQ-001.
+        </scenario>
+        </requirement>
+
+        ## Changelog
+
+        <changelog>
+        | Date | Author | Summary |
+        |------|--------|---------|
+        | 2026-05-11 | t | init |
+        </changelog>
+    "#};
+    template
+        .replace("__ID__", spec_id)
+        .replace("__STATUS__", status)
+}
+
+#[test]
+fn xml_001_unbalanced_foreign_tag_gates_verify_and_names_location() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-xml001",
+        // Implemented so the Error is not demoted to Info.
+        &spec_md_dangling_foreign_tag("SPEC-0001", "implemented"),
+        None,
+    )?;
+
+    let (code, out, _err) = invoke(&ws.root, true)?;
+    assert_eq!(
+        code, 1,
+        "unbalanced foreign tag must gate verify; out:\n{out}"
+    );
+
+    let json: Value = serde_json::from_str(&out)?;
+    let errors = at(&json, &["lint", "errors"])
+        .as_array()
+        .expect("lint.errors array");
+    let xml_001 = errors
+        .iter()
+        .find(|d| field(d, "code").as_str() == Some("XML-001"))
+        .expect("XML-001 must appear in lint.errors");
+
+    let file = field(xml_001, "file").as_str().unwrap_or("");
+    assert!(
+        file.ends_with("/SPEC.md") || file.ends_with("\\SPEC.md"),
+        "XML-001 must name the SPEC.md artifact path; got: {file}",
+    );
+    assert!(
+        field(xml_001, "line").as_u64().is_some(),
+        "XML-001 must carry the orphan tag's 1-indexed line; got: {xml_001}",
+    );
+    Ok(())
+}
+
 /// In-progress demotion: same malformed REPORT.md (no `spec=`) but the spec's
 /// frontmatter is `status: in-progress`.  RPT-001 is demoted to `Level::Info`
 /// by `partition_lint`; exit code must be 0.

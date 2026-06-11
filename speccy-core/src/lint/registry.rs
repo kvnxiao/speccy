@@ -36,6 +36,7 @@ pub const REGISTRY: &[(&str, Level)] = &[
     ("JNL-003", Level::Error),
     ("VET-001", Level::Error),
     ("VET-002", Level::Error),
+    ("XML-001", Level::Error),
 ];
 
 /// Look up the registered severity for `code`. Returns `None` if `code`

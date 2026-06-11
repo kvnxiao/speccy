@@ -261,6 +261,60 @@ fn spec_selector_shows_vet_invocations_and_blocks() -> TestResult {
     Ok(())
 }
 
+/// A mid-vet-run VET.md whose last invocation section is still open — a
+/// `drift-review` has landed but its terminal `<gate>` has not — must read
+/// cleanly. The vet flow's call sites (Phase 0 invocation read-back, the
+/// drift-implementer's `<drift-review>` read, the simplifier-apply's
+/// `<simplifier-scan>` read) all run before the gate lands, so `journal
+/// show` parses VET.md in-flight; the strict parser would reject this shape.
+#[test]
+fn spec_selector_shows_open_invocation_section() -> TestResult {
+    let (ws, spec_dir) = workspace_with_task("completed")?;
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    // No `<gate>` block: the section is open, exactly as it is mid-run after
+    // a `drift-review` is appended and before the polish/gate phases.
+    let vet = concat!(
+        "---\n",
+        "spec: SPEC-0042\n",
+        "generated_at: 2026-05-22T00:00:00Z\n",
+        "---\n\n",
+        "## Invocation 1 — 2026-05-22T00:00:00Z\n\n",
+        "<drift-review verdict=\"blocking\" round=\"1\" date=\"2026-05-22T00:01:00Z\" model=\"m\">\n",
+        "drift found, no gate yet\n",
+        "</drift-review>\n",
+    );
+    fs_err::write(journal.join("VET.md").as_std_path(), vet)?;
+
+    let out = Command::cargo_bin("speccy")?
+        .args(["journal", "show", "SPEC-0042", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: Value = serde_json::from_slice(&out)?;
+    let invocations = json
+        .get("invocations")
+        .and_then(Value::as_array)
+        .expect("invocations array");
+    assert_eq!(invocations.len(), 1, "the open invocation section is shown");
+    let inv = invocations.first().expect("one invocation");
+    let blocks = inv.get("blocks").and_then(Value::as_array).expect("blocks");
+    let kinds: Vec<&str> = blocks
+        .iter()
+        .filter_map(|b| b.get("block").and_then(Value::as_str))
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["drift-review"],
+        "the un-gated section's blocks read back without a terminal gate",
+    );
+    Ok(())
+}
+
 /// A missing journal file exits non-zero with a diagnostic.
 #[test]
 fn missing_journal_exits_nonzero() -> TestResult {

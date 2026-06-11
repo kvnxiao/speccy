@@ -2,7 +2,8 @@
 //!
 //! Takes parsed artifacts from [`crate::parse`] plus a workspace-wide
 //! supersession index and emits structured [`Diagnostic`] values with
-//! stable codes (`SPC-*`, `REQ-*`, `VAL-*`, `TSK-*`, `QST-*`, `RPT-*`).
+//! stable codes (`SPC-*`, `REQ-*`, `VAL-*`, `TSK-*`, `QST-*`, `RPT-*`,
+//! `JNL-*`, `VET-*`, `XML-*`).
 //!
 //! All semantic judgement of quality stays in review. Lint catches only
 //! mechanical inconsistencies. See
@@ -44,6 +45,11 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
         // frozen vet grammar. The lints run only when the file exists;
         // the existence gate lives inside the rule.
         rules::vet::lint(spec, &mut diagnostics);
+        // SPEC-0057: XML-* flags unbalanced foreign (non-whitelisted) XML
+        // tags leaked into the parsed SPEC.md / TASKS.md / REPORT.md
+        // artifacts. Balance is name-scoped and fence-aware; the rule reads
+        // the raw source already retained on each parsed document.
+        rules::xml::lint(spec, &mut diagnostics);
     }
 
     diagnostics.sort_by(|a, b| {

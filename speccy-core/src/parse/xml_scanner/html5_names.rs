@@ -139,3 +139,44 @@ pub const HTML5_ELEMENT_NAMES: &[&str] = &[
 pub fn is_html5_element_name(name: &str) -> bool {
     HTML5_ELEMENT_NAMES.contains(&name)
 }
+
+/// The HTML5 void elements — elements that have no end tag by definition
+/// (WHATWG HTML Living Standard §13.1.2 "void elements").
+///
+/// A foreign open tag whose name is in this set is never a dangling open:
+/// it cannot have a matching close, so balance checks must exempt it. The
+/// set lives in code (not just in docs) so the unit test in `super` can
+/// prove it is a real subset of [`HTML5_ELEMENT_NAMES`] at build time
+/// rather than re-asserting a hand-copied literal.
+///
+/// Sorted alphabetically so future edits stay diff-stable.
+pub const VOID_ELEMENT_NAMES: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
+];
+
+/// Return true when `name` is an HTML5 void element name.
+#[must_use = "the caller uses this to exempt void elements from balance checks"]
+pub fn is_void_element_name(name: &str) -> bool {
+    VOID_ELEMENT_NAMES.contains(&name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The void set is a genuine subset of the HTML5 element index: a
+    /// "void" name that is not even a recognised HTML5 element would be a
+    /// typo or an invented name. This proves the structural relationship
+    /// between the two constants rather than re-asserting a hand-copied
+    /// literal, so it fails if either list drifts out from under the other.
+    #[test]
+    fn void_set_is_subset_of_html5_element_set() {
+        for name in VOID_ELEMENT_NAMES {
+            assert!(
+                is_html5_element_name(name),
+                "void element `{name}` is not in HTML5_ELEMENT_NAMES",
+            );
+        }
+    }
+}

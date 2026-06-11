@@ -32,7 +32,9 @@ use comrak::Arena;
 use comrak::nodes::AstNode;
 use comrak::nodes::NodeValue;
 pub use html5_names::HTML5_ELEMENT_NAMES;
+pub use html5_names::VOID_ELEMENT_NAMES;
 pub use html5_names::is_html5_element_name;
+pub use html5_names::is_void_element_name;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -75,6 +77,23 @@ pub struct RawTag {
     /// Absolute byte offset of this tag's start, used to bound the body
     /// of the matching open tag when this is a close tag.
     pub body_end_after_tag: usize,
+}
+
+/// One scanned foreign (non-whitelisted) open or close tag occurrence.
+///
+/// The inverse view of [`RawTag`]: where [`scan_tags`] keeps only
+/// whitelisted structural tags, [`scan_foreign_tags`] keeps only the tags
+/// whose names lie *outside* the whitelist. Carries just enough to drive a
+/// name-scoped balance check in the lint engine — the element name, whether
+/// it was a close tag, and the 1-indexed source line it sat on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignTag {
+    /// Element name as it appeared in the source (lowercase by regex).
+    pub name: String,
+    /// `true` when the tag was `</name>`, `false` for `<name ...>`.
+    pub is_close: bool,
+    /// 1-indexed source line the tag occupied.
+    pub line: u32,
 }
 
 /// Configuration for one scan pass.
@@ -214,6 +233,89 @@ pub fn scan_tags(
     }
 
     Ok(tags)
+}
+
+/// Scan `source` for line-isolated open and close tags whose element name
+/// is **outside** `whitelist` — the foreign tags [`scan_tags`] discards.
+///
+/// This is the inverse of [`scan_tags`]: it reuses the same line walk, the
+/// same fence-awareness (`code_fence_ranges` is the output of
+/// [`collect_code_fence_byte_ranges`] over `source`), and the same strict
+/// `open`/`close` tag-shape regexes, but emits a [`ForeignTag`] for every
+/// matched tag whose name is not whitelisted instead of the whitelisted
+/// structural tags. Whitelisted names and lines fully inside a fenced range
+/// are skipped — the fence skip is the REQ-003 exemption, living here in
+/// the helper rather than in the lint. Self-closing `<foo/>` does not match
+/// the strict open regex and is therefore never returned.
+///
+/// The helper does no balance computation and no void-element filtering;
+/// callers decide what to do with the occurrences.
+#[must_use = "the returned foreign tags drive the XML-001 balance lint"]
+pub fn scan_foreign_tags(
+    source: &str,
+    code_fence_ranges: &[(usize, usize)],
+    whitelist: &[&str],
+) -> Vec<ForeignTag> {
+    let mut foreign: Vec<ForeignTag> = Vec::new();
+    let mut line_start: usize = 0;
+    let mut line_no: u32 = 1;
+    // `next_line` only errors on byte-arithmetic overflow, which cannot
+    // occur for an in-memory string; a placeholder path satisfies its
+    // signature and the `Err`/`None` arms both end the walk.
+    let scan_path = Utf8Path::new("<foreign-tag-scan>");
+
+    while line_start <= source.len() {
+        let Ok(Some(line_info)) = next_line(source, 0, line_start, scan_path) else {
+            break;
+        };
+
+        if !range_inside_any_fence(
+            line_info.abs_line_start,
+            line_info.abs_line_end_excl,
+            code_fence_ranges,
+        ) {
+            classify_foreign_line(line_info.line, line_no, whitelist, &mut foreign);
+        }
+
+        line_start = line_info.next_start_in_body;
+        line_no = line_no.saturating_add(1);
+    }
+
+    foreign
+}
+
+/// Match one line against the strict open/close tag regexes and push a
+/// [`ForeignTag`] when the name is outside `whitelist`. Mirrors the
+/// non-whitelisted branch of [`classify_line`] — whitelisted names produce
+/// nothing, and a malformed-but-tag-shaped line that matches neither regex
+/// is treated as prose (no diagnostics here; that is the lint's job).
+fn classify_foreign_line(line: &str, line_no: u32, whitelist: &[&str], out: &mut Vec<ForeignTag>) {
+    let line_for_regex = line.trim_start().trim_end();
+
+    // Open is tried before close; the two regexes are mutually exclusive on a
+    // given line, so resolving once preserves the open-before-close order.
+    let resolved = open_tag_regex()
+        .captures(line_for_regex)
+        .map(|caps| (caps, false))
+        .or_else(|| {
+            close_tag_regex()
+                .captures(line_for_regex)
+                .map(|caps| (caps, true))
+        });
+
+    if let Some((caps, is_close)) = resolved {
+        let name = caps
+            .get(1)
+            .map(|m| m.as_str().to_owned())
+            .unwrap_or_default();
+        if !whitelist.contains(&name.as_str()) {
+            out.push(ForeignTag {
+                name,
+                is_close,
+                line: line_no,
+            });
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -590,6 +692,62 @@ mod tests {
                     && allowed == "id, state, covers"
             ),
             "got: {err:?}",
+        );
+    }
+
+    fn scan_foreign(source: &str, whitelist: &[&str]) -> Vec<ForeignTag> {
+        let fences = collect_code_fence_byte_ranges(source);
+        scan_foreign_tags(source, &fences, whitelist)
+    }
+
+    #[test]
+    fn scan_foreign_tags_returns_open_and_close_with_lines() {
+        let src = "line one\nline two\n<custom>\nline four\nline five\nline six\n</custom>\n";
+        let foreign = scan_foreign(src, &["requirement"]);
+        assert_eq!(
+            foreign,
+            vec![
+                ForeignTag {
+                    name: "custom".to_owned(),
+                    is_close: false,
+                    line: 3,
+                },
+                ForeignTag {
+                    name: "custom".to_owned(),
+                    is_close: true,
+                    line: 7,
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn scan_foreign_tags_skips_fenced_lines() {
+        let src = "before\n```\n</custom>\n```\nafter\n";
+        let foreign = scan_foreign(src, &["requirement"]);
+        assert!(
+            foreign.is_empty(),
+            "foreign tag inside a fence must be exempt: got {foreign:?}",
+        );
+    }
+
+    #[test]
+    fn scan_foreign_tags_excludes_whitelisted_names() {
+        let src = "<requirement>\n";
+        let foreign = scan_foreign(src, &["requirement"]);
+        assert!(
+            foreign.is_empty(),
+            "whitelisted structural tags must not be reported as foreign: got {foreign:?}",
+        );
+    }
+
+    #[test]
+    fn scan_foreign_tags_ignores_self_closing() {
+        let src = "<custom/>\n";
+        let foreign = scan_foreign(src, &["requirement"]);
+        assert!(
+            foreign.is_empty(),
+            "self-closing tags do not match the strict open regex: got {foreign:?}",
         );
     }
 

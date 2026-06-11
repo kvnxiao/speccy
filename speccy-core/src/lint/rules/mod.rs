@@ -7,3 +7,4 @@ pub mod rpt;
 pub mod spc;
 pub mod tsk;
 pub mod vet;
+pub mod xml;
