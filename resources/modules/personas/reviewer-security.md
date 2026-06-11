@@ -11,6 +11,8 @@ flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
+{% include "modules/personas/no_working_tree_mutation.md" %}
+
 ## Focus
 
 - Authentication and authorization boundaries -- who can call this

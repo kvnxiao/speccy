@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0057
-spec_hash_at_generation: c490330da6c93550273f2eb4fc2b0e8cc3e5aadd85e3f6037c7571e4bf386b17
-generated_at: 2026-06-11T01:05:32Z
+spec_hash_at_generation: 047df64b73d5d805045429f7005b299eda0c0884805dfc330e9119be692b3ce3
+generated_at: 2026-06-11T06:16:42Z
 ---
 # Tasks: SPEC-0057 Unbalanced foreign-tag lint — `speccy verify` flags leaked orphan XML tags in parsed artifacts
 

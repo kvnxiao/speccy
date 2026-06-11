@@ -411,19 +411,39 @@ fn run_vet_append(
     })?;
 
     let lock_path = journal_dir.join("VET.md.lock");
-    let _guard = LockGuard::acquire(&lock_path)?;
 
     // --- critical section: derive → validate → append → write ---
-    let inputs = VetAppendInputs {
-        journal_path: &journal_path,
-        tasks_md_path: &tasks_md_path,
-        spec_id: selector,
-        block: kind,
-        model,
-        verdict,
-        body,
+    // The append result is bound, then the guard is dropped by closing its
+    // lexical scope, so the lock is provably released before the terminal-gate
+    // reap below observes the sidecar (SPEC-0058 REQ-002).
+    let appended = {
+        let _guard = LockGuard::acquire(&lock_path)?;
+        let inputs = VetAppendInputs {
+            journal_path: &journal_path,
+            tasks_md_path: &tasks_md_path,
+            spec_id: selector,
+            block: kind,
+            model,
+            verdict,
+            body,
+        };
+        append_vet_under_lock(&inputs)
     };
-    append_vet_under_lock(&inputs)
+
+    // SPEC-0058 REQ-002 / DEC-003: the `<gate>` is the terminal vet write on
+    // every exit path, so after the gate append lands reap `VET.md.lock`. Only
+    // the gate reaps — every non-gate vet block (`drift-review`,
+    // `holistic-fix`, `simplifier-scan`, `simplifier-apply`) leaves the
+    // sidecar in place for the next sequential appender. The append's own
+    // `_guard` released above, so the reap's `try_lock` (REQ-003) observes the
+    // lock as free; terminal-boundary quiescence is the real safety contract.
+    // The reap is infallible by design (it runs only after the load-bearing
+    // append succeeded) — it runs solely on the `Ok` path and an absent
+    // sidecar is a safe no-op.
+    if appended.is_ok() && matches!(kind, VetBlockKind::Gate) {
+        reap_lock_sidecar(&lock_path);
+    }
+    appended
 }
 
 /// Resolved, borrowed inputs for the critical-section append.
@@ -699,5 +719,294 @@ impl Drop for LockGuard {
         if FileExt::unlock(&self.file).is_err() {
             // lock already released or file closed; nothing more to do.
         }
+    }
+}
+
+/// Delete a journal advisory-lock sidecar at a terminal lifecycle boundary,
+/// guarded by a non-blocking `try_lock` so a mistimed or repeated reap is a
+/// safe no-op rather than a mutual-exclusion break (DEC-001, DEC-004,
+/// REQ-003).
+///
+/// Unlike [`LockGuard::acquire`], this opens the sidecar **without**
+/// `create(true)`: an absent sidecar (`NotFound`) is the idempotent no-op and
+/// is never re-created. A single non-blocking [`FileExt::try_lock`] verifies
+/// the lock is currently free; a held lock (`WouldBlock`) is left untouched.
+/// On a successful lock the file handle is dropped **before** `remove_file`,
+/// releasing both the advisory lock and the OS handle so the unlink succeeds
+/// identically on Windows (where deleting a path with a live open handle
+/// fails with a sharing violation) and POSIX.
+///
+/// Infallible by design (DEC-004): the reap runs only after the owning
+/// command's load-bearing mutation has already landed, so a reap failure must
+/// never fail the command. The expected no-ops (`NotFound` open, `WouldBlock`
+/// lock) return silently; any error short of a clean reap — an open error
+/// other than `NotFound`, a `try_lock` `Error`, or a `remove_file` error —
+/// emits exactly one `WARN` naming the sidecar path (REQ-005, DEC-005) and
+/// still returns.
+pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path) {
+    let file = match fs_err::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(lock_path.as_std_path())
+    {
+        Ok(file) => file,
+        // Absent sidecar: the idempotent no-op. Never create one here.
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return,
+        Err(source) => {
+            tracing::warn!(
+                sidecar = %lock_path,
+                error = %source,
+                "failed to open journal lock sidecar for reaping",
+            );
+            return;
+        }
+    };
+    // fs4's lock methods extend std::fs::File; unwrap the fs-err wrapper.
+    let (file, _path) = file.into_parts();
+
+    match FileExt::try_lock(&file) {
+        Ok(()) => {}
+        // Held by an in-flight appender: an expected no-op, never unlinked.
+        Err(fs4::TryLockError::WouldBlock) => return,
+        Err(fs4::TryLockError::Error(source)) => {
+            tracing::warn!(
+                sidecar = %lock_path,
+                error = %source,
+                "failed to probe journal lock sidecar for reaping",
+            );
+            return;
+        }
+    }
+
+    // Drop the handle (releasing the advisory lock and the OS handle) before
+    // unlinking, so the unlink behaves identically on Windows and POSIX
+    // (DEC-004).
+    drop(file);
+
+    if let Err(source) = fs_err::remove_file(lock_path.as_std_path()) {
+        tracing::warn!(
+            sidecar = %lock_path,
+            error = %source,
+            "failed to unlink journal lock sidecar after reaping",
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use tracing::Level;
+
+    /// A `tracing` collector that records each event's level and the rendered
+    /// value of its `sidecar` field, so a test can assert how many `WARN`
+    /// events fired and that they name the sidecar path.
+    #[derive(Clone, Default)]
+    struct CapturingCollector {
+        events: Arc<Mutex<Vec<CapturedEvent>>>,
+    }
+
+    #[derive(Clone)]
+    struct CapturedEvent {
+        level: Level,
+        // Only the induced-failure assertion reads this, and that test is
+        // gated to Unix (see below), so the field is unused on other hosts.
+        #[cfg_attr(
+            not(unix),
+            expect(dead_code, reason = "read only by the Unix-gated failure test")
+        )]
+        sidecar: Option<String>,
+    }
+
+    /// Extracts the `sidecar` field's `Display` value from an event.
+    #[derive(Default)]
+    struct SidecarVisitor {
+        sidecar: Option<String>,
+    }
+
+    impl tracing::field::Visit for SidecarVisitor {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "sidecar" {
+                self.sidecar = Some(format!("{value:?}"));
+            }
+        }
+
+        fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+            if field.name() == "sidecar" {
+                self.sidecar = Some(value.to_owned());
+            }
+        }
+    }
+
+    impl tracing::Subscriber for CapturingCollector {
+        fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+
+        fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut visitor = SidecarVisitor::default();
+            event.record(&mut visitor);
+            if let Ok(mut events) = self.events.lock() {
+                events.push(CapturedEvent {
+                    level: *event.metadata().level(),
+                    sidecar: visitor.sidecar,
+                });
+            }
+        }
+
+        fn enter(&self, _span: &tracing::span::Id) {}
+
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    /// Returns the captured `WARN`-level events.
+    fn warn_events(collector: &CapturingCollector) -> Vec<CapturedEvent> {
+        let events = collector
+            .events
+            .lock()
+            .expect("collector mutex should not be poisoned");
+        events
+            .iter()
+            .filter(|event| event.level == Level::WARN)
+            .cloned()
+            .collect()
+    }
+
+    /// Creates a sidecar file at `<dir>/foo.md.lock` and returns its path.
+    fn make_sidecar(dir: &Utf8Path) -> Utf8PathBuf {
+        let path = dir.join("foo.md.lock");
+        fs_err::write(path.as_std_path(), b"").expect("sidecar write should succeed");
+        path
+    }
+
+    #[test]
+    fn free_sidecar_is_unlinked_without_warning() {
+        let dir = tempfile::tempdir().expect("tempdir should be creatable");
+        let dir = Utf8Path::from_path(dir.path()).expect("tempdir path should be UTF-8");
+        let sidecar = make_sidecar(dir);
+
+        let collector = CapturingCollector::default();
+        tracing::subscriber::with_default(collector.clone(), || {
+            reap_lock_sidecar(&sidecar);
+        });
+
+        assert!(
+            !sidecar.as_std_path().exists(),
+            "a free sidecar should be unlinked by the reap"
+        );
+        assert!(
+            warn_events(&collector).is_empty(),
+            "a clean reap must emit no WARN event"
+        );
+    }
+
+    #[test]
+    fn held_sidecar_survives_reap_without_warning() {
+        let dir = tempfile::tempdir().expect("tempdir should be creatable");
+        let dir = Utf8Path::from_path(dir.path()).expect("tempdir path should be UTF-8");
+        let sidecar = make_sidecar(dir);
+
+        // Hold the exclusive advisory lock from a separate handle, mirroring an
+        // in-flight appender.
+        let held = fs_err::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(sidecar.as_std_path())
+            .expect("opening the sidecar should succeed");
+        let (held, _path) = held.into_parts();
+        FileExt::lock(&held).expect("acquiring the test-held lock should succeed");
+
+        let collector = CapturingCollector::default();
+        tracing::subscriber::with_default(collector.clone(), || {
+            reap_lock_sidecar(&sidecar);
+        });
+
+        assert!(
+            sidecar.as_std_path().exists(),
+            "a held sidecar must be left intact (the try_lock guard skips it)"
+        );
+        assert!(
+            warn_events(&collector).is_empty(),
+            "the held-lock skip is an expected no-op and must emit no WARN"
+        );
+
+        // Release for teardown; dropping the handle releases the OS lock.
+        drop(held);
+    }
+
+    #[test]
+    fn absent_sidecar_is_a_silent_noop() {
+        let dir = tempfile::tempdir().expect("tempdir should be creatable");
+        let dir = Utf8Path::from_path(dir.path()).expect("tempdir path should be UTF-8");
+        let sidecar = dir.join("foo.md.lock");
+
+        let collector = CapturingCollector::default();
+        tracing::subscriber::with_default(collector.clone(), || {
+            reap_lock_sidecar(&sidecar);
+        });
+
+        assert!(
+            !sidecar.as_std_path().exists(),
+            "an absent sidecar must not be created by the reap"
+        );
+        assert!(
+            warn_events(&collector).is_empty(),
+            "an absent-sidecar reap is an expected no-op and must emit no WARN"
+        );
+    }
+
+    // Inducing a `remove_file` failure after a successful `try_lock` relies on a
+    // read-only parent directory, which only blocks deletion on POSIX; Windows
+    // ignores the directory's read-only attribute for child deletion. Gate the
+    // induction to Unix per the task's allowance (CHK-009, REQ-005).
+    #[cfg(unix)]
+    #[test]
+    fn induced_unlink_failure_emits_one_warn_naming_the_sidecar() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let dir = tempfile::tempdir().expect("tempdir should be creatable");
+        let dir = Utf8Path::from_path(dir.path()).expect("tempdir path should be UTF-8");
+        let sidecar = make_sidecar(dir);
+
+        // Make the parent directory non-writable so `remove_file` fails after
+        // the helper's `try_lock` succeeds.
+        let mut perms = fs_err::metadata(dir.as_std_path())
+            .expect("reading dir metadata should succeed")
+            .permissions();
+        perms.set_mode(0o555);
+        fs_err::set_permissions(dir.as_std_path(), perms.clone())
+            .expect("tightening dir permissions should succeed");
+
+        let collector = CapturingCollector::default();
+        tracing::subscriber::with_default(collector.clone(), || {
+            reap_lock_sidecar(&sidecar);
+        });
+
+        // Restore writability so the tempdir can be torn down.
+        perms.set_mode(0o755);
+        fs_err::set_permissions(dir.as_std_path(), perms)
+            .expect("restoring dir permissions should succeed");
+
+        let warns = warn_events(&collector);
+        assert_eq!(
+            warns.len(),
+            1,
+            "an induced unlink failure must emit exactly one WARN"
+        );
+        let event = warns.first().expect("one WARN event was just asserted");
+        assert_eq!(
+            event.sidecar.as_deref(),
+            Some(sidecar.as_str()),
+            "the WARN must name the sidecar path as a structured field"
+        );
     }
 }

@@ -23,6 +23,18 @@ You fetch the diff yourself via `git diff <merge-base>...HEAD --
 is not inlined into the prompt.
 
 
+**Read-only — never mutate the working tree.** The fan-out runs
+reviewers in parallel on one shared checkout, so any edit you make
+(even one you revert) is read by a sibling mid-flight and yields a
+verdict against state *you* created, not the implementer's. This bars
+`Bash` writes too: no `sed -i`, redirection into a tracked path,
+`cargo fix`, formatters, or `git stash`/`reset`/`restore`/`checkout`.
+Falsify ("would this test catch a wrong implementation?") by reasoning
+about the code as written, never by editing it and re-running. Your
+only write is the `speccy journal append` for your own `<review>`
+block.
+
+
 ## Focus
 
 - For each `CHK-NNN` covering this task, read its `<scenario>`
@@ -36,7 +48,8 @@ is not inlined into the prompt.
 - Boundary conditions and edge cases named in the requirement's
   `<behavior>` element.
 - Tests can fail. If you mentally rewrite the implementation to be
-  obviously wrong, do the tests catch it?
+  obviously wrong (by reasoning, not by editing the tree), do the
+  tests catch it?
 - Test naming and structure match the project conventions in
   `AGENTS.md` so reviewers next month can read them.
 

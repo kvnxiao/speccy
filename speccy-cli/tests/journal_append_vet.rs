@@ -703,6 +703,193 @@ fn gate_round_trip_accepts_legitimate_inline_tag_prose() -> TestResult {
     Ok(())
 }
 
+/// Path to the vet advisory-lock sidecar beside VET.md.
+fn vet_lock_path(spec_dir: &Utf8Path) -> Utf8PathBuf {
+    spec_dir.join("journal").join("VET.md.lock")
+}
+
+/// CHK-003 (SPEC-0058 REQ-002): a spec whose `VET.md` and `VET.md.lock` exist
+/// from prior vet blocks. After `speccy journal append SPEC-NNNN --block gate`
+/// runs, `VET.md.lock` no longer exists and `VET.md` parses cleanly with the
+/// gate as its last element.
+#[test]
+fn gate_append_reaps_the_vet_lock_sidecar() -> TestResult {
+    let (ws, spec_dir) = workspace_with_completed_task()?;
+    let vpath = vet_path(&spec_dir);
+    let lock = vet_lock_path(&spec_dir);
+
+    // A prior drift-review lands VET.md and leaves VET.md.lock in place.
+    append(
+        &ws,
+        &[
+            "SPEC-0042",
+            "--block",
+            "drift-review",
+            "--verdict",
+            "pass",
+            "--model",
+            "test-model",
+        ],
+        "clean",
+    )
+    .assert()
+    .success();
+    assert!(
+        vpath.as_std_path().exists(),
+        "the drift-review must have created VET.md",
+    );
+    assert!(
+        lock.as_std_path().exists(),
+        "a non-gate vet block must leave VET.md.lock in place",
+    );
+
+    // The terminal gate append reaps the sidecar.
+    append(
+        &ws,
+        &["SPEC-0042", "--block", "gate", "--verdict", "passed"],
+        "shipping",
+    )
+    .assert()
+    .success();
+
+    assert!(
+        !lock.as_std_path().exists(),
+        "the gate append must reap VET.md.lock",
+    );
+
+    // VET.md is intact: it parses cleanly with the gate as the last element.
+    let src = fs_err::read_to_string(vpath.as_std_path())?;
+    let doc = parse_vet_xml(&src, &vpath)?;
+    let inv = doc.invocations.last().expect("at least one invocation");
+    assert!(
+        matches!(inv.blocks.last(), Some(VetBlock::Gate { .. })),
+        "the gate must be the last block of the last invocation",
+    );
+    Ok(())
+}
+
+/// CHK-004 (SPEC-0058 REQ-002): after a `drift-review` vet append,
+/// `VET.md.lock` still exists — only the `gate` block reaps.
+#[test]
+fn drift_review_append_leaves_the_vet_lock_sidecar() -> TestResult {
+    let (ws, spec_dir) = workspace_with_completed_task()?;
+    let lock = vet_lock_path(&spec_dir);
+
+    append(
+        &ws,
+        &[
+            "SPEC-0042",
+            "--block",
+            "drift-review",
+            "--verdict",
+            "pass",
+            "--model",
+            "test-model",
+        ],
+        "clean",
+    )
+    .assert()
+    .success();
+
+    assert!(
+        lock.as_std_path().exists(),
+        "a drift-review append must leave VET.md.lock for the next appender",
+    );
+    Ok(())
+}
+
+/// SPEC-0058 REQ-002: a non-gate vet block other than `drift-review` (here a
+/// `holistic-fix` attached to a preceding drift-review) leaves the vet lock
+/// sidecar in place — only `gate` reaps.
+#[test]
+fn holistic_fix_append_leaves_the_vet_lock_sidecar() -> TestResult {
+    let (ws, spec_dir) = workspace_with_completed_task()?;
+    let lock = vet_lock_path(&spec_dir);
+
+    append(
+        &ws,
+        &[
+            "SPEC-0042",
+            "--block",
+            "drift-review",
+            "--verdict",
+            "blocking",
+            "--model",
+            "test-model",
+        ],
+        "drift found",
+    )
+    .assert()
+    .success();
+    append(
+        &ws,
+        &[
+            "SPEC-0042",
+            "--block",
+            "holistic-fix",
+            "--verdict",
+            "addressed",
+            "--model",
+            "test-model",
+        ],
+        "fixed",
+    )
+    .assert()
+    .success();
+
+    assert!(
+        lock.as_std_path().exists(),
+        "a holistic-fix append must leave VET.md.lock in place (only gate reaps)",
+    );
+    Ok(())
+}
+
+/// SPEC-0058 REQ-002 done-when (idempotent): a `--block gate` append whose
+/// `VET.md.lock` is already absent exits zero and still reaps cleanly.
+#[test]
+fn gate_append_with_absent_lock_is_idempotent() -> TestResult {
+    let (ws, spec_dir) = workspace_with_completed_task()?;
+    let vpath = vet_path(&spec_dir);
+    let lock = vet_lock_path(&spec_dir);
+
+    // Land a drift-review, then delete the sidecar so the gate's reap finds it
+    // already absent.
+    append(
+        &ws,
+        &[
+            "SPEC-0042",
+            "--block",
+            "drift-review",
+            "--verdict",
+            "pass",
+            "--model",
+            "test-model",
+        ],
+        "clean",
+    )
+    .assert()
+    .success();
+    if lock.as_std_path().exists() {
+        fs_err::remove_file(lock.as_std_path())?;
+    }
+
+    append(
+        &ws,
+        &["SPEC-0042", "--block", "gate", "--verdict", "passed"],
+        "shipping",
+    )
+    .assert()
+    .success();
+
+    assert!(
+        !lock.as_std_path().exists(),
+        "an already-absent sidecar must stay absent after the idempotent gate reap",
+    );
+    let src = fs_err::read_to_string(vpath.as_std_path())?;
+    parse_vet_xml(&src, &vpath)?;
+    Ok(())
+}
+
 /// REQ-004 done-when: a `holistic-fix` with no preceding `drift-review` in
 /// the open section exits non-zero with VET.md still absent.
 #[test]

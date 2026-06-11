@@ -15,6 +15,8 @@ verdict; the orchestrating skill flips the task's `state` attribute.
 
 {% include "modules/personas/diff_fetch_command.md" %}
 
+{% include "modules/personas/no_working_tree_mutation.md" %}
+
 ## Focus
 
 - For each `CHK-NNN` covering this task, read its `<scenario>`
@@ -28,7 +30,8 @@ verdict; the orchestrating skill flips the task's `state` attribute.
 - Boundary conditions and edge cases named in the requirement's
   `<behavior>` element.
 - Tests can fail. If you mentally rewrite the implementation to be
-  obviously wrong, do the tests catch it?
+  obviously wrong (by reasoning, not by editing the tree), do the
+  tests catch it?
 - Test naming and structure match the project conventions in
   `AGENTS.md` so reviewers next month can read them.
 
