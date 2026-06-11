@@ -2,7 +2,7 @@
 id: SPEC-0058
 slug: journal-lock-lifecycle
 title: Journal lock-file lifecycle — reap advisory lock sidecars at terminal lifecycle boundaries
-status: in-progress
+status: implemented
 created: 2026-06-10
 supersedes: []
 ---
