@@ -411,19 +411,39 @@ fn run_vet_append(
     })?;
 
     let lock_path = journal_dir.join("VET.md.lock");
-    let _guard = LockGuard::acquire(&lock_path)?;
 
     // --- critical section: derive → validate → append → write ---
-    let inputs = VetAppendInputs {
-        journal_path: &journal_path,
-        tasks_md_path: &tasks_md_path,
-        spec_id: selector,
-        block: kind,
-        model,
-        verdict,
-        body,
+    // The append result is bound, then the guard is dropped by closing its
+    // lexical scope, so the lock is provably released before the terminal-gate
+    // reap below observes the sidecar (SPEC-0058 REQ-002).
+    let appended = {
+        let _guard = LockGuard::acquire(&lock_path)?;
+        let inputs = VetAppendInputs {
+            journal_path: &journal_path,
+            tasks_md_path: &tasks_md_path,
+            spec_id: selector,
+            block: kind,
+            model,
+            verdict,
+            body,
+        };
+        append_vet_under_lock(&inputs)
     };
-    append_vet_under_lock(&inputs)
+
+    // SPEC-0058 REQ-002 / DEC-003: the `<gate>` is the terminal vet write on
+    // every exit path, so after the gate append lands reap `VET.md.lock`. Only
+    // the gate reaps — every non-gate vet block (`drift-review`,
+    // `holistic-fix`, `simplifier-scan`, `simplifier-apply`) leaves the
+    // sidecar in place for the next sequential appender. The append's own
+    // `_guard` released above, so the reap's `try_lock` (REQ-003) observes the
+    // lock as free; terminal-boundary quiescence is the real safety contract.
+    // The reap is infallible by design (it runs only after the load-bearing
+    // append succeeded) — it runs solely on the `Ok` path and an absent
+    // sidecar is a safe no-op.
+    if appended.is_ok() && matches!(kind, VetBlockKind::Gate) {
+        reap_lock_sidecar(&lock_path);
+    }
+    appended
 }
 
 /// Resolved, borrowed inputs for the critical-section append.

@@ -201,7 +201,7 @@ Suggested files: `speccy-cli/src/transition.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-002">
+<task id="T-004" state="completed" covers="REQ-002">
 ## Reap the vet lock sidecar on the terminal `--block gate` append
 
 Wire `reap_lock_sidecar` into `run_vet_append` in
