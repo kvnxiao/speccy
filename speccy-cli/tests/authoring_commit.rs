@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, and T-005: the shared
+//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, T-005, and T-006: the shared
 //! authoring reference modules at
 //! `resources/modules/references/commit-recipe.md` and
 //! `resources/modules/references/branch-guard.md`, the
@@ -13,7 +13,11 @@
 //! onto the shared recipe behind the branch-guard prelude, and the new
 //! `speccy-plan` commit step in
 //! `resources/modules/skills/speccy-plan.md` that commits `SPEC.md`
-//! alone behind the branch-guard prelude.
+//! alone behind the branch-guard prelude, and the new `speccy-amend`
+//! commit step in `resources/modules/skills/speccy-amend.md` that commits
+//! the amend's reconcile delta (`SPEC.md`, the reconciled `TASKS.md` when
+//! one exists, and any journal blocker files appended this run) behind the
+//! branch-guard prelude.
 //!
 //! T-001 — `commit-recipe.md` — checks the three properties the task's
 //! scenarios assert over the embedded `RESOURCES` bundle:
@@ -104,6 +108,27 @@
 //!   preserved).
 //! - [`rendered_plan_skill_fully_expands_includes`]: the ejected
 //!   `.claude/skills/speccy-plan/SKILL.md` has both includes fully expanded
+//!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
+//!   --cached --quiet` text.
+//!
+//! T-006 — `speccy-amend.md` commit step — checks the new commit step that
+//! commits the amend's reconcile delta behind the branch-guard prelude
+//! (REQ-005, CHK-006, CHK-007):
+//!
+//! - [`amend_includes_shared_commit_recipe_and_branch_guard`]: the amend skill
+//!   pulls both the shared commit recipe and the branch-guard prelude via `{%
+//!   include %}` (CHK-006 recipe property, REQ-005).
+//! - [`amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear`][]:
+//!   the commit step titles the commit `[SPEC-NNNN]: amend — <why>`, sources
+//!   `<why>` from the newest `## Changelog` row, and runs after the
+//!   `TSK-003`-clear check (CHK-006).
+//! - [`amend_stages_spec_md_and_tolerates_absent_tasks_md`]: the staging set
+//!   covers `SPEC.md`, the reconciled `TASKS.md` when present, and appended
+//!   journal blocker files, uses narrow `git add <paths>` (no `git add -A`/`git
+//!   add .`), and tolerates an absent `TASKS.md` rather than requiring the
+//!   tasks file to exist (CHK-006 staging property, CHK-007).
+//! - [`rendered_amend_skill_fully_expands_includes`]: the ejected
+//!   `.claude/skills/speccy-amend/SKILL.md` has both includes fully expanded
 //!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 
@@ -694,5 +719,163 @@ fn rendered_plan_skill_fully_expands_includes() {
         file.contents.contains("git diff --cached --quiet"),
         "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
          check, proving the commit-recipe include expanded into the plan skill body",
+    );
+}
+
+/// Read the `speccy-amend.md` skill body from the embedded RESOURCES bundle,
+/// panicking with a clear message if it is missing.
+fn amend_body() -> &'static str {
+    RESOURCES
+        .get_file("modules/skills/speccy-amend.md")
+        .and_then(|f| f.contents_utf8())
+        .unwrap_or_else(|| {
+            panic_with_message("RESOURCES bundle must contain `modules/skills/speccy-amend.md`")
+        })
+}
+
+/// The new commit step pulls both the shared commit recipe and the branch-guard
+/// prelude via `{% include %}` (CHK-006 recipe property, REQ-005).
+#[test]
+fn amend_includes_shared_commit_recipe_and_branch_guard() {
+    let body = amend_body();
+
+    let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
+    assert!(
+        body.contains(recipe_include),
+        "speccy-amend.md must pull the shared commit recipe via `{recipe_include}` \
+         (CHK-006); the amend reconcile-delta commit step must delegate to the shared recipe",
+    );
+
+    let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
+    assert!(
+        body.contains(guard_include),
+        "speccy-amend.md must run the branch-guard prelude via `{guard_include}` \
+         ahead of the commit so the reconcile delta lands on a feature branch (REQ-005)",
+    );
+}
+
+/// The commit step titles the commit `[SPEC-NNNN]: amend — <why>`, sources
+/// `<why>` from the newest `## Changelog` row, and runs after the
+/// `TSK-003`-clear check in step 6 (CHK-006).
+#[test]
+fn amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear() {
+    let body = amend_body();
+
+    assert!(
+        body.contains("[SPEC-NNNN]: amend — <why>"),
+        "speccy-amend.md must title the commit `[SPEC-NNNN]: amend — <why>` (CHK-006)",
+    );
+
+    // `<why>` is sourced from the newest `## Changelog` row, not separately
+    // prompted — the prose must name the Changelog row as the source.
+    assert!(
+        body.contains("## Changelog"),
+        "speccy-amend.md must source the commit title's `<why>` from the newest \
+         `## Changelog` row (CHK-006), not a separate prompt",
+    );
+
+    // The commit must run after the step-6 `TSK-003`-clear check: the
+    // `TSK-003` confirmation text precedes the commit recipe include in
+    // document order.
+    let tsk003_pos = body
+        .find("confirm `TSK-003` cleared")
+        .expect("speccy-amend.md must keep the step-6 `TSK-003`-clear check (CHK-006)");
+    let recipe_pos = body
+        .find(r#"{% include "modules/references/commit-recipe.md" %}"#)
+        .expect("speccy-amend.md must include the commit recipe");
+    assert!(
+        tsk003_pos < recipe_pos,
+        "speccy-amend.md must run the commit recipe after the `TSK-003`-clear check (CHK-006)",
+    );
+}
+
+/// The staging set covers `SPEC.md`, the reconciled `TASKS.md` when present,
+/// and appended journal blocker files; it uses narrow `git add <paths>` (no
+/// `git add -A`/`git add .`) and tolerates an absent `TASKS.md` rather than
+/// requiring the tasks file to exist (CHK-006 staging property, CHK-007).
+#[test]
+fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
+    let body = amend_body();
+
+    // SPEC.md is always in the staging set.
+    assert!(
+        body.contains("<spec-dir>/SPEC.md"),
+        "speccy-amend.md must stage the spec's `SPEC.md` in the amend delta (CHK-006)",
+    );
+
+    // The reconciled TASKS.md is staged when one exists, and the journal
+    // blocker files appended this run are staged too.
+    assert!(
+        body.contains("<spec-dir>/TASKS.md"),
+        "speccy-amend.md must stage the reconciled `TASKS.md` when one exists (CHK-006)",
+    );
+    assert!(
+        body.contains("<spec-dir>/journal/T-NNN.md"),
+        "speccy-amend.md must stage the per-task journal blocker files appended this run \
+         (`<spec-dir>/journal/T-NNN.md`) (CHK-006)",
+    );
+
+    // Narrow staging only. The surrounding prose legitimately *forbids* the
+    // whole-tree forms by name (so a bare `git add -A` / `git add .` substring
+    // check would false-match that prohibition prose, exactly as the plan and
+    // decompose tests note). Anchor instead on the positive narrow-staging
+    // commands: SPEC.md and the journal blockers are staged by explicit path,
+    // which is the observable property the broad forms would violate.
+    assert!(
+        body.contains("git add <paths>"),
+        "speccy-amend.md must use narrow `git add <paths>` staging (CHK-006)",
+    );
+
+    // CHK-007: the staging set tolerates an absent TASKS.md — the prose must
+    // state the missing tasks file does not fail the commit. Anchor on the
+    // distinctive phrasing the step uses.
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("when one exists") || lower.contains("only when it exists"),
+        "speccy-amend.md must qualify `TASKS.md` staging as conditional on the file \
+         existing (CHK-007)",
+    );
+    // Collapse interior whitespace so the assertion does not hinge on where
+    // the prose happens to line-wrap.
+    let collapsed = lower.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        collapsed.contains("without failing on the absent tasks file")
+            || collapsed.contains("without failing on the missing tasks file"),
+        "speccy-amend.md must state that an absent `TASKS.md` does not fail the commit \
+         (CHK-007)",
+    );
+}
+
+/// The ejected `.claude/skills/speccy-amend/SKILL.md` fully expands both
+/// includes: no residual `MiniJinja` markup, and the recipe's
+/// `git diff --cached --quiet` text is present in the rendered output.
+#[test]
+fn rendered_amend_skill_fully_expands_includes() {
+    let rendered = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+
+    let rel = ".claude/skills/speccy-amend/SKILL.md";
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_message(&format!(
+                "rendered claude-code pack must include `{rel}`; \
+                 speccy-amend includes the commit-recipe and branch-guard modules",
+            ))
+        });
+
+    for marker in ["{{", "{%", "{#"] {
+        assert!(
+            !file.contents.contains(marker),
+            "rendered `{rel}` must not contain MiniJinja markup `{marker}`; \
+             the commit-recipe and branch-guard includes must be fully expanded at render time",
+        );
+    }
+
+    assert!(
+        file.contents.contains("git diff --cached --quiet"),
+        "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
+         check, proving the commit-recipe include expanded into the amend skill body",
     );
 }

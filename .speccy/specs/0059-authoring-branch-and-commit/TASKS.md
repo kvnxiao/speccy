@@ -267,7 +267,7 @@ Suggested files: `resources/modules/skills/speccy-plan.md`,
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-005">
+<task id="T-006" state="completed" covers="REQ-005">
 ## speccy-amend commits its reconcile delta behind the branch-guard
 
 Add a commit step to `resources/modules/skills/speccy-amend.md`

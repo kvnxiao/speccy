@@ -152,6 +152,57 @@ reconciliation are not forgotten.
 
 6. Re-run `speccy status` to confirm `TSK-003` cleared.
 
+7. Branch-guard, then commit the amend's reconcile delta. After the
+   `TSK-003`-clear check in step 6 confirms the SPEC and tasks are back
+   in sync, commit this amend's delta so the reconciled artifacts are
+   recorded together. The commit covers the spec's `SPEC.md`, the
+   reconciled `TASKS.md` **when one exists**, and any per-task journal
+   blocker files this amend appended this run
+   (`<spec-dir>/journal/T-NNN.md`). When the spec has no `TASKS.md` yet,
+   the commit contains `SPEC.md` (plus any journal files) without failing
+   on the absent tasks file — drop the missing `TASKS.md` from the
+   staging list rather than requiring it to exist. The step uses narrow
+   file-list staging (never `git add -A` or `git add .`), so any
+   unrelated dirty paths outside `<spec-dir>/` remain in the working tree
+   untouched. The step is idempotent: re-running with nothing new to
+   record produces no new commit.
+
+   First run the branch-guard prelude so the commit lands on a feature
+   branch rather than the repository's default branch. Supply the
+   prelude's one parameter — the **spec directory** (`<spec-dir>/`, i.e.
+   the path that holds `SPEC.md`) — and run it:
+
+{% include "modules/references/branch-guard.md" %}
+
+   Then run the shared commit recipe, supplying its two
+   behaviour-varying parameters as follows:
+
+   - **Staging breadth: narrow `git add <paths>`.** Stage exactly the
+     amend delta and nothing else: `<spec-dir>/SPEC.md`, the reconciled
+     `<spec-dir>/TASKS.md` **only when it exists** (omit it from the list
+     when the spec has no tasks file yet — do not let a missing path
+     fail the stage), and each `<spec-dir>/journal/T-NNN.md` blocker file
+     appended this run. Do not use `git add -A` or `git add .`. Staging
+     unchanged content is a no-op, so passing the present paths
+     unconditionally is safe regardless of whether some were already
+     committed.
+   - **Title and body.**
+     - **Title:** `[SPEC-NNNN]: amend — <why>` with `SPEC-NNNN`
+       substituted for the resolved spec id, and `<why>` a title-length
+       phrase derived from the **newest `## Changelog` row** added during
+       this amend (step 2). Do not separately prompt for `<why>`; read it
+       off the row you just wrote.
+     - **Body:** the full text of that newest `## Changelog` row,
+       explaining why the amendment was needed.
+
+   With those two parameters fixed, run the shared recipe — it defines
+   the no-git short-circuit, the unified stage-then-`git diff --cached
+   --quiet` idempotency check (nothing new to record skips the commit
+   silently), the `Co-Authored-By` trailer, and the HEREDOC commit
+   mechanics:
+
+{% include "modules/references/commit-recipe.md" %}
+
 ### Loop exit criteria
 
 This recipe is a single pass, not a loop -- but step 6 is the gate. If
