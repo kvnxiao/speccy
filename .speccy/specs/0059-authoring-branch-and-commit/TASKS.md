@@ -173,7 +173,7 @@ Suggested files:
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Decompose commits TASKS.md alone via the shared recipe, behind the branch-guard
 
 Rework step 4 of `resources/modules/phases/speccy-decompose.md`

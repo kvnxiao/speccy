@@ -2,12 +2,15 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001, T-002, and T-003: the shared authoring
-//! reference modules at `resources/modules/references/commit-recipe.md`
-//! and `resources/modules/references/branch-guard.md`, plus the
+//! Tests for SPEC-0059 T-001, T-002, T-003, and T-004: the shared
+//! authoring reference modules at
+//! `resources/modules/references/commit-recipe.md` and
+//! `resources/modules/references/branch-guard.md`, the
 //! behaviour-preserving rewrite of the review-pass commit step in
 //! `resources/modules/skills/partials/review-fanout.md` onto the shared
-//! commit recipe.
+//! commit recipe, and the decompose-phase rewrite of the step-4
+//! bootstrap commit in `resources/modules/phases/speccy-decompose.md`
+//! onto the shared recipe behind the branch-guard prelude.
 //!
 //! T-001 — `commit-recipe.md` — checks the three properties the task's
 //! scenarios assert over the embedded `RESOURCES` bundle:
@@ -58,6 +61,28 @@
 //!   `branch-guard.md` include appears (REQ-008 review side).
 //! - [`rendered_review_skill_fully_expands_commit_recipe`]: the ejected
 //!   `.claude/skills/speccy-review/SKILL.md` has the recipe fully expanded with
+//!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
+//!   --cached --quiet` text.
+//!
+//! T-004 — `speccy-decompose.md` refactor — checks the rewrite of the step-4
+//! bootstrap commit onto the shared recipe behind the branch-guard (REQ-004,
+//! REQ-007 decompose side, CHK-005, CHK-009 decompose side):
+//!
+//! - [`decompose_includes_shared_commit_recipe_and_branch_guard`]: the phase
+//!   pulls both the shared commit recipe and the branch-guard prelude via `{%
+//!   include %}` (CHK-005 recipe property, REQ-007 decompose side).
+//! - [`decompose_stages_tasks_md_alone_with_decompose_title`]: the commit step
+//!   titles the commit `[SPEC-NNNN]: decompose tasks`, stages
+//!   `<spec-dir>/TASKS.md` narrowly with no SPEC.md in the staging set, and
+//!   runs after `speccy lock` (CHK-005).
+//! - [`decompose_drops_combined_bootstrap_title`]: the prior combined `create
+//!   spec and decompose tasks` title string is gone from the source (CHK-005
+//!   absent-string property, DEC-005).
+//! - [`decompose_drops_inline_diff_cached_recipe`]: the phase no longer
+//!   restates the `git diff --cached --quiet` recipe inline; it is delegated to
+//!   the included recipe (CHK-009 decompose side).
+//! - [`rendered_decompose_agent_fully_expands_includes`]: the ejected
+//!   `.claude/agents/speccy-decompose.md` has both includes fully expanded with
 //!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 
@@ -380,5 +405,143 @@ fn rendered_review_skill_fully_expands_commit_recipe() {
         file.contents.contains("git diff --cached --quiet"),
         "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
          check, proving the include expanded into the review skill body",
+    );
+}
+
+/// Read the `speccy-decompose.md` phase body from the embedded RESOURCES
+/// bundle, panicking with a clear message if it is missing.
+fn decompose_body() -> &'static str {
+    RESOURCES
+        .get_file("modules/phases/speccy-decompose.md")
+        .and_then(|f| f.contents_utf8())
+        .unwrap_or_else(|| {
+            panic_with_message("RESOURCES bundle must contain `modules/phases/speccy-decompose.md`")
+        })
+}
+
+/// The refactored step-4 commit pulls both the shared commit recipe and the
+/// branch-guard prelude via `{% include %}` (CHK-005 recipe property, REQ-007
+/// decompose side).
+#[test]
+fn decompose_includes_shared_commit_recipe_and_branch_guard() {
+    let body = decompose_body();
+
+    let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
+    assert!(
+        body.contains(recipe_include),
+        "speccy-decompose.md must pull the shared commit recipe via `{recipe_include}` \
+         (CHK-005); the hand-rolled inline bootstrap commit must be removed",
+    );
+
+    let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
+    assert!(
+        body.contains(guard_include),
+        "speccy-decompose.md must run the branch-guard prelude via `{guard_include}` \
+         ahead of the commit so the commit lands on a feature branch (REQ-007 decompose side)",
+    );
+}
+
+/// The commit step titles the commit `[SPEC-NNNN]: decompose tasks`, stages
+/// `<spec-dir>/TASKS.md` narrowly (no `git add -A`/`git add .`, no SPEC.md in
+/// the staging set), and runs after `speccy lock` (CHK-005).
+#[test]
+fn decompose_stages_tasks_md_alone_with_decompose_title() {
+    let body = decompose_body();
+
+    assert!(
+        body.contains("[SPEC-NNNN]: decompose tasks"),
+        "speccy-decompose.md must title the commit `[SPEC-NNNN]: decompose tasks` (CHK-005)",
+    );
+
+    // Narrow staging of TASKS.md alone — the staging command names the path.
+    assert!(
+        body.contains("git add <spec-dir>/TASKS.md"),
+        "speccy-decompose.md must stage the spec's TASKS.md narrowly via \
+         `git add <spec-dir>/TASKS.md` (CHK-005)",
+    );
+
+    // SPEC.md must no longer be in the staging set: it is committed by
+    // speccy-plan, not here (DEC-005). The prior combined staging command
+    // `git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md` must be gone. Anchor on
+    // the SPEC.md staging path rather than a bare `git add .` substring, which
+    // would false-match the prose that *forbids* the whole-tree forms.
+    assert!(
+        !body.contains("git add <spec-dir>/SPEC.md"),
+        "speccy-decompose.md must not stage SPEC.md — it is committed by speccy-plan, \
+         not the decompose commit (DEC-005, CHK-005)",
+    );
+
+    // The commit still runs after `speccy lock`: the lock step text precedes
+    // the commit recipe include in document order.
+    let lock_pos = body
+        .find("speccy lock SPEC-NNNN")
+        .expect("speccy-decompose.md must still run `speccy lock SPEC-NNNN` before the commit");
+    let recipe_pos = body
+        .find(r#"{% include "modules/references/commit-recipe.md" %}"#)
+        .expect("speccy-decompose.md must include the commit recipe");
+    assert!(
+        lock_pos < recipe_pos,
+        "speccy-decompose.md must run `speccy lock` before the commit recipe (CHK-005)",
+    );
+}
+
+/// The prior combined bootstrap title `create spec and decompose tasks` is
+/// gone from the source (CHK-005 absent-string property, DEC-005).
+#[test]
+fn decompose_drops_combined_bootstrap_title() {
+    let body = decompose_body();
+
+    assert!(
+        !body.contains("create spec and decompose tasks"),
+        "speccy-decompose.md must no longer carry the combined \
+         `create spec and decompose tasks` title — it is split into a per-skill \
+         `[SPEC-NNNN]: decompose tasks` commit (CHK-005, DEC-005)",
+    );
+}
+
+/// The phase no longer restates the `git diff --cached --quiet` recipe inline;
+/// it is delegated to the included recipe (CHK-009 decompose side).
+#[test]
+fn decompose_drops_inline_diff_cached_recipe() {
+    let body = decompose_body();
+
+    assert!(
+        !body.contains("git diff --cached --quiet"),
+        "speccy-decompose.md must not restate the recipe's `git diff --cached --quiet` \
+         idempotency check inline; it is delegated to the included recipe (CHK-009)",
+    );
+}
+
+/// The ejected `.claude/agents/speccy-decompose.md` fully expands both
+/// includes: no residual `MiniJinja` markup, and the recipe's
+/// `git diff --cached --quiet` text is present in the rendered output.
+#[test]
+fn rendered_decompose_agent_fully_expands_includes() {
+    let rendered = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+
+    let rel = ".claude/agents/speccy-decompose.md";
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_message(&format!(
+                "rendered claude-code pack must include `{rel}`; \
+                 speccy-decompose includes the refactored phase body",
+            ))
+        });
+
+    for marker in ["{{", "{%", "{#"] {
+        assert!(
+            !file.contents.contains(marker),
+            "rendered `{rel}` must not contain MiniJinja markup `{marker}`; \
+             the commit-recipe and branch-guard includes must be fully expanded at render time",
+        );
+    }
+
+    assert!(
+        file.contents.contains("git diff --cached --quiet"),
+        "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
+         check, proving the commit-recipe include expanded into the decompose agent body",
     );
 }

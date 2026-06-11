@@ -79,60 +79,273 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    `speccy lock` edits TASKS.md's frontmatter in place; it does not
    emit a hash to stdout, and it requires TASKS.md to already exist.
 
-4. Bootstrap commit the SPEC artefacts. This closes the
+4. Branch-guard, then commit `TASKS.md` alone. This closes the
    bootstrap-commit gap that would otherwise trip the SPEC-0045/REQ-002
    strict clean-tree gate when `/speccy-orchestrate
-   SPEC-NNNN` is invoked on a freshly decomposed SPEC. The step uses
-   narrow file-list staging (never `git add -A` or `git add .`), so
-   any unrelated dirty paths outside `<spec-dir>/` remain in the
-   working tree untouched. The step is idempotent: re-running
-   decompose on an already-committed SPEC produces no new commit.
+   SPEC-NNNN` is invoked on a freshly decomposed SPEC. The commit runs
+   after `speccy lock`. It commits only the spec's `TASKS.md` —
+   `SPEC.md` is committed by `/speccy-plan`, not here, so
+   the new-spec path lands two separate commits (one per skill). The
+   step uses narrow file-list staging (never `git add -A` or
+   `git add .`), so any unrelated dirty paths outside `<spec-dir>/`
+   remain in the working tree untouched. The step is idempotent:
+   re-running decompose on an already-committed `TASKS.md` produces no
+   new commit.
 
-   1. Stage exactly the two SPEC artefacts via narrow `git add`:
+   First run the branch-guard prelude so the commit lands on a feature
+   branch rather than the repository's default branch. Supply the
+   prelude's one parameter — the **spec directory** (`<spec-dir>/`,
+   i.e. the path that holds `SPEC.md` and `TASKS.md`) — and run it:
 
-      ```bash
-      git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md
-      ```
+## Branch-guard prelude
 
-      Do not use `git add -A` or `git add .`. Staging unchanged
-      content is a no-op, so passing both paths unconditionally is
-      safe regardless of whether SPEC.md was already committed.
+This module is the single source of truth for the branch-guard prelude
+that the authoring skills run before their commit step. Each callsite
+pulls it in with a MiniJinja `include` directive naming
+`modules/references/branch-guard.md`; there is no verbatim copy of this
+prelude in any individual skill body.
 
-   2. Run `git diff --cached --quiet`. If exit code is 0 (nothing
-      staged), skip the commit silently — both files are already
-      committed at their current content. If non-zero, proceed to
-      the commit.
+The prelude guarantees that HEAD is on a feature branch before any
+artifact is committed, so an authored `SPEC.md` / `TASKS.md` never lands
+on the repository's default branch. It creates a branch only when it
+must, reuses an existing feature branch otherwise, and never prompts for
+confirmation.
 
-   3. Build the commit message:
+The caller supplies one parameter:
 
-      - **Title:** `[SPEC-NNNN]: create spec and decompose tasks`
-        with `SPEC-NNNN` substituted for the resolved spec id.
-      - **Body:** the trimmed value of the `title:` field from
-        SPEC.md's YAML frontmatter (the one-line title slug, not
-        the full document heading).
-      - **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
-        line where `<model>` is the model segment sourced per the
-        "Sourcing your recorded identity" rule — the host's
-        in-context identifier transcribed verbatim in hyphen form
-        (e.g. `claude-opus-4-8[1m]`), never a dotted form or a
-        configured alias. When the host states no resolved identifier
-        in-context, use the documented fallback string
-        `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
-        Trailer resolution matches SPEC-0045/REQ-004 verbatim.
+- **Spec directory.** The path to the spec's directory, used to derive
+  the branch name. For a flat spec this is `.speccy/specs/NNNN-slug/`;
+  for a mission-foldered spec it is `.speccy/specs/[focus]/NNNN-slug/`.
 
-      Pass the body via a HEREDOC so newlines and any special
-      characters in the SPEC title survive verbatim, e.g.:
+### No-git short-circuit
 
-      ```bash
-git commit -m "$(cat <<'EOF'
-[SPEC-NNNN]: create spec and decompose tasks
+Before doing anything, check whether the working directory is inside a
+git repository:
 
-<SPEC title from frontmatter>
+```bash
+git rev-parse --is-inside-work-tree
+```
 
-Co-Authored-By: <model> <noreply@anthropic.com>
-EOF
-)"
-      ```
+If this exits non-zero (the project is not a git repository), **skip the
+entire branch-guard without erroring**. The authoring skill still writes
+its artifact and continues; no branch is created and no git failure is
+surfaced. This preserves Speccy's "works identically in any project
+state" property for non-git projects.
+
+### Default-branch detection
+
+When a git repository is present, identify the repository's default
+branch via an ordered three-tier chain. Each tier is consulted only when
+the prior tier **does not resolve**:
+
+1. **Remote symbolic ref `origin/HEAD`.** When a remote exists, read the
+   branch it points at:
+
+   ```bash
+   git symbolic-ref --quiet refs/remotes/origin/HEAD
+   ```
+
+   The trailing path component (e.g. `origin/main` → `main`) is the
+   default-branch name. If there is no remote, or `origin/HEAD` is not
+   set, this tier does not resolve — fall through to tier 2.
+
+2. **`git config init.defaultBranch`.** Otherwise, read the configured
+   default-branch name:
+
+   ```bash
+   git config init.defaultBranch
+   ```
+
+   If this is set (e.g. `trunk`), it is the default-branch name. If it is
+   unset, this tier does not resolve — fall through to tier 3.
+
+3. **`{main, master}` name match.** Otherwise, when neither remote nor
+   config resolved, treat HEAD as the default branch only when its own
+   branch name is `main` or `master`. HEAD on any other name is treated
+   as a feature branch.
+
+### Branch-creation condition
+
+Read the current HEAD branch name:
+
+```bash
+git symbolic-ref --quiet --short HEAD
+```
+
+A detached HEAD makes this exit non-zero (there is no current branch
+name).
+
+- **Create path** — when HEAD is the detected default branch **or** HEAD
+  is detached, derive the branch name and create it. The branch name is
+  the literal `spec-` prefix followed by the **basename** of the spec
+  directory (its final `NNNN-slug` path component). For a mission-
+  foldered spec at `.speccy/specs/[focus]/NNNN-slug/`, the `[focus]`
+  segment is dropped — only the basename is used, so the name stays flat
+  `spec-NNNN-slug`. Then create and switch to it:
+
+  ```bash
+  git switch -c spec-NNNN-slug
+  ```
+
+  Emit a one-line notice naming the created branch, for example:
+
+  ```
+  Created and switched to branch spec-NNNN-slug.
+  ```
+
+- **Reuse path** — when HEAD is on any other branch (an existing
+  `spec-NNNN-slug`, or an unrelated feature branch), reuse it: create
+  nothing, switch nothing, leave HEAD unchanged.
+
+The one-line creation notice is emitted **only on the create path**,
+never on the reuse path.
+
+> Illustrative example — substitute your own values. For a spec at
+> `.speccy/specs/0042-example-slug/` (or
+> `.speccy/specs/acme/0042-example-slug/` under a mission folder), the
+> derived branch is `spec-0042-example-slug` in both cases.
+
+
+   Then run the shared commit recipe, supplying its two
+   behaviour-varying parameters as follows:
+
+   - **Staging breadth: narrow `git add <spec-dir>/TASKS.md`.** Stage
+     exactly the spec's `TASKS.md` and nothing else. Do not use
+     `git add -A` or `git add .`. Staging unchanged content is a no-op,
+     so passing the path unconditionally is safe regardless of whether
+     `TASKS.md` was already committed.
+   - **Title and body.**
+     - **Title:** `[SPEC-NNNN]: decompose tasks` with `SPEC-NNNN`
+       substituted for the resolved spec id.
+     - **Body:** the trimmed value of the `title:` field from SPEC.md's
+       YAML frontmatter (the one-line title slug, not the full document
+       heading).
+
+   With those two parameters fixed, run the shared recipe — it defines
+   the no-git short-circuit, the unified stage-then-`git diff --cached
+   --quiet` idempotency check (an unchanged `TASKS.md` skips the commit
+   silently), the `Co-Authored-By` trailer, and the HEREDOC commit
+   mechanics:
+
+## Shared commit recipe
+
+This module is the single source of truth for how a skill turns a
+just-written artifact into a git commit. Each callsite pulls it in with
+a MiniJinja `include` directive naming
+`modules/references/commit-recipe.md`; there is no verbatim copy of this
+recipe in any individual skill body.
+
+The caller supplies two — and only two — behaviour-varying parameters:
+
+- **Staging breadth.** Either `git add -A` (stage everything in the
+  working tree) or a narrow `git add <paths>` list (stage exactly the
+  named paths, leaving unrelated dirty paths untouched). The caller's
+  prose states which form applies and why.
+- **Title and body.** The commit message title line and body, built by
+  the caller from its own artifact (e.g. a `[SPEC-NNNN]:`-prefixed
+  title and a body drawn from the artifact's frontmatter or journal).
+
+Everything else — the no-git short-circuit, the idempotency check, the
+trailer, and the HEREDOC mechanics — is identical for every caller and
+is defined once here.
+
+### No-git short-circuit
+
+Before staging anything, check whether the working directory is inside
+a git repository:
+
+```bash
+git rev-parse --is-inside-work-tree
+```
+
+If this exits non-zero (the project is not a git repository), **skip
+the entire commit step without erroring**. The just-written artifact is
+left in place on disk; no commit is attempted and no git failure is
+surfaced. This preserves Speccy's "works identically in any project
+state" property for non-git projects.
+
+### Stage, then skip-if-empty, then commit
+
+When a git repository is present:
+
+1. **Stage** using the caller's chosen breadth — `git add -A` or the
+   narrow `git add <paths>` list. Staging unchanged content is a no-op,
+   so a narrow caller may pass its full path set unconditionally
+   regardless of whether some of those paths were already committed.
+
+2. **Idempotency check** — run the single unified form:
+
+   ```bash
+   git diff --cached --quiet
+   ```
+
+   If exit code is 0 (nothing staged), **skip the commit silently** —
+   the configured paths are already committed at their current content.
+   No surface to the user, no error. This is the only idempotency
+   check; do not substitute a pre-stage `git status --porcelain`
+   variant. If exit code is non-zero, proceed to the commit.
+
+3. **Commit** with the caller's title and body, passing the message via
+   a HEREDOC so newlines and any special characters survive verbatim:
+
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   <caller title>
+
+   <caller body>
+
+   Co-Authored-By: <model> <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+   The commit is single-parent (parent count = 1). The skill body does
+   not check or change the current git branch; the commit lands on
+   whatever HEAD is.
+
+### Trailer
+
+The `Co-Authored-By` trailer is resolved by the identity-sourcing rule,
+not restated here:
+
+## Sourcing your recorded identity
+
+When you record your own identity in a `model="..."` attribute, build
+the value from two independently sourced parts: the model segment and
+the optional effort suffix. Do not infer either from the skill-pack
+name, the persona name, or an inherited environment variable.
+
+- **Model segment — from the host's in-context identifier, verbatim.**
+  Use the resolved long-form model identifier your host states
+  in-context (for example, a host line such as
+  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
+  preserving version punctuation as the host writes it — keep the
+  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
+  (`claude-opus-4.8`), and never substitute a configured alias. Where a
+  host states no resolved identifier in-context, fall back to the
+  `model:` value in your own agent definition file.
+
+- **Effort suffix — from your own definition file.** When your host
+  exposes a reasoning-effort knob, read the effort from your own
+  sub-agent definition file (`effort:` on Claude Code,
+  `model_reasoning_effort` on Codex) and append it as a slash-suffix
+  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
+  `CLAUDE_EFFORT` or any other inherited environment variable: a
+  sub-agent pinned to a low effort that is dispatched from a
+  higher-effort parent session still records its own definition-file
+  effort. A host with no effort knob omits the suffix entirely.
+
+- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
+  override is deliberately not read. A run that sets it still records
+  the effort declared in the agent definition file, not the override
+  value.
+
+
+Apply that rule to fill the `<model>` segment of the trailer line. When
+the host states no resolved identifier in-context, use the documented
+fallback string
+`Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+
 
 5. Suggest the next step: `/speccy-work SPEC-NNNN` to start the
    implementation loop.

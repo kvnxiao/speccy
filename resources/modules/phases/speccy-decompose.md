@@ -73,60 +73,48 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    `speccy lock` edits TASKS.md's frontmatter in place; it does not
    emit a hash to stdout, and it requires TASKS.md to already exist.
 
-4. Bootstrap commit the SPEC artefacts. This closes the
+4. Branch-guard, then commit `TASKS.md` alone. This closes the
    bootstrap-commit gap that would otherwise trip the SPEC-0045/REQ-002
    strict clean-tree gate when `{{ cmd_prefix }}speccy-orchestrate
-   SPEC-NNNN` is invoked on a freshly decomposed SPEC. The step uses
-   narrow file-list staging (never `git add -A` or `git add .`), so
-   any unrelated dirty paths outside `<spec-dir>/` remain in the
-   working tree untouched. The step is idempotent: re-running
-   decompose on an already-committed SPEC produces no new commit.
+   SPEC-NNNN` is invoked on a freshly decomposed SPEC. The commit runs
+   after `speccy lock`. It commits only the spec's `TASKS.md` —
+   `SPEC.md` is committed by `{{ cmd_prefix }}speccy-plan`, not here, so
+   the new-spec path lands two separate commits (one per skill). The
+   step uses narrow file-list staging (never `git add -A` or
+   `git add .`), so any unrelated dirty paths outside `<spec-dir>/`
+   remain in the working tree untouched. The step is idempotent:
+   re-running decompose on an already-committed `TASKS.md` produces no
+   new commit.
 
-   1. Stage exactly the two SPEC artefacts via narrow `git add`:
+   First run the branch-guard prelude so the commit lands on a feature
+   branch rather than the repository's default branch. Supply the
+   prelude's one parameter — the **spec directory** (`<spec-dir>/`,
+   i.e. the path that holds `SPEC.md` and `TASKS.md`) — and run it:
 
-      ```bash
-      git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md
-      ```
+{% include "modules/references/branch-guard.md" %}
 
-      Do not use `git add -A` or `git add .`. Staging unchanged
-      content is a no-op, so passing both paths unconditionally is
-      safe regardless of whether SPEC.md was already committed.
+   Then run the shared commit recipe, supplying its two
+   behaviour-varying parameters as follows:
 
-   2. Run `git diff --cached --quiet`. If exit code is 0 (nothing
-      staged), skip the commit silently — both files are already
-      committed at their current content. If non-zero, proceed to
-      the commit.
+   - **Staging breadth: narrow `git add <spec-dir>/TASKS.md`.** Stage
+     exactly the spec's `TASKS.md` and nothing else. Do not use
+     `git add -A` or `git add .`. Staging unchanged content is a no-op,
+     so passing the path unconditionally is safe regardless of whether
+     `TASKS.md` was already committed.
+   - **Title and body.**
+     - **Title:** `[SPEC-NNNN]: decompose tasks` with `SPEC-NNNN`
+       substituted for the resolved spec id.
+     - **Body:** the trimmed value of the `title:` field from SPEC.md's
+       YAML frontmatter (the one-line title slug, not the full document
+       heading).
 
-   3. Build the commit message:
+   With those two parameters fixed, run the shared recipe — it defines
+   the no-git short-circuit, the unified stage-then-`git diff --cached
+   --quiet` idempotency check (an unchanged `TASKS.md` skips the commit
+   silently), the `Co-Authored-By` trailer, and the HEREDOC commit
+   mechanics:
 
-      - **Title:** `[SPEC-NNNN]: create spec and decompose tasks`
-        with `SPEC-NNNN` substituted for the resolved spec id.
-      - **Body:** the trimmed value of the `title:` field from
-        SPEC.md's YAML frontmatter (the one-line title slug, not
-        the full document heading).
-      - **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
-        line where `<model>` is the model segment sourced per the
-        "Sourcing your recorded identity" rule — the host's
-        in-context identifier transcribed verbatim in hyphen form
-        (e.g. `claude-opus-4-8[1m]`), never a dotted form or a
-        configured alias. When the host states no resolved identifier
-        in-context, use the documented fallback string
-        `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
-        Trailer resolution matches SPEC-0045/REQ-004 verbatim.
-
-      Pass the body via a HEREDOC so newlines and any special
-      characters in the SPEC title survive verbatim, e.g.:
-
-      ```bash
-git commit -m "$(cat <<'EOF'
-[SPEC-NNNN]: create spec and decompose tasks
-
-<SPEC title from frontmatter>
-
-Co-Authored-By: <model> <noreply@anthropic.com>
-EOF
-)"
-      ```
+{% include "modules/references/commit-recipe.md" %}
 
 5. Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-NNNN` to start the
    implementation loop.

@@ -1,10 +1,10 @@
 ## Branch-guard prelude
 
 This module is the single source of truth for the branch-guard prelude
-that the authoring skills run before their commit step. It is pulled
-into each callsite via
-`{% include "modules/references/branch-guard.md" %}`; there is no
-verbatim copy of this prelude in any individual skill body.
+that the authoring skills run before their commit step. Each callsite
+pulls it in with a MiniJinja `include` directive naming
+`modules/references/branch-guard.md`; there is no verbatim copy of this
+prelude in any individual skill body.
 
 The prelude guarantees that HEAD is on a feature branch before any
 artifact is committed, so an authored `SPEC.md` / `TASKS.md` never lands
