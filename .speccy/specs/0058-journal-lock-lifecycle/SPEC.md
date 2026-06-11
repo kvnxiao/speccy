@@ -61,6 +61,9 @@ reap is added.
   leaving the journal byte-identical, locking working before the journal
   `.md` exists) holds unchanged: `Drop` still never unlinks and the
   append-time lock path is unmoved.
+- An unexpected I/O failure that prevents a reap is visible as a `WARN`
+  diagnostic naming the sidecar path rather than being swallowed silently,
+  without failing the command or polluting its stdout / JSON output.
 </goals>
 
 ## Non-goals
@@ -273,6 +276,53 @@ journal file is byte-identical to its pre-append state.
 </scenario>
 </requirement>
 
+<requirement id="REQ-005">
+### REQ-005: An unexpected reap failure surfaces as a `tracing` warning
+
+The CLI initializes a `tracing` subscriber once at process startup that
+writes to stderr at a level controlled by the standard `tracing-subscriber`
+environment filter. The shared reap helper emits exactly one `WARN`-level
+event naming the sidecar path when an unexpected I/O error prevents a reap —
+an open error other than `NotFound`, a `try_lock` `Error`, or a
+`remove_file` error — while the owning command still exits zero. The expected
+reap no-ops (an absent sidecar and a currently-held lock) emit no warning.
+Diagnostics go only to stderr, so the stable stdout / JSON command-output
+contract is unaffected.
+
+<done-when>
+- A reap that hits an unexpected I/O error emits exactly one `WARN` event
+  naming the sidecar path, and the owning command still exits zero.
+- An absent-sidecar reap and a held-lock reap emit no `WARN` event.
+- A command's contracted stdout / JSON output is byte-identical whether or
+  not a reap warning fired; no diagnostic is written to stdout.
+</done-when>
+
+<behavior>
+- Given a sidecar whose unlink fails after a successful `try_lock`, when the
+  reap runs, then a single `WARN` naming the sidecar path is emitted to
+  stderr and the command exits zero.
+- Given an absent or held sidecar, when the reap runs, then no `WARN` is
+  emitted.
+</behavior>
+
+<scenario id="CHK-008">
+Given a CLI invocation whose stdout is a contracted payload (e.g. `speccy
+status SPEC-NNNN --json`) running with the tracing subscriber active,
+when it completes,
+then stdout is well-formed JSON with no log line interleaved, and any
+tracing diagnostics appeared only on stderr.
+</scenario>
+
+<scenario id="CHK-009">
+Given the reap helper and a sidecar whose unlink is induced to fail after a
+successful `try_lock`,
+when the helper runs under a capturing subscriber,
+then it emits exactly one `WARN`-level event naming the sidecar path and
+returns without panicking, while a reap against an absent or held sidecar
+emits no event.
+</scenario>
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -344,9 +394,33 @@ not the `try_lock` alone — the serial orchestrator never produces an appender
 inside that window, and the `try_lock` only guards a mistimed reap. The
 helper is infallible (returns no `Result`): it runs only after the command's
 load-bearing mutation (the TASKS.md state rewrite or the gate append) has
-already succeeded, so any I/O error short of a clean reap leaves the sidecar
-in place and the command still exits zero, matching the unlock-only,
-"not actionable on failure" posture of `Drop for LockGuard`.
+already succeeded, so a reap failure must never fail the command. Rather than
+swallow an unexpected error silently, the helper emits a `tracing::warn!`
+naming the sidecar path on any error short of a clean reap (an open error
+other than `NotFound`, a `try_lock` `Error`, or a `remove_file` error) and
+still returns, leaving the command's exit code unchanged (REQ-005, DEC-005).
+The expected no-ops — an absent sidecar (`NotFound`) and a held lock
+(`WouldBlock`) — return silently with no warning.
+</decision>
+
+<decision id="DEC-005">
+Adopt `tracing` + `tracing-subscriber` as the CLI's diagnostic channel. The
+reap is best-effort cleanup that runs after a command's load-bearing mutation
+has already succeeded, so a reap failure must never fail the command — but
+silently swallowing an unexpected I/O error is a blind spot. A `WARN` event
+surfaces it without changing the exit code. `tracing` is chosen over bare
+`eprintln!` because it gives level filtering (via the standard env filter),
+structured fields (the sidecar path as a field rather than interpolated
+prose), and a single diagnostic channel the CLI can reuse as it grows toward
+the cross-host-harness role in the product north star. The tension with Core
+principle 5 ("stay small") is resolved deliberately: the subscriber writes
+only to stderr (the stdout / JSON output contract is untouched), exposes no
+Speccy-specific configuration knobs (only the standard `tracing-subscriber`
+env filter), and is initialized exactly once at process startup. This is the
+CLI's first diagnostic-logging surface, and the reap warning (REQ-005) is its
+first and, for this SPEC, only consumer. The deterministic-core principle
+(Core principle 2) holds: `tracing` observes behavior, it does not drive
+control flow and never calls an LLM.
 </decision>
 
 ## Notes
@@ -393,6 +467,7 @@ create-take-remove (the unlink-while-locked race itself).
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-10 | kevin | Initial SPEC: relocate journal advisory-lock sidecars out of `journal/` into `.speccy/locks/`; deterministic collision-free mapping; never-delete decision; SPEC-0055 contract preserved. |
-| 2026-06-11 | claude | Decomposition — added DEC-004 capturing the reap helper's cross-platform delete ordering (verify-free via `try_lock`, close the handle, then `remove_file`, because Windows rejects unlinking a path with a live open handle) and its infallible post-mutation posture. No requirement change. |
 | 2026-06-11 | kevin | Amendment — reframed from relocate-and-persist to **delete at terminal lifecycle boundaries**. Brainstorm established that no journal is ever created concurrently (the implementer creates each task journal solo; reviews require a pre-existing round; vet appends are sequential), so task-`completed` and the terminal `<gate>` are quiescent boundaries where unlinking is safe. Reaping folds into `task transition --to completed` (task lock) and `journal append --block gate` (vet lock) via a guarded, idempotent internal helper — no new subcommand (rejected `journal sweep`; `verify` is read-only; `archive` is optional). Inverts the prior "No deletion" non-goal and DEC-001; drops the `.speccy/locks/` relocation (old DEC-002/003). `Drop` stays unlock-only and the append-time lock path is unmoved, so SPEC-0055 REQ-005 holds and its three concurrency tests pass unchanged. Resolved OQ-a. |
+| 2026-06-11 | claude | Decomposition — added DEC-004 capturing the reap helper's cross-platform delete ordering (verify-free via `try_lock`, close the handle, then `remove_file`, because Windows rejects unlinking a path with a live open handle) and its infallible post-mutation posture. No requirement change. |
+| 2026-06-11 | claude | Amendment — adopt `tracing` as the CLI's first diagnostic channel so an unexpected reap failure surfaces as a `WARN` instead of being swallowed (raised in review of the silent-infallible posture). Added REQ-005 (startup subscriber to stderr, level-filterable, stdout/JSON unaffected; reap warns on unexpected I/O error, expected no-ops stay silent) and DEC-005 (adopt `tracing` + `tracing-subscriber`; stay-small tension resolved by stderr-only, no knobs, single init). Revised DEC-004: the reap stays infallible `-> ()` but now emits `tracing::warn!` on an unexpected error rather than swallowing it. |
 </changelog>

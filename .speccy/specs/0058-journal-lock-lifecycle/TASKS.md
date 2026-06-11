@@ -1,11 +1,57 @@
 ---
 spec: SPEC-0058
-spec_hash_at_generation: 9fda71eac3955cb526b77e55d8c173b7fdb55af76688374bc518ea352104f0c7
-generated_at: 2026-06-11T04:25:34Z
+spec_hash_at_generation: 44d96ed73e828454a875700ae177ea19f078f2d5b33d38f5dffb94aa530cb66d
+generated_at: 2026-06-11T04:37:28Z
 ---
 # Tasks: SPEC-0058 Journal lock-file lifecycle — reap advisory lock sidecars at terminal lifecycle boundaries
 
-<task id="T-001" state="pending" covers="REQ-003 REQ-004">
+<task id="T-001" state="pending" covers="REQ-005">
+## Adopt `tracing` as the CLI diagnostic channel
+
+Add a `tracing` diagnostic channel to the CLI so later tasks' reap helper can
+warn on an unexpected failure instead of swallowing it (DEC-005). This task
+adds the dependency and the subscriber only; no reap code uses it yet.
+
+- Add `tracing` and `tracing-subscriber` (the latter with its `env-filter`
+  feature) to the root `[workspace.dependencies]` table in `Cargo.toml`,
+  alongside the existing entries (e.g. `fs4`, `jiff`). Reference both from
+  `speccy-cli/Cargo.toml`'s `[dependencies]` with `{ workspace = true }`,
+  matching the existing workspace-dep convention. Both crates are
+  `MIT OR Apache-2.0`; confirm `cargo deny check` stays green.
+- Initialize the subscriber exactly once at the top of `fn main()` in
+  `speccy-cli/src/main.rs:298` (before `Cli::parse()`), writing to **stderr**
+  (`tracing_subscriber::fmt().with_writer(std::io::stderr)`), with an
+  `EnvFilter` sourced from the environment and a sensible default level. The
+  subscriber must never write to stdout — the stable stdout / JSON
+  command-output contract is unaffected (REQ-005, DEC-005).
+- No Speccy-specific configuration knobs (no new CLI flags, no config file);
+  only the standard `tracing-subscriber` env filter governs level. The CLI
+  remains deterministic — `tracing` observes, it does not drive control flow
+  (Core principle 2).
+
+Add an integration test (drive the built binary via `assert_cmd`) asserting
+that a contracted-stdout command — e.g. `speccy status --json` against a
+scratch `common::Workspace` — emits stdout that parses cleanly as JSON with
+no log line interleaved, proving the subscriber does not pollute stdout
+(CHK-008).
+
+<task-scenarios>
+Given the built `speccy` binary after this task and a scratch workspace,
+when `speccy status --json` runs with the tracing subscriber active,
+then stdout parses as a single well-formed JSON value with no log line
+interleaved, and any diagnostics appear only on stderr (CHK-008).
+
+Given the workspace after this task,
+when `cargo deny check` runs,
+then it passes (the two new dependencies clear the license/advisory gates).
+
+Suggested files: `Cargo.toml`, `speccy-cli/Cargo.toml`,
+`speccy-cli/src/main.rs`, `speccy-cli/tests/` (new or existing integration
+test for stdout cleanliness)
+</task-scenarios>
+</task>
+
+<task id="T-002" state="pending" covers="REQ-003 REQ-004 REQ-005">
 ## Add the guarded, idempotent `reap_lock_sidecar` helper
 
 Add `pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path)` to
@@ -14,57 +60,69 @@ Add `pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path)` to
 shared reap both call sites in later tasks will invoke; this task adds it and
 its direct unit coverage only — no call sites are wired yet.
 
-Behaviour (DEC-004, REQ-003):
+Behaviour (DEC-004, REQ-003, REQ-005):
 - Open `lock_path` with `fs_err::OpenOptions::new().read(true).write(true)` —
   deliberately **without** `create(true)` (unlike `LockGuard::acquire` at
-  `journal.rs:658-663`). A `NotFound` open error is the idempotent no-op:
-  return without error. Reaping must never create a sidecar.
+  `journal.rs:658-663`). An open error whose kind is `NotFound` is the
+  idempotent no-op: return silently. Reaping must never create a sidecar.
 - Unwrap the `fs-err` wrapper to a `std::fs::File` via `.into_parts()`
   (mirror `journal.rs:669`).
 - Take a single non-blocking `fs4::FileExt::try_lock`. On
-  `Err(TryLockError::WouldBlock)` the lock is held — return without
-  unlinking (the held-lock skip). On `Err(TryLockError::Error(_))` also
-  return without unlinking (best-effort).
+  `Err(TryLockError::WouldBlock)` the lock is held — return silently without
+  unlinking (the held-lock skip; no warning, this is an expected no-op).
 - On `Ok(())`, **drop the file handle before** calling
   `fs_err::remove_file(lock_path)`. Dropping releases both the advisory lock
   and the OS handle, so the unlink succeeds on Windows (where `remove_file`
   against a path with a live open handle fails with a sharing violation, see
-  DEC-001/DEC-004) as well as POSIX. Ignore the `remove_file` result (a
-  racing reaper or `NotFound` is a safe no-op).
-
-The helper is infallible (returns no `Result`, per DEC-004): it will run only
-after each command's load-bearing mutation has already landed, so a reap
-failure must never fail the command. This matches the "not actionable on
-failure" posture of `Drop for LockGuard` (`journal.rs:695-703`).
+  DEC-001/DEC-004) as well as POSIX.
+- The helper returns no `Result` (`-> ()`, per DEC-004): it runs only after
+  each command's load-bearing mutation has already landed, so a reap failure
+  must never fail the command. But rather than swallow an unexpected error,
+  emit exactly one `tracing::warn!` with the sidecar path as a structured
+  field on any error short of a clean reap: an open error other than
+  `NotFound`, a `try_lock` `Error`, or a `remove_file` error (REQ-005,
+  DEC-005). The expected no-ops — `NotFound` open and `WouldBlock` — stay
+  silent.
 
 `Drop for LockGuard` and `LockGuard::acquire` are unchanged, and the
 append-time lock path is unmoved — the reap is purely additive (REQ-004). No
 new CLI subcommand and no public API (DEC-002).
 
 Add a `#[cfg(test)] mod tests` in `journal.rs` exercising the helper directly
-against a tempdir-backed `Utf8Path`:
-- a free sidecar is unlinked and the helper returns;
+against a tempdir-backed `Utf8Path`, capturing emitted `tracing` events with
+a test-local subscriber (e.g. `tracing-test`, or
+`tracing::subscriber::with_default` over a capturing collector):
+- a free sidecar is unlinked, the helper returns, and no `WARN` is emitted;
 - a sidecar held by a second locked handle (open the path, `into_parts()`,
-  `FileExt::lock(&std_file)`) survives the reap, then the held handle
-  unlocks for teardown;
-- an absent sidecar path is a no-op (the path still does not exist
-  afterward).
+  `FileExt::lock(&std_file)`) survives the reap with no `WARN` (expected
+  no-op), then the held handle unlocks for teardown;
+- an absent sidecar path is a no-op with no `WARN`;
+- an induced unexpected failure (e.g. a read-only parent directory so
+  `remove_file` fails — gate the induction by platform if needed) emits
+  exactly one `WARN` naming the sidecar path and the helper still returns
+  (REQ-005, CHK-009).
 
 <task-scenarios>
-Given a tempdir holding a `foo.md.lock` file with no lock currently taken on
-it,
-when `reap_lock_sidecar` is called on that path,
-then the file no longer exists.
+Given a tempdir holding a `foo.md.lock` with no lock taken on it,
+when `reap_lock_sidecar` is called on that path under a capturing subscriber,
+then the file no longer exists and no `WARN` event was emitted.
 
-Given a `foo.md.lock` whose exclusive advisory lock is currently held by a
-separate open file handle in the test,
+Given a `foo.md.lock` whose exclusive advisory lock is held by a separate
+open handle in the test,
 when `reap_lock_sidecar` is called on that path,
-then the file still exists afterward (the held lock was skipped, never
-unlinked).
+then the file still exists afterward and no `WARN` was emitted (the held lock
+is an expected no-op, never unlinked).
 
-Given a path under a tempdir for which no `.lock` file exists,
+Given a path for which no `.lock` file exists,
 when `reap_lock_sidecar` is called on it,
-then the call returns with no error and the path still does not exist.
+then the call returns, the path still does not exist, and no `WARN` was
+emitted.
+
+Given a `foo.md.lock` whose unlink is induced to fail after a successful
+`try_lock`,
+when `reap_lock_sidecar` runs under a capturing subscriber,
+then exactly one `WARN`-level event naming the sidecar path is emitted and
+the helper returns without panicking (CHK-009).
 
 Given the workspace after this task,
 when `cargo test -p speccy-cli` runs,
@@ -75,11 +133,12 @@ then the three SPEC-0055 concurrency tests
 `speccy-cli/tests/journal_append.rs`) still pass unchanged — the regression
 signal that `Drop` stays unlock-only and the append path is unmoved (REQ-004).
 
-Suggested files: `speccy-cli/src/journal.rs`
+Suggested files: `speccy-cli/src/journal.rs`, `speccy-cli/Cargo.toml`
+(test-local capturing-subscriber dev-dependency, if used)
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-003">
+<task id="T-003" state="pending" covers="REQ-001 REQ-003">
 ## Reap the task lock sidecar on the `--to completed` transition
 
 Wire `reap_lock_sidecar` into `speccy-cli/src/transition.rs`. In the
@@ -142,7 +201,7 @@ Suggested files: `speccy-cli/src/transition.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-002">
+<task id="T-004" state="pending" covers="REQ-002">
 ## Reap the vet lock sidecar on the terminal `--block gate` append
 
 Wire `reap_lock_sidecar` into `run_vet_append` in
@@ -153,11 +212,12 @@ append's own `_guard` is acquired at `journal.rs:414`. After
 been released**, reap `VET.md.lock` — but only for the terminal `gate` block
 (`matches!(kind, VetBlockKind::Gate)`). Restructure the tail of
 `run_vet_append` so the guard is provably out of scope before the reap runs
-(bind the append result, drop the guard explicitly or close its lexical scope,
-then reap, then return the bound result). The reap must observe the lock as
-free because the append released it first; the `try_lock` guard (REQ-003) is
-the defensive backstop, terminal-boundary quiescence (the gate is the last vet
-write on every exit path, DEC-003) is the real safety contract.
+(bind the append result, drop the guard explicitly or close its lexical
+scope, then reap, then return the bound result). The reap must observe the
+lock as free because the append released it first; the `try_lock` guard
+(REQ-003) is the defensive backstop, terminal-boundary quiescence (the gate
+is the last vet write on every exit path, DEC-003) is the real safety
+contract.
 
 Only the `gate` block reaps. Every non-gate vet block (`drift-review`,
 `holistic-fix`, `simplifier-scan`, `simplifier-apply`) leaves `VET.md.lock` in
