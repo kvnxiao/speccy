@@ -72,7 +72,7 @@ Suggested files: `speccy-core/src/parse/xml_scanner/html5_names.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-002 REQ-003 REQ-004 REQ-005">
+<task id="T-002" state="completed" covers="REQ-001 REQ-002 REQ-003 REQ-004 REQ-005">
 ## Implement the `XML-001` balance lint over SPEC.md / TASKS.md / REPORT.md and register it
 
 Create the `XML-001` lint family and wire it into the engine and registry.
