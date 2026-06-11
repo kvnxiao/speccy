@@ -2,7 +2,7 @@
 id: SPEC-0056
 slug: task-context-bundle
 title: Task-scoped context bundle — `speccy context` emits one JSON read for loop subagents
-status: in-progress
+status: implemented
 created: 2026-06-09
 supersedes: []
 ---
