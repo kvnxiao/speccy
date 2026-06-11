@@ -157,18 +157,13 @@ use speccy_cli::embedded::RESOURCES;
 use speccy_cli::host::HostChoice;
 use speccy_cli::render::render_host_pack;
 
-/// Read the commit-recipe module from the embedded RESOURCES bundle,
-/// panicking with a clear message if it is missing.
-fn commit_recipe_body() -> &'static str {
+/// Read an arbitrary module body from the embedded `RESOURCES` bundle by its
+/// bundle-relative path, panicking with a clear message if it is missing.
+fn module_body(rel: &str) -> &'static str {
     RESOURCES
-        .get_file("modules/references/commit-recipe.md")
+        .get_file(rel)
         .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message(
-                "RESOURCES bundle must contain `modules/references/commit-recipe.md`; \
-                 SPEC-0059 T-001 requires this shared module to be created",
-            )
-        })
+        .unwrap_or_else(|| panic_with_message(&format!("RESOURCES bundle must contain `{rel}`")))
 }
 
 /// Test-only failure path. Centralised so the `clippy::panic` expectation
@@ -185,7 +180,7 @@ fn panic_with_message(msg: &str) -> ! {
 /// `git diff --cached --quiet` form (CHK-008 "recipe stated once", DEC-004).
 #[test]
 fn commit_recipe_states_idempotency_check_exactly_once() {
-    let body = commit_recipe_body();
+    let body = module_body("modules/references/commit-recipe.md");
 
     let occurrences = body.matches("git diff --cached --quiet").count();
     assert_eq!(
@@ -200,7 +195,7 @@ fn commit_recipe_states_idempotency_check_exactly_once() {
 /// inline (CHK-008 delegation property).
 #[test]
 fn commit_recipe_delegates_trailer_via_include() {
-    let body = commit_recipe_body();
+    let body = module_body("modules/references/commit-recipe.md");
 
     let expected_include = r#"{% include "modules/references/identity-sourcing.md" %}"#;
     assert!(
@@ -223,7 +218,7 @@ fn commit_recipe_delegates_trailer_via_include() {
 /// commit step without erroring (CHK-013, REQ-010).
 #[test]
 fn commit_recipe_specifies_no_git_short_circuit() {
-    let body = commit_recipe_body();
+    let body = module_body("modules/references/commit-recipe.md");
 
     assert!(
         body.contains("git rev-parse --is-inside-work-tree"),
@@ -239,26 +234,12 @@ fn commit_recipe_specifies_no_git_short_circuit() {
     );
 }
 
-/// Read the branch-guard module from the embedded RESOURCES bundle,
-/// panicking with a clear message if it is missing.
-fn branch_guard_body() -> &'static str {
-    RESOURCES
-        .get_file("modules/references/branch-guard.md")
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message(
-                "RESOURCES bundle must contain `modules/references/branch-guard.md`; \
-                 SPEC-0059 T-002 requires this shared module to be created",
-            )
-        })
-}
-
 /// The default-branch detection prose names the three tiers — `origin/HEAD`,
 /// then `init.defaultBranch`, then a `{main, master}` name match — in that
 /// order, each gated on the prior tier not resolving (CHK-003).
 #[test]
 fn branch_guard_names_three_detection_tiers_in_order() {
-    let body = branch_guard_body();
+    let body = module_body("modules/references/branch-guard.md");
 
     let tier1 = body
         .find("origin/HEAD")
@@ -298,7 +279,7 @@ fn branch_guard_names_three_detection_tiers_in_order() {
 /// creation notice emitted only on the create path (CHK-002, CHK-001).
 #[test]
 fn branch_guard_states_creation_condition_and_notice() {
-    let body = branch_guard_body();
+    let body = module_body("modules/references/branch-guard.md");
     let lower = body.to_lowercase();
 
     // Derivation property (CHK-001): `spec-` prefix + spec-dir basename, and
@@ -342,7 +323,7 @@ fn branch_guard_states_creation_condition_and_notice() {
 /// branch-guard without erroring (CHK-013, REQ-010, branch-guard side).
 #[test]
 fn branch_guard_specifies_no_git_short_circuit() {
-    let body = branch_guard_body();
+    let body = module_body("modules/references/branch-guard.md");
 
     assert!(
         body.contains("git rev-parse --is-inside-work-tree"),
@@ -358,24 +339,11 @@ fn branch_guard_specifies_no_git_short_circuit() {
     );
 }
 
-/// Read the `review-fanout.md` partial from the embedded RESOURCES bundle,
-/// panicking with a clear message if it is missing.
-fn review_fanout_body() -> &'static str {
-    RESOURCES
-        .get_file("modules/skills/partials/review-fanout.md")
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message(
-                "RESOURCES bundle must contain `modules/skills/partials/review-fanout.md`",
-            )
-        })
-}
-
 /// The refactored review-pass commit step pulls the shared recipe via
 /// `{% include %}` rather than restating it inline (CHK-009 review side).
 #[test]
 fn review_fanout_includes_shared_commit_recipe() {
-    let body = review_fanout_body();
+    let body = module_body("modules/skills/partials/review-fanout.md");
 
     let expected_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
@@ -389,7 +357,7 @@ fn review_fanout_includes_shared_commit_recipe() {
 /// `[SPEC-NNNN/T-NNN]:` title prefix the consistency check greps (CHK-010).
 #[test]
 fn review_fanout_retains_add_dash_a_and_title_prefix() {
-    let body = review_fanout_body();
+    let body = module_body("modules/skills/partials/review-fanout.md");
 
     assert!(
         body.contains("git add -A"),
@@ -408,7 +376,7 @@ fn review_fanout_retains_add_dash_a_and_title_prefix() {
 /// (CHK-009 review side, DEC-004).
 #[test]
 fn review_fanout_drops_inline_status_porcelain_precheck() {
-    let body = review_fanout_body();
+    let body = module_body("modules/skills/partials/review-fanout.md");
 
     assert!(
         !body.contains("git status --porcelain"),
@@ -427,7 +395,7 @@ fn review_fanout_drops_inline_status_porcelain_precheck() {
 /// added — the review-pass commit stays unguarded (REQ-008 review side).
 #[test]
 fn review_fanout_retains_unguarded_branch_statement_no_branch_guard() {
-    let body = review_fanout_body();
+    let body = module_body("modules/skills/partials/review-fanout.md");
 
     assert!(
         body.contains("Commits land on whatever HEAD is"),
@@ -475,23 +443,12 @@ fn rendered_review_skill_fully_expands_commit_recipe() {
     );
 }
 
-/// Read the `speccy-decompose.md` phase body from the embedded RESOURCES
-/// bundle, panicking with a clear message if it is missing.
-fn decompose_body() -> &'static str {
-    RESOURCES
-        .get_file("modules/phases/speccy-decompose.md")
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message("RESOURCES bundle must contain `modules/phases/speccy-decompose.md`")
-        })
-}
-
 /// The refactored step-4 commit pulls both the shared commit recipe and the
 /// branch-guard prelude via `{% include %}` (CHK-005 recipe property, REQ-007
 /// decompose side).
 #[test]
 fn decompose_includes_shared_commit_recipe_and_branch_guard() {
-    let body = decompose_body();
+    let body = module_body("modules/phases/speccy-decompose.md");
 
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
@@ -513,7 +470,7 @@ fn decompose_includes_shared_commit_recipe_and_branch_guard() {
 /// the staging set), and runs after `speccy lock` (CHK-005).
 #[test]
 fn decompose_stages_tasks_md_alone_with_decompose_title() {
-    let body = decompose_body();
+    let body = module_body("modules/phases/speccy-decompose.md");
 
     assert!(
         body.contains("[SPEC-NNNN]: decompose tasks"),
@@ -556,7 +513,7 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
 /// gone from the source (CHK-005 absent-string property, DEC-005).
 #[test]
 fn decompose_drops_combined_bootstrap_title() {
-    let body = decompose_body();
+    let body = module_body("modules/phases/speccy-decompose.md");
 
     assert!(
         !body.contains("create spec and decompose tasks"),
@@ -570,7 +527,7 @@ fn decompose_drops_combined_bootstrap_title() {
 /// it is delegated to the included recipe (CHK-009 decompose side).
 #[test]
 fn decompose_drops_inline_diff_cached_recipe() {
-    let body = decompose_body();
+    let body = module_body("modules/phases/speccy-decompose.md");
 
     assert!(
         !body.contains("git diff --cached --quiet"),
@@ -613,22 +570,11 @@ fn rendered_decompose_agent_fully_expands_includes() {
     );
 }
 
-/// Read the `speccy-plan.md` skill body from the embedded RESOURCES bundle,
-/// panicking with a clear message if it is missing.
-fn plan_body() -> &'static str {
-    RESOURCES
-        .get_file("modules/skills/speccy-plan.md")
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message("RESOURCES bundle must contain `modules/skills/speccy-plan.md`")
-        })
-}
-
 /// The new commit step pulls both the shared commit recipe and the branch-guard
 /// prelude via `{% include %}` (CHK-004 recipe property, REQ-003).
 #[test]
 fn plan_includes_shared_commit_recipe_and_branch_guard() {
-    let body = plan_body();
+    let body = module_body("modules/skills/speccy-plan.md");
 
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
@@ -650,7 +596,7 @@ fn plan_includes_shared_commit_recipe_and_branch_guard() {
 /// the staging set), and runs after the step-3 self-review pass (CHK-004).
 #[test]
 fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
-    let body = plan_body();
+    let body = module_body("modules/skills/speccy-plan.md");
 
     assert!(
         body.contains("[SPEC-NNNN]: create spec"),
@@ -694,7 +640,7 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
 /// CHK-015 invariant is preserved — the commit step must not displace it).
 #[test]
 fn plan_retains_vacancy_id_allocation() {
-    let body = plan_body();
+    let body = module_body("modules/skills/speccy-plan.md");
 
     assert!(
         body.contains("speccy vacancy --json"),
@@ -743,22 +689,11 @@ fn rendered_plan_skill_fully_expands_includes() {
     );
 }
 
-/// Read the `speccy-amend.md` skill body from the embedded RESOURCES bundle,
-/// panicking with a clear message if it is missing.
-fn amend_body() -> &'static str {
-    RESOURCES
-        .get_file("modules/skills/speccy-amend.md")
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| {
-            panic_with_message("RESOURCES bundle must contain `modules/skills/speccy-amend.md`")
-        })
-}
-
 /// The new commit step pulls both the shared commit recipe and the branch-guard
 /// prelude via `{% include %}` (CHK-006 recipe property, REQ-005).
 #[test]
 fn amend_includes_shared_commit_recipe_and_branch_guard() {
-    let body = amend_body();
+    let body = module_body("modules/skills/speccy-amend.md");
 
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
@@ -780,7 +715,7 @@ fn amend_includes_shared_commit_recipe_and_branch_guard() {
 /// `TSK-003`-clear check in step 6 (CHK-006).
 #[test]
 fn amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear() {
-    let body = amend_body();
+    let body = module_body("modules/skills/speccy-amend.md");
 
     assert!(
         body.contains("[SPEC-NNNN]: amend — <why>"),
@@ -816,7 +751,7 @@ fn amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear() {
 /// requiring the tasks file to exist (CHK-006 staging property, CHK-007).
 #[test]
 fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
-    let body = amend_body();
+    let body = module_body("modules/skills/speccy-amend.md");
 
     // SPEC.md is always in the staging set.
     assert!(
@@ -929,15 +864,6 @@ fn rendered_amend_skill_fully_expands_includes() {
 //   property).
 // - [`reeject_leaves_working_tree_clean`]: `just reeject` is a no-op against
 //   the committed ejected packs (the committed output matches its sources).
-
-/// Read an arbitrary module body from the embedded `RESOURCES` bundle by its
-/// bundle-relative path, panicking with a clear message if it is missing.
-fn module_body(rel: &str) -> &'static str {
-    RESOURCES
-        .get_file(rel)
-        .and_then(|f| f.contents_utf8())
-        .unwrap_or_else(|| panic_with_message(&format!("RESOURCES bundle must contain `{rel}`")))
-}
 
 /// The branch-guard include is scoped to exactly the three authoring sources
 /// (plan, decompose, amend) and is absent from work, ship, and the review-pass

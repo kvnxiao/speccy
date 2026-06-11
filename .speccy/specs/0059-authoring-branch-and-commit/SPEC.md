@@ -2,7 +2,7 @@
 id: SPEC-0059
 slug: authoring-branch-and-commit
 title: Branch-guard and consolidated git commits for the authoring skills (plan / decompose / amend)
-status: in-progress
+status: implemented
 created: 2026-06-11
 supersedes: []
 ---
