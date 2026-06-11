@@ -12,12 +12,15 @@
 //! [`scan_foreign_tags`]. Balance is computed name-scoped with a per-name
 //! stack, fence-aware, and does not enforce cross-name nesting (DEC-002).
 //!
-//! This module covers the three parsed-document artifacts. The journal
-//! artifact is added by SPEC-0057 T-003.
+//! This module covers the three parsed-document artifacts plus the
+//! on-demand `journal/T-NNN.md` files (SPEC DEC-003: journals are
+//! defense-in-depth, reached on demand via the `JNL-*` path-derivation
+//! pattern rather than a `ParsedSpec` field).
 
 use crate::lint::types::Diagnostic;
 use crate::lint::types::Level;
 use crate::lint::types::ParsedSpec;
+use crate::parse::journal_xml::JOURNAL_ELEMENT_NAMES;
 use crate::parse::report_xml::REPORT_ELEMENT_NAMES;
 use crate::parse::spec_xml::SPECCY_ELEMENT_NAMES;
 use crate::parse::task_xml::TASKS_ELEMENT_NAMES;
@@ -30,7 +33,8 @@ use std::collections::HashMap;
 const XML_001: &str = "XML-001";
 
 /// Append every `XML-001` diagnostic for one spec across its parsed
-/// document artifacts (SPEC.md / TASKS.md / REPORT.md).
+/// document artifacts (SPEC.md / TASKS.md / REPORT.md) and its existing
+/// per-task `journal/T-NNN.md` files.
 pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     if let Some(spec_doc) = spec.spec_doc_ok() {
         balance_pass(
@@ -56,6 +60,32 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             REPORT_ELEMENT_NAMES,
             out,
         );
+    }
+    journal_pass(spec, out);
+}
+
+/// Run the balance pass over each existing `journal/T-NNN.md` (SPEC
+/// DEC-003). Journal paths are derived from the parsed tasks the same way
+/// the `JNL-*` rules do — `spec.dir.join("journal")` plus
+/// `T-NNN.md` per task — and read on demand; no journal field is added to
+/// `ParsedSpec`. Missing journal files are simply skipped (their
+/// absence/presence is the `JNL-*` family's concern, not `XML-001`'s).
+fn journal_pass(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
+    let Some(tasks_md) = spec.tasks_md_ok() else {
+        return;
+    };
+    let journal_dir = spec.dir.join("journal");
+    for task in &tasks_md.tasks {
+        let journal_path = journal_dir.join(format!("{}.md", task.id));
+        if !journal_path.exists() {
+            continue;
+        }
+        let Ok(raw) = fs_err::read_to_string(journal_path.as_std_path()) else {
+            // An unreadable journal file is the `JNL-*` family's concern;
+            // `XML-001` only balances files it can read.
+            continue;
+        };
+        balance_pass(spec, &raw, &journal_path, JOURNAL_ELEMENT_NAMES, out);
     }
 }
 

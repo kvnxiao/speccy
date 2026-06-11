@@ -171,7 +171,7 @@ Suggested files: `speccy-core/src/lint/rules/xml.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-004">
+<task id="T-003" state="completed" covers="REQ-004">
 ## Extend `XML-001` detection to on-demand `journal/T-NNN.md` files
 
 Cover the fourth parsed-artifact class (SPEC DEC-003: journals are

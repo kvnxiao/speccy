@@ -2,11 +2,13 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation"
 )]
-//! SPEC-0057 T-002 integration tests for the XML-001 balance lint over the
-//! parsed-document artifacts (SPEC.md / TASKS.md / REPORT.md).
+//! SPEC-0057 integration tests for the XML-001 balance lint. T-002 covers
+//! the parsed-document artifacts (SPEC.md / TASKS.md / REPORT.md); T-003
+//! covers the on-demand per-task `journal/T-NNN.md` files.
 //!
-//! Scenario coverage is drawn directly from T-002's `<task-scenarios>`
-//! block (CHK-001 … CHK-006). Fixtures live under tempdirs — never the
+//! Scenario coverage is drawn directly from the tasks' `<task-scenarios>`
+//! blocks: T-002 covers CHK-001 … CHK-006, and T-003 adds CHK-007 (the
+//! journal-coverage scenarios). Fixtures live under tempdirs — never the
 //! real `.speccy/specs/` tree. The CHK-008 verify-exit scenario lives in
 //! `speccy-cli/tests/verify.rs` because it exercises the CLI exit-code
 //! path and the in-progress demotion gate.
@@ -61,6 +63,21 @@ fn make_workspace(
     }
 
     Ok(dir)
+}
+
+/// Write a `journal/<name>` file under the spec dir of an existing
+/// workspace, creating the `journal/` subdir as `lint_jnl.rs` does. The
+/// caller supplies the full journal file body (frontmatter + elements).
+fn write_journal(dir: &TempDir, name: &str, body: &str) -> TestResult {
+    let root = utf8(dir)?;
+    let journal_dir = root
+        .join(".speccy")
+        .join("specs")
+        .join("0042-example")
+        .join("journal");
+    fs_err::create_dir_all(journal_dir.as_std_path())?;
+    fs_err::write(journal_dir.join(name).as_std_path(), body)?;
+    Ok(())
 }
 
 fn run_lint(dir: &TempDir) -> TestResult<Vec<Diagnostic>> {
@@ -224,5 +241,61 @@ fn xml_001_covers_all_three_parsed_artifacts() -> TestResult {
             "XML-001 must fire for {artifact}; files: {names:?}"
         );
     }
+    Ok(())
+}
+
+/// A well-formed journal frontmatter + one `<implementer>` block whose
+/// inner body slot (`__BODY__`) is filled per test. `T-001` matches the
+/// `CLEAN_TASK` id, so the lint derives `journal/T-001.md`.
+const JOURNAL_MD: &str = "---\nspec: SPEC-0042\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\n__BODY__\n</implementer>\n";
+
+/// CHK-007: a task whose `journal/T-001.md` exists and carries a dangling
+/// foreign close fires exactly one XML-001 whose file is that journal file
+/// and whose line is the orphan tag's line (REQ-004).
+#[test]
+fn xml_001_fires_for_dangling_tag_in_journal() -> TestResult {
+    let dir = make_workspace("", CLEAN_TASK, None)?;
+    let journal = JOURNAL_MD.replace("__BODY__", "completed work\n</journalorphan>");
+    write_journal(&dir, "T-001.md", &journal)?;
+    let diags = run_lint(&dir)?;
+    let hits = xml_001(&diags);
+    assert_eq!(
+        hits.len(),
+        1,
+        "one dangling tag in journal -> one XML-001: {diags:?}"
+    );
+    let hit = hits.first().ok_or("one XML-001")?;
+    assert!(
+        hit.file
+            .as_ref()
+            .is_some_and(|p| p.as_str().ends_with("T-001.md")),
+        "XML-001 must name the journal file: {:?}",
+        hit.file
+    );
+    assert!(
+        hit.line.is_some(),
+        "XML-001 must carry the orphan tag's line: {hit:?}"
+    );
+    assert!(
+        hit.message.contains("journalorphan"),
+        "message must name the offending tag: {}",
+        hit.message
+    );
+    Ok(())
+}
+
+/// The journal half of REQ-004's silent case: a journal file with only
+/// balanced foreign tags (and a missing journal for the next task) fires
+/// no XML-001 for any journal file.
+#[test]
+fn xml_001_silent_on_balanced_journal() -> TestResult {
+    let dir = make_workspace("", CLEAN_TASK, None)?;
+    let journal = JOURNAL_MD.replace("__BODY__", "<details>\nnotes\n</details>");
+    write_journal(&dir, "T-001.md", &journal)?;
+    let diags = run_lint(&dir)?;
+    assert!(
+        xml_001(&diags).is_empty(),
+        "balanced foreign tags in a journal must not fire XML-001: {diags:?}"
+    );
     Ok(())
 }
