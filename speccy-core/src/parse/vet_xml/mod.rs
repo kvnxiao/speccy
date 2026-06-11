@@ -257,10 +257,11 @@ struct HeadingMatch {
 ///
 /// The two parse entry points ([`parse`] and [`parse_in_flight`]) differ
 /// only by this flag (DEC-008): strict parsing rejects an un-gated last
-/// section (the complete-file grammar `speccy verify` / `journal show` /
-/// the freshness check rely on), while in-flight parsing tolerates it (the
-/// shape that exists mid-vet-run, after a `drift-review` and before its
-/// `gate`). Every other rule — frontmatter, tag/heading scanning, block
+/// section (the complete-file grammar `speccy verify` relies on), while
+/// in-flight parsing tolerates it (the shape that exists mid-vet-run, after
+/// a `drift-review` and before its `gate`, which `journal append`'s
+/// derivation and `journal show`'s reads both need). Every other rule —
+/// frontmatter, tag/heading scanning, block
 /// assembly, round sequencing, and the gate rules for *non-last* sections —
 /// is identical between the two.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -275,10 +276,10 @@ enum LastSection {
 /// grammar: every invocation section, including the last, must end in a
 /// terminal `<gate>`.
 ///
-/// This is the authority for complete files — `speccy verify`, `journal
-/// show`, and `speccy next`'s freshness check. For deriving append state
-/// from an in-flight file whose last section is still open, use
-/// [`parse_in_flight`].
+/// This is the authority for complete files — `speccy verify`. For reading
+/// or deriving state from an in-flight file whose last section is still
+/// open (the mid-vet-run shape `journal show` and `journal append` both
+/// see), use [`parse_in_flight`].
 ///
 /// # Errors
 ///
@@ -303,7 +304,9 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
 /// `journal append`'s vet path to derive invocation/round state from the
 /// existing file and to validate the would-be-new file before writing, so
 /// the parser is the single authority over both derivation and what may
-/// land on disk (no separate tolerant scan or body-markup guard).
+/// land on disk (no separate tolerant scan or body-markup guard). Also used
+/// by `journal show` for VET.md, whose vet-flow call sites read the journal
+/// mid-run while the last section is still open.
 ///
 /// A *complete* (fully gated) file parses identically under this function
 /// and [`parse`]: the relaxation only ever exempts an un-gated last
