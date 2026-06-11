@@ -296,8 +296,43 @@ fn parse_journal_block(raw: &str) -> Result<speccy_cli::journal::JournalBlock, S
 }
 
 fn main() -> ExitCode {
+    init_tracing();
     let cli = Cli::parse();
     ExitCode::from(dispatch(cli.command))
+}
+
+/// Initialize the process-wide `tracing` subscriber exactly once
+/// (SPEC-0058 REQ-005 / DEC-005).
+///
+/// Diagnostics are written to **stderr** so the stable stdout / JSON
+/// command-output contract is unaffected. The level is governed solely by
+/// the standard `tracing-subscriber` environment filter (`RUST_LOG`),
+/// defaulting to `warn` when unset — no Speccy-specific configuration knob
+/// is introduced. `tracing` observes behavior; it never drives control flow
+/// (Core principle 2). A failed install is tolerated: a missing diagnostic
+/// channel must never abort the command, so `try_init`'s "already
+/// initialized" error is intentionally discarded.
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(tracing::Level::WARN.to_string()));
+    if tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(filter)
+        .try_init()
+        .is_err()
+    {
+        // A subscriber is already installed (e.g. a re-entrant call); the
+        // diagnostic channel is best-effort and never fatal.
+        return;
+    }
+    // First real diagnostic on the channel: a startup TRACE naming the
+    // binary version. It is below the default `warn` level, so a normal
+    // invocation never sees it; under `RUST_LOG=trace` it is emitted to
+    // stderr, where it proves the stdout / JSON contract holds even with a
+    // diagnostic in flight (SPEC-0058 CHK-008) — and would corrupt stdout
+    // were the subscriber ever miswired to it.
+    tracing::trace!(version = env!("CARGO_PKG_VERSION"), "speccy starting");
 }
 
 fn dispatch(command: Command) -> u8 {

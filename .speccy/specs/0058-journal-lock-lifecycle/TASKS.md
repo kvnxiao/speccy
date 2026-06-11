@@ -1,11 +1,11 @@
 ---
 spec: SPEC-0058
-spec_hash_at_generation: 44d96ed73e828454a875700ae177ea19f078f2d5b33d38f5dffb94aa530cb66d
-generated_at: 2026-06-11T04:37:28Z
+spec_hash_at_generation: 6516a84fad515b2fb29e78641a834d58eaa2585fb246cf4efdf4e8232691eaa9
+generated_at: 2026-06-11T04:48:15Z
 ---
 # Tasks: SPEC-0058 Journal lock-file lifecycle — reap advisory lock sidecars at terminal lifecycle boundaries
 
-<task id="T-001" state="pending" covers="REQ-005">
+<task id="T-001" state="completed" covers="REQ-005">
 ## Adopt `tracing` as the CLI diagnostic channel
 
 Add a `tracing` diagnostic channel to the CLI so later tasks' reap helper can

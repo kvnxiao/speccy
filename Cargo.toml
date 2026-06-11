@@ -34,6 +34,12 @@ serde-saphyr = "=0.0.27"
 sha2 = "0.11"
 thiserror = "2.0"
 toml = "1.1"
+# CLI diagnostic channel (SPEC-0058 REQ-005 / DEC-005). The reap helper warns
+# on an unexpected I/O failure via `tracing` rather than swallowing it; the
+# subscriber writes only to stderr so the stdout/JSON contract is untouched.
+# Both crates are MIT OR Apache-2.0; clears `cargo deny check`.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Dev dependencies shared across the workspace.
 assert_cmd = "2.0"

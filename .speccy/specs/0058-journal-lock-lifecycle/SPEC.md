@@ -163,6 +163,7 @@ Given a task with a journal but no lock sidecar,
 when it transitions to `completed`,
 then the command exits zero and the journal is unchanged.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -203,6 +204,7 @@ Given a vet `drift-review` append to a spec,
 when it completes,
 then `VET.md.lock` still exists (only the `gate` block reaps).
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -234,6 +236,7 @@ reap,
 then the sidecar still exists afterward (the guard skipped the held lock)
 and the transition itself exits zero.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -274,6 +277,7 @@ when a `speccy journal append` to that journal waits past the 10s timeout,
 then the append exits non-zero, stderr names the journal path, and the
 journal file is byte-identical to its pre-append state.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -321,6 +325,7 @@ then it emits exactly one `WARN`-level event naming the sidecar path and
 returns without panicking, while a reap against an absent or held sidecar
 emits no event.
 </scenario>
+
 </requirement>
 
 ## Decisions
