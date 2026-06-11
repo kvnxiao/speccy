@@ -1,9 +1,10 @@
 ## Shared commit recipe
 
 This module is the single source of truth for how a skill turns a
-just-written artifact into a git commit. It is pulled into each
-callsite via `{% include "modules/references/commit-recipe.md" %}`;
-there is no verbatim copy of this recipe in any individual skill body.
+just-written artifact into a git commit. Each callsite pulls it in with
+a MiniJinja `include` directive naming
+`modules/references/commit-recipe.md`; there is no verbatim copy of this
+recipe in any individual skill body.
 
 The caller supplies two — and only two — behaviour-varying parameters:
 

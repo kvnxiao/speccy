@@ -405,59 +405,157 @@ with file-editing tools.
 When every spawned reviewer returned `verdict="pass"` and the
 `speccy task transition … --to completed` flip has run (the reviewer
 `<review>` appends already landed via the CLI during the fan-out),
-the running session performs the commit step:
+the running session performs the commit step using the shared commit
+recipe below. The commit captures the implementer's code changes, the
+TASKS.md state flip, and the journal append in a single atomic commit
+(parent count = 1).
 
-1. Run `git status --porcelain`. If stdout is empty, **skip the
-   commit step silently** (no surface to the user, no error). This
-   handles two cases uniformly: tasks whose net filesystem change is
-   zero, and idempotent re-entry from the reconcile pass against an
-   already-converged state.
-2. If stdout is non-empty, run `git add -A` followed by `git commit`
-   with the message format below. The commit captures the
-   implementer's code changes, the TASKS.md state flip, and the
-   journal append in a single atomic commit (parent count = 1).
+Supply the recipe's two behaviour-varying parameters as follows:
 
-Commit message format (REQ-004):
+- **Staging breadth: `git add -A`.** Stage everything in the working
+  tree. Do not stage selectively — `git add -A` is sound under the
+  clean-tree precondition (REQ-002) that fires at the start of work
+  dispatch, which guarantees every dirty path at commit time is
+  task-scoped.
+- **Title and body.**
+  - **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
+    read verbatim from the `<task>` element's `## ` heading in
+    TASKS.md (the one-line H2 immediately after the `<task ...>`
+    opening tag). Substitute the resolved spec and task IDs. This
+    title prefix is the sole task-identity link in git history; the
+    consistency check correlates commits to tasks by grepping for it.
+  - **Body:** the trimmed content of the `Completed` field from the
+    latest `<implementer>` block in the per-task journal file. Extract
+    mechanically as the bytes between the `- Completed:` bullet marker
+    and the next `- <Field>:` bullet marker (one of `Undone`,
+    `Hygiene checks`, `Evidence`, `Discovered issues`,
+    `Procedural compliance`). Trim leading and trailing whitespace.
 
-- **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
-  read verbatim from the `<task>` element's `## ` heading in
-  TASKS.md (the one-line H2 immediately after the `<task ...>`
-  opening tag). Substitute the resolved spec and task IDs.
-- **Body:** the trimmed content of the `Completed` field from the
-  latest `<implementer>` block in the per-task journal file. Extract
-  mechanically as the bytes between the `- Completed:` bullet marker
-  and the next `- <Field>:` bullet marker (one of `Undone`,
-  `Hygiene checks`, `Evidence`, `Discovered issues`,
-  `Procedural compliance`). Trim leading and trailing whitespace.
-- **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
-  line where `<model>` is the model segment sourced per the
-  "Sourcing your recorded identity" rule — the host's in-context
-  identifier transcribed verbatim in hyphen form (e.g.
-  `claude-opus-4-8[1m]`), never a dotted form or a configured alias.
-  When the host states no resolved identifier in-context, use the
-  documented fallback string
-  `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+With those two parameters fixed, run the shared recipe — it defines
+the no-git short-circuit, the unified stage-then-`git diff --cached
+--quiet` idempotency check (a clean working tree skips the commit
+silently, matching the prior behaviour), the `Co-Authored-By` trailer,
+and the HEREDOC commit mechanics:
 
-Pass the body via a HEREDOC so newlines and special characters
-survive verbatim, e.g.:
+## Shared commit recipe
 
+This module is the single source of truth for how a skill turns a
+just-written artifact into a git commit. Each callsite pulls it in with
+a MiniJinja `include` directive naming
+`modules/references/commit-recipe.md`; there is no verbatim copy of this
+recipe in any individual skill body.
+
+The caller supplies two — and only two — behaviour-varying parameters:
+
+- **Staging breadth.** Either `git add -A` (stage everything in the
+  working tree) or a narrow `git add <paths>` list (stage exactly the
+  named paths, leaving unrelated dirty paths untouched). The caller's
+  prose states which form applies and why.
+- **Title and body.** The commit message title line and body, built by
+  the caller from its own artifact (e.g. a `[SPEC-NNNN]:`-prefixed
+  title and a body drawn from the artifact's frontmatter or journal).
+
+Everything else — the no-git short-circuit, the idempotency check, the
+trailer, and the HEREDOC mechanics — is identical for every caller and
+is defined once here.
+
+### No-git short-circuit
+
+Before staging anything, check whether the working directory is inside
+a git repository:
+
+```bash
+git rev-parse --is-inside-work-tree
 ```
-git commit -m "$(cat <<'EOF'
-[SPEC-NNNN/T-NNN]: <task title>
 
-<trimmed Completed field>
+If this exits non-zero (the project is not a git repository), **skip
+the entire commit step without erroring**. The just-written artifact is
+left in place on disk; no commit is attempted and no git failure is
+surfaced. This preserves Speccy's "works identically in any project
+state" property for non-git projects.
 
-Co-Authored-By: <model> <noreply@anthropic.com>
-EOF
-)"
-```
+### Stage, then skip-if-empty, then commit
 
-The title prefix is the sole task-identity link in git history; the
-consistency check correlates commits to tasks by grepping for this
-prefix. Do not stage selectively — `git add -A` is sound under the
-clean-tree precondition (REQ-002) that fires at the start of work
-dispatch, which guarantees every dirty path at commit time is
-task-scoped.
+When a git repository is present:
+
+1. **Stage** using the caller's chosen breadth — `git add -A` or the
+   narrow `git add <paths>` list. Staging unchanged content is a no-op,
+   so a narrow caller may pass its full path set unconditionally
+   regardless of whether some of those paths were already committed.
+
+2. **Idempotency check** — run the single unified form:
+
+   ```bash
+   git diff --cached --quiet
+   ```
+
+   If exit code is 0 (nothing staged), **skip the commit silently** —
+   the configured paths are already committed at their current content.
+   No surface to the user, no error. This is the only idempotency
+   check; do not substitute a pre-stage `git status --porcelain`
+   variant. If exit code is non-zero, proceed to the commit.
+
+3. **Commit** with the caller's title and body, passing the message via
+   a HEREDOC so newlines and any special characters survive verbatim:
+
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   <caller title>
+
+   <caller body>
+
+   Co-Authored-By: <model> <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+   The commit is single-parent (parent count = 1). The skill body does
+   not check or change the current git branch; the commit lands on
+   whatever HEAD is.
+
+### Trailer
+
+The `Co-Authored-By` trailer is resolved by the identity-sourcing rule,
+not restated here:
+
+## Sourcing your recorded identity
+
+When you record your own identity in a `model="..."` attribute, build
+the value from two independently sourced parts: the model segment and
+the optional effort suffix. Do not infer either from the skill-pack
+name, the persona name, or an inherited environment variable.
+
+- **Model segment — from the host's in-context identifier, verbatim.**
+  Use the resolved long-form model identifier your host states
+  in-context (for example, a host line such as
+  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
+  preserving version punctuation as the host writes it — keep the
+  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
+  (`claude-opus-4.8`), and never substitute a configured alias. Where a
+  host states no resolved identifier in-context, fall back to the
+  `model:` value in your own agent definition file.
+
+- **Effort suffix — from your own definition file.** When your host
+  exposes a reasoning-effort knob, read the effort from your own
+  sub-agent definition file (`effort:` on Claude Code,
+  `model_reasoning_effort` on Codex) and append it as a slash-suffix
+  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
+  `CLAUDE_EFFORT` or any other inherited environment variable: a
+  sub-agent pinned to a low effort that is dispatched from a
+  higher-effort parent session still records its own definition-file
+  effort. A host with no effort knob omits the suffix entirely.
+
+- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
+  override is deliberately not read. A run that sets it still records
+  the effort declared in the agent definition file, not the override
+  value.
+
+
+Apply that rule to fill the `<model>` segment of the trailer line. When
+the host states no resolved identifier in-context, use the documented
+fallback string
+`Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+
 
 The skill body does not check the current git branch; it trusts the
 caller / host to have placed the working tree on a feature branch.

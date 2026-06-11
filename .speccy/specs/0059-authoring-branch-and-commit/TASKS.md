@@ -118,7 +118,7 @@ Suggested files: `resources/modules/references/branch-guard.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-007">
+<task id="T-003" state="completed" covers="REQ-007">
 ## Refactor the review-pass commit onto the shared recipe (behaviour-preserving)
 
 Rewrite the "Atomic commit on review pass" section in

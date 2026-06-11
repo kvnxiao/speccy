@@ -149,59 +149,39 @@ with file-editing tools.
 When every spawned reviewer returned `verdict="pass"` and the
 `speccy task transition … --to completed` flip has run (the reviewer
 `<review>` appends already landed via the CLI during the fan-out),
-the running session performs the commit step:
+the running session performs the commit step using the shared commit
+recipe below. The commit captures the implementer's code changes, the
+TASKS.md state flip, and the journal append in a single atomic commit
+(parent count = 1).
 
-1. Run `git status --porcelain`. If stdout is empty, **skip the
-   commit step silently** (no surface to the user, no error). This
-   handles two cases uniformly: tasks whose net filesystem change is
-   zero, and idempotent re-entry from the reconcile pass against an
-   already-converged state.
-2. If stdout is non-empty, run `git add -A` followed by `git commit`
-   with the message format below. The commit captures the
-   implementer's code changes, the TASKS.md state flip, and the
-   journal append in a single atomic commit (parent count = 1).
+Supply the recipe's two behaviour-varying parameters as follows:
 
-Commit message format (REQ-004):
+- **Staging breadth: `git add -A`.** Stage everything in the working
+  tree. Do not stage selectively — `git add -A` is sound under the
+  clean-tree precondition (REQ-002) that fires at the start of work
+  dispatch, which guarantees every dirty path at commit time is
+  task-scoped.
+- **Title and body.**
+  - **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
+    read verbatim from the `<task>` element's `## ` heading in
+    TASKS.md (the one-line H2 immediately after the `<task ...>`
+    opening tag). Substitute the resolved spec and task IDs. This
+    title prefix is the sole task-identity link in git history; the
+    consistency check correlates commits to tasks by grepping for it.
+  - **Body:** the trimmed content of the `Completed` field from the
+    latest `<implementer>` block in the per-task journal file. Extract
+    mechanically as the bytes between the `- Completed:` bullet marker
+    and the next `- <Field>:` bullet marker (one of `Undone`,
+    `Hygiene checks`, `Evidence`, `Discovered issues`,
+    `Procedural compliance`). Trim leading and trailing whitespace.
 
-- **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
-  read verbatim from the `<task>` element's `## ` heading in
-  TASKS.md (the one-line H2 immediately after the `<task ...>`
-  opening tag). Substitute the resolved spec and task IDs.
-- **Body:** the trimmed content of the `Completed` field from the
-  latest `<implementer>` block in the per-task journal file. Extract
-  mechanically as the bytes between the `- Completed:` bullet marker
-  and the next `- <Field>:` bullet marker (one of `Undone`,
-  `Hygiene checks`, `Evidence`, `Discovered issues`,
-  `Procedural compliance`). Trim leading and trailing whitespace.
-- **Trailer:** a single `Co-Authored-By: <model> <noreply@anthropic.com>`
-  line where `<model>` is the model segment sourced per the
-  "Sourcing your recorded identity" rule — the host's in-context
-  identifier transcribed verbatim in hyphen form (e.g.
-  `claude-opus-4-8[1m]`), never a dotted form or a configured alias.
-  When the host states no resolved identifier in-context, use the
-  documented fallback string
-  `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
+With those two parameters fixed, run the shared recipe — it defines
+the no-git short-circuit, the unified stage-then-`git diff --cached
+--quiet` idempotency check (a clean working tree skips the commit
+silently, matching the prior behaviour), the `Co-Authored-By` trailer,
+and the HEREDOC commit mechanics:
 
-Pass the body via a HEREDOC so newlines and special characters
-survive verbatim, e.g.:
-
-```
-git commit -m "$(cat <<'EOF'
-[SPEC-NNNN/T-NNN]: <task title>
-
-<trimmed Completed field>
-
-Co-Authored-By: <model> <noreply@anthropic.com>
-EOF
-)"
-```
-
-The title prefix is the sole task-identity link in git history; the
-consistency check correlates commits to tasks by grepping for this
-prefix. Do not stage selectively — `git add -A` is sound under the
-clean-tree precondition (REQ-002) that fires at the start of work
-dispatch, which guarantees every dirty path at commit time is
-task-scoped.
+{% include "modules/references/commit-recipe.md" %}
 
 The skill body does not check the current git branch; it trusts the
 caller / host to have placed the working tree on a feature branch.

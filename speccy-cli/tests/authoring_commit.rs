@@ -2,9 +2,12 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001 and T-002: the shared authoring reference
-//! modules at `resources/modules/references/commit-recipe.md` and
-//! `resources/modules/references/branch-guard.md`.
+//! Tests for SPEC-0059 T-001, T-002, and T-003: the shared authoring
+//! reference modules at `resources/modules/references/commit-recipe.md`
+//! and `resources/modules/references/branch-guard.md`, plus the
+//! behaviour-preserving rewrite of the review-pass commit step in
+//! `resources/modules/skills/partials/review-fanout.md` onto the shared
+//! commit recipe.
 //!
 //! T-001 — `commit-recipe.md` — checks the three properties the task's
 //! scenarios assert over the embedded `RESOURCES` bundle:
@@ -35,8 +38,32 @@
 //! - [`branch_guard_specifies_no_git_short_circuit`]: the module specifies a
 //!   no-git-repository short-circuit that skips the branch-guard without
 //!   erroring (CHK-013 branch-guard side).
+//!
+//! T-003 — `review-fanout.md` refactor — checks the behaviour-preserving
+//! rewrite of the atomic-commit-on-review-pass section onto the shared recipe
+//! (REQ-007, CHK-009 review side, CHK-010, REQ-008 review side):
+//!
+//! - [`review_fanout_includes_shared_commit_recipe`]: the partial pulls the
+//!   shared recipe via `{% include "modules/references/commit-recipe.md" %}`
+//!   (CHK-009 review side).
+//! - [`review_fanout_retains_add_dash_a_and_title_prefix`]: the refactored
+//!   commit step retains `git add -A` staging and the `[SPEC-NNNN/T-NNN]:`
+//!   title prefix (CHK-010).
+//! - [`review_fanout_drops_inline_status_porcelain_precheck`]: the inline `git
+//!   status --porcelain` pre-check is gone, delegated to the recipe's unified
+//!   `git diff --cached --quiet` idempotency check (CHK-009 review side,
+//!   DEC-004).
+//! - [`review_fanout_retains_unguarded_branch_statement_no_branch_guard`][]:
+//!   the "commits land on whatever HEAD is" statement is retained and no
+//!   `branch-guard.md` include appears (REQ-008 review side).
+//! - [`rendered_review_skill_fully_expands_commit_recipe`]: the ejected
+//!   `.claude/skills/speccy-review/SKILL.md` has the recipe fully expanded with
+//!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
+//!   --cached --quiet` text.
 
 use speccy_cli::embedded::RESOURCES;
+use speccy_cli::host::HostChoice;
+use speccy_cli::render::render_host_pack;
 
 /// Read the commit-recipe module from the embedded RESOURCES bundle,
 /// panicking with a clear message if it is missing.
@@ -236,5 +263,122 @@ fn branch_guard_specifies_no_git_short_circuit() {
         lower.contains("not a git repository") && lower.contains("without erroring"),
         "branch-guard.md must state that when the project is not a git repository the \
          branch-guard is skipped without erroring (CHK-013, REQ-010)",
+    );
+}
+
+/// Read the `review-fanout.md` partial from the embedded RESOURCES bundle,
+/// panicking with a clear message if it is missing.
+fn review_fanout_body() -> &'static str {
+    RESOURCES
+        .get_file("modules/skills/partials/review-fanout.md")
+        .and_then(|f| f.contents_utf8())
+        .unwrap_or_else(|| {
+            panic_with_message(
+                "RESOURCES bundle must contain `modules/skills/partials/review-fanout.md`",
+            )
+        })
+}
+
+/// The refactored review-pass commit step pulls the shared recipe via
+/// `{% include %}` rather than restating it inline (CHK-009 review side).
+#[test]
+fn review_fanout_includes_shared_commit_recipe() {
+    let body = review_fanout_body();
+
+    let expected_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
+    assert!(
+        body.contains(expected_include),
+        "review-fanout.md must pull the shared commit recipe via `{expected_include}` \
+         (CHK-009 review side); the hand-rolled inline copy must be removed",
+    );
+}
+
+/// The refactored commit step retains `git add -A` staging and the
+/// `[SPEC-NNNN/T-NNN]:` title prefix the consistency check greps (CHK-010).
+#[test]
+fn review_fanout_retains_add_dash_a_and_title_prefix() {
+    let body = review_fanout_body();
+
+    assert!(
+        body.contains("git add -A"),
+        "review-fanout.md must retain `git add -A` staging after the refactor (CHK-010); \
+         the review-pass commit stages the whole tree under the clean-tree precondition",
+    );
+    assert!(
+        body.contains("[SPEC-NNNN/T-NNN]:"),
+        "review-fanout.md must retain the `[SPEC-NNNN/T-NNN]:` title prefix (CHK-010); \
+         the consistency check correlates commits to tasks by grepping for it",
+    );
+}
+
+/// The inline `git status --porcelain` pre-check is removed — the unified
+/// `git diff --cached --quiet` idempotency check now lives in the recipe
+/// (CHK-009 review side, DEC-004).
+#[test]
+fn review_fanout_drops_inline_status_porcelain_precheck() {
+    let body = review_fanout_body();
+
+    assert!(
+        !body.contains("git status --porcelain"),
+        "review-fanout.md must no longer contain the inline `git status --porcelain` \
+         pre-check (CHK-009 review side, DEC-004); the recipe's unified \
+         `git diff --cached --quiet` check subsumes it",
+    );
+    assert!(
+        !body.contains("git diff --cached --quiet"),
+        "review-fanout.md must not restate the recipe's `git diff --cached --quiet` \
+         idempotency check inline; it is delegated to the included recipe (CHK-009)",
+    );
+}
+
+/// The unguarded branch statement is retained and no branch-guard include is
+/// added — the review-pass commit stays unguarded (REQ-008 review side).
+#[test]
+fn review_fanout_retains_unguarded_branch_statement_no_branch_guard() {
+    let body = review_fanout_body();
+
+    assert!(
+        body.contains("Commits land on whatever HEAD is"),
+        "review-fanout.md must retain the unguarded \"Commits land on whatever HEAD is\" \
+         statement (REQ-008 review side); the review-pass commit is not branch-guarded",
+    );
+    assert!(
+        !body.contains(r#"{% include "modules/references/branch-guard.md" %}"#),
+        "review-fanout.md must not add a branch-guard include (REQ-008 review side); \
+         only the three authoring skills guard the branch, not the review-pass commit",
+    );
+}
+
+/// The ejected `.claude/skills/speccy-review/SKILL.md` fully expands the
+/// included recipe: no residual `MiniJinja` markup, and the recipe's
+/// `git diff --cached --quiet` text is present in the rendered output.
+#[test]
+fn rendered_review_skill_fully_expands_commit_recipe() {
+    let rendered = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+
+    let rel = ".claude/skills/speccy-review/SKILL.md";
+    let file = rendered
+        .iter()
+        .find(|f| f.rel_path.as_str() == rel)
+        .unwrap_or_else(|| {
+            panic_with_message(&format!(
+                "rendered claude-code pack must include `{rel}`; \
+                 speccy-review includes the refactored review-fanout partial",
+            ))
+        });
+
+    for marker in ["{{", "{%", "{#"] {
+        assert!(
+            !file.contents.contains(marker),
+            "rendered `{rel}` must not contain MiniJinja markup `{marker}`; \
+             the commit-recipe include must be fully expanded at render time",
+        );
+    }
+
+    assert!(
+        file.contents.contains("git diff --cached --quiet"),
+        "rendered `{rel}` must carry the recipe's `git diff --cached --quiet` idempotency \
+         check, proving the include expanded into the review skill body",
     );
 }
