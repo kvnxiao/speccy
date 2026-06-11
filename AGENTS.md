@@ -114,14 +114,16 @@ Durable beliefs. Schema and CLI will evolve; these shouldn't.
    layer. The Rust CLI does not call LLMs.
 
 3. **Proof shape, not proof scores.** Every Requirement maps to ≥1
-   Check; every Check declares what it proves. The CLI flags one
-   structural anti-pattern (no-op commands as sole proof). Everything
-   else about check quality goes to review.
+   Check; every Check declares what it proves. The CLI flags
+   structural breakage only (a requirement with no scenario, an
+   empty scenario body, dangling references). Everything else about
+   check quality goes to review.
 
 4. **Review owns semantic judgment.** Multi-persona adversarial review
-   (business, tests, security, style by default) is where drift gets
-   caught. Personas live as markdown skills; the CLI just renders
-   their prompts. Speccy never tries to grade tests algorithmically.
+   (business, tests, security, style, correctness by default) is where
+   drift gets caught. Personas live as markdown skills; the CLI just
+   renders their prompts. Speccy never tries to grade tests
+   algorithmically.
 
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check),
    a small, flat command surface (see `docs/ARCHITECTURE.md` for the

@@ -237,7 +237,7 @@ flowchart TD
       direction TB
       NextQ["speccy next --json<br/>(re-queried each iteration<br/>for ground truth)"]
       Work["speccy-work sub-agent<br/>one implementer pass"]
-      ReviewFan["speccy-review fan-out (parallel):<br/>reviewer-business · reviewer-tests<br/>reviewer-security · reviewer-style"]
+      ReviewFan["speccy-review fan-out (parallel):<br/>reviewer-business · reviewer-tests<br/>reviewer-security · reviewer-style<br/>reviewer-correctness"]
       NextQ -->|kind=work| Work
       Work --> NextQ
       NextQ -->|kind=review| ReviewFan
@@ -303,7 +303,7 @@ and type the next slash command. If you trust the prior output, you
 can chain them back-to-back without intervention.
 
 Everything inside the autonomous zone — per-task implementer
-passes, the four-persona parallel review fan-out, the holistic
+passes, the five-persona parallel review fan-out, the holistic
 drift-fix loop, and the simplifier polish pass — runs without
 asking. The shipped skills are tuned to be loud at the boundaries
 that matter and quiet in between.
@@ -342,6 +342,7 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
   agents/vet-{reviewer,implementer,simplifier}.md
                                 Vet sub-agents driven by /speccy-vet
                                 (drift review + drift fix + simplifier polish)
+  agents/plan-{explorer,architect}.md     Read-only plan-time grounding sub-agents
   speccy-references/                      Host-shared reference files imported
                                 from multiple skill bodies (evidence.md,
                                 journal-blockers.md, reconcile-policy.md,
@@ -357,6 +358,7 @@ CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
   agents/reviewer-*.toml                    Reviewer persona sub-agents
   agents/vet-{reviewer,implementer,simplifier}.toml
                                             Vet sub-agents (Codex twins)
+  agents/plan-{explorer,architect}.toml     Plan-time grounding sub-agents (Codex twins)
 ```
 
 The requirement-to-scenario graph lives in-band as XML element tags
@@ -398,10 +400,13 @@ session is using.
 | `reviewer-architecture` | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
 | `reviewer-security`     | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
 | `reviewer-style`        | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `reviewer-correctness`  | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
 | `reviewer-docs`         | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `vet-reviewer`          | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
 | `vet-implementer`       | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort low    | yes               |
 | `vet-simplifier`        | `model: opus[1m]`, `effort: medium`     | `model = "gpt-5.5"`, reasoning effort low    | yes               |
+| `plan-explorer`         | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
+| `plan-architect`        | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
 
 The `[1m]` suffix selects the 1M-context variant on Claude Code so
 each agent can read the full SPEC, the full diff, and the relevant
@@ -491,9 +496,12 @@ Add `speccy verify` to your pipeline as a gate:
   run: speccy verify
 ```
 
-It exits non-zero when the proof shape is broken (missing required
-frontmatter, requirements without covering checks, spec or task hash
-drift, no-op check commands, and so on), and zero otherwise. Pass
+It exits non-zero when the proof shape is broken (parse failures,
+missing required frontmatter, requirements without scenarios,
+dangling requirement or scenario references, journal-shape
+violations, and so on), and zero otherwise. Only error-level lint
+findings gate the exit code; spec-hash drift (TASKS.md stale
+relative to SPEC.md) is surfaced as a warning, not a failure. Pass
 `--json` for a schema-versioned envelope that downstream tooling can
 parse.
 
@@ -517,9 +525,9 @@ Speccy commits to a small set of durable principles:
    structural anti-pattern is flagged (no-op commands as sole
    proof); the rest is review's job.
 4. **Review owns semantic judgment.** Multi-persona adversarial
-   review (business, tests, security, and style by default) is the
-   mechanism by which drift gets caught. Personas live as markdown
-   skills.
+   review (business, tests, security, style, and correctness by
+   default) is the mechanism by which drift gets caught. Personas
+   live as markdown skills.
 5. **Stay small.** A handful of nouns (Mission, Spec, Requirement,
    Task, Check), a small flat command surface, and no mode toggles.
    `--json` toggles representation, never content.
