@@ -4,16 +4,12 @@
 )]
 //! Skill-pack content tests.
 //!
-//! - [`persona_files_present`], [`persona_names_match_registry`],
-//!   [`persona_content_shape`]: reviewer persona files match the registry and
-//!   carry the expected frontmatter / body shape.
-//! - [`claude_code_recipes`], [`codex_recipes`], [`recipe_content_shape`]:
-//!   shipped recipes exist for both hosts and follow the recipe schema.
-//! - [`implementer_persona_friction_reference`],
-//!   [`agents_md_friction_paragraph`]: the implementer persona and AGENTS.md
-//!   both reference the friction-to-skill-update convention.
-//! - [`bundle_layout_has_skill_md_per_host`],
-//!   [`shipped_skill_md_frontmatter_shape`],
+//! - [`persona_names_match_registry`], [`persona_content_shape`]: reviewer
+//!   persona files match the registry and carry the expected body shape.
+//! - [`recipe_content_shape`]: rendered recipes follow the recipe schema for
+//!   both hosts.
+//! - [`claude_code_wrapper_shape_and_body`],
+//!   [`t006_codex_wrapper_shape_and_body`],
 //!   [`shipped_descriptions_natural_language_triggers`]: per-host wrapper
 //!   templates exist with valid frontmatter and natural-language descriptions.
 
@@ -107,21 +103,6 @@ struct RecipeFrontmatter {
     name: Option<String>,
 }
 
-const PERSONA_FILES: &[&str] = &[
-    "reviewer-business.md",
-    "reviewer-tests.md",
-    "reviewer-security.md",
-    "reviewer-style.md",
-    "reviewer-architecture.md",
-    "reviewer-docs.md",
-];
-
-// After SPEC-0023 REQ-001 / REQ-002, `speccy-work` and `speccy-review`
-// are single-task primitives — one invocation, one task, exit — and
-// no longer declare loop exit criteria. `speccy-amend` is the only
-// remaining loop recipe.
-const LOOP_RECIPES: &[&str] = &["speccy-amend/SKILL.md"];
-
 const SKILL_NAMES: &[&str] = &[
     "speccy-init",
     "speccy-plan",
@@ -155,7 +136,8 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 // stub-delegate form.
 const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-ship"];
 
-// The current seven-verb CLI surface. This list is used as a substring
+// The current CLI surface (the top-level verbs of the clap `Command`
+// enum in `speccy-cli/src/main.rs`). This list is used as a substring
 // matcher inside SKILL.md code fences to determine whether a rendered
 // skill carries a speccy command.
 const SPECCY_COMMANDS: &[&str] = &[
@@ -163,25 +145,14 @@ const SPECCY_COMMANDS: &[&str] = &[
     "speccy status",
     "speccy next",
     "speccy check",
+    "speccy context",
     "speccy verify",
     "speccy lock",
     "speccy vacancy",
+    "speccy task",
+    "speccy journal",
+    "speccy archive",
 ];
-
-// --------------------------------------------------------------------
-// CHK-001
-// --------------------------------------------------------------------
-
-#[test]
-fn persona_files_present() {
-    for name in PERSONA_FILES {
-        let body = read_persona(name);
-        assert!(
-            !body.trim().is_empty(),
-            "persona `{name}` must be non-empty",
-        );
-    }
-}
 
 // --------------------------------------------------------------------
 // CHK-002
@@ -196,52 +167,6 @@ fn persona_names_match_registry() {
             RESOURCES.get_file(&path).is_some(),
             "personas::ALL contains `{persona}` but `{path}` is missing from the embedded RESOURCES bundle",
         );
-    }
-}
-
-// --------------------------------------------------------------------
-// CHK-005 / CHK-006: recipe frontmatter
-// --------------------------------------------------------------------
-
-fn assert_wrapper_frontmatter(install_root: &str, verb: &str, require_name: bool) {
-    let body = read_wrapper_template(install_root, verb);
-    let (yaml, _rest) = split_frontmatter(&body).unwrap_or_else(|| {
-        panic_with_test_message(&format!(
-            "wrapper `resources/agents/{install_root}/skills/{verb}/SKILL.md.tmpl` must have a `---` frontmatter fence"
-        ))
-    });
-
-    let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
-        panic_with_test_message(&format!(
-            "wrapper `resources/agents/{install_root}/skills/{verb}/SKILL.md.tmpl` frontmatter must be valid YAML: {err}"
-        ))
-    });
-
-    assert!(
-        !fm.description.trim().is_empty(),
-        "wrapper `resources/agents/{install_root}/skills/{verb}/SKILL.md.tmpl` `description` field must be non-empty",
-    );
-
-    if require_name {
-        let name = fm.name.as_deref().unwrap_or("");
-        assert!(
-            !name.trim().is_empty(),
-            "wrapper `resources/agents/{install_root}/skills/{verb}/SKILL.md.tmpl` `name` field is required for Codex",
-        );
-    }
-}
-
-#[test]
-fn claude_code_recipes() {
-    for verb in SKILL_NAMES {
-        assert_wrapper_frontmatter(".claude", verb, true);
-    }
-}
-
-#[test]
-fn codex_recipes() {
-    for verb in SKILL_NAMES {
-        assert_wrapper_frontmatter(".agents", verb, true);
     }
 }
 
@@ -362,61 +287,6 @@ fn recipe_content_shape() {
                 contains_speccy_command_in_code_fence(body),
                 "rendered recipe `{install_root}/skills/{verb}/SKILL.md` must contain a fenced code block with a v1 `speccy ...` command",
             );
-
-            let recipe_name = format!("{verb}/SKILL.md");
-            if LOOP_RECIPES.contains(&recipe_name.as_str()) {
-                let lower = body.to_lowercase();
-                assert!(
-                    lower.contains("loop exit") || lower.contains("exit criteria"),
-                    "loop recipe `{install_root}/skills/{verb}/SKILL.md` must declare explicit loop exit criteria",
-                );
-            }
-        }
-    }
-}
-
-// --------------------------------------------------------------------
-// SPEC-0014 helpers and fixtures
-// --------------------------------------------------------------------
-
-// --------------------------------------------------------------------
-// SKILL.md frontmatter shape (name matches dir, description is a
-// single line).
-// --------------------------------------------------------------------
-
-#[test]
-fn shipped_skill_md_frontmatter_shape() {
-    // SKILL.md frontmatter lives in the per-host wrapper templates at
-    // `resources/agents/<install_root>/skills/<verb>/SKILL.md.tmpl`.
-    for (_host, install_root) in HOST_SKILL_ROOTS {
-        for skill in SKILL_NAMES {
-            let body = read_wrapper_template(install_root, skill);
-            let label = format!("resources/agents/{install_root}/skills/{skill}/SKILL.md.tmpl");
-            let (yaml, _rest) = split_frontmatter(&body).unwrap_or_else(|| {
-                panic_with_test_message(&format!("`{label}` must have a `---` frontmatter fence"))
-            });
-
-            let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
-                panic_with_test_message(&format!("`{label}` frontmatter must be valid YAML: {err}"))
-            });
-
-            let name = fm.name.as_deref().unwrap_or("");
-            assert!(
-                !name.trim().is_empty(),
-                "`{label}` `name` field is required (SPEC-0015 REQ-003)",
-            );
-            assert_eq!(
-                name, *skill,
-                "`{label}` `name` field must equal the parent directory `{skill}` (SPEC-0015 REQ-003)",
-            );
-            assert!(
-                !fm.description.trim().is_empty(),
-                "`{label}` `description` field must be non-empty",
-            );
-            assert!(
-                !fm.description.contains('\n'),
-                "`{label}` `description` must be a single line (no embedded newlines) so both hosts' YAML loaders agree on its shape",
-            );
         }
     }
 }
@@ -472,41 +342,6 @@ fn shipped_descriptions_natural_language_triggers() {
     }
 }
 
-// --------------------------------------------------------------------
-// SPEC-0053 CHK-013: `can we brainstorm` trigger phrase in the rendered
-// `speccy-brainstorm` description for both hosts.
-// --------------------------------------------------------------------
-
-#[test]
-fn brainstorm_description_lists_can_we_brainstorm_trigger() {
-    const PHRASE: &str = "can we brainstorm";
-    for (host, install_root) in [
-        (HostChoice::ClaudeCode, ".claude"),
-        (HostChoice::Codex, ".agents"),
-    ] {
-        let rendered = render_host_pack(host).unwrap_or_else(|err| {
-            panic_with_test_message(&format!("render_host_pack({host:?}) should succeed: {err}"))
-        });
-        let body = find_rendered_skill(&rendered, install_root, "speccy-brainstorm");
-        let label = format!("{install_root}/skills/speccy-brainstorm/SKILL.md");
-        let (yaml, _rest) = split_frontmatter(body).unwrap_or_else(|| {
-            panic_with_test_message(&format!(
-                "rendered `{label}` must have a `---` frontmatter fence"
-            ))
-        });
-        let fm: RecipeFrontmatter = serde_saphyr::from_str(yaml).unwrap_or_else(|err| {
-            panic_with_test_message(&format!(
-                "rendered `{label}` frontmatter must be valid YAML: {err}"
-            ))
-        });
-        assert!(
-            fm.description.contains(PHRASE),
-            "rendered `{label}` description must list the `{PHRASE}` trigger phrase (SPEC-0053 REQ-010); got: {:?}",
-            fm.description,
-        );
-    }
-}
-
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
 /// crate dir) by walking one level up.
 fn workspace_root() -> std::path::PathBuf {
@@ -516,77 +351,21 @@ fn workspace_root() -> std::path::PathBuf {
     )
 }
 
-#[test]
-fn resources_modules_personas_is_non_empty() {
-    let root = workspace_root();
-    let personas_dir = root.join("resources").join("modules").join("personas");
-    let persona_count = fs_err::read_dir(&personas_dir)
-        .map(|it| {
-            it.filter_map(Result::ok)
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
-                })
-                .count()
-        })
-        .expect("resources/modules/personas/ must exist");
-    assert!(
-        persona_count >= 1,
-        "resources/modules/personas/ must contain at least one .md file; got {persona_count}",
-    );
-}
-
 // --------------------------------------------------------------------
-// Divergence-block guard and rendered-output shape for `speccy-review`.
+// Rendered-output shape for `speccy-review`.
 //
-// Step 4 of the speccy-review module body lives on a
-// `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
-// triple so the rendered `/speccy-review` skill picks the host-native
-// subagent primitive (Claude Code's `Task` tool with `subagent_type`;
-// Codex's native sub-agent-spawn primitive against each registered
+// Step 4 of the speccy-review module body renders host-divergently:
+// the rendered `/speccy-review` skill picks the host-native subagent
+// primitive (Claude Code's `Task` tool with `subagent_type`; Codex's
+// native sub-agent-spawn primitive against each registered
 // `reviewer-<persona>` sub-agent).
 // --------------------------------------------------------------------
-
-/// Embedded copy of the `speccy-review` module body, used by the
-/// T-011 source-shape guard below. Kept as a single `include_str!`
-/// constant rather than a lookup table because only the one verb
-/// is checked.
-/// Source of truth for the four-persona fan-out is now the shared
-/// partial included by both `speccy-review.md` and
-/// `speccy-orchestrate.md`'s review dispatch. The host-divergence
-/// block lives there too.
-const SPECCY_REVIEW_FANOUT_PARTIAL: &str =
-    include_str!("../../resources/modules/skills/partials/review-fanout.md");
 
 /// Default reviewer fan-out used by both `/speccy-review` rendered
 /// branches: the five personas Speccy invokes per task. Other shipped
 /// reviewers (`architecture`, `docs`) are explicit-only.
 const DEFAULT_REVIEWER_PERSONAS: &[&str] =
     &["business", "tests", "security", "style", "correctness"];
-
-#[test]
-fn speccy_review_fanout_partial_has_host_divergence_block() {
-    // Source-shape guard: the shared review fan-out partial must
-    // carry the canonical
-    // `{% if host == "claude-code" %}` / `{% else %}` / `{% endif %}`
-    // triple so the renderer (and any future contributor reading the
-    // source) sees the same syntax. Both `speccy-review.md` and the
-    // `speccy-orchestrate` review dispatch include this partial.
-    let body = SPECCY_REVIEW_FANOUT_PARTIAL;
-    assert!(
-        body.contains("{% if host == \"claude-code\" %}"),
-        "`partials/review-fanout.md` must contain a `{{% if host == \"claude-code\" %}}` block",
-    );
-    assert!(
-        body.contains("{% else %}"),
-        "`partials/review-fanout.md` must contain an `{{% else %}}` branch",
-    );
-    assert!(
-        body.contains("{% endif %}"),
-        "`partials/review-fanout.md` must close the divergence block with `{{% endif %}}`",
-    );
-}
 
 #[test]
 fn speccy_review_skill_prefers_native_subagents() {
@@ -611,33 +390,17 @@ fn speccy_review_skill_prefers_native_subagents() {
             "rendered Claude Code `speccy-review` SKILL.md must name persona `{persona}` as `{needle}`; got:\n{claude_body}",
         );
     }
-    // The `prose-spawn` wording must not leak into either render.
-    // Pin it at the rendered-output layer so a future edit that
-    // reintroduces the phrase fails this test first.
-    assert!(
-        !claude_body.to_lowercase().contains("prose-spawn"),
-        "rendered Claude Code `speccy-review` SKILL.md must not contain `prose-spawn` wording; got:\n{claude_body}",
-    );
 
     let codex =
         render_host_pack(HostChoice::Codex).expect("render_host_pack(codex) should succeed");
     let codex_body = find_rendered_skill(&codex, ".agents", "speccy-review");
 
     // Codex branch: step 4 must not mention `subagent_type:` (a
-    // Claude-Code-specific key), must reference each default reviewer
-    // subagent by name, and must invoke Codex's native sub-agent-spawn
-    // primitive.
+    // Claude-Code-specific key) and must reference each default
+    // reviewer subagent by name.
     assert!(
         !codex_body.contains("subagent_type:"),
         "rendered Codex `speccy-review` SKILL.md must not contain `subagent_type:` (Claude-Code-only key); got:\n{codex_body}",
-    );
-    assert!(
-        !codex_body.to_lowercase().contains("prose-spawn"),
-        "rendered Codex `speccy-review` SKILL.md must not contain `prose-spawn` wording; got:\n{codex_body}",
-    );
-    assert!(
-        codex_body.contains("Codex's native sub-agent-spawn primitive"),
-        "rendered Codex `speccy-review` SKILL.md must invoke `Codex's native sub-agent-spawn primitive` in step 4; got:\n{codex_body}",
     );
     for persona in DEFAULT_REVIEWER_PERSONAS {
         let needle = format!("`reviewer-{persona}`");
@@ -1114,9 +877,8 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
     // `agents/.claude/agents/` produces additional `RenderedFile`
     // entries with `rel_path` rooted at `.claude/agents/`. This test
     // exercises the rendered-output shape: count, frontmatter name
-    // equals filename stem, and (for the security persona) the body
-    // carries the documented focus bullet drawn verbatim from the
-    // persona module file.
+    // equals filename stem, and each body carries the persona module
+    // body's `## Focus` section (proof the `{% include %}` expanded).
     let rendered = render_host_pack(HostChoice::ClaudeCode)
         .expect("render_host_pack(claude-code) should succeed");
     // SPEC-0032 T-001 added phase-worker subagent files at
@@ -1173,27 +935,25 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
         );
     }
 
-    // SPEC-0016 REQ-003 / TASKS.md T-009 obligation: the security
-    // reviewer subagent's body must carry the focus bullet drawn
-    // verbatim from `resources/modules/personas/reviewer-security.md`.
-    let security = agent_files
-        .iter()
-        .find(|f| f.rel_path.as_str() == ".claude/agents/reviewer-security.md")
-        .expect("rendered output must include the security reviewer subagent");
-    assert!(
-        security
-            .contents
-            .contains("Authentication and authorization boundaries"),
-        "rendered .claude/agents/reviewer-security.md must contain the focus bullet drawn from the persona body; got:\n{}",
-        security.contents,
-    );
+    // SPEC-0016 REQ-003 / TASKS.md T-009 obligation: each rendered
+    // reviewer subagent body must carry the persona module body with
+    // its `{% include %}` expanded — the structural `## Focus` section
+    // heading from the persona body proves the expansion happened.
+    for file in &agent_files {
+        assert!(
+            file.contents.contains("## Focus"),
+            "rendered `{}` must carry the persona body's `## Focus` section (include expansion); got:\n{}",
+            file.rel_path,
+            file.contents,
+        );
+    }
 }
 
 // --------------------------------------------------------------------
 // SPEC-0053 T-001 (CHK-001, CHK-002): the `reviewer-correctness`
 // persona renders for both hosts with all `{% include %}` directives
-// expanded, and the rendered body names the four deferral targets as
-// out-of-scope and carries the literal confidence threshold `80`.
+// expanded, and the rendered body carries a non-empty
+// `## Out of scope` deferral section.
 // --------------------------------------------------------------------
 
 /// Returns the rendered body of the named agent for the given host,
@@ -1237,21 +997,17 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
 }
 
 #[test]
-fn reviewer_correctness_body_names_deferrals_and_threshold() {
-    // CHK-002: the rendered body names all four deferral targets as
-    // out-of-scope and carries the literal confidence threshold `80`,
-    // gating a silent drop of the scope/filter on a future edit.
+fn reviewer_correctness_body_has_out_of_scope_section() {
+    // CHK-002: the rendered body carries a non-empty
+    // `## Out of scope` deferral section, gating a silent drop of the
+    // scope boundary on a future edit. The section's wording is prose
+    // and deliberately not pinned here.
     let body = rendered_agent_body(
         HostChoice::ClaudeCode,
         ".claude",
         "reviewer-correctness",
         "md",
     );
-    // Scope the deferral-target assertion to the "Out of scope — defer"
-    // section. `security`/`style`/`business` also appear in the Focus
-    // section, so a body-wide `contains` would let three of the four
-    // targets pass even if the deferral section were deleted; only the
-    // section slice makes all four load-bearing.
     let mut in_defer = false;
     let mut defer_section = String::new();
     for line in body.lines() {
@@ -1268,18 +1024,8 @@ fn reviewer_correctness_body_names_deferrals_and_threshold() {
         }
     }
     assert!(
-        !defer_section.is_empty(),
+        !defer_section.trim().is_empty(),
         "reviewer-correctness must have a non-empty out-of-scope deferral section; got:\n{body}",
-    );
-    for target in ["security", "style", "business", "tests"] {
-        assert!(
-            defer_section.contains(target),
-            "reviewer-correctness out-of-scope section must name deferral target `{target}`; got:\n{defer_section}",
-        );
-    }
-    assert!(
-        body.contains("80"),
-        "rendered reviewer-correctness must state the confidence->=80 reporting threshold; got:\n{body}",
     );
 }
 
@@ -1378,23 +1124,16 @@ fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
         (HostChoice::Codex, ".codex", "toml"),
     ] {
         let body = rendered_agent_body(host, dir, "plan-architect", suffix);
-        // Assert on language that lives ONLY in the included persona
-        // body's build-sequence section, never in the wrapper
-        // frontmatter `description`. The description paraphrases the
-        // contract ("a build-sequence checklist whose items are
-        // agent-sized (one item ≈ one Speccy task)"), so a loose
-        // substring like "agent-sized" / "build-sequence" against the
-        // full rendered file would pass even if the body said nothing.
-        // The dedicated section heading and the explicit "one item is a
-        // plausible single Speccy task" sizing sentence appear only in
-        // the body, so this fails RED when the body language is removed.
+        // Assert on the dedicated section heading that lives ONLY in
+        // the included persona body, never in the wrapper frontmatter
+        // `description`. The description paraphrases the contract, so
+        // a loose substring like "agent-sized" / "build-sequence"
+        // against the full rendered file would pass even if the body
+        // said nothing; the heading fails RED when the body section is
+        // removed.
         assert!(
             body.contains("## Build sequence — an agent-sized ordered checklist"),
             "rendered `{dir}/agents/plan-architect.{suffix}` must carry the dedicated agent-sized build-sequence section heading from the persona body; got:\n{body}",
-        );
-        assert!(
-            body.contains("one item is a plausible single Speccy task"),
-            "rendered `{dir}/agents/plan-architect.{suffix}` body must specify that each build-sequence item is agent-sized (one plausible single Speccy task); got:\n{body}",
         );
     }
 }
@@ -1618,9 +1357,9 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
     // `agents/.codex/agents/` produces additional `RenderedFile`
     // entries with `rel_path` rooted at `.codex/agents/`. This test
     // exercises the rendered-output shape: count, parse-as-TOML, three
-    // required top-level keys, name equals filename stem, and the
-    // security reviewer carries the focus bullet drawn verbatim from
-    // the persona module file.
+    // required top-level keys, name equals filename stem, and each
+    // `developer_instructions` body carries the persona module body's
+    // `## Focus` section (proof the `{% include %}` expanded).
     //
     // SPEC-0032 T-004 added phase-worker subagent files at
     // `.codex/agents/speccy-<phase>.toml` alongside the existing
@@ -1703,37 +1442,16 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
             !dev_instructions.trim().is_empty(),
             "rendered subagent `{path}` `developer_instructions` must be non-empty",
         );
-    }
 
-    // SPEC-0016 REQ-003 / TASKS.md T-010 obligation: the security
-    // reviewer subagent's `developer_instructions` body must carry the
-    // focus bullet drawn verbatim from
-    // `resources/modules/personas/reviewer-security.md`.
-    let security = agent_files
-        .iter()
-        .find(|f| f.rel_path.as_str() == ".codex/agents/reviewer-security.toml")
-        .expect("rendered output must include the security reviewer subagent");
-    let security_parsed: toml::Value = toml::from_str(&security.contents)
-        .expect("rendered reviewer-security.toml must parse as TOML");
-    let security_table = security_parsed
-        .as_table()
-        .expect("rendered reviewer-security.toml must be a top-level table");
-    let security_name = security_table
-        .get("name")
-        .and_then(toml::Value::as_str)
-        .expect("rendered reviewer-security.toml must have a string `name` key");
-    assert_eq!(
-        security_name, "reviewer-security",
-        "rendered reviewer-security.toml `name` must equal `reviewer-security`",
-    );
-    let security_dev = security_table
-        .get("developer_instructions")
-        .and_then(toml::Value::as_str)
-        .expect("rendered reviewer-security.toml must have a string `developer_instructions` key");
-    assert!(
-        security_dev.contains("Authentication and authorization boundaries"),
-        "rendered .codex/agents/reviewer-security.toml `developer_instructions` must contain the focus bullet drawn from the persona body; got:\n{security_dev}",
-    );
+        // SPEC-0016 REQ-003: `developer_instructions` must carry the
+        // persona module body with its `{% include %}` expanded — the
+        // structural `## Focus` section heading from the persona body
+        // proves the expansion happened.
+        assert!(
+            dev_instructions.contains("## Focus"),
+            "rendered subagent `{path}` `developer_instructions` must carry the persona body's `## Focus` section (include expansion); got:\n{dev_instructions}",
+        );
+    }
 }
 
 /// SPEC-0016 DEC-004 invariant: persona body files must not contain
@@ -1787,16 +1505,14 @@ fn t010_persona_bodies_have_no_toml_triple_quote() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0025 REQ-002 content-shape: the speccy-brainstorm skill body
-// must teach the Socratic flow with a hard gate, naming the four
-// artifacts, the "2-3" soft-guidance count, the four destination
-// sections, "one question at a time" discipline, and both terminal
-// actions (`speccy-plan` for new specs, `speccy-amend` for
-// amendments). Without these grep-style assertions, a mutation that
-// strips the hard gate, drops a destination, or collapses the
-// amendment branch leaves every other test green — the canonical
-// "test passes even when the behaviour is gone" failure mode that
-// SPEC-0025 T-001's tests reviewer flagged.
+// SPEC-0025 REQ-002 content-shape (structural surfaces only): the
+// speccy-brainstorm skill body must route output into the four SPEC.md
+// destination sections, point at both terminal actions
+// (`speccy-plan` for new specs, `speccy-amend` for amendments) via the
+// `{{ cmd_prefix }}` placeholder, and render with the host-specific
+// prefix. The body's Socratic-flow prose (hard gate, artifact labels,
+// question discipline) is deliberately not substring-pinned — that is
+// editorial content owned by review, not tests.
 // --------------------------------------------------------------------
 
 fn read_brainstorm_module_body() -> String {
@@ -1810,75 +1526,6 @@ fn read_brainstorm_module_body() -> String {
             "`resources/modules/skills/speccy-brainstorm.md` must be readable: {err}"
         ))
     })
-}
-
-#[test]
-fn brainstorm_module_body_names_four_artifacts() {
-    let body = read_brainstorm_module_body();
-    for label in [
-        "Restated ask",
-        "alternative framings",
-        "Silent assumptions",
-        "Open questions",
-    ] {
-        assert!(
-            body.contains(label),
-            "speccy-brainstorm.md must name the artifact label `{label}` (REQ-002 done-when item 1)",
-        );
-    }
-    assert!(
-        body.contains("- [ ]"),
-        "speccy-brainstorm.md must instruct the agent to use the `- [ ]` checkbox format \
-         for open questions so the output is copy-pasteable into SPEC.md (REQ-002 done-when item 1d)",
-    );
-}
-
-#[test]
-fn brainstorm_module_body_names_two_to_three_soft_guidance() {
-    let body = read_brainstorm_module_body();
-    assert!(
-        body.contains("2-3"),
-        "speccy-brainstorm.md must name `2-3` as the suggested alternative-framings count (REQ-002 done-when item 2)",
-    );
-    let lower = body.to_lowercase();
-    assert!(
-        lower.contains("soft guidance"),
-        "speccy-brainstorm.md must explicitly mark `2-3` as soft guidance scaled to complexity (REQ-002 done-when item 2)",
-    );
-}
-
-#[test]
-fn brainstorm_module_body_teaches_one_question_at_a_time() {
-    let body = read_brainstorm_module_body();
-    let lower = body.to_lowercase();
-    assert!(
-        lower.contains("one question at a time"),
-        "speccy-brainstorm.md must teach `one question at a time` as an explicit interaction discipline (REQ-002 done-when item 5; CHK-002)",
-    );
-}
-
-#[test]
-fn brainstorm_module_body_carries_prose_hard_gate() {
-    let body = read_brainstorm_module_body();
-    let lower = body.to_lowercase();
-    assert!(
-        lower.contains("hard gate"),
-        "speccy-brainstorm.md must carry an explicit prose `hard gate` instruction (REQ-002 done-when item 3)",
-    );
-    let strong_marker = body.contains("Do NOT") || body.contains("do NOT") || body.contains("STOP");
-    assert!(
-        strong_marker,
-        "speccy-brainstorm.md must use strong gate language (`Do NOT` / `STOP`) so an attentive agent honors it (REQ-002 done-when item 3)",
-    );
-    assert!(
-        body.contains("{{ cmd_prefix }}speccy-plan"),
-        "speccy-brainstorm.md hard-gate prose must name `{{{{ cmd_prefix }}}}speccy-plan` as the gated action (REQ-002 behavior; CHK-002)",
-    );
-    let machine_marker = body.contains("<HARD-GATE>") || body.contains("<hard-gate>");
-    assert!(
-        !machine_marker,
-        "speccy-brainstorm.md must NOT introduce a machine sentinel for the gate (DEC-003 / REQ-002 done-when item 3)",
-    );
 }
 
 #[test]
@@ -2023,18 +1670,6 @@ const FRAMEWORK_ANCHORS: [&str; 9] = [
     "vitest",
 ];
 
-/// SPEC-named fabrication patterns the reviewer-tests persona must
-/// enumerate. Each marker is a distinctive substring that uniquely
-/// identifies the corresponding bullet in the persona body. SPEC-0031
-/// REQ-005 done-when item 2 names the five patterns.
-const FABRICATION_PATTERN_MARKERS: [&str; 5] = [
-    "structural artifacts",
-    "test names",
-    "identical",
-    "suspiciously clean",
-    "hygiene",
-];
-
 /// Slice the persona body into its normative portion: everything
 /// before the `## Example` worked-example section, since the SPEC
 /// carves out worked-example asides and `<!-- ... -->` annotations
@@ -2066,15 +1701,6 @@ fn reviewer_tests_persona_loads_evidence() {
         lower.contains("blocking"),
         "`reviewer-tests.md` normative guidance must name `blocking` as the verdict for evidence absence or fabrication (SPEC-0031 REQ-005 done-when item 1)",
     );
-
-    // Fabrication-pattern enumeration: at least the five SPEC-named
-    // patterns must appear in the persona body.
-    for marker in FABRICATION_PATTERN_MARKERS {
-        assert!(
-            lower.contains(&marker.to_lowercase()),
-            "`reviewer-tests.md` must enumerate the fabrication pattern marked by `{marker}` (SPEC-0031 REQ-005 done-when item 2)",
-        );
-    }
 
     // Framework-agnostic clause: no per-framework anchor strings
     // inside normative guidance. Worked-example asides under

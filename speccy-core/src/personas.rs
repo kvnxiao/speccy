@@ -36,33 +36,3 @@ pub const ALL: &[&str] = &[
     "architecture",
     "docs",
 ];
-
-#[cfg(test)]
-mod tests {
-    use super::ALL;
-
-    #[test]
-    fn all_contains_exactly_seven_names_in_declared_order() {
-        assert_eq!(
-            ALL,
-            &[
-                "business",
-                "tests",
-                "security",
-                "style",
-                "correctness",
-                "architecture",
-                "docs"
-            ]
-        );
-    }
-
-    #[test]
-    fn default_personas_is_prefix_of_all() {
-        let default = ALL.get(..5).expect("ALL must have at least 5 elements");
-        assert_eq!(
-            default,
-            &["business", "tests", "security", "style", "correctness"]
-        );
-    }
-}

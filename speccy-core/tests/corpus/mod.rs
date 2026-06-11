@@ -59,17 +59,6 @@ pub fn spec_dirs(root: &Utf8Path) -> Vec<Utf8PathBuf> {
     out
 }
 
-/// Locate a specific spec directory by its on-disk folder name (e.g.
-/// `0020-raw-xml-spec-carrier`) under either `.speccy/specs/` or
-/// `.speccy/archive/`. Returns `None` if neither location contains
-/// a `SPEC.md` inside that folder.
-pub fn find_spec_dir(root: &Utf8Path, dir_name: &str) -> Option<Utf8PathBuf> {
-    ["specs", "archive"]
-        .iter()
-        .map(|sub| root.join(".speccy").join(sub).join(dir_name))
-        .find(|p| p.join("SPEC.md").is_file())
-}
-
 /// Deliberately-unused helper. Guarantees the module-level
 /// `expect(dead_code)` is always fulfilled, even in test binaries
 /// that use every public helper above.

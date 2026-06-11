@@ -383,21 +383,21 @@ fn copy_codex_pack_skill_md() -> TestResult {
 #[test]
 fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult {
     // SPEC-0016 T-009 obligation: `speccy init --host claude-code`
-    // materialises six `.claude/agents/reviewer-<persona>.md` files,
-    // each opening with `---` (YAML fence), each parseable, and the
-    // security file in particular carrying the documented focus
-    // bullet from the persona body.
+    // materialises one `.claude/agents/reviewer-<persona>.md` file per
+    // shipped reviewer persona, each opening with `---` (YAML fence)
+    // and each parseable.
     let fx = project_with_name("t009-claude-agents")?;
     mkdir(&fx.root, ".claude")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init").current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let personas: [&str; 6] = [
+    let personas: [&str; 7] = [
         "business",
         "tests",
         "security",
         "style",
+        "correctness",
         "architecture",
         "docs",
     ];
@@ -430,14 +430,14 @@ fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult
         );
     }
 
-    // The security reviewer's body must carry the documented focus
-    // bullet drawn verbatim from the persona module file (this is the
-    // observable assertion REQ-003 specifies for the security
-    // persona).
+    // The security reviewer's body must carry the persona module body
+    // with its `{% include %}` expanded — the structural `## Focus`
+    // section heading from the persona body proves the expansion
+    // happened (REQ-003's observable for the security persona).
     let security = read_file(&fx.root, ".claude/agents/reviewer-security.md")?;
     assert!(
-        security.contains("Authentication and authorization boundaries"),
-        "rendered .claude/agents/reviewer-security.md must contain the focus bullet drawn from the persona body; got:\n{security}",
+        security.contains("## Focus"),
+        "rendered .claude/agents/reviewer-security.md must carry the persona body's `## Focus` section (include expansion); got:\n{security}",
     );
     Ok(())
 }
@@ -445,12 +445,10 @@ fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult
 #[test]
 fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
     // SPEC-0016 T-010 obligation: `speccy init --host codex`
-    // materialises six `.codex/agents/reviewer-<persona>.toml` files,
-    // each parseable as flat TOML with the three required top-level
-    // keys (`name`, `description`, `developer_instructions`), and the
-    // security file in particular carrying the documented focus
-    // bullet from the persona body inside its `developer_instructions`
-    // string.
+    // materialises one `.codex/agents/reviewer-<persona>.toml` file per
+    // shipped reviewer persona, each parseable as flat TOML with the
+    // three required top-level keys (`name`, `description`,
+    // `developer_instructions`).
     let fx = project_with_name("t010-codex-agents")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -459,11 +457,12 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let personas: [&str; 6] = [
+    let personas: [&str; 7] = [
         "business",
         "tests",
         "security",
         "style",
+        "correctness",
         "architecture",
         "docs",
     ];
@@ -506,10 +505,11 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
         );
     }
 
-    // The security reviewer's `developer_instructions` body must
-    // carry the documented focus bullet drawn verbatim from the
-    // persona module file (this is the observable assertion REQ-003
-    // specifies for the security persona on the Codex host).
+    // The security reviewer's `developer_instructions` body must carry
+    // the persona module body with its `{% include %}` expanded — the
+    // structural `## Focus` section heading from the persona body
+    // proves the expansion happened (REQ-003's observable for the
+    // security persona on the Codex host).
     let security_body = read_file(&fx.root, ".codex/agents/reviewer-security.toml")?;
     let security_parsed: toml::Value = toml::from_str(&security_body)
         .map_err(|err| format!("rendered reviewer-security.toml must parse as TOML: {err}"))?;
@@ -519,8 +519,8 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
         .and_then(toml::Value::as_str)
         .ok_or("rendered reviewer-security.toml must have a string `developer_instructions` key")?;
     assert!(
-        security_dev.contains("Authentication and authorization boundaries"),
-        "rendered .codex/agents/reviewer-security.toml `developer_instructions` must contain the focus bullet drawn from the persona body; got:\n{security_dev}",
+        security_dev.contains("## Focus"),
+        "rendered .codex/agents/reviewer-security.toml `developer_instructions` must carry the persona body's `## Focus` section (include expansion); got:\n{security_dev}",
     );
     Ok(())
 }

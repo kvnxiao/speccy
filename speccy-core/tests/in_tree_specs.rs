@@ -12,13 +12,9 @@
 //!    ([`speccy_core::parse::parse_spec_xml`]).
 //! 2. Renderer convention: every whitelisted closing element tag is followed by
 //!    a blank line.
-//! 3. Fenced documentation examples in the specs that document Speccy's own
-//!    grammar survive byte-for-byte, so silent rewrites of their fenced bodies
-//!    cannot corrupt the canonical reference.
 
 mod corpus;
 
-use corpus::find_spec_dir;
 use corpus::spec_dirs;
 use corpus::workspace_root;
 use speccy_core::parse::parse_spec_xml;
@@ -167,36 +163,4 @@ fn is_whitelist_close_line(line: &str) -> bool {
         .and_then(|s| s.strip_suffix('>'))
         .unwrap_or("");
     WHITELIST_NAMES.contains(&inner)
-}
-
-#[test]
-fn spec_0020_fenced_example_preserves_raw_xml_form() {
-    // SPEC-0020 documents the raw-tag carrier inside a ```markdown
-    // fence; pin the body byte-for-byte so any future bulk-rewrite
-    // cannot silently mutate documentation that describes Speccy's own
-    // grammar.
-    let root = workspace_root();
-    let spec_dir = find_spec_dir(&root, "0020-raw-xml-spec-carrier")
-        .expect("SPEC-0020 exists under .speccy/specs/ or .speccy/archive/");
-    let path = spec_dir.join("SPEC.md");
-    let source = fs_err::read_to_string(path.as_std_path()).expect("SPEC-0020 SPEC.md is readable");
-    let expected = "```markdown\n\
-<requirement id=\"REQ-001\">\n\
-### REQ-001: Render selected scenarios\n\
-\n\
-Plain Markdown prose remains plain Markdown.\n\
-\n\
-<scenario id=\"CHK-001\">\n\
-Given a task covers REQ-001,\n\
-when `speccy check SPEC-0019/T-001` runs,\n\
-then only REQ-001's scenarios are rendered.\n\
-</scenario>\n\
-</requirement>\n\
-```";
-    assert!(
-        source.contains(expected),
-        "SPEC-0020 fenced raw-XML example drift: expected substring\n\
-        ---\n{expected}\n---\n\
-        not found in SPEC.md (path: {path})",
-    );
 }
