@@ -17,11 +17,13 @@ mod common;
 
 use common::TestResult;
 use common::Workspace;
+use common::render_vet_md;
 use common::sha256_hex;
 use common::spec_md_template;
 use common::task_xml;
 use common::tasks_md_xml;
 use common::write_spec;
+use common::write_vet_md;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
 
@@ -55,6 +57,39 @@ fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std:
         &mut err,
     )?;
     Ok(String::from_utf8(buf)?)
+}
+
+// -- SPEC-0061 REQ-004 / CHK-007 ---------------------------------------------
+// The cli crate's renderer-backed helper produces a VET.md that
+// `parse_vet_in_flight` accepts, whose terminal gate carries the given
+// (verdict, tasks_hash).
+
+#[test]
+fn chk007_cli_helper_output_round_trips_through_parser() -> TestResult {
+    use camino::Utf8Path;
+    use speccy_core::parse::VetBlock;
+    use speccy_core::parse::parse_vet_in_flight;
+
+    let path = Utf8Path::new("fixture/journal/VET.md");
+    let hash = "feedface00000000000000000000000000000000000000000000000000000000";
+    let vet = render_vet_md("SPEC-0001", "passed", hash, None, &[])?;
+    let doc = parse_vet_in_flight(&vet, path)?;
+    let last = doc
+        .invocations
+        .last()
+        .expect("one invocation section")
+        .blocks
+        .last()
+        .expect("a terminal block");
+    assert!(
+        matches!(
+            last,
+            VetBlock::Gate { verdict, tasks_hash, .. }
+                if verdict == "passed" && tasks_hash == hash,
+        ),
+        "terminal block must be a gate carrying the verdict and tasks_hash, got {last:?}",
+    );
+    Ok(())
 }
 
 // -- CHK-007: per-spec JSON envelope shape -----------------------------------
@@ -220,12 +255,7 @@ fn workspace_json_emits_ship_when_vet_passes_fresh() -> TestResult {
         Some(&tasks_md),
     )?;
     let hash = sha256_hex(tasks_md.as_bytes());
-    let journal = spec_dir.join("journal");
-    fs_err::create_dir_all(journal.as_std_path())?;
-    let vet_body = format!(
-        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
-    );
-    fs_err::write(journal.join("VET.md").as_std_path(), vet_body)?;
+    write_vet_md(&spec_dir, "SPEC-0001", "passed", &hash)?;
     let text = render_workspace(&ws)?;
     let parsed: serde_json::Value = serde_json::from_str(&text)?;
     let specs = parsed

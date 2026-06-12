@@ -204,16 +204,125 @@ pub fn non_blank_line_count_outside_shared_markers(s: &str) -> usize {
     count
 }
 
-/// Write a fresh, passing `journal/VET.md` whose `tasks_hash` matches
-/// the supplied TASKS.md bytes. Drives the SPEC-0041 fresh-pass gate
-/// branch in `speccy next`.
-pub fn write_fresh_pass_vet_md(spec_dir: &Utf8Path, tasks_md: &str) -> TestResult {
-    let hash = sha256_hex(tasks_md.as_bytes());
+/// Render a single-invocation VET.md for `spec_id` whose terminal `<gate>`
+/// carries `verdict` and `tasks_hash`, built entirely from the exported
+/// production renderers so the fixture matches the real grammar by
+/// construction (SPEC-0061 REQ-004 / DEC-004). `extra_body_line`, when
+/// `Some`, is appended to the gate body — used by the spoof fixture that
+/// embeds a line-isolated fake `<gate>` inside a block body. `leading`
+/// blocks (already rendered via [`render_vet_block`]) are emitted in the
+/// invocation section before the terminal gate — used by the fixture that
+/// asserts a `drift-review` then `gate` read back.
+///
+/// `verdict` must be in the gate domain (`passed` / `failed`); an
+/// out-of-domain value is a test bug and surfaces as a renderer error.
+pub fn render_vet_md(
+    spec_id: &str,
+    verdict: &str,
+    tasks_hash: &str,
+    extra_body_line: Option<&str>,
+    leading: &[String],
+) -> TestResult<String> {
+    use speccy_core::parse::render_fresh_vet_frontmatter;
+    use speccy_core::parse::render_vet_section_heading;
+
+    let date = "2026-05-22T00:00:00Z";
+    let mut body = String::from("stub.");
+    if let Some(line) = extra_body_line {
+        body.push('\n');
+        body.push_str(line);
+    }
+    let gate = render_vet_block(&VetTestBlock::Gate {
+        verdict,
+        tasks_hash,
+        body: &body,
+    })?;
+    let frontmatter = render_fresh_vet_frontmatter(spec_id, date);
+    let heading = render_vet_section_heading(1, date);
+    let mut doc = format!("{frontmatter}{heading}");
+    for block in leading {
+        doc.push_str(block);
+        doc.push('\n');
+    }
+    doc.push_str(&gate);
+    Ok(doc)
+}
+
+/// A vet block to render through the production renderer for test fixtures.
+#[derive(Clone, Copy)]
+pub enum VetTestBlock<'a> {
+    /// A `<drift-review>` block with the given verdict and round.
+    DriftReview {
+        /// `pass` or `blocking`.
+        verdict: &'a str,
+        /// Round counter.
+        round: u32,
+    },
+    /// A terminal `<gate>` block.
+    Gate {
+        /// `passed` or `failed`.
+        verdict: &'a str,
+        /// Lowercase hex SHA-256 of the sibling TASKS.md.
+        tasks_hash: &'a str,
+        /// Block body.
+        body: &'a str,
+    },
+}
+
+/// Render one vet block via the production [`validate_and_render_vet_block`]
+/// renderer, so test fixtures cannot diverge from the real grammar.
+pub fn render_vet_block(block: &VetTestBlock<'_>) -> TestResult<String> {
+    use speccy_core::parse::VetBlockInputs;
+    use speccy_core::parse::VetBlockKind;
+    use speccy_core::parse::validate_and_render_vet_block;
+
+    let date = "2026-05-22T00:00:00Z";
+    let inputs = match *block {
+        VetTestBlock::DriftReview { verdict, round } => VetBlockInputs {
+            kind: VetBlockKind::DriftReview,
+            date,
+            round,
+            verdict: Some(verdict),
+            model: Some("m"),
+            tasks_hash: None,
+            body: "drift body",
+        },
+        VetTestBlock::Gate {
+            verdict,
+            tasks_hash,
+            body,
+        } => VetBlockInputs {
+            kind: VetBlockKind::Gate,
+            date,
+            round: 1,
+            verdict: Some(verdict),
+            model: None,
+            tasks_hash: Some(tasks_hash),
+            body,
+        },
+    };
+    Ok(validate_and_render_vet_block(&inputs)?)
+}
+
+/// Write a single-invocation `journal/VET.md` for `spec_id` whose terminal
+/// gate carries `verdict` and `tasks_hash`, via [`render_vet_md`].
+pub fn write_vet_md(
+    spec_dir: &Utf8Path,
+    spec_id: &str,
+    verdict: &str,
+    tasks_hash: &str,
+) -> TestResult {
     let journal = spec_dir.join("journal");
     fs_err::create_dir_all(journal.as_std_path())?;
-    let body = format!(
-        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
-    );
+    let body = render_vet_md(spec_id, verdict, tasks_hash, None, &[])?;
     fs_err::write(journal.join("VET.md").as_std_path(), body)?;
     Ok(())
+}
+
+/// Write a fresh, passing `journal/VET.md` whose `tasks_hash` matches
+/// the supplied TASKS.md bytes. Drives the SPEC-0041 fresh-pass gate
+/// branch in `speccy next`. Delegates to [`write_vet_md`].
+pub fn write_fresh_pass_vet_md(spec_dir: &Utf8Path, spec_id: &str, tasks_md: &str) -> TestResult {
+    let hash = sha256_hex(tasks_md.as_bytes());
+    write_vet_md(spec_dir, spec_id, "passed", &hash)
 }

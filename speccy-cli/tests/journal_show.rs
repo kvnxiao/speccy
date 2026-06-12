@@ -22,7 +22,10 @@ use assert_cmd::Command;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use common::TestResult;
+use common::VetTestBlock;
 use common::Workspace;
+use common::render_vet_block;
+use common::render_vet_md;
 use common::sha256_hex;
 use common::spec_md_template;
 use common::task_xml;
@@ -205,22 +208,11 @@ fn spec_selector_shows_vet_invocations_and_blocks() -> TestResult {
     let hash = sha256_hex(tasks_md.as_bytes());
     let journal = spec_dir.join("journal");
     fs_err::create_dir_all(journal.as_std_path())?;
-    let vet = format!(
-        concat!(
-            "---\n",
-            "spec: SPEC-0042\n",
-            "generated_at: 2026-05-22T00:00:00Z\n",
-            "---\n\n",
-            "## Invocation 1 — 2026-05-22T00:00:00Z\n\n",
-            "<drift-review verdict=\"pass\" round=\"1\" date=\"2026-05-22T00:01:00Z\" model=\"m\">\n",
-            "clean\n",
-            "</drift-review>\n\n",
-            "<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:02:00Z\">\n",
-            "shipping\n",
-            "</gate>\n",
-        ),
-        hash = hash,
-    );
+    let drift = render_vet_block(&VetTestBlock::DriftReview {
+        verdict: "pass",
+        round: 1,
+    })?;
+    let vet = render_vet_md("SPEC-0042", "passed", &hash, None, &[drift])?;
     fs_err::write(journal.join("VET.md").as_std_path(), vet)?;
 
     let out = Command::cargo_bin("speccy")?

@@ -165,6 +165,7 @@ required frontmatter (and is therefore unparseable),
 when `compute_for_spec` resolves the spec,
 then the resolved action is `Vet`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -212,6 +213,7 @@ inline in a prose sentence,
 then the command exits 0 and the resulting journal parses under
 `parse_journal_xml`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -253,6 +255,7 @@ then the only matches are block renderers that emit tags (not recognizers
 scanning input) — no hand-rolled recognizer remains — and the audit is recorded
 in REPORT.md.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -301,6 +304,7 @@ then none remains outside a renderer-backed helper — excepting the
 intentionally-invalid / gate-less fixtures in `lint_vet.rs` and `journal_show.rs`
 that exercise the parse/lint boundary — and the audit is recorded in REPORT.md.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -334,6 +338,7 @@ when `compute_for_spec` resolves the spec after the fix,
 then the action is `Vet`; and the recorded pre-fix run of the same test yields
 `Ship`, proving the bug it guards.
 </scenario>
+
 </requirement>
 
 ## Decisions

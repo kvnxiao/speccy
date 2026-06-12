@@ -22,6 +22,7 @@ use common::spec_md_template;
 use common::task_xml;
 use common::tasks_md_xml;
 use common::write_spec;
+use common::write_vet_md;
 use predicates::str::contains;
 use speccy_cli::next::NextArgs;
 use speccy_cli::next::run;
@@ -131,12 +132,7 @@ fn one_line_per_active_spec() -> TestResult {
     )?;
     // Compute SHA-256 of TASKS.md for the gate freshness signal.
     let hash = sha256_hex(tasks_md5.as_bytes());
-    let journal = spec_dir.join("journal");
-    fs_err::create_dir_all(journal.as_std_path())?;
-    let vet = format!(
-        "## Invocation 1\n\n<gate verdict=\"passed\" tasks_hash=\"{hash}\" date=\"2026-05-22T00:00:00Z\">\nstub.\n</gate>\n",
-    );
-    fs_err::write(journal.join("VET.md").as_std_path(), vet)?;
+    write_vet_md(&spec_dir, "SPEC-0001", "passed", &hash)?;
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
     let text5 = render_text(&ws5)?;
     assert!(

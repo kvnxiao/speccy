@@ -204,7 +204,7 @@ fn per_spec_json_null_when_all_done_and_report_present() -> TestResult {
     )?;
     // Write a fresh-pass VET.md so the resolver advances past the vet
     // step (SPEC-0041) and REPORT.md presence drives the omission.
-    write_fresh_pass_vet_md(&spec_dir, &tasks_md)?;
+    write_fresh_pass_vet_md(&spec_dir, "SPEC-0003", &tasks_md)?;
     // Write REPORT.md so kind resolution lands on "completed".
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
 
@@ -255,7 +255,7 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
         &spec_md_template("SPEC-0002", "in-progress"),
         Some(&tasks_md_done),
     )?;
-    write_fresh_pass_vet_md(&spec_dir_done, &tasks_md_done)?;
+    write_fresh_pass_vet_md(&spec_dir_done, "SPEC-0002", &tasks_md_done)?;
     fs_err::write(spec_dir_done.join("REPORT.md").as_std_path(), "# Report\n")?;
 
     let output = Command::cargo_bin("speccy")?
@@ -308,7 +308,7 @@ fn per_spec_json_ship_when_all_done_no_report() -> TestResult {
     )?;
     // Write a fresh-pass VET.md so the resolver advances past the new
     // vet step to ship (SPEC-0041).
-    write_fresh_pass_vet_md(&spec_dir, &tasks_md)?;
+    write_fresh_pass_vet_md(&spec_dir, "SPEC-0001", &tasks_md)?;
     // No REPORT.md → kind should be "ship".
     let output = Command::cargo_bin("speccy")?
         .args(["next", "SPEC-0001", "--json"])

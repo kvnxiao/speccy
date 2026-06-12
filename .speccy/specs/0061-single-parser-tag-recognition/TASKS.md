@@ -5,7 +5,7 @@ generated_at: 2026-06-12T07:25:09Z
 ---
 # Tasks: SPEC-0061 Single parser authority for tag recognition — gate-read and journal-write paths use the canonical parser, deleting both hand-rolled scanners
 
-<task id="T-001" state="pending" covers="REQ-004">
+<task id="T-001" state="completed" covers="REQ-004">
 ## Route test VET.md through per-crate renderer-backed helpers
 
 Add a renderer-backed VET.md builder to each test crate's support module so
