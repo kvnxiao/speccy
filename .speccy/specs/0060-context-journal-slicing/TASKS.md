@@ -138,7 +138,7 @@ Suggested files: `speccy-cli/src/journal_show_output.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-003">
+<task id="T-003" state="completed" covers="REQ-003">
 ## Reword shipped prompt modules for the sliced journal and re-eject
 
 Reword the source modules that describe the bundle's journal contents,

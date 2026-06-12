@@ -48,7 +48,7 @@ incremented round).
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `{{ speccy_references_path }}/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below rather than the normal implementer flow.
+**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the latest-round journal blocks inline with prior rounds as an attributes-only index, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `{{ speccy_references_path }}/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below rather than the normal implementer flow.
 
 {% include "modules/references/reconcile-summary.md" %}
 
@@ -84,12 +84,17 @@ incremented round).
 
    **Retry branch.** Enter retry mode:
 
-   - Read the most recent `<implementer>` block from the bundle's
-     journal section to understand the prior pass's stated `Completed`
-     work.
-   - Read the latest `<blockers>` block (the one whose `round`
-     matches the highest `<implementer>` round) from that same
-     journal section for the specific feedback to address.
+   - Read the latest-round `<implementer>` block inlined in the
+     bundle's journal section to understand the prior pass's stated
+     `Completed` work.
+   - Read the latest-round `<blockers>` block (the one whose `round`
+     matches the highest `<implementer>` round, also inlined) from
+     that same journal section for the specific feedback to address.
+   - Prior rounds are not inlined: the bundle lists them as an
+     attributes-only index (`round`, `block`, `persona`, `verdict`).
+     If a prior round's prose is needed — e.g. a persona blocking
+     across rounds — drill in explicitly with `speccy journal show
+     SPEC-NNNN/T-NNN --round N [--block <type>]`.
    - Amend the existing WIP in the working tree to address the
      blockers. Do not run `git restore`, `git clean`, or
      `git checkout` against the dirty paths; do not rewrite the
