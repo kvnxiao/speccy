@@ -55,7 +55,7 @@ reconciliation are not forgotten.
    any existing sequence, and `{issue}` is a one-line description of
    the problem. Do not substitute freeform prose.
 
-   **The eight check properties:**
+   **The seven check properties:**
 
    - **Routing fidelity.** Brainstorm artifacts landed in the
      correct SPEC.md sections: restated ask → Summary +
@@ -80,10 +80,6 @@ reconciliation are not forgotten.
      goals, non-goals, requirements, and assumptions sections. A
      goal that a non-goal denies, or a requirement that violates an
      assumption, is an internal contradiction.
-
-   - **Placeholder leakage.** No `TBD`, `TODO`, or untouched
-     `<...>` template-placeholder strings remain in SPEC.md.
-     These are mechanical and should be fixed inline, not surfaced.
 
    - **Ambiguity.** No `<requirement>` wording is interpretable in
      two materially different ways that would lead to different
@@ -160,11 +156,7 @@ reconciliation are not forgotten.
    (`<spec-dir>/journal/T-NNN.md`). When the spec has no `TASKS.md` yet,
    the commit contains `SPEC.md` (plus any journal files) without failing
    on the absent tasks file — drop the missing `TASKS.md` from the
-   staging list rather than requiring it to exist. The step uses narrow
-   file-list staging (never `git add -A` or `git add .`), so any
-   unrelated dirty paths outside `<spec-dir>/` remain in the working tree
-   untouched. The step is idempotent: re-running with nothing new to
-   record produces no new commit.
+   staging list rather than requiring it to exist.
 
    First run the branch-guard prelude so the commit lands on a feature
    branch rather than the repository's default branch. Supply the
@@ -181,10 +173,7 @@ reconciliation are not forgotten.
      `<spec-dir>/TASKS.md` **only when it exists** (omit it from the list
      when the spec has no tasks file yet — do not let a missing path
      fail the stage), and each `<spec-dir>/journal/T-NNN.md` blocker file
-     appended this run. Do not use `git add -A` or `git add .`. Staging
-     unchanged content is a no-op, so passing the present paths
-     unconditionally is safe regardless of whether some were already
-     committed.
+     appended this run. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: amend — <why>` with `SPEC-NNNN`
        substituted for the resolved spec id, and `<why>` a title-length

@@ -76,27 +76,17 @@ The journal is the durable record of *what the loop did* and must
 survive any rollback. Two git facts drive the mechanism below:
 
 - `git restore -- ':!…/journal/'` and `git clean -fd -e '…/journal/'`
-  **do** honour the journal exclusion — a path-excluded restore and an
-  `-e`-excluded clean both leave VET.md on disk. Use them directly.
+  **do** honour the journal exclusion, leaving VET.md on disk.
 - `git stash push --include-untracked` does **not** honour a pathspec
-  exclusion for the *untracked* journal file: it sweeps VET.md into the
-  stash regardless of any `':!…/journal/'` argument. A later
-  `git stash pop` then tries to restore that stale copy over the live
-  journal — at best it aborts with `already exists, no checkout`
-  (leaving stash litter and a non-zero exit), at worst it clobbers the
-  blocks appended since the snapshot. **Never `git stash pop` in this
-  loop.**
+  exclusion for the untracked journal file — it sweeps VET.md into the
+  stash regardless. A later `git stash pop` would then restore that
+  stale copy over the live journal and clobber blocks appended since
+  the snapshot.
 
-So the loop snapshots with a plain `--include-untracked` stash (no
-pathspec — the journal is swept in, then immediately restored by
-`git stash apply`; because the journal is always dirty at vet time the
-push always creates a stash, so `stash@{0}` reliably names *our*
-snapshot and never a pre-existing unrelated one). On rollback it
-restores prior-round **code** from the stash with a tracked-only
-`git checkout 'stash@{0}' -- ':!…/journal/'`, which never touches the
-stash's untracked journal copy, then drops the stash. The live on-disk
-journal — with every block appended since the snapshot — is left
-untouched throughout.
+So: snapshot with a plain `--include-untracked` stash; restore code
+with the tracked-only checkout below; **never `git stash pop`.** The
+journal is always dirty at vet time, so the push always creates a
+stash and `stash@{0}` reliably names *our* snapshot.
 
 This is the **journal-safe revert sequence**. Every rollback in
 Phases 1 and 2 runs these four commands verbatim — the restore and
@@ -167,11 +157,8 @@ git stash drop
       The `push` snapshots all uncommitted state and clears it to
       HEAD; the `apply` restores the working tree so the implementer
       has the current implementation to work on. The stash stays
-      available as the rollback target. The journal is swept into the
-      stash by `--include-untracked` and immediately restored by
-      `apply` (see "Protect the journal from rollback" above); the
-      rollback path below restores code from the stash without ever
-      touching that copy.
+      available as the rollback target (see "Protect the journal from
+      rollback" above).
 
    b. **Spawn the drift-implementer sub-agent.** Prompt:
 
@@ -290,10 +277,7 @@ the return block.
       The first command snapshots uncommitted state and clears it to
       HEAD; the second restores the working tree so the simplifier
       sees the drift-fix changes. The stash remains as the rollback
-      target. As in Phase 1, `--include-untracked` sweeps the journal
-      into the stash and `apply` restores it; the rollback path below
-      restores code from the stash without touching that copy (see
-      "Protect the journal from rollback" above).
+      target (see "Protect the journal from rollback" above).
 
    b. **Spawn the simplifier apply sub-agent.** Prompt:
 
@@ -363,7 +347,6 @@ placement:
 - It computes `tasks_hash` as the lowercase hex SHA-256 of the
   sibling TASKS.md read at append time — **do not compute or supply
   a hash**, and there is no `sha256sum` / `Get-FileHash` step.
-- It stamps `date` (UTC now).
 - It manages invocation sectioning: the gate lands as the **last**
   element of the current open invocation section, after any
   `<drift-review>`, `<holistic-fix>`, `<simplifier-scan>`, and

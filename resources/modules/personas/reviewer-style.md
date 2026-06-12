@@ -32,26 +32,16 @@ control envelope around those changes belongs to the orchestrator,
 not to this persona. The following are **not** style concerns and
 must not produce a `verdict="blocking"`:
 
-- **Commit shape, commit timing, or commit count.** The orchestrator
-  performs a single atomic commit on review pass per REQ-003/REQ-004;
-  the implementer leaves changes uncommitted by design. A dirty
-  working tree at review time is the contract, not a violation.
-- **Retry-round dirty trees.** Per the retry-shape contract, a
-  round-2+ implementer amends the prior pass's WIP in place; the
-  dirty tree carries the WIP forward and is what the next reviewer
-  reads. Do not flag the dirty tree as "changes not committed."
-- **Branch state, HEAD position, or merge-base shape.** The
-  orchestrator and host harness own branch placement; style does
-  not.
-- **`git status`-derived complaints.** Anything visible only through
-  `git status` (modified-not-staged, untracked files, etc.) is
-  out of scope. Style assesses the on-disk content of the changed
-  files, not their staging or commit state.
-
-If you genuinely believe a style-relevant invariant requires a
-specific git-state shape, surface it as a one-line aside outside
-the `<review>` block rather than as a blocking verdict; the
-orchestrator will weigh it without forcing a retry round.
+- **Commit shape, timing, count, and dirty working trees.** The
+  orchestrator performs a single atomic commit on review pass per
+  REQ-003/REQ-004; the implementer leaves changes uncommitted by
+  design, and a round-2+ implementer amends the prior pass's WIP in
+  place. A dirty tree at review time is the contract, not a
+  violation — do not flag it as "changes not committed."
+- **Branch state, HEAD position, merge-base shape, and any
+  `git status`-derived complaint.** The orchestrator and host
+  harness own branch placement; style assesses the on-disk content
+  of the changed files, not their staging or commit state.
 
 ## Grounding a lint-driven verdict
 
@@ -85,29 +75,20 @@ hunk, and misreading which side is a recurring failure mode that
 produces false-positive blocking verdicts.
 
 The "No newline at end of file" marker is the canonical case. Git
-emits it immediately after the most recent content line whose file
-lacks a trailing newline. That line may be a `-` line (the marker is
-describing the OLD side) or a `+` line (the marker is describing the
-NEW side). When you see this marker in a hunk that changes only the
-trailing byte of a file, identify which side it's attached to before
-reporting a violation, since the diff base may itself be in a
-non-compliant state. A diff that adds the trailing newline (fixing a
-previously-broken file) shows the marker on the OLD side; a diff
-that removes it shows the marker on the NEW side.
-
-When trailing-newline state is the thing under review, do not trust
-the diff marker's position alone. Confirm with a direct byte probe:
+emits it after the most recent content line whose file lacks a
+trailing newline, and that line may be a `-` line (describing the
+OLD side) or a `+` line (the NEW side) — misreading which side is
+attached produces false-positive blocks, since the diff base may
+itself be non-compliant. When trailing-newline state is under
+review, do not trust the marker's position; confirm with a direct
+byte probe:
 
     tail -c 1 <path> | od -An -tx1
 
 `0x0a` is the trailing newline byte; anything else is its absence.
 Cite the byte-probe output in your `<review>` block when the verdict
-hinges on trailing-newline state, so the orchestrator and downstream
-readers can re-verify without re-parsing the diff.
-
-The same caution applies to any rendered-output invariant where the
-diff base may itself be in a non-compliant state. The on-disk file
-is the source of truth; the diff is a navigational aid.
+hinges on trailing-newline state, so readers can re-verify without
+re-parsing the diff.
 
 ## Verdict return contract
 

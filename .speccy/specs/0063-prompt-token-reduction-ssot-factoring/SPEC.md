@@ -181,6 +181,7 @@ when `cargo test --workspace` runs (notably `persona_snippets.rs` and
 then all guardrail assertions — required headings, `{% include %}` lines, and
 command strings in the rendered personas and recipes — pass.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -212,6 +213,7 @@ when it is read,
 then it contains no post-append journal re-read step, relies on the CLI's
 validate-before-write guarantee, and the determinism trim is noted in `REPORT.md`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -246,6 +248,7 @@ then step 1 contains no `speccy status SPEC-NNNN --json` call (deriving readines
 and paths from `speccy next --json`), step 3 contains no post-flip `speccy status`
 re-check, and both removals are recorded in `REPORT.md`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -299,6 +302,7 @@ then the only differences are include-expansions whose expanded text equals the
 prior inline text, every one-liner-plus-pointer module expands to its full inline
 sentence rather than a bare pointer, and no ejected file contains a `{%` marker.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -337,6 +341,7 @@ self-review-core module carries the supersession comment, `speccy-brainstorm`
 retains its independent self-review, and no `<!-- … DEC-001 / OQ-b … -->` comment
 remains in `speccy-plan`, `speccy-amend`, or `speccy-brainstorm`.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -367,6 +372,7 @@ when `cargo test --workspace`, `cargo clippy --workspace --all-targets
 `cargo deny check` run,
 then all four pass.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -399,6 +405,7 @@ then no ejected file contains a `{%` marker and the eject diff mirrors the
 `resources/modules/**` edits for that commit (1:1 for Track 1; include-expansion
 for Track 2).
 </scenario>
+
 </requirement>
 
 ## Decisions

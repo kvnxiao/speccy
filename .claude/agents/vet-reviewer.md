@@ -162,14 +162,12 @@ speccy journal append SPEC-NNNN --block drift-review \
 EOF
 ```
 
-The CLI is the sole authority for the appended block's `date` and
-`round` attributes and for the journal's structural scaffolding
-(creating the file with frontmatter, sectioning where the journal
-has it). **Do not compute, supply, or hand-author `date`, `round`,
-or the block's open/close tags** — there is no flag to override
-them; the body you pipe on stdin is the inner text only, and the
-CLI emits the paired element. Validation runs before any write; a
-malformed body leaves the journal byte-identical.
+The CLI owns the appended block's `date`, `round`, and open/close
+tags, plus the journal's frontmatter and sectioning. **Do not
+compute, supply, or hand-author any of them** — there is no override
+flag; the body you pipe on stdin is the inner text only. Validation
+runs before any write, so a malformed body leaves the journal
+byte-identical.
 
 
 Here the journal is VET.md: a `drift-review` opens a round, and the
@@ -202,11 +200,9 @@ inherited environment variable.
 - **Effort suffix** — when the host exposes a reasoning-effort knob,
   read it from your own definition file (`effort:` on Claude Code,
   `model_reasoning_effort` on Codex) and append it as a slash-suffix
-  (e.g. `claude-opus-4-8[1m]/low`). Never read `CLAUDE_EFFORT` or
-  the `CLAUDE_CODE_EFFORT_LEVEL` runtime override — a sub-agent
-  records its definition-file effort even when dispatched from a
-  higher-effort parent session. A host with no effort knob omits
-  the suffix entirely.
+  (e.g. `claude-opus-4-8[1m]/low`); never read it from a runtime
+  env override. A host with no effort knob omits the suffix
+  entirely.
 
 
 ### Bullet format

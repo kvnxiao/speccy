@@ -5,7 +5,7 @@ generated_at: 2026-06-12T20:34:03Z
 ---
 # Tasks: SPEC-0063 Prompt token reduction + SSOT factoring for `resources/` modules — compress SDLC-loop prose, defer two procedures to existing CLI guarantees, then factor duplicated passages into shared modules
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002 REQ-003 REQ-006 REQ-007">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002 REQ-003 REQ-006 REQ-007">
 ## Track 1 — compress SDLC-loop prose and defer two procedures to existing CLI guarantees (commit 1)
 
 Track 1 is **commit 1** of two. It cuts redundant prose from the SDLC-loop

@@ -78,7 +78,7 @@ is already agreed.
    any existing sequence, and `{issue}` is a one-line description of
    the problem. Do not substitute freeform prose.
 
-   **The six check properties:**
+   **The five check properties:**
 
    - **Routing fidelity.** Brainstorm artifacts landed in the
      correct SPEC.md sections: restated ask → Summary +
@@ -104,10 +104,6 @@ is already agreed.
      goal that a non-goal denies, or a requirement that violates an
      assumption, is an internal contradiction.
 
-   - **Placeholder leakage.** No `TBD`, `TODO`, or untouched
-     `<...>` template-placeholder strings remain in SPEC.md.
-     These are mechanical and should be fixed inline, not surfaced.
-
    - **Ambiguity.** No `<requirement>` wording is interpretable in
      two materially different ways that would lead to different
      implementations. If the requirement is ambiguous, surface it
@@ -130,11 +126,7 @@ is already agreed.
    committed. The commit covers only the spec's `SPEC.md` —
    `TASKS.md` is committed by `{{ cmd_prefix }}speccy-decompose`, not
    here, so the new-spec path lands two separate commits (one per
-   skill). The step uses narrow file-list staging (never `git add -A`
-   or `git add .`), so any unrelated dirty paths outside `<spec-dir>/`
-   remain in the working tree untouched. The step is idempotent:
-   re-running plan on an already-committed `SPEC.md` produces no new
-   commit.
+   skill).
 
    First run the branch-guard prelude so the commit lands on a feature
    branch rather than the repository's default branch. Supply the
@@ -148,9 +140,7 @@ is already agreed.
 
    - **Staging breadth: narrow `git add <spec-dir>/SPEC.md`.** Stage
      exactly the spec's `SPEC.md` and nothing else. Do not use
-     `git add -A` or `git add .`. Staging unchanged content is a no-op,
-     so passing the path unconditionally is safe regardless of whether
-     `SPEC.md` was already committed.
+     `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
        substituted for the resolved spec id.

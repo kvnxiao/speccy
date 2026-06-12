@@ -23,14 +23,11 @@ the primitive — adversarial diversity comes from fresh contexts per
 persona — and is bounded to one round of five sub-agents on one
 task.
 
-Because sub-agents cannot spawn sub-agents, this skill must run in a
-context that **is** the top-level session — either a human
-invocation (`{{ cmd_prefix }}speccy-review …`) where the host CLI
-itself runs the skill body, or the
-`{{ cmd_prefix }}speccy-orchestrate` outer loop which inlines this
-skill body into its own session at the `review` dispatch (it cannot
-delegate to a wrapper sub-agent that would then try to spawn the
-persona leaves).
+Because sub-agents cannot spawn sub-agents, this skill must run in the
+top-level session — either a human invocation
+(`{{ cmd_prefix }}speccy-review …`) or the
+`{{ cmd_prefix }}speccy-orchestrate` outer loop inlining this body at
+its `review` dispatch.
 
 ## When to use
 
@@ -61,19 +58,6 @@ fan-out inline in its own session and points here rather than
 duplicating it.
 
 {% include "modules/skills/partials/review-fanout.md" %}
-
-Reviewers append their own `<review>` block via `speccy journal
-append` and return a thin verdict; they never edit TASKS.md or the
-journal file with file-editing tools. This running session does not
-transcribe `<review>` blocks. It drives the review-induced writes
-exclusively through the CLI verbs the partial above details:
-`speccy journal show` to verify the round's reviews are complete and
-to read back blockers, `speccy task transition` for the `in-review`
-→ `completed` / `pending` state flip, and `speccy journal append
---block blockers` for the consolidated orchestrator-authored
-`<blockers>` block. No `<review>` or `<blockers>` block is ever
-appended to the `<task>` body in TASKS.md — TSK-006 rejects journal
-elements there.
 
 ### Exit
 

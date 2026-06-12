@@ -183,22 +183,11 @@ Verdict semantics:
   why; `Addressed:` may be empty (omit). The caller will fail
   immediately and surface to the human.
 
-There is no `partial` verdict. If something fell short, that is
-`blocking` — uniform handling, and the journal body explains the
-shape of the shortfall.
-
 `--model` is required on the append. The slash-suffix on the model
 string encodes reasoning effort when the host harness exposes that
 knob; hosts without an effort knob omit the suffix.
 
 {% include "modules/references/identity-sourcing.md" %}
-
-Why the body is structured: round N+1's reviewer reads VET.md
-(which contains the round N drift-review + your round N fix block)
-before re-evaluating the diff. Restating each bullet from the drift
-review makes it trivial for the reviewer to walk the same list and
-verify. A vague "fixed the issues" body forces the reviewer to
-re-derive everything from scratch.
 
 ### Step 2 — return a thin verdict
 
