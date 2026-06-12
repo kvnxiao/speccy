@@ -204,6 +204,61 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
     })
 }
 
+/// Byte offset just after the last well-formed depth-0 close tag in a
+/// per-task journal `source`, for reconcile to truncate a malformed
+/// journal to.
+///
+/// Reuses the canonical [`scan_tags`] recognizer (SPEC-0062 DEC-001) over
+/// the same preamble [`parse`] composes — the [`split_required`]
+/// frontmatter split, [`collect_code_fence_byte_ranges`], and a
+/// [`ScanConfig`] keyed on [`JOURNAL_ELEMENT_NAMES`] — then walks the
+/// resulting [`RawTag`] stream with a depth counter, recording each depth-0
+/// close tag's `span.end` (the byte just past its `>`). Per DEC-002 the
+/// offset comes from the token stream, never from the failed parse's
+/// `ParseError.offset` (which can fall mid-element). A line-isolated close
+/// tag inside a fenced code block is excluded by the fence ranges, so it
+/// does not count as a structural close.
+///
+/// Returns `usize`, not a `Result`: it runs only after the strict [`parse`]
+/// has already failed, and both error paths collapse to `0` — the legitimate
+/// "nothing closed cleanly" value. `split_required` returning `Err` (missing
+/// or empty frontmatter) short-circuits to `0` before any scan; `scan_tags`
+/// returning `Err` (byte-arithmetic overflow, impossible for an in-memory
+/// string) likewise yields `0`.
+///
+/// # Arguments
+///
+/// * `source` - The full journal file contents that failed strict parsing.
+/// * `path` - The journal path, used only for diagnostics inside the scan.
+#[must_use = "the recovery offset is the reconcile truncation point"]
+pub fn last_well_formed_offset(source: &str, path: &Utf8Path) -> usize {
+    let Ok((_yaml_raw, body, body_offset)) = split_required(source, path, "journal file") else {
+        return 0;
+    };
+    let code_fence_ranges = collect_code_fence_byte_ranges(source);
+    let cfg = ScanConfig {
+        whitelist: JOURNAL_ELEMENT_NAMES,
+        structure_shaped_names: JOURNAL_ELEMENT_NAMES,
+    };
+    let Ok(raw_tags) = scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg) else {
+        return 0;
+    };
+
+    let mut depth: u32 = 0;
+    let mut last_close_end: usize = 0;
+    for tag in &raw_tags {
+        if tag.is_close {
+            if depth == 1 {
+                last_close_end = tag.span.end;
+            }
+            depth = depth.saturating_sub(1);
+        } else {
+            depth = depth.saturating_add(1);
+        }
+    }
+    last_close_end
+}
+
 fn build_entry(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<JournalEntry> {
     match open.name.as_str() {
         "implementer" => {
@@ -560,6 +615,36 @@ mod tests {
         let doc = parse(&empty, path()).expect("parse zero entries");
         assert!(doc.entries.is_empty(), "fixture has no blocks");
         assert_eq!(latest_round(&doc.entries), None);
+    }
+
+    #[test]
+    fn last_well_formed_offset_finds_close_of_implementer() {
+        // A well-formed implementer block followed by a non-whitelisted
+        // trailing tag that makes the strict parse fail. The recovery
+        // offset is the byte just past the `</implementer>` close tag.
+        let src = make(
+            "<implementer date=\"2026-01-01T00:00:00Z\" model=\"x\" round=\"1\">\nbody\n</implementer>\n<garbage>",
+        );
+        let offset = last_well_formed_offset(&src, path());
+        let close_idx = src.find("</implementer>").expect("close present");
+        let expected = close_idx + "</implementer>".len();
+        assert_eq!(offset, expected);
+    }
+
+    #[test]
+    fn last_well_formed_offset_zero_when_no_close_tag() {
+        // An open tag with no close: nothing closed cleanly, so the
+        // recovery offset is 0.
+        let src = make("<implementer date=\"\"");
+        assert_eq!(last_well_formed_offset(&src, path()), 0);
+    }
+
+    #[test]
+    fn last_well_formed_offset_zero_when_frontmatter_missing() {
+        // No frontmatter: split_required short-circuits to 0 before any
+        // tag scan (CHK-003).
+        let src = "<implementer date=\"2026-01-01T00:00:00Z\" model=\"x\" round=\"1\">\nbody\n</implementer>\n";
+        assert_eq!(last_well_formed_offset(src, path()), 0);
     }
 
     #[test]

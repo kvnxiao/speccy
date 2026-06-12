@@ -423,7 +423,7 @@ fn detect_journal_drift(spec: &ParsedSpec, task_id: &str) -> Option<DriftEntry> 
     if journal_xml::parse(source, &journal_path).is_ok() {
         return None;
     }
-    let offset = last_well_formed_offset(source);
+    let offset = journal_xml::last_well_formed_offset(source, &journal_path);
     let task = task_id.to_owned();
     let state_str = spec
         .tasks_md_ok()
@@ -440,82 +440,6 @@ fn detect_journal_drift(spec: &ParsedSpec, task_id: &str) -> Option<DriftEntry> 
             last_well_formed_byte_offset: offset,
         },
     })
-}
-
-/// Compute the byte offset just after the last well-formed top-level
-/// element closing tag in `source`. Walks `<implementer>`,
-/// `<review>`, `<blockers>` open/close pairs at depth 0 and returns
-/// the offset of the byte immediately after the most recent matched
-/// close tag. Returns `0` when no element closed cleanly.
-///
-/// This is a tolerant, format-aware scan rather than a full XML parse
-/// — by the time this runs, the strict parser has already rejected the
-/// source. We only need a stable byte offset for reconcile to truncate
-/// to.
-#[expect(
-    clippy::similar_names,
-    reason = "after_lt / after_gt mirror the tag-scan grammar"
-)]
-fn last_well_formed_offset(source: &str) -> usize {
-    let names = ["implementer", "review", "blockers"];
-    let bytes = source.as_bytes();
-    let mut cursor: usize = 0;
-    let mut last_close_end: usize = 0;
-    while cursor < bytes.len() {
-        // Find the next '<' from cursor.
-        let Some(lt_rel) = source.get(cursor..).and_then(|s| s.find('<')) else {
-            break;
-        };
-        let lt = cursor.saturating_add(lt_rel);
-        let after_lt = lt.saturating_add(1);
-        let is_close = source.as_bytes().get(after_lt) == Some(&b'/');
-        let name_start = if is_close {
-            after_lt.saturating_add(1)
-        } else {
-            after_lt
-        };
-        // Match a known element name.
-        let mut matched: Option<&str> = None;
-        for n in names {
-            if source
-                .get(name_start..name_start.saturating_add(n.len()))
-                .is_some_and(|s| s == n)
-            {
-                // Next char must be whitespace, '>', or '/'.
-                let next_char = source
-                    .as_bytes()
-                    .get(name_start.saturating_add(n.len()))
-                    .copied();
-                if matches!(next_char, Some(b' ' | b'\t' | b'\n' | b'\r' | b'>' | b'/')) {
-                    matched = Some(n);
-                    break;
-                }
-            }
-        }
-        let Some(name) = matched else {
-            cursor = after_lt;
-            continue;
-        };
-        // Find the matching '>' for this tag.
-        let Some(gt_rel) = source.get(name_start..).and_then(|s| s.find('>')) else {
-            break;
-        };
-        let gt = name_start.saturating_add(gt_rel);
-        let after_gt = gt.saturating_add(1);
-        if is_close {
-            // We require well-formed open before this close for the
-            // count to advance. To stay simple and conservative, we
-            // record the close-end whenever we see a `</name>` at
-            // depth 0 — the strict parser already validated nesting
-            // up to this point, so this matches what the truncation
-            // policy needs: "truncate to where the last close tag
-            // ended".
-            let _ = name;
-            last_close_end = after_gt;
-        }
-        cursor = after_gt;
-    }
-    last_close_end
 }
 
 #[cfg(test)]
@@ -542,21 +466,6 @@ mod tests {
     #[test]
     fn regex_escape_brackets_and_metacharacters() {
         assert_eq!(regex_escape("[SPEC-0045/T-001]:"), r"\[SPEC-0045/T-001\]:",);
-    }
-
-    #[test]
-    fn last_well_formed_offset_finds_close_of_implementer() {
-        let src = "<implementer date=\"2026-01-01T00:00:00Z\" model=\"x\" round=\"1\">\nbody\n</implementer>\n<review persona=\"business\"";
-        let offset = last_well_formed_offset(src);
-        // The offset is just after `</implementer>`.
-        let close_idx = src.find("</implementer>").expect("close present");
-        let expected = close_idx + "</implementer>".len();
-        assert_eq!(offset, expected);
-    }
-
-    #[test]
-    fn last_well_formed_offset_zero_when_no_close_tag() {
-        assert_eq!(last_well_formed_offset("<implementer date=\"\""), 0);
     }
 
     #[test]
