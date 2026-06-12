@@ -166,6 +166,10 @@ source. The single source of truth lives under `resources/`:
   Wrappers carry frontmatter and pull module bodies in via MiniJinja
   `{% include %}` directives at render time.
 
+The MiniJinja variables those wrappers may reference (the per-host
+`TemplateContext` fields plus template-local `{% set %}` bindings) are
+catalogued in `docs/ARCHITECTURE.md` → "Per-host template variables".
+
 `speccy init --force --host <host>` (or `just reeject` to refresh
 both Claude Code and Codex at once) renders every wrapper, expands
 includes, and writes the result to `.claude/`, `.agents/`, and

@@ -2067,6 +2067,35 @@ phase prompt body inside the CLI binary. The CLI ships
 content and `resources/agents/` as the per-host MiniJinja wrappers;
 nothing else.
 
+### Per-host template variables
+
+Wrappers under `resources/agents/.<host>/` are MiniJinja templates
+rendered at `speccy init` time. A render draws on two variable
+surfaces: the per-host `TemplateContext` built in
+`speccy-cli/src/host.rs`, and template-local `{% set %}` bindings
+declared at the top of individual module bodies. The environment
+renders with `UndefinedBehavior::Strict` (set in both
+`speccy-cli/src/host.rs` and `speccy-cli/src/render.rs`), so
+referencing a variable that is neither in `TemplateContext` nor bound
+by a `{% set %}` before its first use is a hard render error — add the
+binding before the reference.
+
+| Variable | Source | Claude Code | Codex |
+|---|---|---|---|
+| `host` | `TemplateContext` | `claude-code` | `codex` |
+| `cmd_prefix` | `TemplateContext` | `/` | _(empty)_ |
+| `host_display_name` | `TemplateContext` | `Claude Code` | `Codex` |
+| `skill_install_path` | `TemplateContext` | `.claude/skills` | `.agents/skills` |
+| `speccy_references_path` | `TemplateContext` | `.claude/speccy-references` | `.agents/speccy-references` |
+| `persona_name` | `{% set %}` | line 1 of each `resources/modules/personas/reviewer-*.md` | _(same source)_ |
+| `task_kind` / `task_adjective` | `{% set %}` | `phases/speccy-work.md`, `skills/speccy-review.md` | _(same source)_ |
+
+`host_display_name` is currently unused: no wrapper or module under
+`resources/` references it. It is retained in `TemplateContext` as a
+ready binding for a future wrapper; an unused context field is harmless
+under strict-undefined (the mode rejects undefined *references*, not
+unused *bindings*).
+
 ## Skill-pack reference files
 
 Each lintable Speccy artifact has exactly one canonical reference
