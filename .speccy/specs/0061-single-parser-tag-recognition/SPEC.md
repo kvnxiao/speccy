@@ -11,16 +11,22 @@ supersedes: []
 
 ## Summary
 
-There should be exactly one implementation of "recognize a Speccy XML tag in
-text." Today there are three: the canonical line/fence/structure-aware parser
-in `xml_scanner` (behind `parse_journal_xml` and `parse_vet_in_flight`), plus
-two hand-rolled byte-substring scanners that re-derive — incompletely — what
-the canonical parser already does. The first is `next.rs::last_gate_block`, the
-read path behind `speccy next`'s ship-gate freshness check; it walks
+On the paths that make a ship/write decision from possibly-valid input, there
+should be exactly one implementation of "recognize a Speccy XML tag in text."
+Two hand-rolled byte-substring scanners exist on those paths today alongside the
+canonical line/fence/structure-aware parser in `xml_scanner` (behind
+`parse_journal_xml` and `parse_vet_in_flight`); both re-derive — incompletely —
+what the canonical parser already does. The first is `next.rs::last_gate_block`,
+the read path behind `speccy next`'s ship-gate freshness check; it walks
 `cursor.find("<gate")` with no line isolation, no fence awareness, and no
 structural model. The second is `journal_xml/serialize.rs::first_nested_journal_element`,
 a per-task journal write-side body guard that only matches open tags
-(`<implementer`), never close tags (`</implementer>`).
+(`<implementer`), never close tags (`</implementer>`). (A third hand-rolled
+walk, `consistency.rs::last_well_formed_offset`, is deliberately out of scope:
+it is a tolerant recovery scan that runs only *after* the strict parser has
+already rejected the source, computing a byte offset for reconcile to truncate
+to. It decides nothing about possibly-valid input, and replacing it would mean
+adding parser surface, which DEC-003 disfavors — see DEC-001.)
 
 The divergence has produced two defects. A **live** gate-spoof: a failing
 terminal gate whose body quotes an inline `<gate verdict="passed">` (with a
@@ -56,8 +62,11 @@ helpers (one per test crate) built on the production renderers.
 - `speccy journal append` refuses to write a per-task journal that would not
   parse, failing before the file is modified and leaving it byte-identical (or
   absent for a new journal).
-- No hand-rolled tag scanner remains in production code: the canonical
-  `xml_scanner`-backed parsers are the sole tag recognizers.
+- No hand-rolled tag scanner remains on the two production paths this SPEC
+  addresses — the gate-freshness read and the per-task journal write — both
+  route recognition through the canonical `xml_scanner`-backed parsers. (The
+  tolerant post-parse-failure recovery scan in `consistency.rs` is out of scope;
+  see Summary and DEC-001.)
 - All valid test VET.md is constructed through renderer-backed helpers (one per
   test crate) built on the production renderers, so fixtures cannot diverge from
   the real grammar.
@@ -347,8 +356,15 @@ then the action is `Vet`; and the recorded pre-fix run of the same test yields
 Single-parser-authority (SPEC-0055 DEC-008) is extended to the two readers it
 did not reach: the gate-freshness read path in `next.rs` and the per-task
 journal write path in `speccy-cli/src/journal.rs`. After this SPEC, no
-hand-rolled tag scan remains anywhere in production — recognition lives only
-inside the canonical `xml_scanner`-backed parsers. Rationale: the two readers
+hand-rolled tag scan remains on the production paths that recognize
+possibly-valid input — recognition there lives only inside the canonical
+`xml_scanner`-backed parsers. The one remaining hand-rolled walk,
+`consistency.rs::last_well_formed_offset`, is deliberately excluded: it is a
+tolerant recovery scan that runs only after the strict parser has already
+rejected the source, to compute a byte offset for reconcile to truncate to. It
+makes no recognition decision on valid input, and eliminating it would require
+exposing a "last well-formed offset on parse failure" primitive from the parser
+— new surface that DEC-003 disfavors. Rationale: the two readers
 re-implemented the parser's tag/line/fence/structure rules and diverged from it
 needle-by-needle, the exact class DEC-008 named. The read path collapses onto
 `parse_vet_in_flight`'s typed `VetDoc`; the per-task write path gains a
@@ -458,4 +474,5 @@ violations, and the audit recorded in REPORT.md should note them as such.
 | 2026-06-12 | Kevin Xiao | Initial SPEC: single parser authority for tag recognition; delete the gate-read and journal-write hand-rolled scanners (refines SPEC-0055 DEC-008). |
 | 2026-06-12 | speccy-decompose | Promoted decompose-time decisions: DEC-004 (REQ-004's "one helper" is realized per-crate, not one shared function), DEC-005 (the renderer-backed helper is valid-only, so `lint_vet.rs`'s intentionally-invalid fixtures stay hand-rolled and are carved out of CHK-008), and a Note that CHK-006's audit excludes block renderers. No requirement text changed. |
 | 2026-06-12 | speccy-amend | Folded DEC-004/DEC-005 into the requirement text so REQ-004 and REQ-003/CHK-006 stop contradicting themselves: REQ-004 now states per-crate renderer-backed helpers and the corrected migration set (dropped "single helper" and the false "valid-but-hand-rolled" label on `lint_vet.rs`; carved out `lint_vet.rs` and the open `journal_show.rs` fixture); REQ-003 done-when + CHK-006 scope the audit to recognizers, excluding block renderers; added a Notes sequencing line (REQ-004 before REQ-001). Clarification for implementation clarity — no requirement added, dropped, or behaviorally changed. |
+| 2026-06-12 | speccy-amend | Narrative-accuracy fix (no requirement added/dropped/behaviorally changed): the pre-ship vet drift gate found a fourth production hand-rolled tag walk, `consistency.rs::last_well_formed_offset`, that the Summary's "today there are three" census, the Goals "sole tag recognizers" line, and DEC-001's "anywhere in production" overstated. Scoped all three to the two primary recognizers (gate-read, journal-write) this SPEC actually retires, and carved out `last_well_formed_offset` as a deliberate tolerant post-parse-failure recovery scan whose removal would require new parser surface (DEC-003 disfavors). All done-when criteria and scenarios unchanged; CHK-006's audit pattern (`find("<…")` / `format!("<{…")`) never structurally claimed to cover its single-char `find('<')` walk. |
 </changelog>
