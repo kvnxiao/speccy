@@ -25,6 +25,7 @@
 //! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
 
 use crate::journal_show_output::JsonJournalBlock;
+use crate::journal_show_output::JsonJournalBlockAttrs;
 use serde::Serialize;
 use speccy_core::consistency::ConsistencyBlock;
 
@@ -153,12 +154,16 @@ pub struct ScenarioEntry {
     pub body: String,
 }
 
-/// The selected task's per-task journal, inlined into the bundle (REQ-004).
+/// The selected task's per-task journal, sliced to its latest round and
+/// inlined into the bundle (SPEC-0056 REQ-004, narrowed by SPEC-0060 REQ-001).
 ///
 /// When `<spec-dir>/journal/<task-id>.md` exists, `exists` is `true`,
 /// the frontmatter fields carry the parsed `spec` / `task` / `generated_at`,
-/// and `blocks` holds every `<implementer>` / `<review>` / `<blockers>`
-/// entry across all rounds in file order. When the file does not exist,
+/// and `blocks` holds the `<implementer>` / `<review>` / `<blockers>` entries
+/// of the journal's highest round in file order. Prior-round bodies are not
+/// inlined — `prior_rounds` carries an attributes-only index of them (REQ-002),
+/// and the full prose remains reachable on demand via
+/// `speccy journal show <selector> --round N`. When the file does not exist,
 /// `exists` is `false`, the frontmatter fields are absent, and `blocks` is
 /// empty — a round-1 implementer legitimately has no journal yet (DEC-004),
 /// so absence is normal and the command still exits 0.
@@ -181,8 +186,18 @@ pub struct BundleJournal {
     /// `generated_at:` frontmatter field; present only when the file exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generated_at: Option<String>,
-    /// Every journal block in file order; empty when the file is absent.
+    /// The latest round's journal blocks in file order; empty when the file
+    /// is absent or parses to zero entries.
     pub blocks: Vec<JsonJournalBlock>,
+    /// An attributes-only index of every block whose round is strictly below
+    /// the highest round, in file order (SPEC-0060 REQ-002). Prior-round
+    /// bodies are never inlined; this index tells an agent that history exists
+    /// and what shape it has, with the full prose reachable on demand via
+    /// `speccy journal show <selector> --round N`. Empty for single-round,
+    /// zero-entry, and absent journals. Together with `blocks` it forms a total
+    /// and disjoint partition of the parsed entries: round equals highest →
+    /// `blocks`; round below highest → `prior_rounds`.
+    pub prior_rounds: Vec<JsonJournalBlockAttrs>,
 }
 
 /// One sibling task projected into the bundle's navigation index (REQ-005).

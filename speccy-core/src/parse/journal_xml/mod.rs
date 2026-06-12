@@ -127,6 +127,17 @@ impl JournalEntry {
     }
 }
 
+/// The highest round across the entries, or `None` when there are none.
+///
+/// The single definition both journal views resolve "latest round"
+/// through: `speccy journal show --round latest` and `speccy context`'s
+/// inlined-journal section call this so the two cannot drift
+/// (SPEC-0060 DEC-001).
+#[must_use = "the resolved round selects which blocks to keep"]
+pub fn latest_round(entries: &[JournalEntry]) -> Option<u32> {
+    entries.iter().map(JournalEntry::round).max()
+}
+
 /// Parse a journal file source into a [`JournalDoc`].
 ///
 /// # Errors
@@ -529,6 +540,26 @@ mod tests {
             ),
             "got {err:?}"
         );
+    }
+
+    #[test]
+    fn latest_round_resolves_highest_and_handles_empty() {
+        let two = make(indoc! {r#"
+            <implementer date="2026-05-21T18:00:00Z" model="m" round="1">
+            a
+            </implementer>
+
+            <implementer date="2026-05-21T19:00:00Z" model="m" round="2">
+            b
+            </implementer>
+        "#});
+        let doc = parse(&two, path()).expect("parse two rounds");
+        assert_eq!(latest_round(&doc.entries), Some(2));
+
+        let empty = make("");
+        let doc = parse(&empty, path()).expect("parse zero entries");
+        assert!(doc.entries.is_empty(), "fixture has no blocks");
+        assert_eq!(latest_round(&doc.entries), None);
     }
 
     #[test]

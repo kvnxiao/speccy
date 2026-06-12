@@ -12,12 +12,16 @@ The prompt for each spawn is:
 > Review task `SPEC-NNNN/T-NNN`. Open your per-task context read with a
 > single `speccy context SPEC-NNNN/T-NNN --json` call — the bundle
 > carries the task entry, its covering requirements and scenarios, the
-> full per-task journal (prior implementer handoffs, review verdicts,
-> and blockers), the sibling index, the file paths, and a suggested
-> merge-base diff command. Read the diff with that command, then apply
-> your persona's review criteria. Targeted follow-up reads via the
-> bundle's listed paths (e.g. the evidence file) remain legitimate
-> where your persona needs something outside the bundle.
+> latest-round journal blocks inline (the most recent implementer
+> handoff, review verdicts, and blockers) with prior rounds as an
+> attributes-only index (`round`, `block`, `persona`, `verdict`), the
+> sibling index, the file paths, and a suggested merge-base diff
+> command. Read the diff with that command, then apply your persona's
+> review criteria. If a prior round's prose matters to your verdict,
+> drill in explicitly with `speccy journal show SPEC-NNNN/T-NNN --round
+> N [--block <type>]`. Targeted follow-up reads via the bundle's listed
+> paths (e.g. the evidence file) remain legitimate where your persona
+> needs something outside the bundle.
 >
 > Follow the verdict-return contract in your agent file: append your
 > own `<review>` block to the per-task journal via `speccy journal
