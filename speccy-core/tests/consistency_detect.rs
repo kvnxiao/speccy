@@ -226,12 +226,19 @@ fn detect_state_in_progress_clean_tree_is_blocking_with_new_kind() -> TestResult
 
 #[test]
 fn detect_journal_xml_malformed_is_blocking_with_forward_slash_path() -> TestResult {
-    // Journal missing the YAML frontmatter -> closed-grammar parser
-    // rejects it. There is no matching commit and the task is
-    // completed, so we *also* expect a StateCompletedNoCommit drift;
-    // assert on the malformed entry specifically. Use a clean tree
-    // and a fake commit to isolate the journal-malformed case.
-    let malformed = "<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<garbage>";
+    // Journal with valid frontmatter, a well-formed implementer block,
+    // then a trailing whitelisted open tag with no matching close ->
+    // strict parse rejects it (unbalanced element) while the tolerant
+    // `scan_tags` recovery still pairs the first block. There is no
+    // matching commit and the task is completed, so we *also* expect a
+    // StateCompletedNoCommit drift; assert on the malformed entry
+    // specifically. Use a clean tree and a fake commit to isolate the
+    // journal-malformed case. Frontmatter is required: the recovery
+    // helper reuses `scan_tags` behind `split_required`, so a journal
+    // missing frontmatter recovers to offset 0 (SPEC-0062 CHK-003); the
+    // non-zero recovery offset asserted here depends on the frontmatter
+    // being present.
+    let malformed = "---\nspec: SPEC-0099\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<implementer date=\"2026-05-21T19:00:00Z\" model=\"m\" round=\"2\">";
     let (_tmp, spec_dir) = make_spec_dir(&one_task("completed"), &[("T-001.md", malformed)])?;
     let spec = parse_spec_dir(&spec_dir);
     let sha = "0".repeat(40);

@@ -5,7 +5,7 @@ generated_at: 2026-06-12T18:33:59Z
 ---
 # Tasks: SPEC-0062 Retire the last hand-rolled tag recognizer — reconcile's recovery offset derives from the canonical scanner
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Re-derive the reconcile recovery offset from `scan_tags`; delete the hand-rolled scan
 
 Replace `consistency.rs::last_well_formed_offset` — the last hand-rolled tag

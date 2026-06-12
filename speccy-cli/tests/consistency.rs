@@ -251,7 +251,15 @@ fn state_completed_no_commit_with_dirty_tree_is_blocking() -> TestResult {
 
 #[test]
 fn journal_xml_malformed_reports_kind_path_and_offset() -> TestResult {
-    let body = "<implementer date=\"2026-05-25T00:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<review persona=\"business\"";
+    // Valid frontmatter, a well-formed implementer block, then a trailing
+    // whitelisted open tag with no matching close -> strict parse fails
+    // (unbalanced element) while the tolerant `scan_tags` recovery still
+    // pairs the first block. Frontmatter is required: the recovery helper
+    // reuses `scan_tags` behind `split_required`, so a frontmatter-less
+    // journal recovers to offset 0 (SPEC-0062 CHK-003). The expected
+    // offset is computed relative to this same `body`, so the frontmatter
+    // prefix shifts the actual and expected close offsets together.
+    let body = "---\nspec: SPEC-0099\ntask: T-001\ngenerated_at: 2026-05-25T00:00:00Z\n---\n\n<implementer date=\"2026-05-25T00:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<implementer date=\"2026-05-25T01:00:00Z\" model=\"m\" round=\"2\">";
     let fx = make_fixture(&one_task("T-001", "completed"), Some(("T-001", body)))?;
     // Land a matching commit so we isolate the journal-malformed drift
     // from a parallel state_completed_no_commit entry.
