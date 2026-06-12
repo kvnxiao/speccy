@@ -30,6 +30,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # serde-saphyr is pre-0.1.0; pin exact patch and accept future refactor when
 # 0.1.0 stabilises (per docs/ARCHITECTURE.md "Parsing stack" and DEC-002).
+# Last checked 2026-06-11: 0.0.27 is still the newest release (shipped
+# 2026-05-26); no 0.1.0 yet, so the pin stays. Unpin to "0.1" when it ships.
 serde-saphyr = "=0.0.27"
 sha2 = "0.11"
 thiserror = "2.0"
