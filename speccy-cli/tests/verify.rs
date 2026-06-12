@@ -42,9 +42,8 @@ fn at<'a>(v: &'a Value, keys: &[&str]) -> &'a Value {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn invoke(root: &Utf8Path, json: bool) -> TestResult<(i32, String, String)> {
+fn invoke(root: &Utf8Path, json: bool) -> TestResult<(i32, String)> {
     let mut out: Vec<u8> = Vec::new();
-    let mut err: Vec<u8> = Vec::new();
     let code = run(
         VerifyArgs {
             include_archive: false,
@@ -52,9 +51,8 @@ fn invoke(root: &Utf8Path, json: bool) -> TestResult<(i32, String, String)> {
         },
         root,
         &mut out,
-        &mut err,
     )?;
-    Ok((code, String::from_utf8(out)?, String::from_utf8(err)?))
+    Ok((code, String::from_utf8(out)?))
 }
 
 /// Marker SPEC.md with a requirement marker that has no nested
@@ -156,7 +154,7 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "empty scenarios must gate verify");
 
     let json: Value = serde_json::from_str(&out)?;
@@ -203,7 +201,7 @@ fn clean_workspace_exits_zero_without_spawning_child_processes() -> TestResult {
         None,
     )?;
 
-    let (code, _out, _err) = invoke(&ws.root, false)?;
+    let (code, _out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0, "clean workspace must exit 0");
     assert!(
         !sentinel.as_std_path().exists(),
@@ -226,7 +224,7 @@ fn text_output_ends_with_shape_summary_line() -> TestResult {
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, false)?;
+    let (code, out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0);
     let last = last_n_lines(&out, 1);
     assert_eq!(
@@ -253,7 +251,7 @@ fn text_output_summary_counts_aggregate_across_specs() -> TestResult {
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, false)?;
+    let (code, out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0);
     let last = last_n_lines(&out, 1);
     assert_eq!(
@@ -266,7 +264,7 @@ fn text_output_summary_counts_aggregate_across_specs() -> TestResult {
 #[test]
 fn text_output_summary_on_empty_workspace() -> TestResult {
     let ws = Workspace::new()?;
-    let (code, out, _err) = invoke(&ws.root, false)?;
+    let (code, out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0);
     let last = last_n_lines(&out, 1);
     assert_eq!(
@@ -290,7 +288,7 @@ fn json_envelope_is_schema_one_and_has_no_execution_fields() -> TestResult {
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 0);
 
     let json: Value = serde_json::from_str(&out)?;
@@ -330,7 +328,7 @@ fn json_envelope_is_pretty_printed_with_trailing_newline() -> TestResult {
         None,
     )?;
 
-    let (_code, out, _err) = invoke(&ws.root, true)?;
+    let (_code, out) = invoke(&ws.root, true)?;
     assert!(out.ends_with('\n'), "JSON output must end with newline");
     assert!(
         out.contains("\n  \"schema_version\": 1,"),
@@ -349,8 +347,8 @@ fn json_envelope_is_byte_identical_across_runs() -> TestResult {
         None,
     )?;
 
-    let (_c1, out1, _e1) = invoke(&ws.root, true)?;
-    let (_c2, out2, _e2) = invoke(&ws.root, true)?;
+    let (_c1, out1) = invoke(&ws.root, true)?;
+    let (_c2, out2) = invoke(&ws.root, true)?;
     assert_eq!(out1, out2, "verify --json must be deterministic");
     Ok(())
 }
@@ -371,7 +369,7 @@ fn dropped_spec_with_shape_errors_is_non_gating() -> TestResult {
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, false)?;
+    let (code, out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0, "dropped spec shape errors must not gate verify");
     let last = last_n_lines(&out, 1);
     // The dropped spec still counts in specs_total (one walked) but its
@@ -445,7 +443,7 @@ fn superseded_spec_with_shape_errors_is_non_gating() -> TestResult {
     "#};
     write_spec(&ws.root, "0002-new", supersedes_md, None)?;
 
-    let (code, _out, _err) = invoke(&ws.root, false)?;
+    let (code, _out) = invoke(&ws.root, false)?;
     assert_eq!(code, 0, "superseded spec shape errors must not gate verify");
     Ok(())
 }
@@ -456,7 +454,7 @@ fn workspace_level_parse_errors_still_gate_verify() -> TestResult {
     // SPEC.md missing `id` -> SPC-004 (Error) -> gating.
     write_spec(&ws.root, "0001-bad", &spec_md_missing_id(), None)?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "SPC-004 parse error must gate verify");
 
     let json: Value = serde_json::from_str(&out)?;
@@ -484,7 +482,7 @@ fn in_progress_spec_shape_errors_are_demoted_not_gating() -> TestResult {
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(
         code, 0,
         "marker-tree shape errors on an in-progress spec must not gate; out:\n{out}",
@@ -512,7 +510,7 @@ fn implemented_spec_shape_errors_still_gate() -> TestResult {
         None,
     )?;
 
-    let (code, _out, _err) = invoke(&ws.root, false)?;
+    let (code, _out) = invoke(&ws.root, false)?;
     assert_eq!(code, 1, "REQ-001 on an implemented spec must gate verify");
     Ok(())
 }
@@ -654,7 +652,7 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
     "#};
     write_spec(&ws.root, "0098-dup-chk", spec_md, None)?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(
         code, 1,
         "duplicate scenario id must gate verify (status=implemented)",
@@ -766,7 +764,7 @@ fn report_md_missing_spec_attribute_fires_rpt_001() -> TestResult {
         report_md_missing_spec_attr(),
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "RPT-001 on implemented spec must gate verify");
 
     assert!(
@@ -806,7 +804,7 @@ fn report_md_dangling_req_fires_rpt_002() -> TestResult {
         report_md_dangling_req(),
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "RPT-002 on implemented spec must gate verify");
 
     assert!(
@@ -866,7 +864,7 @@ fn report_md_dangling_scenario_fires_rpt_003() -> TestResult {
         report_md_dangling_scenario(),
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(code, 1, "RPT-003 on implemented spec must gate verify");
 
     assert!(
@@ -984,7 +982,7 @@ fn xml_001_unbalanced_foreign_tag_gates_verify_and_names_location() -> TestResul
         None,
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(
         code, 1,
         "unbalanced foreign tag must gate verify; out:\n{out}"
@@ -1028,7 +1026,7 @@ fn report_md_rpt_demotes_on_in_progress_spec() -> TestResult {
         report_md_missing_spec_attr(),
     )?;
 
-    let (code, out, _err) = invoke(&ws.root, true)?;
+    let (code, out) = invoke(&ws.root, true)?;
     assert_eq!(
         code, 0,
         "RPT-001 on in-progress spec must be demoted; must not gate verify; out:\n{out}",

@@ -508,7 +508,6 @@ fn run_archive(spec_id: String, reason: Option<String>, force: bool, json: bool)
             spec_id,
             reason,
             force,
-            json,
         },
         &cwd,
     );
@@ -594,7 +593,7 @@ fn run_status(selector: Option<String>, all: bool, include_archive: bool, json: 
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy status: {e}");
-            return 1;
+            return 2;
         }
     };
     let mut stdout = std::io::stdout().lock();
@@ -623,7 +622,7 @@ fn run_next(spec_id: Option<String>, include_archive: bool, json: bool) -> u8 {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy next: {e}");
-            return 1;
+            return 2;
         }
     };
     let mut stdout = std::io::stdout().lock();
@@ -651,13 +650,12 @@ fn run_next(spec_id: Option<String>, include_archive: bool, json: bool) -> u8 {
 
 fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
     use speccy_cli::check::CheckError;
-    use speccy_core::task_lookup::LookupError;
 
     let cwd = match speccy_cli::cwd::resolve() {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy check: {e}");
-            return 1;
+            return 2;
         }
     };
     let mut stdout = std::io::stdout().lock();
@@ -674,30 +672,7 @@ fn run_check(selector: Option<String>, include_archive: bool) -> u8 {
     flush_best_effort(&mut stdout);
     match result {
         Ok(code) => clamp_exit(code),
-        Err(CheckError::TaskLookup(LookupError::InvalidFormat { arg })) => {
-            eprintln!("speccy check: invalid task reference `{arg}`");
-            eprintln!("  expected `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN` (qualified)");
-            1
-        }
-        Err(CheckError::TaskLookup(LookupError::NotFound { task_ref })) => {
-            eprintln!("speccy check: task `{task_ref}` not found in any spec");
-            eprintln!("  run `speccy status` to list specs and their tasks");
-            1
-        }
-        Err(CheckError::TaskLookup(LookupError::Ambiguous {
-            task_id,
-            candidate_specs,
-        })) => {
-            eprintln!(
-                "speccy check: {task_id} is ambiguous; matches in {count} specs.",
-                count = candidate_specs.len(),
-            );
-            eprintln!("Disambiguate with one of:");
-            for spec_id in &candidate_specs {
-                eprintln!("  speccy check {spec_id}/{task_id}");
-            }
-            1
-        }
+        Err(CheckError::TaskLookup(e)) => report_lookup_error("check", "", &e),
         Err(e) => {
             eprintln!("speccy check: {e}");
             1
@@ -843,11 +818,10 @@ fn run_verify(include_archive: bool, json: bool) -> u8 {
         Ok(p) => p,
         Err(e) => {
             eprintln!("speccy verify: {e}");
-            return 1;
+            return 2;
         }
     };
     let mut stdout = std::io::stdout().lock();
-    let mut stderr = std::io::stderr().lock();
     let result = speccy_cli::verify::run(
         speccy_cli::verify::VerifyArgs {
             include_archive,
@@ -855,10 +829,8 @@ fn run_verify(include_archive: bool, json: bool) -> u8 {
         },
         &cwd,
         &mut stdout,
-        &mut stderr,
     );
     flush_best_effort(&mut stdout);
-    flush_best_effort(&mut stderr);
     match result {
         Ok(code) => clamp_exit(code),
         Err(e) => {

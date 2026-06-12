@@ -14,17 +14,15 @@
 //! See `.speccy/specs/0006-tasks-command/SPEC.md` for the original
 //! `--commit` contract this command inherits.
 
+use crate::check_selector::bare_spec_regex;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use jiff::Timestamp;
-use regex::Regex;
 use speccy_core::ParseError;
 use speccy_core::parse::spec_md;
 use speccy_core::tasks::CommitError;
 use speccy_core::tasks::commit_frontmatter;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
-use std::sync::OnceLock;
+use speccy_core::workspace::scan;
 use thiserror::Error;
 
 /// CLI-level error returned by [`run`].
@@ -84,14 +82,16 @@ pub struct LockArgs {
 /// SPEC.md parsing, or the frontmatter rewrite fails.
 pub fn run(args: LockArgs, cwd: &Utf8Path) -> Result<(), LockError> {
     let LockArgs { spec_id } = args;
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(LockError::ProjectRootNotFound),
-        Err(other) => return Err(LockError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, LockError::ProjectRootNotFound)?;
 
     let canonical_id = validate_spec_id(&spec_id)?;
-    let spec_dir = locate_spec_dir(&project_root, &canonical_id)?;
+    let workspace = scan(&project_root);
+    let spec_dir =
+        workspace
+            .spec_dir_by_id(&canonical_id)
+            .ok_or_else(|| LockError::SpecNotFound {
+                id: canonical_id.clone(),
+            })?;
     let spec_md_path = spec_dir.join("SPEC.md");
     let tasks_md_path = spec_dir.join("TASKS.md");
 
@@ -112,7 +112,7 @@ pub fn run(args: LockArgs, cwd: &Utf8Path) -> Result<(), LockError> {
 }
 
 fn validate_spec_id(raw: &str) -> Result<String, LockError> {
-    if !spec_id_regex().is_match(raw) {
+    if !bare_spec_regex().is_match(raw) {
         return Err(LockError::InvalidSpecIdFormat {
             arg: raw.to_owned(),
         });
@@ -120,86 +120,15 @@ fn validate_spec_id(raw: &str) -> Result<String, LockError> {
     Ok(raw.to_owned())
 }
 
-fn locate_spec_dir(project_root: &Utf8Path, canonical_id: &str) -> Result<Utf8PathBuf, LockError> {
-    let digits =
-        canonical_id
-            .strip_prefix("SPEC-")
-            .ok_or_else(|| LockError::InvalidSpecIdFormat {
-                arg: canonical_id.to_owned(),
-            })?;
-    let specs_dir = project_root.join(".speccy").join("specs");
-    let prefix = format!("{digits}-");
-
-    if let Some(dir) = find_spec_dir_in(&specs_dir, &prefix) {
-        return Ok(dir);
-    }
-    // Mission-folder layer: one level of grouping per the workspace
-    // scanner's contract (`enumerate_focus_folder`).
-    if let Some(dir) = find_spec_dir_in_mission_folders(&specs_dir, &prefix) {
-        return Ok(dir);
-    }
-    Err(LockError::SpecNotFound {
-        id: canonical_id.to_owned(),
-    })
-}
-
-fn find_spec_dir_in(parent: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
-    let entries = fs_err::read_dir(parent.as_std_path()).ok()?;
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
-            continue;
-        };
-        if !meta.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.starts_with(prefix) {
-            return Utf8PathBuf::from_path_buf(path).ok();
-        }
-    }
-    None
-}
-
-fn find_spec_dir_in_mission_folders(specs_dir: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
-    let entries = fs_err::read_dir(specs_dir.as_std_path()).ok()?;
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
-            continue;
-        };
-        if !meta.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        let Ok(utf8) = Utf8PathBuf::from_path_buf(path) else {
-            continue;
-        };
-        if let Some(found) = find_spec_dir_in(&utf8, prefix) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn spec_id_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^SPEC-\d{4,}$").unwrap())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::spec_id_regex;
     use super::validate_spec_id;
 
     #[test]
-    fn valid_spec_ids_pass_regex() {
-        assert!(spec_id_regex().is_match("SPEC-0006"));
-        assert!(spec_id_regex().is_match("SPEC-1234"));
-        assert!(spec_id_regex().is_match("SPEC-10000"));
+    fn valid_spec_ids_pass_format_validation() {
+        validate_spec_id("SPEC-0006").expect("4-digit id accepted");
+        validate_spec_id("SPEC-1234").expect("4-digit id accepted");
+        validate_spec_id("SPEC-10000").expect("5-digit id accepted");
     }
 
     #[test]

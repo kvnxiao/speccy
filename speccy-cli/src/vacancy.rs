@@ -21,7 +21,6 @@ use camino::Utf8Path;
 use serde::Serialize;
 use speccy_core::prompt::allocate_next_spec_id_across_dirs;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use std::io::Write;
 use thiserror::Error;
 
@@ -71,11 +70,7 @@ pub struct VacancyArgs {
 /// directory exists in the cwd ancestry. Returns
 /// [`VacancyError::Io`] if writing to `out` fails.
 pub fn run(args: &VacancyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), VacancyError> {
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(VacancyError::ProjectRootNotFound),
-        Err(other) => return Err(VacancyError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, VacancyError::ProjectRootNotFound)?;
 
     let specs_dir = project_root.join(".speccy").join("specs");
     let archive_dir = project_root.join(".speccy").join("archive");

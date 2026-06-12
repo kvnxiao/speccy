@@ -24,7 +24,7 @@
 //! missing journal file exits non-zero (the known call sites run only after
 //! blocks exist, so absence is a loud anomaly).
 
-use crate::journal::bare_spec_selector_regex;
+use crate::check_selector::bare_spec_regex;
 use crate::journal_show_output::FilteredInvocation;
 use crate::journal_show_output::FilteredJournal;
 use crate::journal_show_output::render_json;
@@ -42,7 +42,6 @@ use speccy_core::task_lookup::TaskRef;
 use speccy_core::task_lookup::find as find_task;
 use speccy_core::task_lookup::parse_ref;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
 use std::io::Write;
 use thiserror::Error;
@@ -145,13 +144,9 @@ pub fn run(args: ShowArgs, cwd: &Utf8Path, out: &mut impl Write) -> Result<(), S
         block,
     } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(ShowError::ProjectRootNotFound),
-        Err(other) => return Err(ShowError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, ShowError::ProjectRootNotFound)?;
 
-    let view = if bare_spec_selector_regex().is_match(&selector) {
+    let view = if bare_spec_regex().is_match(&selector) {
         resolve_vet(
             &project_root,
             &selector,

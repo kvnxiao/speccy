@@ -19,7 +19,6 @@ use speccy_core::lint::Level;
 use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan_with_archive;
 use std::collections::HashMap;
 use std::io::Write;
@@ -95,29 +94,18 @@ impl VerifyReport {
 }
 
 /// Run `speccy verify` from `cwd`. The text summary or JSON envelope goes
-/// to `out`; nothing streams to `err` in normal flow (it remains for
-/// future diagnostic surfaces). Returns the process exit code (0 on
-/// pass, 1 on fail).
+/// to `out`. Returns the process exit code (0 on pass, 1 on fail).
 ///
 /// # Errors
 ///
 /// Returns [`VerifyError`] when discovery or I/O fails. Shape failures
 /// are surfaced via the exit code, not the `Result`.
-pub fn run(
-    args: VerifyArgs,
-    cwd: &Utf8Path,
-    out: &mut dyn Write,
-    _err: &mut dyn Write,
-) -> Result<i32, VerifyError> {
+pub fn run(args: VerifyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<i32, VerifyError> {
     let VerifyArgs {
         include_archive,
         json,
     } = args;
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(VerifyError::ProjectRootNotFound),
-        Err(other) => return Err(VerifyError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, VerifyError::ProjectRootNotFound)?;
 
     let workspace = scan_with_archive(&project_root, include_archive);
     let diagnostics = lint::run(&workspace.as_lint_workspace());

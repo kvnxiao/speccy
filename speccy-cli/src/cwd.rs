@@ -3,9 +3,13 @@
 //! Centralises cwd discovery so each command's error surface does not
 //! carry its own `Cwd` / `CwdNotUtf8` variants. The non-UTF-8 case
 //! folds into a synthesised [`std::io::Error`] so callers observe a
-//! single error type.
+//! single error type. [`resolve_root`] carries the companion
+//! project-root discovery step every workspace command shares.
 
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use speccy_core::workspace::WorkspaceError;
+use speccy_core::workspace::find_root;
 
 /// Resolve the current working directory as a UTF-8 path.
 ///
@@ -23,4 +27,24 @@ pub fn resolve() -> Result<Utf8PathBuf, std::io::Error> {
             "current working directory is not valid UTF-8",
         )
     })
+}
+
+/// Resolve the project root by walking up from `cwd`, mapping the
+/// no-`.speccy/`-found case to the command's `not_found` error and any
+/// other discovery failure through the command error's
+/// `From<WorkspaceError>` impl.
+///
+/// # Errors
+///
+/// Returns `not_found` when no `.speccy/` directory exists on the walk
+/// up from `cwd`, or the converted [`WorkspaceError`] on I/O failure.
+pub fn resolve_root<E: From<WorkspaceError>>(
+    cwd: &Utf8Path,
+    not_found: E,
+) -> Result<Utf8PathBuf, E> {
+    match find_root(cwd) {
+        Ok(p) => Ok(p),
+        Err(WorkspaceError::NoSpeccyDir { .. }) => Err(not_found),
+        Err(other) => Err(E::from(other)),
+    }
 }

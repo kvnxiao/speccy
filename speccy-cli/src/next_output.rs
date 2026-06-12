@@ -278,9 +278,16 @@ fn apply_reconcile_override(
 /// Render the per-spec text output.
 ///
 /// Format: `SPEC-NNNN: <kind> [T-NNN]\n` or `SPEC-NNNN: completed\n`.
+/// The SPEC-0045 REQ-005 reconcile override applies exactly as in the
+/// JSON form: a non-`ok` consistency status renders `reconcile` (with
+/// the underlying dispatch's task id preserved when there is one).
 #[must_use = "the rendered line goes to stdout"]
-pub fn render_text_per_spec(spec_id: &str, action: Option<&NextAction>) -> String {
-    render_text_per_spec_with_reason(spec_id, action, TerminalReason::Completed)
+pub fn render_text_per_spec(
+    spec_id: &str,
+    action: Option<&NextAction>,
+    consistency: &ConsistencyBlock,
+) -> String {
+    render_text_per_spec_with_reason(spec_id, action, TerminalReason::Completed, consistency)
 }
 
 /// Render the per-spec text output with an explicit terminal reason.
@@ -293,18 +300,15 @@ pub fn render_text_per_spec_with_reason(
     spec_id: &str,
     action: Option<&NextAction>,
     reason: TerminalReason,
+    consistency: &ConsistencyBlock,
 ) -> String {
-    match action {
-        None => format!("{spec_id}: {reason}\n", reason = reason.as_str()),
-        Some(NextAction::Decompose) => format!("{spec_id}: decompose\n"),
-        Some(NextAction::Review { task_id, .. }) => {
-            format!("{spec_id}: review {task_id}\n")
-        }
-        Some(NextAction::Work { task_id }) => {
-            format!("{spec_id}: work {task_id}\n")
-        }
-        Some(NextAction::Vet) => format!("{spec_id}: vet\n"),
-        Some(NextAction::Ship) => format!("{spec_id}: ship\n"),
+    let Some(action) = action else {
+        return format!("{spec_id}: {reason}\n", reason = reason.as_str());
+    };
+    let json_action = apply_reconcile_override(to_json_action(action), consistency);
+    match json_action.task_id {
+        Some(task_id) => format!("{spec_id}: {kind} {task_id}\n", kind = json_action.kind),
+        None => format!("{spec_id}: {kind}\n", kind = json_action.kind),
     }
 }
 
@@ -316,8 +320,8 @@ pub fn render_text_per_spec_with_reason(
 #[must_use = "the rendered lines go to stdout"]
 pub fn render_text_workspace(entries: &[(SpecNextEntry, SpecPaths, ConsistencyBlock)]) -> String {
     let mut out = String::new();
-    for (e, _paths, _consistency) in entries {
-        let line = render_text_per_spec(&e.spec_id, Some(&e.action));
+    for (e, _paths, consistency) in entries {
+        let line = render_text_per_spec(&e.spec_id, Some(&e.action), consistency);
         out.push_str(&line);
     }
     out
@@ -334,7 +338,11 @@ mod tests {
     #[test]
     fn text_per_spec_decompose() {
         assert_eq!(
-            render_text_per_spec("SPEC-0001", Some(&NextAction::Decompose)),
+            render_text_per_spec(
+                "SPEC-0001",
+                Some(&NextAction::Decompose),
+                &ConsistencyBlock::ok()
+            ),
             "SPEC-0001: decompose\n",
         );
     }
@@ -346,7 +354,7 @@ mod tests {
             personas: default_personas(),
         };
         assert_eq!(
-            render_text_per_spec("SPEC-0001", Some(&action)),
+            render_text_per_spec("SPEC-0001", Some(&action), &ConsistencyBlock::ok()),
             "SPEC-0001: review T-002\n",
         );
     }
@@ -357,7 +365,7 @@ mod tests {
             task_id: "T-003".to_owned(),
         };
         assert_eq!(
-            render_text_per_spec("SPEC-0001", Some(&action)),
+            render_text_per_spec("SPEC-0001", Some(&action), &ConsistencyBlock::ok()),
             "SPEC-0001: work T-003\n",
         );
     }
@@ -365,7 +373,7 @@ mod tests {
     #[test]
     fn text_per_spec_vet() {
         assert_eq!(
-            render_text_per_spec("SPEC-0001", Some(&NextAction::Vet)),
+            render_text_per_spec("SPEC-0001", Some(&NextAction::Vet), &ConsistencyBlock::ok()),
             "SPEC-0001: vet\n",
         );
     }
@@ -373,7 +381,11 @@ mod tests {
     #[test]
     fn text_per_spec_ship() {
         assert_eq!(
-            render_text_per_spec("SPEC-0001", Some(&NextAction::Ship)),
+            render_text_per_spec(
+                "SPEC-0001",
+                Some(&NextAction::Ship),
+                &ConsistencyBlock::ok()
+            ),
             "SPEC-0001: ship\n",
         );
     }
@@ -381,8 +393,19 @@ mod tests {
     #[test]
     fn text_per_spec_completed() {
         assert_eq!(
-            render_text_per_spec("SPEC-0001", None),
+            render_text_per_spec("SPEC-0001", None, &ConsistencyBlock::ok()),
             "SPEC-0001: completed\n",
+        );
+    }
+
+    #[test]
+    fn text_per_spec_reconcile_override_matches_json_form() {
+        let action = NextAction::Work {
+            task_id: "T-001".to_owned(),
+        };
+        assert_eq!(
+            render_text_per_spec("SPEC-0099", Some(&action), &blocked_block()),
+            "SPEC-0099: reconcile T-001\n",
         );
     }
 

@@ -21,7 +21,6 @@ use speccy_core::task_lookup::TaskRef;
 use speccy_core::task_lookup::find as find_task;
 use speccy_core::task_lookup::parse_ref;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
 use thiserror::Error;
 
@@ -92,13 +91,7 @@ pub struct TransitionArgs {
 pub fn run(args: TransitionArgs, cwd: &Utf8Path) -> Result<(), TransitionError> {
     let TransitionArgs { selector, to } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => {
-            return Err(TransitionError::ProjectRootNotFound);
-        }
-        Err(other) => return Err(TransitionError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, TransitionError::ProjectRootNotFound)?;
 
     let task_ref: TaskRef = parse_ref(&selector)?;
     let ws = scan(&project_root);

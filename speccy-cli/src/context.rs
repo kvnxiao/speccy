@@ -59,7 +59,6 @@ use speccy_core::task_lookup::find as find_task;
 use speccy_core::task_lookup::parse_ref;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan_with_archive;
 use std::io::Write;
 use thiserror::Error;
@@ -102,6 +101,15 @@ pub enum ContextError {
     Io(#[from] std::io::Error),
 }
 
+impl From<WorkspaceError> for ContextError {
+    fn from(err: WorkspaceError) -> Self {
+        match err {
+            WorkspaceError::Io(e) => ContextError::Io(e),
+            other => ContextError::Io(std::io::Error::other(other.to_string())),
+        }
+    }
+}
+
 /// `speccy context` arguments.
 #[derive(Debug, Clone)]
 pub struct ContextArgs {
@@ -131,12 +139,7 @@ pub struct ContextArgs {
 pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(), ContextError> {
     let ContextArgs { selector, json } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(ContextError::ProjectRootNotFound),
-        Err(WorkspaceError::Io(e)) => return Err(ContextError::Io(e)),
-        Err(other) => return Err(ContextError::Io(std::io::Error::other(other.to_string()))),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, ContextError::ProjectRootNotFound)?;
 
     // Resolve the selector before touching the workspace scan result, so
     // an invalid-format selector fails fast with the shared diagnostic.

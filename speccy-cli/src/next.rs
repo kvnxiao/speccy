@@ -28,7 +28,6 @@ use speccy_core::next::compute_for_spec;
 use speccy_core::next::compute_workspace;
 use speccy_core::parse::SpecStatus;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan_with_archive;
 use std::io::Write;
 use thiserror::Error;
@@ -95,13 +94,7 @@ pub fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<i32, NextError> {
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => {
-            return Err(NextError::ProjectRootNotFound);
-        }
-        Err(other) => return Err(NextError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, NextError::ProjectRootNotFound)?;
     let workspace = scan_with_archive(&project_root, args.include_archive);
 
     let (payload, exit_code) = if let Some(ref spec_id) = args.spec_id {
@@ -238,8 +231,10 @@ fn run_per_spec(
         text
     } else {
         match terminal_reason {
-            Some(reason) => render_text_per_spec_with_reason(spec_id, effective_action, reason),
-            None => render_text_per_spec(spec_id, effective_action),
+            Some(reason) => {
+                render_text_per_spec_with_reason(spec_id, effective_action, reason, &consistency)
+            }
+            None => render_text_per_spec(spec_id, effective_action, &consistency),
         }
     };
 

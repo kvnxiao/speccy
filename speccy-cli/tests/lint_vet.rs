@@ -37,7 +37,6 @@ fn at<'a>(v: &'a Value, keys: &[&str]) -> &'a Value {
 
 fn invoke(root: &Utf8Path) -> TestResult<(i32, String)> {
     let mut out: Vec<u8> = Vec::new();
-    let mut err: Vec<u8> = Vec::new();
     let code = run(
         VerifyArgs {
             include_archive: false,
@@ -45,7 +44,6 @@ fn invoke(root: &Utf8Path) -> TestResult<(i32, String)> {
         },
         root,
         &mut out,
-        &mut err,
     )?;
     Ok((code, String::from_utf8(out)?))
 }
