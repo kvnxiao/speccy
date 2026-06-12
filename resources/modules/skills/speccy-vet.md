@@ -158,10 +158,6 @@ section.
 
 ## Loop
 
-Shared with the `{{ cmd_prefix }}speccy-orchestrate` ship dispatch
-— both this skill body and that dispatch step include the same
-partial below so Phase 0 / 1 / 2 / 3 have a single source of truth.
-
 {% include "modules/skills/partials/vet-phases.md" %}
 
 ## Return contract

@@ -162,10 +162,6 @@ section.
 
 ## Loop
 
-Shared with the `speccy-orchestrate` ship dispatch
-— both this skill body and that dispatch step include the same
-partial below so Phase 0 / 1 / 2 / 3 have a single source of truth.
-
 
 Round budget: **3 rounds per invocation** for drift fixing. Each
 round is expensive (full SPEC re-read + diff re-analysis +

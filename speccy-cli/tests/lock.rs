@@ -15,12 +15,14 @@
 mod common;
 
 use assert_cmd::Command;
+use camino::Utf8Path;
 use common::TestResult;
 use common::Workspace;
 use common::bootstrap_tasks_md;
 use common::spec_md_template;
 use common::write_spec;
 use predicates::str::contains;
+use serde_json::Value;
 
 #[test]
 fn lock_writes_hash_and_rfc3339_timestamp_into_tasks_md_frontmatter() -> TestResult {
@@ -211,6 +213,184 @@ fn lock_preserves_body_bytes_byte_identical() -> TestResult {
     assert!(
         after.ends_with(body),
         "body bytes (after the closing `---` fence) must remain byte-identical: {after}",
+    );
+    Ok(())
+}
+
+// --- Hash-value & resolution coverage ---
+//
+// The tests above gate the hash *shape* (64 lowercase hex chars). The four
+// below gate that lock records the *right* hash and resolves the right
+// spec: a cross-command staleness round-trip, invariance under a `status:`
+// flip (canonical vs raw-byte hashing), mission-folder resolution, and the
+// CLI's exit-1 mapping for a 3-way ID disagreement.
+
+/// Run `speccy lock <id>` and assert it succeeds.
+fn run_lock_ok(ws: &Workspace, id: &str) -> TestResult {
+    Command::cargo_bin("speccy")?
+        .args(["lock", id])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+    Ok(())
+}
+
+/// Read `speccy status --json` and report whether spec `id` is stale.
+fn spec_is_stale(ws: &Workspace, id: &str) -> TestResult<bool> {
+    let stdout = Command::cargo_bin("speccy")?
+        .args(["status", "--json"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: Value = serde_json::from_slice(&stdout)?;
+    let specs = json
+        .get("specs")
+        .and_then(Value::as_array)
+        .ok_or("status --json output missing `specs` array")?;
+    let spec = specs
+        .iter()
+        .find(|s| s.get("id").and_then(Value::as_str) == Some(id))
+        .ok_or_else(|| format!("spec {id} absent from status --json output"))?;
+    let stale = spec
+        .get("stale")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| format!("spec {id} entry missing `stale` boolean"))?;
+    Ok(stale)
+}
+
+/// Mutate the REQ-001 body so the SPEC.md canonical content hash changes.
+fn dirty_requirement_body(spec_dir: &Utf8Path) -> TestResult {
+    let path = spec_dir.join("SPEC.md");
+    let before = fs_err::read_to_string(path.as_std_path())?;
+    let after = before.replace("Body.", "Body. Amended requirement prose.");
+    assert_ne!(
+        before, after,
+        "template must contain the REQ-001 body sentinel to mutate",
+    );
+    fs_err::write(path.as_std_path(), after)?;
+    Ok(())
+}
+
+#[test]
+fn lock_then_status_round_trips_staleness() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&bootstrap_tasks_md("SPEC-0001")),
+    )?;
+
+    // Locking records the canonical hash → the spec is fresh.
+    run_lock_ok(&ws, "SPEC-0001")?;
+    assert!(
+        !spec_is_stale(&ws, "SPEC-0001")?,
+        "freshly locked spec must report stale:false",
+    );
+
+    // Editing a Requirement body changes the canonical hash → drift.
+    dirty_requirement_body(&spec_dir)?;
+    assert!(
+        spec_is_stale(&ws, "SPEC-0001")?,
+        "editing a Requirement body must drive stale:true",
+    );
+
+    // Re-locking captures the new hash → fresh again.
+    run_lock_ok(&ws, "SPEC-0001")?;
+    assert!(
+        !spec_is_stale(&ws, "SPEC-0001")?,
+        "re-locking must clear staleness",
+    );
+    Ok(())
+}
+
+#[test]
+fn lock_hash_invariant_under_status_flip() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&bootstrap_tasks_md("SPEC-0001")),
+    )?;
+    run_lock_ok(&ws, "SPEC-0001")?;
+    assert!(!spec_is_stale(&ws, "SPEC-0001")?, "locked spec is fresh");
+
+    // Flip ONLY the frontmatter `status:` value. The canonical content
+    // hash excludes `status` (HASH_EXCLUDED_FRONTMATTER_FIELDS), so
+    // staleness must not change — proving canonical, not raw-byte, hashing.
+    let spec_md = spec_dir.join("SPEC.md");
+    let before = fs_err::read_to_string(spec_md.as_std_path())?;
+    let after = before.replace("status: in-progress", "status: implemented");
+    assert_ne!(before, after, "status line must be present to flip");
+    fs_err::write(spec_md.as_std_path(), after)?;
+
+    assert!(
+        !spec_is_stale(&ws, "SPEC-0001")?,
+        "flipping status: must NOT flip staleness (hash excludes status)",
+    );
+    Ok(())
+}
+
+#[test]
+fn lock_resolves_spec_in_mission_folder() -> TestResult {
+    let ws = Workspace::new()?;
+    // Spec grouped under a `platform/` mission (focus) folder.
+    let spec_dir = write_spec(
+        &ws.root,
+        "platform/0001-foo",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        Some(&bootstrap_tasks_md("SPEC-0001")),
+    )?;
+
+    Command::cargo_bin("speccy")?
+        .args(["lock", "SPEC-0001"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .success();
+
+    let tasks_md = fs_err::read_to_string(spec_dir.join("TASKS.md").as_std_path())?;
+    assert!(
+        !tasks_md.contains("bootstrap-pending"),
+        "lock must resolve and rewrite a mission-grouped spec's TASKS.md: {tasks_md}",
+    );
+    assert!(
+        !spec_is_stale(&ws, "SPEC-0001")?,
+        "mission-grouped spec must be non-stale after lock",
+    );
+    Ok(())
+}
+
+#[test]
+fn lock_id_disagreement_exits_one_tasks_untouched() -> TestResult {
+    let ws = Workspace::new()?;
+    // folder=0001-foo (→ SPEC-0001), SPEC.md.id=SPEC-0002, TASKS.md.spec=SPEC-0001.
+    // The 3-way ID guard fires. The error variant and byte-preservation are
+    // covered in speccy-core/tests/tasks_commit.rs, so this asserts only the
+    // CLI-level contract: exit 1 with TASKS.md byte-identical.
+    let tasks_before = bootstrap_tasks_md("SPEC-0001");
+    let spec_dir = write_spec(
+        &ws.root,
+        "0001-foo",
+        &spec_md_template("SPEC-0002", "in-progress"),
+        Some(&tasks_before),
+    )?;
+
+    Command::cargo_bin("speccy")?
+        .args(["lock", "SPEC-0001"])
+        .current_dir(ws.root.as_std_path())
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("disagreement"));
+
+    let tasks_after = fs_err::read_to_string(spec_dir.join("TASKS.md").as_std_path())?;
+    assert_eq!(
+        tasks_before, tasks_after,
+        "TASKS.md must be byte-identical on ID disagreement",
     );
     Ok(())
 }
