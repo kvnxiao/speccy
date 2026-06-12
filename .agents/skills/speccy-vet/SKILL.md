@@ -162,13 +162,6 @@ section.
 
 ## Loop
 
-This skill body is the canonical home of the vet-phases grammar: it
-includes the `modules/skills/partials/vet-phases.md` partial below so
-Phase 0 / 1 / 2 / 3 have a single source of truth. The
-`speccy-orchestrate` ship dispatch carries only a
-pointer to this body, not its own copy of the partial, so the two
-invocation paths stay in sync without duplicating the grammar.
-
 
 Round budget: **3 rounds per invocation** for drift fixing. Each
 round is expensive (full SPEC re-read + diff re-analysis +

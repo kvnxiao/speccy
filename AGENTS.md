@@ -195,6 +195,17 @@ friction for legitimate prose edits without catching anything
 content checks don't — avoid them. Prose under `resources/` is
 meant to be easy to revise by humans and agents alike.
 
+**Keep ejected content lean.** Everything under `resources/modules/`
+and `resources/agents/` ejects into users' repos and reloads into
+agent context on every prompt, so prefer terse phrasing. Write what an
+agent needs to act on and cut the rest: meta-annotation (cross-file
+"single source of truth" notes, explanations of how modules relate,
+rationale that doesn't change agent behavior) is fluff in shipped
+content even when it reads well in the source. Terse over complete.
+This is an authoring judgment, not a test gate — consistent with
+"Verifying prose-template changes" above, don't enforce it with size
+limits.
+
 **Read-only agent tool grants — Claude Code vs Codex parity.** The ten
 read-only agents (`plan-explorer`, `plan-architect`,
 `reviewer-correctness`, the six `reviewer-*`, and `vet-reviewer`)
