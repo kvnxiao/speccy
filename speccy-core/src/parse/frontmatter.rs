@@ -1,9 +1,13 @@
-//! Markdown frontmatter splitter.
+//! Markdown frontmatter splitter and shared document-prologue helpers.
 //!
 //! Splits a markdown source into `(yaml_frontmatter, body)` pairs. The
 //! implementation is intentionally narrow — four string slicing steps — so
 //! frontmatter parsing is not coupled to any particular YAML crate. See
 //! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-002.
+//!
+//! [`split_required`] and [`extract_level1_heading`] carry the prologue
+//! steps every frontmatter-bearing Speccy artifact parser shares
+//! (SPEC.md, TASKS.md, REPORT.md, the per-task journal, and VET.md).
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
@@ -65,6 +69,67 @@ pub fn split<'a>(source: &'a str, path: &Utf8Path) -> ParseResult<Split<'a>> {
     };
 
     Ok(Split::Some { yaml, body })
+}
+
+/// Split `source` into `(yaml_frontmatter, body, body_offset)`, requiring
+/// the frontmatter fence to be present. `context_label` names the
+/// artifact kind in diagnostics (e.g. `"SPEC.md"`); `body_offset` is the
+/// byte offset of `body` within `source`.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnterminatedFrontmatter`] for an unclosed fence
+/// and [`ParseError::MissingField`] when the file has no frontmatter at
+/// all.
+pub fn split_required<'a>(
+    source: &'a str,
+    path: &Utf8Path,
+    context_label: &str,
+) -> ParseResult<(String, &'a str, usize)> {
+    match split(source, path)? {
+        Split::Some { yaml, body } => {
+            let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
+                Box::new(ParseError::MalformedMarker {
+                    path: path.to_path_buf(),
+                    offset: 0,
+                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
+                })
+            })?;
+            Ok((yaml.to_owned(), body, body_offset))
+        }
+        Split::None => Err(Box::new(ParseError::MissingField {
+            field: "frontmatter".to_owned(),
+            context: format!("{context_label} at {path}"),
+        })),
+    }
+}
+
+/// Return the text of the first level-1 ATX heading (`# ...`) in `body`.
+/// A bare `#` line yields an empty heading. `context_label` names the
+/// artifact kind in the missing-heading diagnostic.
+///
+/// # Errors
+///
+/// Returns [`ParseError::MissingField`] when `body` has no level-1
+/// heading line.
+pub fn extract_level1_heading(
+    body: &str,
+    path: &Utf8Path,
+    context_label: &str,
+) -> ParseResult<String> {
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("# ") {
+            return Ok(rest.trim().to_owned());
+        }
+        if trimmed == "#" {
+            return Ok(String::new());
+        }
+    }
+    Err(Box::new(ParseError::MissingField {
+        field: "level-1 heading".to_owned(),
+        context: format!("{context_label} at {path}"),
+    }))
 }
 
 fn strip_utf8_bom(source: &str) -> &str {

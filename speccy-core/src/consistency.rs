@@ -333,7 +333,7 @@ pub fn detect(spec_id: &str, spec: &ParsedSpec, probe: &dyn GitProbe) -> Consist
         let prefix = format!("[{spec_id}/{task_id}]:", task_id = task.id);
         let commit_sha = probe.first_commit_sha_with_title_prefix(&prefix);
         let state = task.state;
-        let state_str = task_state_str(state);
+        let state_str = state.as_str();
 
         match (state, commit_sha.as_deref()) {
             (TaskState::Completed, None) => {
@@ -428,7 +428,7 @@ fn detect_journal_drift(spec: &ParsedSpec, task_id: &str) -> Option<DriftEntry> 
     let state_str = spec
         .tasks_md_ok()
         .and_then(|t| t.tasks.iter().find(|tt| tt.id == task_id))
-        .map_or("unknown", |t| task_state_str(t.state))
+        .map_or("unknown", |t| t.state.as_str())
         .to_owned();
     Some(DriftEntry {
         task_id: task,
@@ -516,15 +516,6 @@ fn last_well_formed_offset(source: &str) -> usize {
         cursor = after_gt;
     }
     last_close_end
-}
-
-fn task_state_str(state: TaskState) -> &'static str {
-    match state {
-        TaskState::Pending => "pending",
-        TaskState::InProgress => "in-progress",
-        TaskState::InReview => "in-review",
-        TaskState::Completed => "completed",
-    }
 }
 
 #[cfg(test)]

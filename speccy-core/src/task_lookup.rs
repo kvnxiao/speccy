@@ -186,7 +186,7 @@ pub fn find<'a>(
                 candidates.first().ok_or_else(|| LookupError::NotFound {
                     task_ref: task_ref.as_arg(),
                 })?;
-            let entry = extract_task_entry(parsed, tasks_md, task);
+            let entry = extract_entry_from_raw(&tasks_md.raw, task);
             let parsed_spec_md = parsed.spec_md_ok().ok_or_else(|| LookupError::NotFound {
                 task_ref: task_ref.as_arg(),
             })?;
@@ -251,14 +251,6 @@ fn collect_candidates<'a>(
         }
     }
     out
-}
-
-fn extract_task_entry(
-    _parsed: &crate::lint::ParsedSpec,
-    tasks_md: &TasksDoc,
-    task: &Task,
-) -> String {
-    extract_entry_from_raw(&tasks_md.raw, task)
 }
 
 /// Slice the verbatim `<task>...</task>` block out of `raw`, given the

@@ -270,7 +270,8 @@ fn parse_status(value: &str, path: &Utf8Path) -> ParseResult<SpecStatus> {
 /// Keys appear in alphabetical order; strings are double-quoted with
 /// backslash escapes for `"`, `\`, and ASCII control characters;
 /// sequences are emitted in flow style. Fields named in
-/// [`HASH_EXCLUDED_FRONTMATTER_FIELDS`] are omitted (`status` today).
+/// [`HASH_EXCLUDED_FRONTMATTER_FIELDS`] are omitted (`status` and the
+/// archive fields today).
 /// Two equal [`SpecFrontmatter`] values always produce byte-identical
 /// output, so source-file whitespace, key order, and comments are
 /// erased by the parse-then-emit round-trip.
@@ -302,9 +303,6 @@ fn canonical_frontmatter_for_hash(fm: &SpecFrontmatter) -> Vec<u8> {
     });
     push_kv(&mut out, "slug", &|out| {
         write_yaml_dquoted(out, &fm.slug);
-    });
-    push_kv(&mut out, "status", &|out| {
-        write_yaml_dquoted(out, fm.status.as_str());
     });
     push_kv(&mut out, "supersedes", &|out| {
         out.push('[');
