@@ -5,6 +5,7 @@ title: Port feature-dev agents into speccy — correctness reviewer, plan-explor
 status: implemented
 created: 2026-05-29
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0053: Port feature-dev agents into speccy — correctness reviewer, plan-explorer, plan-architect, read-only tool hardening, brainstorm trigger phrase

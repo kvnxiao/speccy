@@ -150,9 +150,10 @@ Given the two-round journal fixture (five round-1 blocks, three
 round-2 blocks) used by the existing
 `bundle_inlines_full_journal_with_all_blocks_and_rounds` test,
 when `speccy context` emits the bundle for that task,
-then `journal.blocks` has exactly three elements, all with
-`round == 2`, and the round-1 body markers appear nowhere in the
-serialized `blocks` array.
+then `journal.blocks` contains exactly one element per round-2
+block of the fixture, each with `round == 2` and its full body, and
+the round-1 body markers appear nowhere in the serialized `blocks`
+array.
 </scenario>
 
 <scenario id="CHK-002">
@@ -168,6 +169,7 @@ when the bundle is emitted,
 then `journal.blocks` contains every block of that journal with
 full bodies.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -186,6 +188,9 @@ prior-round block carrying the same attributes.
 <done-when>
 - Against the two-round fixture, `prior_rounds` has one entry per
   round-1 block, in file order.
+- Every journal entry appears in exactly one of `blocks` (its round
+  equals the highest) or `prior_rounds` (its round is below the
+  highest); no entry is dropped or duplicated.
 - No `prior_rounds` entry's JSON serialization contains a `body`
   key.
 - A `review` index entry carries `persona` and `verdict`; an
@@ -212,10 +217,10 @@ prior-round block carrying the same attributes.
 <scenario id="CHK-004">
 Given the two-round journal fixture,
 when `speccy context --json` emits the bundle,
-then `journal.prior_rounds` has exactly five entries in file order,
-the round-1 review entry carries its `persona` and `verdict`
-values, and the serialized array contains no `body` key and no
-round-1 body marker substring.
+then `journal.prior_rounds` has exactly one entry per round-1 block
+of the fixture, in file order, the round-1 review entry carries its
+`persona` and `verdict` values, and the serialized array contains
+no `body` key and no round-1 body marker substring.
 </scenario>
 
 <scenario id="CHK-005">
@@ -232,6 +237,7 @@ then the journal section renders the round-2 block bodies and a
 prior-rounds index naming each round-1 block's type and attributes,
 with no round-1 body content.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -288,6 +294,7 @@ prior-rounds index, names the `journal show --round N` drill-down,
 and makes no full-journal claim. (Review-verified; prose content is
 not substring-gated by tests per AGENTS.md.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -325,6 +332,7 @@ then the journal-section documentation matches the emitted JSON
 field-for-field and no full-journal claim remains.
 (Review-verified.)
 </scenario>
+
 </requirement>
 
 ## Decisions
@@ -392,12 +400,16 @@ whole-SPEC supersession).
 
 ## Open Questions
 
-- [ ] a. **Self-review caught:** REQ-002 fixes the two-round
+- [x] a. **Self-review caught:** REQ-002 fixes the two-round
   fixture's `prior_rounds` count at "exactly five entries"
   (CHK-004), which couples the CHK to the current fixture layout in
   `speccy-cli/tests/context.rs`; if decompose reshapes the fixture,
   the scenario's count must be re-derived from the fixture rather
-  than treated as a contract value.
+  than treated as a contract value. **Resolved:** CHK-001 and
+  CHK-004 rephrased to one-element-per-fixture-block properties, and
+  REQ-002's done-when gained the partition invariant (every entry in
+  exactly one of `blocks` / `prior_rounds`); counts now derive from
+  the fixture instead of being contract values.
 
 ## Changelog
 
@@ -405,4 +417,5 @@ whole-SPEC supersession).
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-11 | claude-fable-5 | Initial SPEC: bundle journal section carries latest-round blocks in full (REQ-001) plus attributes-only prior-rounds index (REQ-002); shipped prompt modules reworded with `journal show --round N` drill-down (REQ-003); ARCHITECTURE.md envelope docs updated (REQ-004). DEC-001 reuses `--round latest` resolution; DEC-002 keeps `schema_version: 1`; DEC-003 never inlines prior bodies; DEC-004 index = `JsonJournalBlock` minus `body`. Supersedes SPEC-0056 REQ-004 full-inline behavior for the journal section only. |
+| 2026-06-11 | claude-fable-5 | Resolved open question a.: CHK-001/CHK-004 fixture counts rephrased as one-element-per-block properties; REQ-002 done-when gained the blocks/prior_rounds partition invariant. No requirement intent changed. |
 </changelog>
