@@ -63,6 +63,25 @@ impl Workspace {
             supersession: &self.supersession,
         }
     }
+
+    /// Locate the spec directory whose `NNNN-slug` name matches the
+    /// digits of `canonical_id` (a `SPEC-NNNN` string). Matches on the
+    /// directory name rather than the parsed frontmatter id so a spec
+    /// with an unparseable SPEC.md is still located (the caller then
+    /// surfaces its own parse diagnostic).
+    #[must_use = "callers must handle the not-found case"]
+    pub fn spec_dir_by_id(&self, canonical_id: &str) -> Option<&Utf8Path> {
+        let digits = canonical_id.strip_prefix("SPEC-")?;
+        let prefix = format!("{digits}-");
+        self.specs
+            .iter()
+            .find(|s| {
+                s.dir
+                    .file_name()
+                    .is_some_and(|name| name.starts_with(prefix.as_str()))
+            })
+            .map(|s| s.dir.as_path())
+    }
 }
 
 /// Per-spec staleness result.

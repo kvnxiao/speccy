@@ -1,4 +1,4 @@
-//! Raw-XML-element-structured REPORT.md parser and renderer (SPEC-0022
+//! Raw-XML-element-structured REPORT.md parser (SPEC-0022
 //! REQ-002 / REQ-003 carrier).
 //!
 //! Reads a REPORT.md whose body is ordinary Markdown plus line-isolated raw
@@ -13,8 +13,8 @@
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
-use crate::parse::frontmatter::Split;
-use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::frontmatter::extract_level1_heading;
+use crate::parse::frontmatter::split_required;
 use crate::parse::xml_scanner::ElementSpan;
 use crate::parse::xml_scanner::RawTag;
 use crate::parse::xml_scanner::ScanConfig;
@@ -166,27 +166,9 @@ fn scan_report_tags(
 /// formats, or coverage rows whose `result` requires a non-empty
 /// `scenarios` attribute but did not carry one.
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<ReportDoc> {
-    let split = split_frontmatter(source, path)?;
-    let (frontmatter_raw, body, body_offset) = match split {
-        Split::Some { yaml, body } => {
-            let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: 0,
-                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                })
-            })?;
-            (yaml.to_owned(), body, body_offset)
-        }
-        Split::None => {
-            return Err(Box::new(ParseError::MissingField {
-                field: "frontmatter".to_owned(),
-                context: format!("REPORT.md at {path}"),
-            }));
-        }
-    };
+    let (frontmatter_raw, body, body_offset) = split_required(source, path, "REPORT.md")?;
 
-    let heading = extract_level1_heading(body, path)?;
+    let heading = extract_level1_heading(body, path, "REPORT.md")?;
 
     let raw_tags = scan_report_tags(source, body, body_offset, path)?;
 
@@ -237,13 +219,8 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<ReportDoc> {
     let mut coverage: Vec<RequirementCoverage> = Vec::new();
     for child in children {
         match child {
-            Block::Coverage {
-                attrs,
-                body,
-                span,
-                attrs_present,
-            } => {
-                let row = build_coverage(&attrs, &attrs_present, body, span, path)?;
+            Block::Coverage { attrs, body, span } => {
+                let row = build_coverage(&attrs, body, span, path)?;
                 coverage.push(row);
             }
             Block::Report { span, .. } => {
@@ -268,7 +245,6 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<ReportDoc> {
 
 fn build_coverage(
     attrs: &[(String, String)],
-    attrs_present: &[String],
     body: String,
     span: ElementSpan,
     path: &Utf8Path,
@@ -308,14 +284,13 @@ fn build_coverage(
     })?;
 
     // scenarios — must be *present*, but may be empty for deferred.
-    if !attrs_present.iter().any(|k| k == "scenarios") {
-        return Err(Box::new(ParseError::MissingCoverageAttribute {
+    let scenarios_raw = find_attr(attrs, "scenarios").ok_or_else(|| {
+        Box::new(ParseError::MissingCoverageAttribute {
             path: path.to_path_buf(),
             attribute: "scenarios".to_owned(),
             offset: span.start,
-        }));
-    }
-    let scenarios_raw = find_attr(attrs, "scenarios").unwrap_or_default();
+        })
+    })?;
     let scenarios = parse_scenarios(&scenarios_raw, &req, path)?;
 
     match result {
@@ -383,156 +358,6 @@ fn parse_scenarios(raw: &str, req: &str, path: &Utf8Path) -> ParseResult<Vec<Str
     Ok(scenarios)
 }
 
-/// Render a [`ReportDoc`] to its canonical raw-XML REPORT.md form.
-///
-/// The output is a Markdown document with raw XML element tags carrying
-/// Speccy structure:
-///
-/// 1. Frontmatter fence followed by [`ReportDoc::frontmatter_raw`].
-/// 2. A blank line, then the level-1 heading (`# {heading}`).
-/// 3. The root `<report spec="...">` block wrapping every coverage row in
-///    [`ReportDoc::coverage`] order.
-///
-/// `render(doc) == render(doc)` byte-for-byte for any valid `doc`.
-/// Free Markdown prose between `<coverage>` blocks is **not** preserved:
-/// the renderer projects only the typed model, mirroring SPEC-0020's
-/// canonical-not-lossless contract.
-#[must_use = "the rendered Markdown string is the canonical projection of the ReportDoc"]
-pub fn render(doc: &ReportDoc) -> String {
-    let mut out = String::new();
-    out.push_str("---\n");
-    out.push_str(&doc.frontmatter_raw);
-    if !doc.frontmatter_raw.ends_with('\n') {
-        out.push('\n');
-    }
-    out.push_str("---\n\n");
-    out.push_str("# ");
-    out.push_str(&doc.heading);
-    out.push_str("\n\n");
-
-    push_element_open(&mut out, "report", &[("spec", doc.spec_id.as_str())]);
-    out.push('\n');
-    for row in &doc.coverage {
-        let scenarios_value = row.scenarios.join(" ");
-        let attrs: [(&str, &str); 3] = [
-            ("req", row.req.as_str()),
-            ("result", row.result.as_str()),
-            ("scenarios", scenarios_value.as_str()),
-        ];
-        push_element_block(&mut out, "coverage", &attrs, &row.body);
-    }
-    push_element_close(&mut out, "report");
-
-    out
-}
-
-fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
-    push_element_open(out, name, attrs);
-    push_body(out, body);
-    push_element_close(out, name);
-}
-
-fn push_element_open(out: &mut String, name: &str, attrs: &[(&str, &str)]) {
-    out.push('<');
-    out.push_str(name);
-    for (k, v) in attrs {
-        out.push(' ');
-        out.push_str(k);
-        out.push_str("=\"");
-        out.push_str(v);
-        out.push('"');
-    }
-    out.push_str(">\n");
-}
-
-fn push_element_close(out: &mut String, name: &str) {
-    out.push_str("</");
-    out.push_str(name);
-    out.push_str(">\n");
-    // Match `spec_xml`/`task_xml` determinism contract: every close tag is
-    // followed by a single blank line.
-    out.push('\n');
-}
-
-fn push_body(out: &mut String, body: &str) {
-    let interior = trim_blank_boundary_lines(body);
-    if interior.is_empty() {
-        return;
-    }
-    out.push_str(interior);
-    out.push('\n');
-}
-
-fn trim_blank_boundary_lines(body: &str) -> &str {
-    let bytes = body.as_bytes();
-    let mut start: usize = 0;
-    let mut cursor: usize = 0;
-    while cursor < bytes.len() {
-        let line_start = cursor;
-        let mut all_ws = true;
-        while cursor < bytes.len() && bytes.get(cursor) != Some(&b'\n') {
-            match bytes.get(cursor) {
-                Some(b' ' | b'\t' | b'\r') => {}
-                _ => all_ws = false,
-            }
-            cursor = cursor.saturating_add(1);
-        }
-        if cursor < bytes.len() {
-            cursor = cursor.saturating_add(1);
-        }
-        if all_ws {
-            start = cursor;
-        } else {
-            start = line_start;
-            break;
-        }
-    }
-    if start >= bytes.len() {
-        return "";
-    }
-
-    let mut end: usize = bytes.len();
-    let mut cursor: usize = bytes.len();
-    while cursor > start {
-        let mut line_end = cursor;
-        let mut probe = cursor;
-        if probe > start && bytes.get(probe.saturating_sub(1)) == Some(&b'\n') {
-            probe = probe.saturating_sub(1);
-            line_end = probe;
-        }
-        let mut line_start = probe;
-        while line_start > start && bytes.get(line_start.saturating_sub(1)) != Some(&b'\n') {
-            line_start = line_start.saturating_sub(1);
-        }
-        let line = bytes.get(line_start..line_end).unwrap_or(&[]);
-        let all_ws = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
-        if all_ws {
-            end = line_start;
-            cursor = line_start;
-        } else {
-            end = line_end;
-            break;
-        }
-    }
-    body.get(start..end).unwrap_or("")
-}
-
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
-    for line in body.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("# ") {
-            return Ok(rest.trim().to_owned());
-        }
-        if trimmed == "#" {
-            return Ok(String::new());
-        }
-    }
-    Err(Box::new(ParseError::MissingField {
-        field: "level-1 heading".to_owned(),
-        context: format!("REPORT.md at {path}"),
-    }))
-}
-
 #[derive(Debug)]
 enum Block {
     Report {
@@ -542,7 +367,6 @@ enum Block {
     },
     Coverage {
         attrs: Vec<(String, String)>,
-        attrs_present: Vec<String>,
         body: String,
         span: ElementSpan,
     },
@@ -582,11 +406,9 @@ fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<
                 top.push(block);
             }
         } else {
-            let attrs_present: Vec<String> = t.attrs.iter().map(|(k, _)| k.clone()).collect();
             stack.push(PendingBlock {
                 name: t.name,
                 attrs: t.attrs,
-                attrs_present,
                 span: t.span,
                 body_start: t.body_start,
                 children: Vec::new(),
@@ -650,7 +472,6 @@ fn validate_tag_shape(t: &RawTag, path: &Utf8Path) -> ParseResult<()> {
 struct PendingBlock {
     name: String,
     attrs: Vec<(String, String)>,
-    attrs_present: Vec<String>,
     span: ElementSpan,
     body_start: usize,
     children: Vec<Block>,
@@ -661,7 +482,6 @@ impl PendingBlock {
         let PendingBlock {
             name,
             attrs,
-            attrs_present,
             span,
             body_start: _,
             children,
@@ -680,12 +500,7 @@ impl PendingBlock {
                     children,
                 })
             }
-            "coverage" => Ok(Block::Coverage {
-                attrs,
-                attrs_present,
-                body,
-                span,
-            }),
+            "coverage" => Ok(Block::Coverage { attrs, body, span }),
             other => Err(Box::new(ParseError::UnknownMarkerName {
                 path: path.to_path_buf(),
                 marker_name: other.to_owned(),
@@ -701,7 +516,6 @@ mod tests {
     use super::CoverageResult;
     use super::REPORT_ELEMENT_NAMES;
     use super::parse;
-    use super::render;
     use crate::error::ParseError;
     use crate::parse::xml_scanner::HTML5_ELEMENT_NAMES;
     use camino::Utf8Path;
@@ -970,55 +784,6 @@ mod tests {
             msg.contains("req, result, scenarios"),
             "msg `{msg}` missing valid set"
         );
-    }
-
-    #[test]
-    fn render_then_reparse_field_equal() {
-        let src = make(indoc! {r#"
-            <report spec="SPEC-0022">
-
-            <coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
-            sat body.
-            </coverage>
-
-            <coverage req="REQ-002" result="partial" scenarios="CHK-002 CHK-003">
-            partial body.
-            </coverage>
-
-            <coverage req="REQ-003" result="deferred" scenarios="">
-            deferred body.
-            </coverage>
-
-            </report>
-        "#});
-        let doc = parse(&src, path()).expect("parse should succeed");
-        let rendered = render(&doc);
-        let doc2 = parse(&rendered, path()).expect("rendered REPORT.md must reparse");
-        assert_eq!(doc.spec_id, doc2.spec_id);
-        assert_eq!(doc.coverage.len(), doc2.coverage.len());
-        for (a, b) in doc.coverage.iter().zip(doc2.coverage.iter()) {
-            assert_eq!(a.req, b.req);
-            assert_eq!(a.result, b.result);
-            assert_eq!(a.scenarios, b.scenarios);
-            assert_eq!(a.body.trim(), b.body.trim());
-        }
-    }
-
-    #[test]
-    fn render_is_idempotent() {
-        let src = make(indoc! {r#"
-            <report spec="SPEC-0022">
-
-            <coverage req="REQ-001" result="satisfied" scenarios="CHK-001">
-            sat body.
-            </coverage>
-
-            </report>
-        "#});
-        let doc = parse(&src, path()).expect("parse should succeed");
-        let first = render(&doc);
-        let second = render(&doc);
-        assert_eq!(first, second, "render must be byte-identical on repeat");
     }
 
     #[test]

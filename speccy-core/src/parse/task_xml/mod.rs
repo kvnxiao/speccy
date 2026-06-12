@@ -1,4 +1,4 @@
-//! Raw-XML-element-structured TASKS.md parser and renderer.
+//! Raw-XML-element-structured TASKS.md parser.
 //!
 //! TASKS.md is a YAML frontmatter, a level-1 `# Tasks: ...` heading, and
 //! a sequence of bare `<task>` children. The closed element set is
@@ -14,8 +14,8 @@
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
-use crate::parse::frontmatter::Split;
-use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::frontmatter::extract_level1_heading;
+use crate::parse::frontmatter::split_required;
 use crate::parse::xml_scanner::ElementSpan;
 use crate::parse::xml_scanner::RawTag;
 use crate::parse::xml_scanner::ScanConfig;
@@ -193,8 +193,7 @@ pub enum SpliceError {
 /// whose [`Task::span`] locates its `<task>` open tag. Only the bytes of
 /// the `state="..."` attribute *value* are replaced; every other byte of
 /// `raw` — frontmatter, bodies, whitespace, and line endings — is
-/// preserved verbatim. This does **not** round-trip through [`render`],
-/// which reformats and strips nested blocks.
+/// preserved verbatim.
 ///
 /// # Errors
 ///
@@ -268,46 +267,6 @@ pub struct Task {
 }
 
 impl Task {
-    /// Derive a one-line summary of the task by returning the first
-    /// non-empty line of the body.
-    #[must_use = "the title is used as the next-command task line"]
-    pub fn title(&self) -> String {
-        self.body
-            .lines()
-            .map(str::trim)
-            .find(|l| !l.is_empty())
-            .unwrap_or("")
-            .to_owned()
-    }
-
-    /// Extract the `Suggested files:` bullet from the task body, when
-    /// present.
-    #[must_use = "the suggested files drive prompt rendering"]
-    pub fn suggested_files(&self) -> Vec<String> {
-        for line in self.body.lines() {
-            let trimmed = line.trim_start();
-            let Some(rest) = trimmed
-                .strip_prefix("- ")
-                .or_else(|| trimmed.strip_prefix("* "))
-            else {
-                continue;
-            };
-            let rest = rest.trim_start();
-            let label_match = rest
-                .strip_prefix("Suggested files:")
-                .or_else(|| rest.strip_prefix("**Suggested files**:"))
-                .or_else(|| rest.strip_prefix("Suggested files**:"));
-            if let Some(after) = label_match {
-                return after
-                    .split(',')
-                    .map(|s| s.trim().trim_matches('`').to_owned())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-            }
-        }
-        Vec::new()
-    }
-
     /// 1-indexed source line of the `<task>` open tag inside the parent
     /// TASKS.md.
     #[must_use = "the line number is used to extract verbatim task entries"]
@@ -365,27 +324,9 @@ fn scan_task_tags(
 /// invalid `covers` formats, or missing required nested
 /// `<task-scenarios>` blocks.
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<TasksDoc> {
-    let split = split_frontmatter(source, path)?;
-    let (frontmatter_raw, body, body_offset) = match split {
-        Split::Some { yaml, body } => {
-            let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: 0,
-                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                })
-            })?;
-            (yaml.to_owned(), body, body_offset)
-        }
-        Split::None => {
-            return Err(Box::new(ParseError::MissingField {
-                field: "frontmatter".to_owned(),
-                context: format!("TASKS.md at {path}"),
-            }));
-        }
-    };
+    let (frontmatter_raw, body, body_offset) = split_required(source, path, "TASKS.md")?;
 
-    let heading = extract_level1_heading(body, path)?;
+    let heading = extract_level1_heading(body, path, "TASKS.md")?;
 
     let raw_tags = scan_task_tags(source, body, body_offset, path)?;
 
@@ -591,178 +532,6 @@ fn parse_covers(raw: &str, task_id: &str, path: &Utf8Path) -> ParseResult<Vec<St
         covers.push(token.to_owned());
     }
     Ok(covers)
-}
-
-/// Render a [`TasksDoc`] back to its canonical Markdown form.
-///
-/// Output: frontmatter, blank line, level-1 heading, blank line, then
-/// bare `<task>` children separated by a blank line each.
-#[must_use = "the rendered Markdown string is the canonical projection of the TasksDoc"]
-pub fn render(doc: &TasksDoc) -> String {
-    let mut out = String::new();
-    out.push_str("---\n");
-    out.push_str(&doc.frontmatter_raw);
-    if !doc.frontmatter_raw.ends_with('\n') {
-        out.push('\n');
-    }
-    out.push_str("---\n\n");
-    out.push_str("# ");
-    out.push_str(&doc.heading);
-    out.push_str("\n\n");
-
-    for task in &doc.tasks {
-        let covers_value = task.covers.join(" ");
-        let attrs: [(&str, &str); 3] = [
-            ("id", task.id.as_str()),
-            ("state", task.state.as_str()),
-            ("covers", covers_value.as_str()),
-        ];
-        push_element_open(&mut out, "task", &attrs);
-        let prose = strip_nested_body_blocks(&task.body);
-        push_body(&mut out, &prose);
-        push_element_block(&mut out, "task-scenarios", &[], &task.scenarios_body);
-        push_element_close(&mut out, "task");
-    }
-
-    out
-}
-
-fn strip_nested_body_blocks(body: &str) -> String {
-    const STRIPPED: &[&str] = &["task-scenarios", "implementer", "review", "blockers"];
-    let mut out = String::with_capacity(body.len());
-    let mut in_block: Option<&'static str> = None;
-    for line in body.split_inclusive('\n') {
-        let trimmed = line.trim_start();
-        if let Some(name) = in_block {
-            let close = format!("</{name}>");
-            if trimmed.starts_with(close.as_str()) {
-                in_block = None;
-            }
-            continue;
-        }
-        let mut matched: Option<&'static str> = None;
-        for name in STRIPPED {
-            let open_prefix_attr = format!("<{name} ");
-            let open_prefix_close = format!("<{name}>");
-            if trimmed.starts_with(open_prefix_attr.as_str())
-                || trimmed.starts_with(open_prefix_close.as_str())
-            {
-                matched = Some(name);
-                break;
-            }
-        }
-        if let Some(name) = matched {
-            in_block = Some(name);
-            continue;
-        }
-        out.push_str(line);
-    }
-    out
-}
-
-fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
-    push_element_open(out, name, attrs);
-    push_body(out, body);
-    push_element_close(out, name);
-}
-
-fn push_element_open(out: &mut String, name: &str, attrs: &[(&str, &str)]) {
-    out.push('<');
-    out.push_str(name);
-    for (k, v) in attrs {
-        out.push(' ');
-        out.push_str(k);
-        out.push_str("=\"");
-        out.push_str(v);
-        out.push('"');
-    }
-    out.push_str(">\n");
-}
-
-fn push_element_close(out: &mut String, name: &str) {
-    out.push_str("</");
-    out.push_str(name);
-    out.push_str(">\n");
-    out.push('\n');
-}
-
-fn push_body(out: &mut String, body: &str) {
-    let interior = trim_blank_boundary_lines(body);
-    if interior.is_empty() {
-        return;
-    }
-    out.push_str(interior);
-    out.push('\n');
-}
-
-fn trim_blank_boundary_lines(body: &str) -> &str {
-    let bytes = body.as_bytes();
-    let mut start: usize = 0;
-    let mut cursor: usize = 0;
-    while cursor < bytes.len() {
-        let line_start = cursor;
-        let mut all_ws = true;
-        while cursor < bytes.len() && bytes.get(cursor) != Some(&b'\n') {
-            match bytes.get(cursor) {
-                Some(b' ' | b'\t' | b'\r') => {}
-                _ => all_ws = false,
-            }
-            cursor = cursor.saturating_add(1);
-        }
-        if cursor < bytes.len() {
-            cursor = cursor.saturating_add(1);
-        }
-        if all_ws {
-            start = cursor;
-        } else {
-            start = line_start;
-            break;
-        }
-    }
-    if start >= bytes.len() {
-        return "";
-    }
-
-    let mut end: usize = bytes.len();
-    let mut cursor: usize = bytes.len();
-    while cursor > start {
-        let mut line_end = cursor;
-        let mut probe = cursor;
-        if probe > start && bytes.get(probe.saturating_sub(1)) == Some(&b'\n') {
-            probe = probe.saturating_sub(1);
-            line_end = probe;
-        }
-        let mut line_start = probe;
-        while line_start > start && bytes.get(line_start.saturating_sub(1)) != Some(&b'\n') {
-            line_start = line_start.saturating_sub(1);
-        }
-        let line = bytes.get(line_start..line_end).unwrap_or(&[]);
-        let all_ws = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
-        if all_ws {
-            end = line_start;
-            cursor = line_start;
-        } else {
-            end = line_end;
-            break;
-        }
-    }
-    body.get(start..end).unwrap_or("")
-}
-
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
-    for line in body.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("# ") {
-            return Ok(rest.trim().to_owned());
-        }
-        if trimmed == "#" {
-            return Ok(String::new());
-        }
-    }
-    Err(Box::new(ParseError::MissingField {
-        field: "level-1 heading".to_owned(),
-        context: format!("TASKS.md at {path}"),
-    }))
 }
 
 #[derive(Debug)]

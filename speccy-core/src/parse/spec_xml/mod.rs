@@ -1,4 +1,4 @@
-//! Raw-XML-element-structured SPEC.md parser and renderer.
+//! Raw-XML-element-structured SPEC.md parser.
 //!
 //! Reads a SPEC.md whose body is ordinary Markdown plus line-isolated raw
 //! XML open/close tag pairs drawn from a closed whitelist (`requirement`,
@@ -13,23 +13,14 @@
 //! XML payload and `<`, `>`, `&` inside it remain ordinary Markdown
 //! characters.
 //!
-//! [`render`] is the deterministic projection of a [`SpecDoc`] back to
-//! Markdown source. It is canonical-not-lossless: only the typed model is
-//! emitted, so free Markdown prose that lived outside any element block
-//! in the source (Goals, Non-goals, Design narrative, Notes, etc.) does
-//! **not** roundtrip. Parse-then-render-then-parse on a rendered document
-//! is structurally equivalent (ids, parent links, element names, bodies);
-//! parse-then-render-then-parse on an arbitrary hand-authored SPEC.md
-//! drops free prose.
-//!
 //! See `.speccy/specs/0020-raw-xml-spec-carrier/SPEC.md` REQ-001/REQ-002/
 //! REQ-003 for the contract this module satisfies, and DEC-002/DEC-003
 //! for the disjointness invariant and the line-aware scanner decision.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
-use crate::parse::frontmatter::Split;
-use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::frontmatter::extract_level1_heading;
+use crate::parse::frontmatter::split_required;
 pub use crate::parse::xml_scanner::ElementSpan;
 pub use crate::parse::xml_scanner::HTML5_ELEMENT_NAMES;
 use crate::parse::xml_scanner::RawTag;
@@ -96,8 +87,7 @@ pub struct Requirement {
     pub id: String,
     /// Markdown body between open and close tags, verbatim (nested
     /// `<done-when>`, `<behavior>`, and `<scenario>` tag lines are
-    /// included as literal text — the renderer strips them before
-    /// re-emitting from typed state).
+    /// included as literal text).
     pub body: String,
     /// Body of the required `<done-when>` sub-element, verbatim.
     pub done_when: String,
@@ -260,27 +250,9 @@ fn dec_id_regex() -> &'static Regex {
 /// required bodies, invalid attribute values, or surviving SPEC-0019
 /// HTML-comment markers outside fenced code blocks.
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<SpecDoc> {
-    let split = split_frontmatter(source, path)?;
-    let (frontmatter_raw, body, body_offset) = match split {
-        Split::Some { yaml, body } => {
-            let body_offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: 0,
-                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                })
-            })?;
-            (yaml.to_owned(), body, body_offset)
-        }
-        Split::None => {
-            return Err(Box::new(ParseError::MissingField {
-                field: "frontmatter".to_owned(),
-                context: format!("SPEC.md at {path}"),
-            }));
-        }
-    };
+    let (frontmatter_raw, body, body_offset) = split_required(source, path, "SPEC.md")?;
 
-    let heading = extract_level1_heading(body, path)?;
+    let heading = extract_level1_heading(body, path, "SPEC.md")?;
 
     let raw_tags = scan_spec_tags(source, body, body_offset, path)?;
     let tree = assemble(raw_tags, source, path)?;
@@ -360,290 +332,6 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<SpecDoc> {
         changelog_body,
         changelog_span,
     })
-}
-
-/// Render a [`SpecDoc`] to its canonical raw-XML SPEC.md form.
-///
-/// The output is a Markdown document with raw XML element tags carrying
-/// Speccy structure:
-///
-/// 1. Frontmatter fence followed by [`SpecDoc::frontmatter_raw`].
-/// 2. A blank line, then the level-1 heading (`# {heading}`).
-/// 3. `<goals>`, `<non-goals>`, `<user-stories>` top-level sections.
-/// 4. Every [`Requirement`] in [`SpecDoc::requirements`] order. Each
-///    requirement renders its prose (with nested `<done-when>`, `<behavior>`,
-///    and `<scenario>` tag lines stripped out), then `<done-when>` and
-///    `<behavior>`, then every nested [`Scenario`] in
-///    [`Requirement::scenarios`] order.
-/// 5. Every [`Decision`] in [`SpecDoc::decisions`] order.
-/// 6. Every [`OpenQuestion`] in [`SpecDoc::open_questions`] order.
-/// 7. Optional `<assumptions>` block, if present.
-/// 8. The required `<changelog>` block.
-///
-/// The renderer is canonical-not-lossless. Free Markdown prose between
-/// elements in a hand-authored source (Goals, Non-goals, Design,
-/// Migration, Notes, etc.) is **not** preserved — render emits only the
-/// typed model. The SPEC-0020 migration tool (T-003) is responsible for
-/// preserving free prose by rewriting source files directly rather than
-/// going through this renderer; see the module-level doc for the same
-/// trade-off SPEC-0019 T-002 documented for the marker renderer.
-///
-/// # Determinism contract
-///
-/// - Every element open and close tag occupies its own line. Nothing else
-///   shares the tag's line.
-/// - Element attributes are emitted in a fixed order. Today the only
-///   multi-attribute element is `<decision>`, which always emits `id` before
-///   `status`. `<open-question>` carries at most `resolved` only.
-/// - Block order follows struct field order ([`SpecDoc::requirements`],
-///   [`Requirement::scenarios`], [`SpecDoc::decisions`],
-///   [`SpecDoc::open_questions`]) — never source byte offsets.
-/// - Element bodies are emitted verbatim except that boundary whitespace is
-///   normalised: leading and trailing whitespace-only lines inside the body are
-///   dropped, then exactly one `\n` separates the open tag line from the first
-///   body byte and exactly one `\n` separates the last non-whitespace body byte
-///   from the close tag line. Interior bytes (including fenced code blocks,
-///   inline backticks, and literal `<` / `>` / `&`) are preserved
-///   byte-for-byte.
-/// - Every closing element tag is followed by a single blank line. This is the
-///   SPEC-0020 Open Question 2 resolution: the canonical fixture and shipped
-///   SPEC.md files all favour visual separation between top-level blocks over
-///   diff width, and applying the same rule between nested scenarios keeps the
-///   renderer's emission shape uniform (one rule, no special cases). Roundtrip
-///   equivalence is structural — not byte-identical — so the rule does not need
-///   to match the original source's whitespace.
-/// - `render(doc) == render(doc)` byte-for-byte for any valid `doc`.
-/// - The renderer never emits the SPEC-0019 `<!-- speccy:` HTML-comment marker
-///   form (REQ-002 contract).
-///
-/// This function cannot fail: a [`SpecDoc`] has already been validated
-/// by [`parse`], so every invariant the renderer relies on is
-/// guaranteed.
-#[must_use = "the rendered Markdown string is the canonical projection of the SpecDoc"]
-pub fn render(doc: &SpecDoc) -> String {
-    let mut out = String::new();
-    out.push_str("---\n");
-    out.push_str(&doc.frontmatter_raw);
-    if !doc.frontmatter_raw.ends_with('\n') {
-        out.push('\n');
-    }
-    out.push_str("---\n\n");
-    out.push_str("# ");
-    out.push_str(&doc.heading);
-    out.push('\n');
-
-    out.push('\n');
-    push_element_block(&mut out, "goals", &[], &doc.goals);
-    out.push('\n');
-    push_element_block(&mut out, "non-goals", &[], &doc.non_goals);
-    out.push('\n');
-    push_element_block(&mut out, "user-stories", &[], &doc.user_stories);
-
-    for req in &doc.requirements {
-        out.push('\n');
-        let attrs = [("id", req.id.as_str())];
-        push_element_open(&mut out, "requirement", &attrs);
-        // The parser stores `Requirement.body` as the verbatim slice
-        // between the requirement's open and close tags, which includes
-        // nested done-when, behavior, and scenario tag lines as literal
-        // text. The renderer re-emits each sub-section from typed state
-        // to honour the SPEC-0021 canonical order, so strip those nested
-        // tag blocks out of the prose here.
-        let prose = strip_nested_requirement_sub_blocks(&req.body);
-        push_body(&mut out, &prose);
-        push_element_block(&mut out, "done-when", &[], &req.done_when);
-        push_element_block(&mut out, "behavior", &[], &req.behavior);
-        for sc in &req.scenarios {
-            let sc_attrs = [("id", sc.id.as_str())];
-            push_element_open(&mut out, "scenario", &sc_attrs);
-            push_body(&mut out, &sc.body);
-            push_element_close(&mut out, "scenario");
-        }
-        push_element_close(&mut out, "requirement");
-    }
-
-    for dec in &doc.decisions {
-        out.push('\n');
-        let status_str = dec.status.map(DecisionStatus::as_str);
-        let mut attrs: Vec<(&str, &str)> = Vec::with_capacity(2);
-        attrs.push(("id", dec.id.as_str()));
-        if let Some(s) = status_str.as_ref() {
-            attrs.push(("status", s));
-        }
-        push_element_block(&mut out, "decision", &attrs, &dec.body);
-    }
-
-    for q in &doc.open_questions {
-        out.push('\n');
-        let resolved_str = q.resolved.map(|b| if b { "true" } else { "false" });
-        let mut attrs: Vec<(&str, &str)> = Vec::new();
-        if let Some(r) = resolved_str.as_ref() {
-            attrs.push(("resolved", r));
-        }
-        push_element_block(&mut out, "open-question", &attrs, &q.body);
-    }
-
-    if let Some(assumptions) = &doc.assumptions {
-        out.push('\n');
-        push_element_block(&mut out, "assumptions", &[], assumptions);
-    }
-
-    out.push('\n');
-    push_element_block(&mut out, "changelog", &[], &doc.changelog_body);
-
-    out
-}
-
-/// Strip nested `<done-when>`, `<behavior>`, and `<scenario>` blocks
-/// from a requirement body.
-///
-/// The parser stores `Requirement.body` as the verbatim source slice
-/// between the requirement's open and close tags, which includes all
-/// nested SPEC-0021 sub-section tag lines as literal text. [`render`]
-/// re-emits those sub-sections from typed state to honour the canonical
-/// order, so the tag lines must be stripped from the surrounding prose
-/// first.
-///
-/// We walk line-by-line and drop runs that begin with a sub-section
-/// open tag and continue through the matching close tag. The parser
-/// has already validated tag shape and nesting, so this scan can rely
-/// on balanced single-level structure (sub-sections never nest each
-/// other).
-fn strip_nested_requirement_sub_blocks(body: &str) -> String {
-    let mut out = String::with_capacity(body.len());
-    let mut in_block: Option<&'static str> = None;
-    for line in body.split_inclusive('\n') {
-        let trimmed = line.trim_start();
-        if let Some(close) = in_block {
-            if trimmed.starts_with(close) {
-                in_block = None;
-            }
-            continue;
-        }
-        if (trimmed.starts_with("<scenario ") || trimmed.starts_with("<scenario>"))
-            && !trimmed.starts_with("</scenario>")
-        {
-            in_block = Some("</scenario>");
-            continue;
-        }
-        if trimmed.starts_with("<done-when>") {
-            in_block = Some("</done-when>");
-            continue;
-        }
-        if trimmed.starts_with("<behavior>") {
-            in_block = Some("</behavior>");
-            continue;
-        }
-        out.push_str(line);
-    }
-    out
-}
-
-fn push_element_block(out: &mut String, name: &str, attrs: &[(&str, &str)], body: &str) {
-    push_element_open(out, name, attrs);
-    push_body(out, body);
-    push_element_close(out, name);
-}
-
-fn push_element_open(out: &mut String, name: &str, attrs: &[(&str, &str)]) {
-    out.push('<');
-    out.push_str(name);
-    for (k, v) in attrs {
-        out.push(' ');
-        out.push_str(k);
-        out.push_str("=\"");
-        out.push_str(v);
-        out.push('"');
-    }
-    out.push_str(">\n");
-}
-
-fn push_element_close(out: &mut String, name: &str) {
-    out.push_str("</");
-    out.push_str(name);
-    out.push_str(">\n");
-    // Determinism contract: every closing element tag is followed by a
-    // single blank line. See [`render`] doc for the rationale.
-    out.push('\n');
-}
-
-/// Append `body` with normalised boundary whitespace: drop leading
-/// whitespace-only lines and trailing whitespace-only lines, then emit
-/// the interior bytes verbatim followed by exactly one `\n` before the
-/// trailing close tag line.
-///
-/// "Whitespace-only line" means a sequence of `' '`, `'\t'`, `'\r'`
-/// bytes terminated by `'\n'` — i.e. a blank or whitespace-padded blank
-/// line. Indentation on the first non-blank line is preserved (e.g. a
-/// body that starts with `    code-block-indent` keeps its leading
-/// spaces because that line is not whitespace-only).
-fn push_body(out: &mut String, body: &str) {
-    let interior = trim_blank_boundary_lines(body);
-    if interior.is_empty() {
-        // `parse` rejects empty required-element bodies, so this branch
-        // only fires for hand-built `SpecDoc`s with empty optional
-        // elements. Emit nothing between open and close tag lines.
-        return;
-    }
-    out.push_str(interior);
-    out.push('\n');
-}
-
-/// Return the slice of `body` with leading and trailing
-/// whitespace-only lines removed. See [`push_body`] for the definition
-/// of "whitespace-only line".
-fn trim_blank_boundary_lines(body: &str) -> &str {
-    let bytes = body.as_bytes();
-    let mut start: usize = 0;
-    let mut cursor: usize = 0;
-    while cursor < bytes.len() {
-        let line_start = cursor;
-        let mut all_ws = true;
-        while cursor < bytes.len() && bytes.get(cursor) != Some(&b'\n') {
-            match bytes.get(cursor) {
-                Some(b' ' | b'\t' | b'\r') => {}
-                _ => all_ws = false,
-            }
-            cursor = cursor.saturating_add(1);
-        }
-        if cursor < bytes.len() {
-            cursor = cursor.saturating_add(1);
-        }
-        if all_ws {
-            start = cursor;
-        } else {
-            start = line_start;
-            break;
-        }
-    }
-    if start >= bytes.len() {
-        return "";
-    }
-
-    let mut end: usize = bytes.len();
-    let mut cursor: usize = bytes.len();
-    while cursor > start {
-        let mut line_end = cursor;
-        let mut probe = cursor;
-        if probe > start && bytes.get(probe.saturating_sub(1)) == Some(&b'\n') {
-            probe = probe.saturating_sub(1);
-            line_end = probe;
-        }
-        let mut line_start = probe;
-        while line_start > start && bytes.get(line_start.saturating_sub(1)) != Some(&b'\n') {
-            line_start = line_start.saturating_sub(1);
-        }
-        let line = bytes.get(line_start..line_end).unwrap_or(&[]);
-        let all_ws = line.iter().all(|b| matches!(b, b' ' | b'\t' | b'\r'));
-        if all_ws {
-            end = line_start;
-            cursor = line_start;
-        } else {
-            end = line_end;
-            break;
-        }
-    }
-    body.get(start..end).unwrap_or("")
 }
 
 struct ProcessCtx<'a> {
@@ -1039,22 +727,6 @@ impl Block {
             Block::Changelog { .. } => "changelog",
         }
     }
-}
-
-fn extract_level1_heading(body: &str, path: &Utf8Path) -> ParseResult<String> {
-    for line in body.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("# ") {
-            return Ok(rest.trim().to_owned());
-        }
-        if trimmed == "#" {
-            return Ok(String::new());
-        }
-    }
-    Err(Box::new(ParseError::MissingField {
-        field: "level-1 heading".to_owned(),
-        context: format!("SPEC.md at {path}"),
-    }))
 }
 
 fn assemble(raw: Vec<RawTag>, source: &str, path: &Utf8Path) -> ParseResult<Vec<Block>> {

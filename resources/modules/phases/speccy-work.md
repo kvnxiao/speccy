@@ -48,41 +48,14 @@ incremented round).
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `{{ speccy_references_path }}/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `{{ speccy_references_path }}/reconcile-policy.md`) rather than the normal implementer flow.
+**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the full per-task journal, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `{{ speccy_references_path }}/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below rather than the normal implementer flow.
 
-**Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `{{ speccy_references_path }}/reconcile-policy.md` for the full policy table.
+{% include "modules/references/reconcile-summary.md" %}
 
 1. Resolve the target task.
 
-   - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
-   - Otherwise, query the CLI in workspace form (no SPEC selector
-     is known on this no-selector invocation path — we must walk
-     the active tree to find an implementable task):
-
-     ```bash
-     # workspace form: no SPEC-NNNN known yet; scan the active tree.
-     speccy next --json
-     ```
-
-     Workspace-form exit-code-stop contract: exit code 2 with a
-     top-level `reason="no_active_specs"` field in the JSON envelope
-     means the workspace has no active specs at all (fresh repo, or
-     every spec has shipped or been archived). Exit gracefully and
-     surface the reason; do not treat the non-zero exit as a CLI
-     error.
-
-     On exit code 0, if the resulting `specs` array has no entry
-     with `next_action.kind == "work"`, exit and report that no
-     implementable tasks remain. Otherwise, construct the
-     disambiguated `<spec>/<task>` form from the JSON's `spec_id`
-     and `next_action.task_id` fields (the bare task ID is
-     ambiguous across specs — every spec has its own `T-001`).
-
-     Exit-code-stop contract: once SPEC-NNNN is resolved, any
-     subsequent per-spec query (`speccy next SPEC-NNNN --json`) that
-     exits non-zero means the SPEC has reached a terminal state —
-     halt and surface the stderr line. Only parse JSON when exit
-     code is 0.
+{% set task_kind = "work" %}{% set task_adjective = "implementable" -%}
+{% include "modules/skills/partials/resolve-target-task.md" %}
 
 2. Apply the REQ-001 retry-shape rule summarized immediately below
    against the journal section of the bundle returned by the
@@ -230,19 +203,13 @@ incremented round).
    EOF
    ```
 
-   The CLI is the sole authority for the block's `date` and `round`
-   and for creating the journal file with frontmatter on the first
-   append — it stamps `date` (UTC now), derives `round`
-   (`max existing round + 1`, or `1` on a fresh file), writes the
-   three-field frontmatter when creating the file, and emits the
-   paired `<implementer>…</implementer>` element with a correct
-   closing tag. **Do not compute, supply, or mention `date`,
-   `round`, `generated_at`, or hand-author the block's open/close
-   tags** — there is no flag to override them, and the body you pipe
-   is the inner text only. Validation runs before any write; a
-   malformed body leaves the journal byte-identical (or still
-   absent). On a retry round the same command appends after the
-   existing journal contents and increments `round` for you.
+   {% include "modules/references/cli-stamps.md" %}
+
+   Here `round` derives as `max existing round + 1` (or `1` on a
+   fresh file, where the same append also creates the journal with
+   its three-field frontmatter). On a retry round the same command
+   appends after the existing journal contents and increments
+   `round` for you.
 
    `--model` is required. Encode reasoning effort (when your host
    harness exposes an effort knob) as a slash-suffix on the model
@@ -251,7 +218,7 @@ incremented round).
 
    {% include "modules/references/identity-sourcing.md" %}
 
-   Canonical journal `<implementer>` shape: `references/journal-implementer.md`.
+   Canonical journal `<implementer>` shape: `{{ speccy_references_path }}/journal-implementer.md`.
 
    Canonical evidence file shape: `{{ speccy_references_path }}/evidence.md`.
 

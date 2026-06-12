@@ -191,11 +191,15 @@ fn qualified_check_regex() -> &'static Regex {
     CELL.get_or_init(|| Regex::new(r"^(SPEC-\d{4,})/(CHK-\d{3,})$").unwrap())
 }
 
+/// Shared `SPEC-NNNN` (4+ digits) shape check. Also used by the
+/// `lock` and `archive` commands to validate their spec-id arguments
+/// and by `journal append` / `journal show` as the DEC-004 routing
+/// discriminant, so the accepted shape cannot drift per command.
 #[expect(
     clippy::unwrap_used,
     reason = "compile-time literal regex; covered by unit tests"
 )]
-fn bare_spec_regex() -> &'static Regex {
+pub(crate) fn bare_spec_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"^SPEC-\d{4,}$").unwrap())
 }

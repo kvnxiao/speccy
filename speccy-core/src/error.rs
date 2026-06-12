@@ -28,23 +28,6 @@ pub enum ParseError {
     #[error("path is not valid UTF-8: {0}")]
     NonUtf8Path(String),
 
-    /// File content is not valid UTF-8. Speccy does not attempt encoding
-    /// detection.
-    #[error("{path} is not valid UTF-8")]
-    NonUtf8File {
-        /// Path that contained the invalid bytes.
-        path: Utf8PathBuf,
-    },
-
-    /// The TOML payload at `path` could not be deserialised.
-    #[error("failed to parse TOML in {path}: {message}")]
-    Toml {
-        /// Path that failed to parse.
-        path: Utf8PathBuf,
-        /// Underlying TOML error message.
-        message: String,
-    },
-
     /// The YAML frontmatter could not be deserialised.
     #[error("failed to parse YAML frontmatter{location}: {message}", location = location_suffix(.label.as_deref()))]
     Yaml {
@@ -495,16 +478,6 @@ pub enum ParseError {
         /// Path of the offending journal file.
         path: Utf8PathBuf,
         /// Human-readable explanation of the violation.
-        reason: String,
-    },
-
-    /// A journal file's frontmatter binding (`spec:` or `task:`) did
-    /// not match the filename or parent directory. SPEC-0037 REQ-001.
-    #[error("journal {path} binding mismatch: {reason}")]
-    JournalBindingMismatch {
-        /// Path of the offending journal file.
-        path: Utf8PathBuf,
-        /// Human-readable explanation.
         reason: String,
     },
 

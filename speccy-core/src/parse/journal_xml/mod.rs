@@ -22,8 +22,15 @@ pub mod serialize;
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
-use crate::parse::frontmatter::Split;
-use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::frontmatter::split_required;
+use crate::parse::journal_common::assemble_flat;
+use crate::parse::journal_common::extract_yaml_field;
+use crate::parse::journal_common::is_iso8601;
+use crate::parse::journal_common::require_iso8601;
+use crate::parse::journal_common::require_nonempty;
+use crate::parse::journal_common::require_one_of;
+use crate::parse::journal_common::require_only_allowed;
+use crate::parse::journal_common::require_round;
 use crate::parse::xml_scanner::ElementSpan;
 use crate::parse::xml_scanner::RawTag;
 use crate::parse::xml_scanner::ScanConfig;
@@ -31,8 +38,6 @@ use crate::parse::xml_scanner::collect_code_fence_byte_ranges;
 use crate::parse::xml_scanner::scan_tags;
 use crate::personas::ALL as PERSONAS_ALL;
 use camino::Utf8Path;
-use regex::Regex;
-use std::sync::OnceLock;
 
 /// Closed set of `<review verdict="...">` values, on-disk form.
 pub const ALLOWED_REVIEW_VERDICTS: &[&str] = &["pass", "blocking"];
@@ -122,26 +127,6 @@ impl JournalEntry {
     }
 }
 
-fn iso8601_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by unit tests"
-    )]
-    CELL.get_or_init(|| {
-        Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$").unwrap()
-    })
-}
-
-fn round_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by unit tests"
-    )]
-    CELL.get_or_init(|| Regex::new(r"^[1-9][0-9]*$").unwrap())
-}
-
 /// Parse a journal file source into a [`JournalDoc`].
 ///
 /// # Errors
@@ -151,25 +136,7 @@ fn round_regex() -> &'static Regex {
 /// schema regex, or the round counter sequence violates REQ-004
 /// (first round must be 1, monotonic non-decreasing, no skips).
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
-    let split = split_frontmatter(source, path)?;
-    let (yaml_raw, body, body_offset) = match split {
-        Split::Some { yaml, body } => {
-            let offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: 0,
-                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                })
-            })?;
-            (yaml.to_owned(), body, offset)
-        }
-        Split::None => {
-            return Err(Box::new(ParseError::MissingField {
-                field: "frontmatter".to_owned(),
-                context: format!("journal file at {path}"),
-            }));
-        }
-    };
+    let (yaml_raw, body, body_offset) = split_required(source, path, "journal file")?;
 
     let spec = extract_yaml_field(&yaml_raw, "spec").ok_or_else(|| {
         Box::new(ParseError::MissingField {
@@ -190,7 +157,7 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
         })
     })?;
 
-    if !iso8601_regex().is_match(&generated_at) {
+    if !is_iso8601(&generated_at) {
         return Err(Box::new(ParseError::InvalidJournalAttribute {
             path: path.to_path_buf(),
             element: "<frontmatter>".to_owned(),
@@ -208,7 +175,13 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
     };
     let raw_tags = scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)?;
 
-    let entries = assemble_entries(raw_tags, source, path)?;
+    let (entries, _body_ranges) = assemble_flat(
+        raw_tags,
+        source,
+        path,
+        "journal elements must not be nested",
+        |open, body| build_entry(open, body, path),
+    )?;
 
     validate_round_sequence(&entries, path)?;
 
@@ -220,78 +193,13 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
     })
 }
 
-fn assemble_entries(
-    tags: Vec<RawTag>,
-    source: &str,
-    path: &Utf8Path,
-) -> ParseResult<Vec<JournalEntry>> {
-    let mut entries: Vec<JournalEntry> = Vec::new();
-    let mut stack: Vec<RawTag> = Vec::new();
-    for t in tags {
-        if t.is_close {
-            let Some(open) = stack.pop() else {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: t.span.start,
-                    reason: format!("close tag `</{}>` without matching open", t.name),
-                }));
-            };
-            if open.name != t.name {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: t.span.start,
-                    reason: format!(
-                        "close tag `</{}>` does not match open `<{}>`",
-                        t.name, open.name
-                    ),
-                }));
-            }
-            if !stack.is_empty() {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: open.span.start,
-                    reason: "journal elements must not be nested".to_owned(),
-                }));
-            }
-            let body = source
-                .get(open.body_start..t.body_end_after_tag)
-                .unwrap_or("")
-                .to_owned();
-            entries.push(build_entry(&open, body, path)?);
-        } else {
-            stack.push(t);
-        }
-    }
-    if let Some(open) = stack.first() {
-        return Err(Box::new(ParseError::MalformedMarker {
-            path: path.to_path_buf(),
-            offset: open.span.start,
-            reason: format!("open tag `<{}>` is never closed", open.name),
-        }));
-    }
-    Ok(entries)
-}
-
 fn build_entry(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<JournalEntry> {
     match open.name.as_str() {
         "implementer" => {
-            let allowed: &[&str] = &["date", "model", "round"];
-            require_only_allowed(open, allowed, path)?;
-            let date = require_attr(open, "date", path)?;
-            validate_iso8601(open, "date", &date, path)?;
-            let model = require_attr(open, "model", path)?;
-            if model.is_empty() {
-                return Err(Box::new(ParseError::InvalidJournalAttribute {
-                    path: path.to_path_buf(),
-                    element: open.name.clone(),
-                    attribute: "model".to_owned(),
-                    value: model,
-                    reason: "model must be a non-empty string".to_owned(),
-                    offset: open.span.start,
-                }));
-            }
-            let round_raw = require_attr(open, "round", path)?;
-            let round = parse_round(open, &round_raw, path)?;
+            require_only_allowed(open, &["date", "model", "round"], path)?;
+            let date = require_iso8601(open, "date", path)?;
+            let model = require_nonempty(open, "model", path)?;
+            let round = require_round(open, path)?;
             Ok(JournalEntry::Implementer {
                 date,
                 model,
@@ -301,48 +209,16 @@ fn build_entry(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<Jour
             })
         }
         "review" => {
-            let allowed: &[&str] = &["date", "model", "persona", "verdict", "round"];
-            require_only_allowed(open, allowed, path)?;
-            let date = require_attr(open, "date", path)?;
-            validate_iso8601(open, "date", &date, path)?;
-            let model = require_attr(open, "model", path)?;
-            if model.is_empty() {
-                return Err(Box::new(ParseError::InvalidJournalAttribute {
-                    path: path.to_path_buf(),
-                    element: open.name.clone(),
-                    attribute: "model".to_owned(),
-                    value: model,
-                    reason: "model must be a non-empty string".to_owned(),
-                    offset: open.span.start,
-                }));
-            }
-            let persona = require_attr(open, "persona", path)?;
-            if !PERSONAS_ALL.contains(&persona.as_str()) {
-                return Err(Box::new(ParseError::InvalidJournalAttribute {
-                    path: path.to_path_buf(),
-                    element: open.name.clone(),
-                    attribute: "persona".to_owned(),
-                    value: persona,
-                    reason: format!("persona must be one of {}", PERSONAS_ALL.join(", ")),
-                    offset: open.span.start,
-                }));
-            }
-            let verdict = require_attr(open, "verdict", path)?;
-            if !ALLOWED_REVIEW_VERDICTS.contains(&verdict.as_str()) {
-                return Err(Box::new(ParseError::InvalidJournalAttribute {
-                    path: path.to_path_buf(),
-                    element: open.name.clone(),
-                    attribute: "verdict".to_owned(),
-                    value: verdict,
-                    reason: format!(
-                        "verdict must be one of {}",
-                        ALLOWED_REVIEW_VERDICTS.join(", ")
-                    ),
-                    offset: open.span.start,
-                }));
-            }
-            let round_raw = require_attr(open, "round", path)?;
-            let round = parse_round(open, &round_raw, path)?;
+            require_only_allowed(
+                open,
+                &["date", "model", "persona", "verdict", "round"],
+                path,
+            )?;
+            let date = require_iso8601(open, "date", path)?;
+            let model = require_nonempty(open, "model", path)?;
+            let persona = require_one_of(open, "persona", PERSONAS_ALL, path)?;
+            let verdict = require_one_of(open, "verdict", ALLOWED_REVIEW_VERDICTS, path)?;
+            let round = require_round(open, path)?;
             Ok(JournalEntry::Review {
                 date,
                 model,
@@ -354,12 +230,9 @@ fn build_entry(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<Jour
             })
         }
         "blockers" => {
-            let allowed: &[&str] = &["date", "round"];
-            require_only_allowed(open, allowed, path)?;
-            let date = require_attr(open, "date", path)?;
-            validate_iso8601(open, "date", &date, path)?;
-            let round_raw = require_attr(open, "round", path)?;
-            let round = parse_round(open, &round_raw, path)?;
+            require_only_allowed(open, &["date", "round"], path)?;
+            let date = require_iso8601(open, "date", path)?;
+            let round = require_round(open, path)?;
             Ok(JournalEntry::Blockers {
                 date,
                 round,
@@ -373,71 +246,6 @@ fn build_entry(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<Jour
             offset: open.span.start,
         })),
     }
-}
-
-fn require_attr(open: &RawTag, key: &str, path: &Utf8Path) -> ParseResult<String> {
-    open.attrs
-        .iter()
-        .find(|(k, _)| k == key)
-        .map(|(_, v)| v.clone())
-        .ok_or_else(|| {
-            Box::new(ParseError::MissingField {
-                field: key.to_owned(),
-                context: format!("<{}> in {path}", open.name),
-            })
-        })
-}
-
-fn require_only_allowed(open: &RawTag, allowed: &[&str], path: &Utf8Path) -> ParseResult<()> {
-    for (k, _) in &open.attrs {
-        if !allowed.contains(&k.as_str()) {
-            return Err(Box::new(ParseError::UnknownMarkerAttribute {
-                path: path.to_path_buf(),
-                marker_name: open.name.clone(),
-                attribute: k.clone(),
-                offset: open.span.start,
-                allowed: allowed.join(", "),
-            }));
-        }
-    }
-    Ok(())
-}
-
-fn validate_iso8601(open: &RawTag, attr: &str, value: &str, path: &Utf8Path) -> ParseResult<()> {
-    if iso8601_regex().is_match(value) {
-        return Ok(());
-    }
-    Err(Box::new(ParseError::InvalidJournalAttribute {
-        path: path.to_path_buf(),
-        element: open.name.clone(),
-        attribute: attr.to_owned(),
-        value: value.to_owned(),
-        reason: "expected ISO8601 timestamp `YYYY-MM-DDTHH:MM:SS(Z|±HH:MM)`".to_owned(),
-        offset: open.span.start,
-    }))
-}
-
-fn parse_round(open: &RawTag, raw: &str, path: &Utf8Path) -> ParseResult<u32> {
-    if !round_regex().is_match(raw) {
-        return Err(Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: "round".to_owned(),
-            value: raw.to_owned(),
-            reason: "round must be a positive integer (regex `[1-9][0-9]*`)".to_owned(),
-            offset: open.span.start,
-        }));
-    }
-    raw.parse::<u32>().map_err(|err| -> Box<ParseError> {
-        Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: "round".to_owned(),
-            value: raw.to_owned(),
-            reason: format!("round overflows u32: {err}"),
-            offset: open.span.start,
-        })
-    })
 }
 
 fn validate_round_sequence(entries: &[JournalEntry], path: &Utf8Path) -> ParseResult<()> {
@@ -480,21 +288,6 @@ fn validate_round_sequence(entries: &[JournalEntry], path: &Utf8Path) -> ParseRe
         }));
     }
     Ok(())
-}
-
-fn extract_yaml_field(yaml: &str, field: &str) -> Option<String> {
-    let prefix = format!("{field}:");
-    for line in yaml.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
-            return Some(
-                rest.trim()
-                    .trim_matches(|c| c == '"' || c == '\'')
-                    .to_owned(),
-            );
-        }
-    }
-    None
 }
 
 #[cfg(test)]

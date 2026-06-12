@@ -32,8 +32,15 @@ pub mod serialize;
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
-use crate::parse::frontmatter::Split;
-use crate::parse::frontmatter::split as split_frontmatter;
+use crate::parse::frontmatter::split_required;
+use crate::parse::journal_common::assemble_flat;
+use crate::parse::journal_common::extract_yaml_field;
+use crate::parse::journal_common::is_iso8601;
+use crate::parse::journal_common::require_iso8601;
+use crate::parse::journal_common::require_nonempty;
+use crate::parse::journal_common::require_one_of;
+use crate::parse::journal_common::require_only_allowed;
+use crate::parse::journal_common::require_round;
 use crate::parse::xml_scanner::ElementSpan;
 use crate::parse::xml_scanner::RawTag;
 use crate::parse::xml_scanner::ScanConfig;
@@ -196,26 +203,6 @@ impl VetBlock {
     }
 }
 
-fn iso8601_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by unit tests"
-    )]
-    CELL.get_or_init(|| {
-        Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$").unwrap()
-    })
-}
-
-fn round_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by unit tests"
-    )]
-    CELL.get_or_init(|| Regex::new(r"^[1-9][0-9]*$").unwrap())
-}
-
 /// Matches a line-isolated open tag (`<name ...>`), capturing the
 /// element name. Used to detect tags the shared scanner deliberately
 /// flows through as Markdown body so this parser can reject unknown
@@ -329,25 +316,7 @@ fn parse_with_mode(
     path: &Utf8Path,
     last_section: LastSection,
 ) -> ParseResult<VetDoc> {
-    let split = split_frontmatter(source, path)?;
-    let (yaml_raw, body, body_offset) = match split {
-        Split::Some { yaml, body } => {
-            let offset = source.len().checked_sub(body.len()).ok_or_else(|| {
-                Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: 0,
-                    reason: "frontmatter splitter produced an inconsistent body offset".to_owned(),
-                })
-            })?;
-            (yaml.to_owned(), body, offset)
-        }
-        Split::None => {
-            return Err(Box::new(ParseError::MissingField {
-                field: "frontmatter".to_owned(),
-                context: format!("vet journal at {path}"),
-            }));
-        }
-    };
+    let (yaml_raw, body, body_offset) = split_required(source, path, "vet journal")?;
 
     let spec = extract_yaml_field(&yaml_raw, "spec").ok_or_else(|| {
         Box::new(ParseError::MissingField {
@@ -361,7 +330,7 @@ fn parse_with_mode(
             context: format!("vet journal frontmatter at {path}"),
         })
     })?;
-    if !iso8601_regex().is_match(&generated_at) {
+    if !is_iso8601(&generated_at) {
         return Err(Box::new(ParseError::InvalidJournalAttribute {
             path: path.to_path_buf(),
             element: "<frontmatter>".to_owned(),
@@ -379,14 +348,20 @@ fn parse_with_mode(
     };
     reject_unknown_block_tags(body, body_offset, &code_fence_ranges, path)?;
     let raw_tags = scan_tags(source, body, body_offset, &code_fence_ranges, path, &cfg)?;
-    let assembled = assemble_blocks(raw_tags, source, path)?;
+    let (blocks, body_ranges) = assemble_flat(
+        raw_tags,
+        source,
+        path,
+        "vet blocks must not be nested",
+        |open, block_body| build_block(open, block_body, path),
+    )?;
 
     // A `## Invocation N — …` line is only a real section heading when it sits
     // in free document body — not inside a fenced code block (`code_fence_ranges`)
-    // and not inside a vet block body (`assembled.body_ranges`). This mirrors the
+    // and not inside a vet block body (`body_ranges`). This mirrors the
     // fence-awareness `reject_unknown_block_tags` already has.
-    let headings = collect_invocation_headings(source, &code_fence_ranges, &assembled.body_ranges);
-    let invocations = partition_into_sections(&headings, assembled.blocks, path, last_section)?;
+    let headings = collect_invocation_headings(source, &code_fence_ranges, &body_ranges);
+    let invocations = partition_into_sections(&headings, blocks, path, last_section)?;
 
     Ok(VetDoc {
         spec,
@@ -441,79 +416,11 @@ fn reject_unknown_block_tags(
     Ok(())
 }
 
-/// Result of [`assemble_blocks`]: the typed blocks plus the inner-body
-/// byte range of each (half-open `[start, end)` spans into the source).
-/// The caller uses `body_ranges` to keep [`collect_invocation_headings`]
-/// from mistaking a `## Invocation N — …` line *inside* a block body for
-/// a real section heading.
-struct AssembledBlocks {
-    blocks: Vec<VetBlock>,
-    body_ranges: Vec<(usize, usize)>,
-}
-
-/// Assemble line-isolated open/close tags into typed [`VetBlock`]s.
-fn assemble_blocks(
-    tags: Vec<RawTag>,
-    source: &str,
-    path: &Utf8Path,
-) -> ParseResult<AssembledBlocks> {
-    let mut blocks: Vec<VetBlock> = Vec::new();
-    let mut body_ranges: Vec<(usize, usize)> = Vec::new();
-    let mut stack: Vec<RawTag> = Vec::new();
-    for t in tags {
-        if t.is_close {
-            let Some(open) = stack.pop() else {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: t.span.start,
-                    reason: format!("close tag `</{}>` without matching open", t.name),
-                }));
-            };
-            if open.name != t.name {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: t.span.start,
-                    reason: format!(
-                        "close tag `</{}>` does not match open `<{}>`",
-                        t.name, open.name
-                    ),
-                }));
-            }
-            if !stack.is_empty() {
-                return Err(Box::new(ParseError::MalformedMarker {
-                    path: path.to_path_buf(),
-                    offset: open.span.start,
-                    reason: "vet blocks must not be nested".to_owned(),
-                }));
-            }
-            let body = source
-                .get(open.body_start..t.body_end_after_tag)
-                .unwrap_or("")
-                .to_owned();
-            body_ranges.push((open.body_start, t.body_end_after_tag));
-            blocks.push(build_block(&open, body, path)?);
-        } else {
-            stack.push(t);
-        }
-    }
-    if let Some(open) = stack.first() {
-        return Err(Box::new(ParseError::MalformedMarker {
-            path: path.to_path_buf(),
-            offset: open.span.start,
-            reason: format!("open tag `<{}>` is never closed", open.name),
-        }));
-    }
-    Ok(AssembledBlocks {
-        blocks,
-        body_ranges,
-    })
-}
-
 fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetBlock> {
     match open.name.as_str() {
         "drift-review" => {
             require_only_allowed(open, &["verdict", "round", "date", "model"], path)?;
-            let verdict = require_verdict(open, DRIFT_REVIEW_VERDICTS, path)?;
+            let verdict = require_one_of(open, "verdict", DRIFT_REVIEW_VERDICTS, path)?;
             let round = require_round(open, path)?;
             let date = require_iso8601(open, "date", path)?;
             let model = require_nonempty(open, "model", path)?;
@@ -528,7 +435,7 @@ fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetB
         }
         "holistic-fix" => {
             require_only_allowed(open, &["verdict", "round", "date", "model"], path)?;
-            let verdict = require_verdict(open, HOLISTIC_FIX_VERDICTS, path)?;
+            let verdict = require_one_of(open, "verdict", HOLISTIC_FIX_VERDICTS, path)?;
             let round = require_round(open, path)?;
             let date = require_iso8601(open, "date", path)?;
             let model = require_nonempty(open, "model", path)?;
@@ -543,7 +450,7 @@ fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetB
         }
         "simplifier-scan" => {
             require_only_allowed(open, &["verdict"], path)?;
-            let verdict = require_verdict(open, SIMPLIFIER_SCAN_VERDICTS, path)?;
+            let verdict = require_one_of(open, "verdict", SIMPLIFIER_SCAN_VERDICTS, path)?;
             Ok(VetBlock::SimplifierScan {
                 verdict,
                 body,
@@ -552,7 +459,7 @@ fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetB
         }
         "simplifier-apply" => {
             require_only_allowed(open, &["verdict"], path)?;
-            let verdict = require_verdict(open, SIMPLIFIER_APPLY_VERDICTS, path)?;
+            let verdict = require_one_of(open, "verdict", SIMPLIFIER_APPLY_VERDICTS, path)?;
             Ok(VetBlock::SimplifierApply {
                 verdict,
                 body,
@@ -561,7 +468,7 @@ fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetB
         }
         "gate" => {
             require_only_allowed(open, &["verdict", "tasks_hash", "date"], path)?;
-            let verdict = require_verdict(open, GATE_VERDICTS, path)?;
+            let verdict = require_one_of(open, "verdict", GATE_VERDICTS, path)?;
             let tasks_hash = require_nonempty(open, "tasks_hash", path)?;
             let date = require_iso8601(open, "date", path)?;
             Ok(VetBlock::Gate {
@@ -578,103 +485,6 @@ fn build_block(open: &RawTag, body: String, path: &Utf8Path) -> ParseResult<VetB
             offset: open.span.start,
         })),
     }
-}
-
-fn require_attr(open: &RawTag, key: &str, path: &Utf8Path) -> ParseResult<String> {
-    open.attrs
-        .iter()
-        .find(|(k, _)| k == key)
-        .map(|(_, v)| v.clone())
-        .ok_or_else(|| {
-            Box::new(ParseError::MissingField {
-                field: key.to_owned(),
-                context: format!("<{}> in {path}", open.name),
-            })
-        })
-}
-
-fn require_only_allowed(open: &RawTag, allowed: &[&str], path: &Utf8Path) -> ParseResult<()> {
-    for (k, _) in &open.attrs {
-        if !allowed.contains(&k.as_str()) {
-            return Err(Box::new(ParseError::UnknownMarkerAttribute {
-                path: path.to_path_buf(),
-                marker_name: open.name.clone(),
-                attribute: k.clone(),
-                offset: open.span.start,
-                allowed: allowed.join(", "),
-            }));
-        }
-    }
-    Ok(())
-}
-
-fn require_verdict(open: &RawTag, allowed: &[&str], path: &Utf8Path) -> ParseResult<String> {
-    let verdict = require_attr(open, "verdict", path)?;
-    if !allowed.contains(&verdict.as_str()) {
-        return Err(Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: "verdict".to_owned(),
-            value: verdict,
-            reason: format!("verdict must be one of {}", allowed.join(", ")),
-            offset: open.span.start,
-        }));
-    }
-    Ok(verdict)
-}
-
-fn require_iso8601(open: &RawTag, attr: &str, path: &Utf8Path) -> ParseResult<String> {
-    let value = require_attr(open, attr, path)?;
-    if !iso8601_regex().is_match(&value) {
-        return Err(Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: attr.to_owned(),
-            value,
-            reason: "expected ISO8601 timestamp `YYYY-MM-DDTHH:MM:SS(Z|±HH:MM)`".to_owned(),
-            offset: open.span.start,
-        }));
-    }
-    Ok(value)
-}
-
-fn require_nonempty(open: &RawTag, attr: &str, path: &Utf8Path) -> ParseResult<String> {
-    let value = require_attr(open, attr, path)?;
-    if value.is_empty() {
-        return Err(Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: attr.to_owned(),
-            value,
-            reason: format!("{attr} must be a non-empty string"),
-            offset: open.span.start,
-        }));
-    }
-    Ok(value)
-}
-
-fn require_round(open: &RawTag, path: &Utf8Path) -> ParseResult<u32> {
-    let raw = require_attr(open, "round", path)?;
-    if !round_regex().is_match(&raw) {
-        return Err(Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: "round".to_owned(),
-            value: raw,
-            reason: "round must be a positive integer (regex `[1-9][0-9]*`)".to_owned(),
-            offset: open.span.start,
-        }));
-    }
-    raw.parse::<u32>().map_err(|err| -> Box<ParseError> {
-        Box::new(ParseError::InvalidJournalAttribute {
-            path: path.to_path_buf(),
-            element: open.name.clone(),
-            attribute: "round".to_owned(),
-            value: raw.clone(),
-            reason: format!("round overflows u32: {err}"),
-            offset: open.span.start,
-        })
-    })
 }
 
 /// Collect the `## Invocation N — <date>` section headings from free
@@ -873,21 +683,6 @@ fn validate_round_sequence(inv: &Invocation, path: &Utf8Path) -> ParseResult<()>
 
 fn section_offset(inv: &Invocation) -> usize {
     inv.blocks.first().map_or(0, VetBlock::offset)
-}
-
-fn extract_yaml_field(yaml: &str, field: &str) -> Option<String> {
-    let prefix = format!("{field}:");
-    for line in yaml.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix(prefix.as_str()) {
-            return Some(
-                rest.trim()
-                    .trim_matches(|c| c == '"' || c == '\'')
-                    .to_owned(),
-            );
-        }
-    }
-    None
 }
 
 #[cfg(test)]

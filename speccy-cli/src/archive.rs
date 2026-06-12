@@ -9,10 +9,10 @@
 //! See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-001,
 //! REQ-002, REQ-003.
 
+use crate::check_selector::bare_spec_regex;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use jiff::Zoned;
-use regex::Regex;
 use serde::Serialize;
 use speccy_core::ParseError;
 use speccy_core::parse::SpecMd;
@@ -20,11 +20,9 @@ use speccy_core::parse::spec_md;
 use speccy_core::parse::spec_md::SpecStatus;
 use speccy_core::parse::supersession::orphan_candidates_on_archive;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan as scan_workspace;
 use std::process::Command;
 use std::process::Stdio;
-use std::sync::OnceLock;
 use thiserror::Error;
 
 /// Statuses that may be archived without `--force`.
@@ -95,8 +93,6 @@ pub struct ArchiveArgs {
     pub reason: Option<String>,
     /// `--force`: bypass the status gate.
     pub force: bool,
-    /// `--json`: emit a placeholder JSON receipt (full shape lands in T-003).
-    pub json: bool,
 }
 
 /// Successful outcome of an archive run.
@@ -132,17 +128,22 @@ pub fn run(args: ArchiveArgs, cwd: &Utf8Path) -> Result<ArchiveOutcome, ArchiveE
         spec_id,
         reason,
         force,
-        json: _,
     } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(ArchiveError::ProjectRootNotFound),
-        Err(other) => return Err(ArchiveError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, ArchiveError::ProjectRootNotFound)?;
 
     let canonical_id = validate_spec_id(&spec_id)?;
-    let spec_dir = locate_spec_dir(&project_root, &canonical_id)?;
+    // Scan once, before any file mutation: the supersession-chain orphan
+    // detector below needs the source SPEC.md in its pre-move location
+    // and pre-mutation state. The scan tolerates parse failures on
+    // unrelated specs (ParsedSpec carries Result fields).
+    let workspace = scan_workspace(&project_root);
+    let spec_dir = workspace
+        .spec_dir_by_id(&canonical_id)
+        .ok_or_else(|| ArchiveError::SpecNotFound {
+            id: canonical_id.clone(),
+        })?
+        .to_path_buf();
     let spec_md_path = spec_dir.join("SPEC.md");
 
     let parsed = spec_md(&spec_md_path).map_err(|source| ArchiveError::SpecMdParse {
@@ -165,11 +166,6 @@ pub fn run(args: ArchiveArgs, cwd: &Utf8Path) -> Result<ArchiveOutcome, ArchiveE
             message: format!("read {spec_md_path}: {e}"),
         })?;
 
-    // Compute supersession-chain orphan candidates *before* mutating
-    // any files: the scan needs the source SPEC.md in its pre-move
-    // location and pre-mutation state. The scan tolerates parse
-    // failures on unrelated specs (ParsedSpec carries Result fields).
-    let workspace = scan_workspace(&project_root);
     let active_specs: Vec<&SpecMd> = workspace
         .specs
         .iter()
@@ -350,98 +346,12 @@ fn relativize(path: &Utf8Path, root: &Utf8Path) -> Utf8PathBuf {
 }
 
 fn validate_spec_id(raw: &str) -> Result<String, ArchiveError> {
-    if !spec_id_regex().is_match(raw) {
+    if !bare_spec_regex().is_match(raw) {
         return Err(ArchiveError::InvalidSpecIdFormat {
             arg: raw.to_owned(),
         });
     }
     Ok(raw.to_owned())
-}
-
-fn locate_spec_dir(
-    project_root: &Utf8Path,
-    canonical_id: &str,
-) -> Result<Utf8PathBuf, ArchiveError> {
-    let digits =
-        canonical_id
-            .strip_prefix("SPEC-")
-            .ok_or_else(|| ArchiveError::InvalidSpecIdFormat {
-                arg: canonical_id.to_owned(),
-            })?;
-    let specs_dir = project_root.join(".speccy").join("specs");
-    let prefix = format!("{digits}-");
-
-    if let Some(dir) = find_spec_dir_in(&specs_dir, &prefix) {
-        return Ok(dir);
-    }
-    if let Some(dir) = find_spec_dir_in_mission_folders(&specs_dir, &prefix) {
-        return Ok(dir);
-    }
-    Err(ArchiveError::SpecNotFound {
-        id: canonical_id.to_owned(),
-    })
-}
-
-fn find_spec_dir_in(parent: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
-    let entries = fs_err::read_dir(parent.as_std_path()).ok()?;
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
-            continue;
-        };
-        if !meta.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.starts_with(prefix) {
-            return Utf8PathBuf::from_path_buf(path).ok();
-        }
-    }
-    None
-}
-
-fn find_spec_dir_in_mission_folders(specs_dir: &Utf8Path, prefix: &str) -> Option<Utf8PathBuf> {
-    let entries = fs_err::read_dir(specs_dir.as_std_path()).ok()?;
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
-            continue;
-        };
-        if !meta.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        let Ok(utf8) = Utf8PathBuf::from_path_buf(path) else {
-            continue;
-        };
-        // Skip if this is itself a numbered spec dir.
-        if let Some(name) = utf8.file_name()
-            && spec_dir_name_regex().is_match(name)
-        {
-            continue;
-        }
-        if let Some(found) = find_spec_dir_in(&utf8, prefix) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn spec_id_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^SPEC-\d{4,}$").unwrap())
-}
-
-#[expect(
-    clippy::unwrap_used,
-    reason = "compile-time literal regex; covered by unit tests"
-)]
-fn spec_dir_name_regex() -> &'static Regex {
-    static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| Regex::new(r"^\d{4}-[a-z0-9-]+$").unwrap())
 }
 
 /// Today's UTC date as `YYYY-MM-DD`.

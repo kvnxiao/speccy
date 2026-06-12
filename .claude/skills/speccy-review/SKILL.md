@@ -1,6 +1,6 @@
 ---
 name: speccy-review
-description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --json`. Four personas (business, tests, security, style) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `<blockers>` block appended to the per-task journal file. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
+description: 'Review one Speccy task per invocation and exit, running one round of adversarial multi-persona review. With an optional `SPEC-NNNN/T-NNN` selector, the session reviews that task; without it, the skill resolves the next reviewable task via `speccy next --json`. Five personas (business, tests, security, style, correctness) fan out in parallel and either pass the task to `completed` or flip it back to `pending` with a `<blockers>` block appended to the per-task journal file. Use when the user says "review T-003" or "review the next task". Requires: a task in `state="in-review"`. If no in-review task and work remains → prefer speccy-work. If all tasks `completed` → prefer speccy-ship. Do NOT trigger on generic "review this PR" or "review my code" asks — this skill runs Speccy task-state review only.'
 ---
 
 # /speccy-review
@@ -20,11 +20,12 @@ remaining `in-review` tasks; composition across tasks belongs to a
 caller (a human at the terminal, the `/loop` skill, or a future
 orchestrator).
 
-Within the one task under review, the skill fans out to four
+Within the one task under review, the skill fans out to five
 parallel persona sub-agents (default fan-out: `business`, `tests`,
-`security`, `style`). That fan-out is intrinsic to the primitive —
-adversarial diversity comes from fresh contexts per persona — and is
-bounded to one round of four sub-agents on one task.
+`security`, `style`, `correctness`). That fan-out is intrinsic to
+the primitive — adversarial diversity comes from fresh contexts per
+persona — and is bounded to one round of five sub-agents on one
+task.
 
 Because sub-agents cannot spawn sub-agents, this skill must run in a
 context that **is** the top-level session — either a human
@@ -33,7 +34,7 @@ itself runs the skill body, or the
 `/speccy-orchestrate` outer loop which inlines this
 skill body into its own session at the `review` dispatch (it cannot
 delegate to a wrapper sub-agent that would then try to spawn the
-four persona leaves).
+persona leaves).
 
 ## When to use
 
@@ -47,47 +48,56 @@ flipped there by `/speccy-work`).
 
 ## Steps
 
-**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** summary below (canonical policy at `.claude/speccy-references/reconcile-policy.md`) instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
+**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
 
-**Reconcile policy.** When `speccy next --json` returns `next_action.kind == "reconcile"`, iterate `consistency.drifts[]` and apply the table action per entry, then re-query before proceeding. See `.claude/speccy-references/reconcile-policy.md` for the full policy table, the three properties the dispatch holds by construction (autonomous / rollback-biased / idempotent), and the extension protocol for adding new drift kinds.
+**Reconcile policy.** When `speccy next --json` (in either per-spec
+or workspace form) returns `next_action.kind == "reconcile"`, iterate
+`consistency.drifts[]` and apply the table action per entry, then
+re-query before proceeding. See
+`.claude/speccy-references/reconcile-policy.md` for the full
+policy table and the three properties the dispatch holds by
+construction (autonomous / rollback-biased / idempotent).
+
 
 ### Resolve the target task
 
-- If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
-- Otherwise, query the CLI in workspace form (no SPEC selector
-  is known on this no-selector invocation path — we must walk
-  the active tree to find a reviewable task):
+   - If a `SPEC-NNNN/T-NNN` selector was passed, that is the target.
+   - Otherwise, query the CLI in workspace form (no SPEC selector
+     is known on this no-selector invocation path — we must walk
+     the active tree to find the next reviewable task):
 
-  ```bash
-  # workspace form: no SPEC-NNNN known yet; scan the active tree.
-  speccy next --json
-  ```
+     ```bash
+     # workspace form: no SPEC-NNNN known yet; scan the active tree.
+     speccy next --json
+     ```
 
-  Workspace-form exit-code-stop contract: exit code 2 with a
-  top-level `reason="no_active_specs"` field in the JSON envelope
-  means the workspace has no active specs at all. Exit gracefully
-  and surface the reason; do not treat the non-zero exit as a CLI
-  error.
+     Workspace-form exit-code-stop contract: exit code 2 with a
+     top-level `reason="no_active_specs"` field in the JSON envelope
+     means the workspace has no active specs at all (fresh repo, or
+     every spec has shipped or been archived). Exit gracefully and
+     surface the reason; do not treat the non-zero exit as a CLI
+     error.
 
-  On exit code 0, if the resulting `specs` array has no entry with
-  `next_action.kind == "review"`, exit and report that no
-  reviewable tasks remain. Otherwise, construct the disambiguated
-  `<spec>/<task>` form from the JSON's `spec_id` and
-  `next_action.task_id` fields (the bare task ID is ambiguous
-  across specs — every spec has its own `T-001`).
+     On exit code 0, if the resulting `specs` array has no entry
+     with `next_action.kind == "review"`, exit and report
+     that no reviewable tasks remain. Otherwise, construct
+     the disambiguated `<spec>/<task>` form from the JSON's `spec_id`
+     and `next_action.task_id` fields (the bare task ID is
+     ambiguous across specs — every spec has its own `T-001`).
 
-  Exit-code-stop contract: once SPEC-NNNN is resolved, any
-  subsequent per-spec query (`speccy next SPEC-NNNN --json`) that
-  exits non-zero means the SPEC has reached a terminal state —
-  halt and surface the stderr line. Only parse JSON when exit
-  code is 0.
+     Exit-code-stop contract: once SPEC-NNNN is resolved, any
+     subsequent per-spec query (`speccy next SPEC-NNNN --json`) that
+     exits non-zero means the SPEC has reached a terminal state —
+     halt and surface the stderr line. Only parse JSON when exit
+     code is 0.
+
 
 ### Run the persona fan-out and consolidation
 
-Shared with the `/speccy-orchestrate` review
-dispatch — both this skill body and that dispatch step include the
-same partial below so the fan-out contract has a single source of
-truth.
+This section is the canonical fan-out grammar. The
+`/speccy-orchestrate` review dispatch runs the same
+fan-out inline in its own session and points here rather than
+duplicating it.
 
 
 Fan out five reviewer-* sub-agents in parallel against the resolved
@@ -108,18 +118,13 @@ The prompt for each spawn is:
 > merge-base diff command. Read the diff with that command, then apply
 > your persona's review criteria. Targeted follow-up reads via the
 > bundle's listed paths (e.g. the evidence file) remain legitimate
-> where your persona needs something outside the bundle. Append your
-> own `<review>` block to the
-> per-task journal by running
-> `speccy journal append SPEC-NNNN/T-NNN --block review --persona <persona> --verdict <pass|blocking> --model <your-model>`
-> with the review body on stdin, then return a thin self-closing
-> `<verdict persona="<persona>" verdict="..." model="..." rationale="..." />`
-> element as your final message (per the verdict-return contract). The
-> `--model` value is required and must identify the model that produced
-> the verdict (with the optional slash-suffix effort convention from the
-> verdict-return contract). Do not edit TASKS.md. The journal write goes
-> through `speccy journal append` — do not use file-editing tools on the
-> journal.
+> where your persona needs something outside the bundle.
+>
+> Follow the verdict-return contract in your agent file: append your
+> own `<review>` block to the per-task journal via `speccy journal
+> append` and return a single thin `<verdict>` element as your final
+> message. Do not edit TASKS.md or the journal with file-editing
+> tools.
 >
 > The working tree may be dirty: the implementer leaves changes
 > uncommitted on purpose, and the orchestrator (not the implementer)
@@ -151,7 +156,7 @@ Canonical journal `<blockers>` shape:
 Each reviewer sub-agent appends its own `<review>` block to
 `.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
 append --block review` before returning a thin `<verdict>` element
-(see `resources/modules/personas/verdict_return_contract.md`). The
+(per the verdict-return contract in its agent definition). The
 CLI's per-file lock serializes those parallel appends, so the
 running session never transcribes `<review>` blocks itself and never
 edits the journal with file-editing tools. The orchestrator's job
@@ -214,12 +219,15 @@ speccy journal append SPEC-NNNN/T-NNN --block blockers <<'EOF'
 EOF
 ```
 
-The CLI is the sole authority for the block's `date` and `round` and
-emits the paired `<blockers>…</blockers>` element — **do not compute,
-supply, or hand-author `date`, `round`, or the open/close tags**.
-There is no flag to override them; the body you pipe is the inner
-text only. Validation runs before any write; a malformed body leaves
-the journal byte-identical.
+The CLI is the sole authority for the appended block's `date` and
+`round` attributes and for the journal's structural scaffolding
+(creating the file with frontmatter, sectioning where the journal
+has it). **Do not compute, supply, or hand-author `date`, `round`,
+or the block's open/close tags** — there is no flag to override
+them; the body you pipe on stdin is the inner text only, and the
+CLI emits the paired element. Validation runs before any write; a
+malformed body leaves the journal byte-identical.
+
 
 The single-writer rule holds: the CLI's append lock owns write
 serialization across the parallel reviewer appends and this
@@ -350,35 +358,24 @@ not restated here:
 
 ## Sourcing your recorded identity
 
-When you record your own identity in a `model="..."` attribute, build
-the value from two independently sourced parts: the model segment and
-the optional effort suffix. Do not infer either from the skill-pack
-name, the persona name, or an inherited environment variable.
+Build the `model="..."` value from two independently sourced parts;
+never infer either from the skill-pack name, the persona name, or an
+inherited environment variable.
 
-- **Model segment — from the host's in-context identifier, verbatim.**
-  Use the resolved long-form model identifier your host states
-  in-context (for example, a host line such as
-  `The exact model ID is claude-opus-4-8[1m]`). Transcribe it exactly,
-  preserving version punctuation as the host writes it — keep the
-  hyphen form (`claude-opus-4-8`), never normalise it to a dotted form
-  (`claude-opus-4.8`), and never substitute a configured alias. Where a
-  host states no resolved identifier in-context, fall back to the
-  `model:` value in your own agent definition file.
-
-- **Effort suffix — from your own definition file.** When your host
-  exposes a reasoning-effort knob, read the effort from your own
-  sub-agent definition file (`effort:` on Claude Code,
+- **Model segment** — the resolved long-form identifier your host
+  states in-context (e.g. `claude-opus-4-8[1m]`), transcribed
+  verbatim: keep the host's version punctuation (`claude-opus-4-8`,
+  never `claude-opus-4.8`), never substitute a configured alias.
+  When the host states no resolved identifier in-context, fall back
+  to the `model:` value in your own agent definition file.
+- **Effort suffix** — when the host exposes a reasoning-effort knob,
+  read it from your own definition file (`effort:` on Claude Code,
   `model_reasoning_effort` on Codex) and append it as a slash-suffix
-  (e.g. `claude-opus-4-8[1m]/low`). Never derive the effort from
-  `CLAUDE_EFFORT` or any other inherited environment variable: a
-  sub-agent pinned to a low effort that is dispatched from a
-  higher-effort parent session still records its own definition-file
-  effort. A host with no effort knob omits the suffix entirely.
-
-- **Override limitation.** The `CLAUDE_CODE_EFFORT_LEVEL` runtime
-  override is deliberately not read. A run that sets it still records
-  the effort declared in the agent definition file, not the override
-  value.
+  (e.g. `claude-opus-4-8[1m]/low`). Never read `CLAUDE_EFFORT` or
+  the `CLAUDE_CODE_EFFORT_LEVEL` runtime override — a sub-agent
+  records its definition-file effort even when dispatched from a
+  higher-effort parent session. A host with no effort knob omits
+  the suffix entirely.
 
 
 Apply that rule to fill the `<model>` segment of the trailer line. When

@@ -17,18 +17,13 @@ The prompt for each spawn is:
 > merge-base diff command. Read the diff with that command, then apply
 > your persona's review criteria. Targeted follow-up reads via the
 > bundle's listed paths (e.g. the evidence file) remain legitimate
-> where your persona needs something outside the bundle. Append your
-> own `<review>` block to the
-> per-task journal by running
-> `speccy journal append SPEC-NNNN/T-NNN --block review --persona <persona> --verdict <pass|blocking> --model <your-model>`
-> with the review body on stdin, then return a thin self-closing
-> `<verdict persona="<persona>" verdict="..." model="..." rationale="..." />`
-> element as your final message (per the verdict-return contract). The
-> `--model` value is required and must identify the model that produced
-> the verdict (with the optional slash-suffix effort convention from the
-> verdict-return contract). Do not edit TASKS.md. The journal write goes
-> through `speccy journal append` — do not use file-editing tools on the
-> journal.
+> where your persona needs something outside the bundle.
+>
+> Follow the verdict-return contract in your agent file: append your
+> own `<review>` block to the per-task journal via `speccy journal
+> append` and return a single thin `<verdict>` element as your final
+> message. Do not edit TASKS.md or the journal with file-editing
+> tools.
 >
 > The working tree may be dirty: the implementer leaves changes
 > uncommitted on purpose, and the orchestrator (not the implementer)
@@ -65,7 +60,7 @@ Canonical journal `<blockers>` shape:
 Each reviewer sub-agent appends its own `<review>` block to
 `.speccy/specs/NNNN-slug/journal/T-NNN.md` via `speccy journal
 append --block review` before returning a thin `<verdict>` element
-(see `resources/modules/personas/verdict_return_contract.md`). The
+(per the verdict-return contract in its agent definition). The
 CLI's per-file lock serializes those parallel appends, so the
 running session never transcribes `<review>` blocks itself and never
 edits the journal with file-editing tools. The orchestrator's job
@@ -128,12 +123,7 @@ speccy journal append SPEC-NNNN/T-NNN --block blockers <<'EOF'
 EOF
 ```
 
-The CLI is the sole authority for the block's `date` and `round` and
-emits the paired `<blockers>…</blockers>` element — **do not compute,
-supply, or hand-author `date`, `round`, or the open/close tags**.
-There is no flag to override them; the body you pipe is the inner
-text only. Validation runs before any write; a malformed body leaves
-the journal byte-identical.
+{% include "modules/references/cli-stamps.md" %}
 
 The single-writer rule holds: the CLI's append lock owns write
 serialization across the parallel reviewer appends and this

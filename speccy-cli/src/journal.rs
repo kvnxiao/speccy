@@ -24,6 +24,7 @@
 //! the journal byte-identical. Validation runs before any write, so a
 //! malformed block leaves the journal untouched (or still absent).
 
+use crate::check_selector::bare_spec_regex;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use fs4::FileExt;
@@ -53,24 +54,10 @@ use speccy_core::task_lookup::TaskRef;
 use speccy_core::task_lookup::find as find_task;
 use speccy_core::task_lookup::parse_ref;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan;
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
-
-/// Regex matching a bare `SPEC-NNNN` selector (4+ digits) with no trailing
-/// task component — the DEC-004 routing discriminant. Shared with
-/// `journal show` to keep both commands' target inference in lockstep.
-pub(crate) fn bare_spec_selector_regex() -> &'static regex::Regex {
-    use std::sync::OnceLock;
-    static CELL: OnceLock<regex::Regex> = OnceLock::new();
-    #[expect(
-        clippy::unwrap_used,
-        reason = "compile-time literal regex; covered by tests"
-    )]
-    CELL.get_or_init(|| regex::Regex::new(r"^SPEC-\d{4,}$").unwrap())
-}
 
 /// The block type a `journal append` invocation names, partitioned by which
 /// journal it targets. The CLI value-parser maps `--block <name>` to one of
@@ -274,11 +261,7 @@ pub fn run(
         verdict,
     } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(JournalError::ProjectRootNotFound),
-        Err(other) => return Err(JournalError::Workspace(other)),
-    };
+    let project_root = crate::cwd::resolve_root(cwd, JournalError::ProjectRootNotFound)?;
 
     // Read the whole body before taking any lock — stdin reads should not
     // hold the lock open against other appenders.
@@ -319,7 +302,7 @@ fn run_task_append(
     body: &str,
 ) -> Result<(), JournalError> {
     // A vet selector with a task block type is the DEC-004 mismatch.
-    if bare_spec_selector_regex().is_match(selector) {
+    if bare_spec_regex().is_match(selector) {
         return Err(JournalError::SelectorBlockMismatch {
             block: kind.element_name(),
             expected: "task",
@@ -373,7 +356,7 @@ fn run_vet_append(
     body: &str,
 ) -> Result<(), JournalError> {
     // A task selector with a vet block type is the DEC-004 mismatch.
-    if !bare_spec_selector_regex().is_match(selector) {
+    if !bare_spec_regex().is_match(selector) {
         // Distinguish "looks like a task selector" from "not a spec id at all"
         // for a clearer message.
         let got = if selector.contains('/') || selector.starts_with("T-") {

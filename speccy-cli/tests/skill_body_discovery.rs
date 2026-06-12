@@ -6,21 +6,24 @@
 //! discover speccy resources via CLI JSON envelopes only, not via
 //! direct filesystem patterns.
 //!
-//! SPEC-0033 T-007 checks:
+//! SPEC-0033 T-007 checks (each negative sweep runs over every `.md`
+//! file shipped under `resources/modules/`, enumerated from the
+//! embedded bundle so new modules are covered automatically):
 //!
 //! - [`chk014_no_direct_speccy_resource_patterns_in_skills_or_phases`]: no raw
 //!   `.speccy/specs/*` globs or bare `SPEC.md`/`TASKS.md`/`MISSION.md`/
 //!   `REPORT.md` paths (not bound to a template placeholder) appear in any
-//!   skill or phase body file.
+//!   module body file.
 //! - [`chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id`]:
 //!   `speccy-plan.md` invokes `speccy vacancy --json` (not `speccy status
 //!   --json`) to allocate a new SPEC ID.
 //! - [`no_old_cli_verbs_in_skill_or_phase_bodies`]: deleted CLI verbs (`speccy
 //!   plan`, `speccy tasks`, `speccy implement`, `speccy review`, `speccy
-//!   report`) do not appear as commands in any skill or phase body file.
+//!   report`) do not appear as commands in any module body file.
 //! - [`no_kind_filter_flag_in_skill_or_phase_bodies`]: the removed `--kind`
-//!   flag to `speccy next` does not appear in any skill or phase body file.
+//!   flag to `speccy next` does not appear in any module body file.
 
+use include_dir::Dir;
 use speccy_cli::embedded::RESOURCES;
 
 // ---------------------------------------------------------------------------
@@ -56,38 +59,47 @@ fn panic_with_message(msg: &str) -> ! {
 }
 
 // ---------------------------------------------------------------------------
-// Module lists
+// Module enumeration
 // ---------------------------------------------------------------------------
 
-const SKILL_FILES: &[&str] = &[
-    "skills/speccy-plan.md",
-    "skills/speccy-amend.md",
-    "skills/speccy-brainstorm.md",
-    "skills/speccy-review.md",
-];
+/// Every `.md` module body shipped under `resources/modules/`
+/// (skills, partials, phases, personas, references), as
+/// `(bundle path, body)` pairs sorted by path. Enumerated from the
+/// embedded bundle rather than a hard-coded file list so the negative
+/// sweeps below cover newly added module bodies automatically.
+fn all_module_bodies() -> Vec<(String, &'static str)> {
+    let modules = RESOURCES
+        .get_dir("modules")
+        .unwrap_or_else(|| panic_with_message("RESOURCES bundle must contain `modules/`"));
+    let mut out: Vec<(String, &'static str)> = Vec::new();
+    collect_md_bodies(modules, &mut out);
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    // Floor guard: if the walk ever returns near-zero files (path or
+    // bundle-layout change), every sweep below would pass vacuously.
+    assert!(
+        out.len() >= 10,
+        "module enumeration found only {} .md files under resources/modules/ — \
+         the sweep scope looks broken",
+        out.len(),
+    );
+    out
+}
 
-const PHASE_FILES: &[&str] = &[
-    "phases/speccy-decompose.md",
-    "phases/speccy-work.md",
-    "phases/speccy-ship.md",
-    "phases/speccy-init.md",
-];
-
-/// Persona snippet files that are shared building blocks — they do NOT
-/// individually contain discovery patterns, but the reviewer persona bodies
-/// that include them are checked.
-const PERSONA_FILES: &[&str] = &[
-    "personas/reviewer-architecture.md",
-    "personas/reviewer-business.md",
-    "personas/reviewer-docs.md",
-    "personas/reviewer-security.md",
-    "personas/reviewer-style.md",
-    "personas/reviewer-tests.md",
-    "personas/diff_fetch_command.md",
-    "personas/inline_note_format.md",
-    "personas/no_tasks_md_writes.md",
-    "personas/verdict_return_contract.md",
-];
+fn collect_md_bodies(dir: &Dir<'static>, out: &mut Vec<(String, &'static str)>) {
+    for sub in dir.dirs() {
+        collect_md_bodies(sub, out);
+    }
+    for file in dir.files() {
+        if file.path().extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let path = file.path().to_string_lossy().replace('\\', "/");
+        let body = file.contents_utf8().unwrap_or_else(|| {
+            panic_with_message(&format!("module file `{path}` must be valid UTF-8"))
+        });
+        out.push((path, body));
+    }
+}
 
 // ---------------------------------------------------------------------------
 // CHK-014: no direct speccy-resource discovery patterns
@@ -96,36 +108,32 @@ const PERSONA_FILES: &[&str] = &[
 /// CHK-014: no `.speccy/specs/*` glob expressions, no bare `SPEC.md` /
 /// `TASKS.md` / `MISSION.md` / `REPORT.md` filesystem paths (not bound
 /// to a `{{ ... }}` template placeholder), and no directory-enumeration
-/// instructions targeting `.speccy/specs/` appear in any skill, phase,
-/// or persona body file.
+/// instructions targeting `.speccy/specs/` appear in any module body
+/// file.
 ///
 /// General-purpose Read/Glob/grep references for non-speccy project files
-/// (AGENTS.md, Cargo.toml, source code) are NOT violations.
+/// (AGENTS.md, Cargo.toml, source code) are NOT violations. Git
+/// pathspecs naming `.speccy/specs/*` (e.g. the journal-preservation
+/// exclusion `git restore -- ':!.speccy/specs/*/journal/'`) are not
+/// resource discovery and are exempt.
 #[test]
 fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
-    // Patterns that indicate direct filesystem discovery of speccy resources.
-    // Each entry is a (pattern, description) pair.
-    let forbidden_patterns: &[(&str, &str)] =
-        &[(".speccy/specs/*", "glob discovery of .speccy/specs/")];
-
-    // Check all skill, phase, and persona files.
-    let all_files: Vec<&str> = SKILL_FILES
-        .iter()
-        .chain(PHASE_FILES.iter())
-        .chain(PERSONA_FILES.iter())
-        .copied()
-        .collect();
-
-    for sub_path in &all_files {
-        let body = require_module(sub_path);
-        for (pattern, desc) in forbidden_patterns {
+    for (path, body) in &all_module_bodies() {
+        // `.speccy/specs/*` glob discovery, checked per line so git
+        // invocations (pathspec exclusions, not discovery) can be
+        // exempted.
+        for (idx, line) in body.lines().enumerate() {
+            if line.trim_start().starts_with("git ") {
+                continue;
+            }
             assert!(
-                !body.contains(pattern),
-                "skill/phase/persona file `resources/modules/{sub_path}` \
-                 contains `{pattern}` which is a {desc}; \
-                 use `speccy status --json`, `speccy next --json`, or \
-                 `speccy vacancy --json` CLI envelopes instead \
-                 (SPEC-0033 REQ-008 / CHK-014)",
+                !line.contains(".speccy/specs/*"),
+                "module file `resources/{path}` line {line_no} \
+                 contains `.speccy/specs/*` which is a glob discovery of \
+                 .speccy/specs/; use `speccy status --json`, \
+                 `speccy next --json`, or `speccy vacancy --json` CLI \
+                 envelopes instead (SPEC-0033 REQ-008 / CHK-014)",
+                line_no = idx + 1,
             );
         }
 
@@ -152,7 +160,7 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
         for (pattern, desc) in direct_read_patterns {
             assert!(
                 !body.contains(pattern),
-                "skill/phase/persona file `resources/modules/{sub_path}` \
+                "module file `resources/{path}` \
                  contains `{pattern}` which is a {desc}; \
                  obtain the path from `speccy status --json` or \
                  `speccy next --json` path fields instead \
@@ -176,7 +184,7 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
             || normalised.contains("Walk `.speccy/specs/`");
         assert!(
             !scan_instruction,
-            "skill/phase/persona file `resources/modules/{sub_path}` \
+            "module file `resources/{path}` \
              contains a directory-enumeration instruction targeting \
              `.speccy/specs/`; use `speccy status --json` or \
              `speccy next --json` instead (SPEC-0033 REQ-008 / CHK-014)",
@@ -217,7 +225,7 @@ fn chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id() {
 
 /// Deleted CLI commands (`speccy plan`, `speccy tasks`, `speccy implement`,
 /// `speccy review`, `speccy report`) must not appear as invokable commands
-/// in any skill, phase, or persona body file.
+/// in any module body file.
 ///
 /// The test checks for the command patterns as they would appear in
 /// code-fenced blocks (the primary way commands are presented to agents).
@@ -269,19 +277,11 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
         ),
     ];
 
-    let all_files: Vec<&str> = SKILL_FILES
-        .iter()
-        .chain(PHASE_FILES.iter())
-        .chain(PERSONA_FILES.iter())
-        .copied()
-        .collect();
-
-    for sub_path in &all_files {
-        let body = require_module(sub_path);
+    for (path, body) in &all_module_bodies() {
         for (pattern, desc) in deleted_verb_patterns {
             assert!(
                 !body.contains(pattern),
-                "skill/phase/persona file `resources/modules/{sub_path}` \
+                "module file `resources/{path}` \
                  contains `{pattern}` which references the deleted command \
                  {desc}; remove or replace with the equivalent current \
                  workflow (SPEC-0033 REQ-008)",
@@ -327,22 +327,13 @@ fn chk019_speccy_decompose_template_documents_output_shape() {
 // ---------------------------------------------------------------------------
 
 /// The removed `--kind` flag to `speccy next` must not appear in any
-/// skill, phase, or persona body file (replaced by derived action-kind
-/// logic in T-004).
+/// module body file (replaced by derived action-kind logic in T-004).
 #[test]
 fn no_kind_filter_flag_in_skill_or_phase_bodies() {
-    let all_files: Vec<&str> = SKILL_FILES
-        .iter()
-        .chain(PHASE_FILES.iter())
-        .chain(PERSONA_FILES.iter())
-        .copied()
-        .collect();
-
-    for sub_path in &all_files {
-        let body = require_module(sub_path);
+    for (path, body) in &all_module_bodies() {
         assert!(
             !body.contains("--kind"),
-            "skill/phase/persona file `resources/modules/{sub_path}` \
+            "module file `resources/{path}` \
              contains `--kind` which references the removed \
              `speccy next --kind` flag; replace with \
              `speccy next SPEC-NNNN --json` or `speccy next --json` \

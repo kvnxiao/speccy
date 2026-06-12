@@ -23,7 +23,6 @@ use speccy_core::task_lookup::TaskRef;
 use speccy_core::task_lookup::find as find_task;
 use speccy_core::workspace::Workspace;
 use speccy_core::workspace::WorkspaceError;
-use speccy_core::workspace::find_root;
 use speccy_core::workspace::scan_with_archive;
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -57,6 +56,15 @@ pub enum CheckError {
     /// I/O failure during discovery or while writing framing output.
     #[error("I/O error during check rendering")]
     Io(#[from] std::io::Error),
+}
+
+impl From<WorkspaceError> for CheckError {
+    fn from(err: WorkspaceError) -> Self {
+        match err {
+            WorkspaceError::Io(e) => CheckError::Io(e),
+            other => CheckError::Io(std::io::Error::other(other.to_string())),
+        }
+    }
 }
 
 /// `speccy check` arguments.
@@ -104,14 +112,7 @@ pub fn run(
         include_archive,
     } = args;
 
-    let project_root = match find_root(cwd) {
-        Ok(p) => p,
-        Err(WorkspaceError::NoSpeccyDir { .. }) => return Err(CheckError::ProjectRootNotFound),
-        Err(WorkspaceError::Io(e)) => return Err(CheckError::Io(e)),
-        Err(other) => {
-            return Err(CheckError::Io(std::io::Error::other(other.to_string())));
-        }
-    };
+    let project_root = crate::cwd::resolve_root(cwd, CheckError::ProjectRootNotFound)?;
 
     let parsed = parse_selector(selector.as_deref())?;
     let ws = scan_with_archive(&project_root, include_archive);

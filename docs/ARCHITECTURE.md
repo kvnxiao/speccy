@@ -57,8 +57,8 @@ So Speccy is a **feedback engine**:
 - **Reviewer personas own semantic judgment.** Whether a scenario
   is meaningful, whether the diff actually satisfies it, and
   whether the project tests cover the scenario meaningfully are
-  questions for the business / tests / security / style reviewer
-  loop, not for the CLI.
+  questions for the business / tests / security / style /
+  correctness reviewer loop, not for the CLI.
 - There is no `--strict` mode, no policy file, no configurable
   enforcement. Speccy is opinionated about what to surface and
   silent about what to do about it.
@@ -353,9 +353,9 @@ AGENTS.md                Project-wide product north star + agent conventions
 
 resources/               Shipped with Speccy; rendered/copied by `speccy init`
   modules/               Single-source bodies (no host duplication)
-    personas/            Reviewer and vet persona bodies, plus
-                         co-located snippets included from those
-                         bodies.
+    personas/            Reviewer, vet, and plan persona bodies,
+                         plus co-located snippets included from
+                         those bodies.
     phases/              Agent bodies for the pinned phase workers
                          and the init phase.
     skills/              Interactive skill bodies plus the SKILL.md
@@ -410,9 +410,11 @@ for every shipped skill (full body for the interactive skills;
 defer-to-agent SKILL.md for the pinned phase workers), plus
 `.claude/agents/speccy-{decompose,work,ship}.md` for the pinned
 phase worker bodies, `.claude/agents/reviewer-<persona>.md` for
-the reviewer sub-agents, and
+the reviewer sub-agents,
 `.claude/agents/vet-{reviewer,implementer,simplifier}.md` for the
-vet sub-agents that `/speccy-vet` drives. Skills that stay in the
+vet sub-agents that `/speccy-vet` drives, and
+`.claude/agents/plan-{explorer,architect}.md` for the read-only
+plan-time grounding sub-agents. Skills that stay in the
 parent session (no agent file) are the ones that either need
 interactive user prompts or own serialised writes to TASKS.md /
 the journal — `speccy-init`, `speccy-review`, `speccy-orchestrate`,
@@ -420,8 +422,9 @@ and `speccy-vet` fall into this bucket.
 
 For Codex the parallel is `.agents/skills/speccy-<verb>/SKILL.md`
 plus `.codex/agents/speccy-{decompose,work,ship}.toml`,
-`.codex/agents/reviewer-<persona>.toml`, and
-`.codex/agents/vet-{reviewer,implementer,simplifier}.toml`.
+`.codex/agents/reviewer-<persona>.toml`,
+`.codex/agents/vet-{reviewer,implementer,simplifier}.toml`, and
+`.codex/agents/plan-{explorer,architect}.toml`.
 
 There is no project-local persona override directory. The
 host-native sub-agent files under `.claude/agents/` and
@@ -512,7 +515,7 @@ The `/speccy-work` skill is a single-task primitive. One invocation
 implements one task and exits with one state transition recorded in
 TASKS.md. The skill ships as a thin SKILL.md stub plus a full agent
 body at `.claude/agents/speccy-work.md` (pinned `model: opus[1m]`,
-`effort: low`) and the Codex twin at
+`effort: high`) and the Codex twin at
 `.codex/agents/speccy-work.toml`.
 
 With an optional `[SPEC-NNNN/T-NNN]` selector the session implements
@@ -572,7 +575,8 @@ that specific task. Without an argument the session calls
 In either case the session:
 
 - fans out one reviewer sub-agent per persona in the default
-  fan-out (`business`, `tests`, `security`, `style`) in parallel
+  fan-out (`business`, `tests`, `security`, `style`,
+  `correctness`) in parallel
   within this single task; each sub-agent's body is loaded from
   `.claude/agents/reviewer-<persona>.md` or its Codex parallel,
   with per-persona model pins (see "Model pinning" in the README
@@ -607,8 +611,8 @@ persona on one task in one round. Failed tasks return to
 `state="pending"` for a later Phase 3 invocation to pick up.
 
 The default fan-out is **business**, **tests**, **security**,
-**style**. The other personas (**architecture**, **docs**) are
-available by user request but not in the default set.
+**style**, **correctness**. The other personas (**architecture**,
+**docs**) are available by user request but not in the default set.
 
 Composing multiple Phase 4 invocations into a batch is a future
 Layer-2 concern not built today. The interim composer is the
@@ -736,6 +740,10 @@ bcrypt cost 10; policy requires >=12. See `src/auth/password.ts:14`.
 Conventions OK.
 </review>
 
+<review persona="correctness" verdict="pass" date="2026-05-11T19:00:00Z" model="claude-opus-4-8[1m]/high" round="1">
+Control flow and error handling sound.
+</review>
+
 <blockers date="2026-05-11T19:00:00Z" round="2">
 Address bcrypt cost.
 </blockers>
@@ -779,7 +787,7 @@ attributes in the journal schema. Attribute value rules:
 - `round` — positive integer (regex `^[1-9][0-9]*$`).
 - `verdict` — closed value set `{pass, blocking}`.
 - `persona` — closed persona registry (`business`, `tests`,
-  `security`, `style`, `architecture`, `docs`).
+  `security`, `style`, `correctness`, `architecture`, `docs`).
 
 ### Round monotonicity
 
@@ -919,7 +927,7 @@ step.
 
 ## Concurrent pickup
 
-`state="in-progress"` with a session marker is enough for
+`state="in-progress"` on the `<task>` element is enough for
 `speccy next` to skip in-progress tasks via the resolver's
 state-based priority (there is no `--kind` flag — see
 `speccy next` above). If two agents race to *claim* the same
@@ -1028,27 +1036,40 @@ supersedes: []
 into the broader product.
 
 ## Goals
+
+<goals>
 - Concrete outcomes this spec must achieve.
+</goals>
 
 ## Non-goals
+
+<non-goals>
 - Explicitly out of scope. Things readers might assume but shouldn't.
+</non-goals>
 
 ## User stories
+
+<user-stories>
 - As a new visitor, I want to create an account with email/password
   so that I can save my work between sessions.
 - As a returning user, I want a clear error when I try to sign up
   with an email that already exists.
+</user-stories>
 
 ## Requirements
 
+<requirement id="REQ-001">
 ### REQ-001: Account creation
+
 Users can create an account with email and password.
 
-**Done when:** A valid signup request persists a user record and
-returns a session token; duplicate email returns 409 with an
-actionable message.
+<done-when>
+- A valid signup request persists a user record and returns a
+  session token.
+- A duplicate email returns 409 with an actionable message.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given no account exists for `alice@example.com`, when a signup
   request submits valid credentials, then a user record is
   persisted and the response includes a session token.
@@ -1057,24 +1078,54 @@ actionable message.
   with an error message containing "already exists".
 - Given a signup request submits an invalid email format, when
   processed, then the response is 400 with a validation error.
+</behavior>
 
-**Covered by:** CHK-001, CHK-002, CHK-003
+<scenario id="CHK-001">
+Given no account exists for alice@example.com,
+when the signup endpoint receives a valid request,
+then a user row is persisted and the response includes a session
+token.
+</scenario>
 
+<scenario id="CHK-002">
+Given an account already exists for alice@example.com,
+when a signup request submits the same email,
+then the response is 409 with an error containing "already exists".
+</scenario>
+
+<scenario id="CHK-003">
+Given a signup request with a malformed email,
+when the handler runs,
+then the response is 400 with a validation error.
+</scenario>
+</requirement>
+
+<requirement id="REQ-002">
 ### REQ-002: Password storage
+
 Passwords are hashed before persistence; plaintext never touches
 storage.
 
-**Done when:** Inspection of the users table shows hashed values;
-a direct DB query for the password column never returns plaintext.
+<done-when>
+- Inspection of the users table shows hashed values; a direct DB
+  query for the password column never returns plaintext.
+</done-when>
 
-**Behavior:**
+<behavior>
 - Given a signup request with password `correct horse battery
   staple`, when the user record is persisted, then the password
   column contains a hash and never the original string.
 - Given the users table is dumped to logs, when inspected, then
   no plaintext passwords appear.
+</behavior>
 
-**Covered by:** CHK-004
+<scenario id="CHK-004">
+Given a signup request with password `correct horse battery staple`,
+when the user record is persisted,
+then the password column contains a hash and never the original
+string.
+</scenario>
+</requirement>
 
 ## Design
 
@@ -1083,20 +1134,19 @@ a direct DB query for the password column never returns plaintext.
 
 ### Decisions
 
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Password hashing algorithm
-**Status:** Accepted
 **Context:** Signup requires password auth without hosted services.
 **Decision:** bcrypt with cost factor 12.
 **Alternatives:** Hosted auth (deferred, requires email
-infrastructure); argon2 (deferred, no clear need yet); plaintext
-with separate KMS (rejected: KMS not yet provisioned).
+infrastructure); argon2 (deferred, no clear need yet).
 **Consequences:** App owns credential storage risk. Security
 review must inspect password handling on every auth-touching
-change. Cost factor revisits required when hardware baselines
-shift.
+change.
+</decision>
 
+<decision id="DEC-002" status="accepted">
 #### DEC-002: Session storage
-**Status:** Accepted
 **Context:** Signup must return something a returning user can
 present to authenticate later requests.
 **Decision:** JWT signed with project secret, 24h expiry, stored
@@ -1106,6 +1156,7 @@ infrastructure dependency); long-lived API tokens (rejected:
 revocation story is poor).
 **Consequences:** Stateless auth; horizontal scaling is trivial.
 Token revocation requires key rotation or a blocklist (deferred).
+</decision>
 
 ### Interfaces
 - `POST /api/signup` -- accepts `{email, password}`, returns
@@ -1125,13 +1176,18 @@ Token revocation requires key rotation or a blocklist (deferred).
 - [x] Email case-sensitivity? -- Normalize to lowercase on write.
 
 ## Assumptions
+
+<assumptions>
 - Email uniqueness enforced at the DB layer via index.
+</assumptions>
 
 ## Changelog
 
+<changelog>
 | Date       | Author          | Summary |
 |------------|-----------------|---------|
 | 2026-05-11 | agent/claude-1  | Initial draft from AGENTS.md north star |
+</changelog>
 
 ## Notes
 Free-form context for future agents and reviewers.
@@ -1347,7 +1403,7 @@ then they differ (salt is applied).
 
 The element shapes mirror the SPEC.md grammar described above
 (line-isolated open and close tags, double-quoted attributes,
-deterministic rendering).
+deterministic canonical form).
 
 | Element | Cardinality | Parent | Required attributes | Notes |
 |---|---|---|---|---|
@@ -1356,10 +1412,19 @@ deterministic rendering).
 
 Only `task` and `task-scenarios` are the live Speccy element names
 inside a TASKS.md body. The closed XML element set across all
-Speccy artifacts is — `task`, `task-scenarios`, `implementer`,
-`review`, `blockers` — with the
-last three only ever appearing inside `journal/T-NNN.md` (never in
-TASKS.md).
+Speccy artifacts is, per artifact:
+
+- SPEC.md: `goals`, `non-goals`, `user-stories`, `assumptions`,
+  `requirement`, `done-when`, `behavior`, `scenario`, `decision`,
+  `open-question`, `changelog`
+- TASKS.md: `task`, `task-scenarios`
+- REPORT.md: `report`, `coverage`
+- `journal/T-NNN.md`: `implementer`, `review`, `blockers`
+- `journal/VET.md`: `drift-review`, `holistic-fix`,
+  `simplifier-scan`, `simplifier-apply`, `gate`
+
+`implementer`, `review`, and `blockers` only ever appear inside
+`journal/T-NNN.md`, never in TASKS.md (see TSK-006).
 
 Valid `state` attribute values are exactly `pending`, `in-progress`,
 `in-review`, `completed`. The `covers` attribute is one or more
@@ -1527,24 +1592,21 @@ accidental collisions at build time.
   example tags inside fenced code blocks so the scanner does not
   promote them.
 
-### Deterministic rendering
+### Canonical form
 
 `speccy-core::parse::spec_xml` exposes `SpecDoc`, `Requirement`,
-`Scenario`, `Decision`, `ElementSpan`,
-`parse(source, path) -> Result<SpecDoc, ParseError>`, and
-`render(&SpecDoc) -> String`. Rendering is deterministic:
+`Scenario`, `Decision`, `ElementSpan`, and
+`parse(source, path) -> Result<SpecDoc, ParseError>`. The canonical
+on-disk form is deterministic:
 
 - element tags are line-isolated;
-- element attributes emit in a stable order;
-- requirement and scenario order follows the struct order;
-- Markdown bodies are preserved except for trailing whitespace
-  normalization at element boundaries;
-- parse / render / parse yields a structurally equivalent
-  `SpecDoc`.
+- element attributes appear in a stable order;
+- requirement and scenario order follows document order;
+- Markdown bodies are preserved verbatim except for trailing
+  whitespace normalization at element boundaries.
 
-The deterministic renderer is library-internal. There is no public
-`speccy fmt` command; rendering is used by CLI internals, prompt
-slicing, and tests.
+The canonical form is a grammar contract enforced by the parser,
+not a formatter. There is no public `speccy fmt` command.
 
 ## REPORT.md
 
@@ -1665,22 +1727,25 @@ and execution history from REPORT.md.
 
 ## Decisions (inline ADRs)
 
-Decisions live inside each SPEC.md under `## Design > ### Decisions`
-as `#### DEC-NNN: <title>` sub-headings. They follow the classic
-ADR shape:
+Decisions live inside each SPEC.md as `<decision id="DEC-NNN">`
+elements, conventionally under a `## Design > ### Decisions` (or
+`## Decisions`) heading. The element carries an optional
+`status="accepted|rejected|deferred|superseded"` attribute; the
+body is free Markdown that follows the classic ADR shape:
 
-- **Status:** Accepted | Proposed | Rejected | Superseded
 - **Context:** Why this decision needs to be made.
 - **Decision:** What was chosen.
 - **Alternatives:** Other options considered, with brief reason
   each was rejected or deferred.
 - **Consequences:** What this commits the project to.
 
-> **Decisions are a documented convention, not a CLI noun.** Speccy
-> does not parse decision blocks beyond surfacing them in prompts.
-> There is no `speccy decision` command, no separate lifecycle, no
-> linting of decision shape. The structure is a convention skill
-> prompts nudge agents toward.
+> **Decisions are parsed elements, not a CLI lifecycle.** The
+> parser validates `<decision>` ids (duplicates are parse errors)
+> and the `status` attribute domain, and `speccy context` surfaces
+> every decision body in its intent section. There is no
+> `speccy decision` command, no separate lifecycle, and no linting
+> of the ADR shape inside the body — that structure is a convention
+> skill prompts nudge agents toward.
 
 `DEC-NNN` IDs are scoped to the spec (like `REQ-NNN` and `CHK-NNN`).
 Two specs can both have `DEC-001`; they're local.
@@ -1690,14 +1755,15 @@ later spec records the supersession in its own `### Decisions` block
 and references the prior spec in prose:
 
 ```markdown
+<decision id="DEC-001" status="accepted">
 #### DEC-001: Password hashing algorithm
-**Status:** Accepted
 **Context:** SPEC-001 chose bcrypt cost 12. Subsequent benchmarking
 showed argon2id is faster at equivalent security on current
 hardware.
 **Decision:** Migrate to argon2id with project-standard parameters.
 **Supersedes:** SPEC-001 / DEC-001.
 **Consequences:** ...
+</decision>
 ```
 
 Project-wide conventions that aren't tied to any one spec belong in
@@ -1784,18 +1850,20 @@ Speccy ships with these personas (markdown skill files):
 | `tests` | Are checks meaningful or vacuous? Edge cases covered? Are negative cases asserted? Is the test exercising the actual behavior, or testing the mock? |
 | `security` | Auth, input validation, secrets, injection, sensitive data exposure, access control |
 | `style` | Project conventions per `AGENTS.md`, lint compliance, naming, dead code |
+| `correctness` | Logic and control-flow errors, `Option`/`Result` mishandling, off-by-one and boundary conditions, non-security races and deadlocks, resource leaks |
 | `architecture` | Cross-spec invariants, design adherence, layering, premature abstraction, ADR drift |
 | `docs` | Comments, READMEs, inline SPEC.md decisions and AGENTS.md updated to match the change |
 
 The default fan-out (run when the skill does a full review) is:
 
 ```
-business, tests, security, style
+business, tests, security, style, correctness
 ```
 
-Architecture and docs are available via explicit `--persona` but
-not in the default set. A future change may make the fan-out
-project-configurable; v1 does not.
+Architecture and docs are off-by-default: the `/speccy-review`
+skill runs them only when explicitly asked. Persona selection is a
+skill-layer concern — there is no CLI flag for it. A future change
+may make the fan-out project-configurable; v1 does not.
 
 ## Invocation
 
@@ -1968,7 +2036,8 @@ resources/
     phases/                  Agent bodies for the pinned workers and init
                              (speccy-decompose, -work, -ship, -init).
     personas/                Reviewer persona bodies (`reviewer-*.md`),
-                             vet persona bodies (`vet-*.md`), and
+                             vet persona bodies (`vet-*.md`), plan
+                             persona bodies (`plan-*.md`), and
                              topic-named snippets included from those
                              bodies. The snippet/body distinction is
                              carried by filename pattern; no
@@ -1984,10 +2053,12 @@ resources/
     .claude/agents/speccy-{decompose,work,ship}.md.tmpl
     .claude/agents/reviewer-<persona>.md.tmpl
     .claude/agents/vet-{reviewer,implementer,simplifier}.md.tmpl
+    .claude/agents/plan-{explorer,architect}.md.tmpl
     .agents/skills/speccy-<verb>/SKILL.md.tmpl
     .codex/agents/speccy-{decompose,work,ship}.toml.tmpl
     .codex/agents/reviewer-<persona>.toml.tmpl
     .codex/agents/vet-{reviewer,implementer,simplifier}.toml.tmpl
+    .codex/agents/plan-{explorer,architect}.toml.tmpl
 ```
 
 There is no `resources/modules/prompts/` directory and no embedded
@@ -2011,8 +2082,8 @@ no separate manifest declares it. The mapping:
 | TASKS.md                        | `resources/modules/references/tasks.md`               | `.claude/skills/speccy-decompose/references/tasks.md`             | `.agents/skills/speccy-decompose/references/tasks.md`               | skill-local |
 | REPORT.md                       | `resources/modules/references/report.md`              | `.claude/skills/speccy-ship/references/report.md`                 | `.agents/skills/speccy-ship/references/report.md`                   | skill-local |
 | PR body template                | `resources/modules/references/pr-body.md`             | `.claude/skills/speccy-ship/references/pr-body.md`                | `.agents/skills/speccy-ship/references/pr-body.md`                  | skill-local |
-| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/skills/speccy-work/references/journal-implementer.md`    | `.agents/skills/speccy-work/references/journal-implementer.md`      | skill-local |
-| journal `<review>` block        | `resources/modules/references/journal-review.md`      | `.claude/skills/speccy-review/references/journal-review.md`       | `.agents/skills/speccy-review/references/journal-review.md`         | skill-local |
+| journal `<implementer>` block   | `resources/modules/references/journal-implementer.md` | `.claude/speccy-references/journal-implementer.md`                | `.agents/speccy-references/journal-implementer.md`                  | host-shared |
+| journal `<review>` block        | `resources/modules/references/journal-review.md`      | `.claude/speccy-references/journal-review.md`                     | `.agents/speccy-references/journal-review.md`                       | host-shared |
 | evidence file (`evidence/T-NNN.md`) | `resources/modules/references/evidence.md`        | `.claude/speccy-references/evidence.md`                           | `.agents/speccy-references/evidence.md`                             | host-shared |
 | journal `<blockers>` block      | `resources/modules/references/journal-blockers.md`    | `.claude/speccy-references/journal-blockers.md`                   | `.agents/speccy-references/journal-blockers.md`                     | host-shared |
 | reconcile policy table          | `resources/modules/references/reconcile-policy.md`    | `.claude/speccy-references/reconcile-policy.md`                   | `.agents/speccy-references/reconcile-policy.md`                     | host-shared |
@@ -2029,10 +2100,18 @@ imports the same canonical text. `evidence.md` is referenced by
 `/speccy-review`, and `/speccy-orchestrate` (all of which dispatch
 on `consistency.drifts[]`); `retry-shape.md` is referenced by
 `/speccy-work` (deciding whether the strict clean-tree gate applies)
-and by reviewer sub-agents (recognising retry-shape attempts).
+and by reviewer sub-agents (recognising retry-shape attempts);
+`journal-implementer.md` is referenced by the `speccy-work` agent
+body and by `evidence.md` (the roll-call coverage rule);
+`journal-review.md` is referenced by the review fan-out partial,
+which lands in both `/speccy-review` and `/speccy-orchestrate`.
 Skill-local rows have exactly one consuming body each (or two in
 the case of `pr-body.md` and `report.md`, both consumed by
-`/speccy-ship`).
+`/speccy-ship`). Agent bodies eject as flat files with no sibling
+`references/` directory, so a skill-local file consumed from an
+agent body is pointed at via its host-rooted skill path
+(`<skill_install_path>/<skill>/references/<file>.md`), never a
+bare `references/…` relative path.
 
 SPEC-0038 REQ-002 is the source of truth. The
 `chkNNN_no_orphan_references` test in
@@ -2053,13 +2132,16 @@ Init renders the per-host wrappers into host-native locations:
 - Claude Code: `.claude/skills/speccy-<verb>/SKILL.md` plus
   `.claude/agents/speccy-{decompose,work,ship}.md` for the pinned
   phase workers, `.claude/agents/reviewer-<persona>.md` for the
-  reviewer sub-agents, and
+  reviewer sub-agents,
   `.claude/agents/vet-{reviewer,implementer,simplifier}.md` for
-  the vet sub-agents.
+  the vet sub-agents, and
+  `.claude/agents/plan-{explorer,architect}.md` for the plan-time
+  grounding sub-agents.
 - Codex: `.agents/skills/speccy-<verb>/SKILL.md` plus
   `.codex/agents/speccy-{decompose,work,ship}.toml`,
-  `.codex/agents/reviewer-<persona>.toml`, and
-  `.codex/agents/vet-{reviewer,implementer,simplifier}.toml`.
+  `.codex/agents/reviewer-<persona>.toml`,
+  `.codex/agents/vet-{reviewer,implementer,simplifier}.toml`, and
+  `.codex/agents/plan-{explorer,architect}.toml`.
 
 Existing files are handled by a three-way per-file classification:
 absent → `created`; byte-identical to planned content → `unchanged`;
@@ -2418,16 +2500,20 @@ new drift kind is a two-change procedure:
 
 1. Add the variant + detection logic in the Rust source (the
    `DriftKind` enum in `speccy-core` and its detection branch in
-   the consistency check).
+   the consistency check). Detection must stay read-only: no
+   mutating git commands, no writes to TASKS.md or the journal.
 2. Add the matching row to the policy table in
-   `.claude/speccy-references/reconcile-policy.md` and re-sync the
-   three inlined copies in the `speccy-work`, `speccy-review`,
-   and `speccy-orchestrate` skill bodies.
+   `resources/modules/references/reconcile-policy.md`, then run
+   `just reeject` to re-render the ejected host-shared copies at
+   `<host>/speccy-references/reconcile-policy.md`.
 
-The reconcile-policy partial is the single source of truth for
-what each drift kind means at the dispatch layer — see
-`.claude/speccy-references/reconcile-policy.md` for the policy
-table that maps each `kind` to its concrete action.
+No other site needs to change: the consuming skill bodies carry only
+a summary plus a pointer to the ejected file, so they pick up new
+rows without editing. The CLI knows what it *detected*; the policy
+file knows what to *do*. The reconcile-policy file is the single
+source of truth for what each drift kind means at the dispatch
+layer — see `.claude/speccy-references/reconcile-policy.md` for the
+policy table that maps each `kind` to its concrete action.
 
 ## `speccy vacancy --json`
 
@@ -2532,8 +2618,9 @@ Speccy emits a small set of deterministic lint codes. None depend
 on LLM judgment. All have stable prefixes: `SPC-` for spec
 structure, `REQ-` for requirements, `TSK-` for task structure,
 `QST-` for open questions, `RPT-` for REPORT.md proof shape,
-`JNL-` for `journal/T-NNN.md` per-task journal proof shape, and
-`VET-` for `journal/VET.md` per-SPEC vet journal proof shape.
+`JNL-` for `journal/T-NNN.md` per-task journal proof shape,
+`VET-` for `journal/VET.md` per-SPEC vet journal proof shape, and
+`XML-` for foreign-tag balance across parsed artifacts.
 The canonical, append-only list lives in
 `speccy-core::lint::registry::REGISTRY`; the snapshot test at
 `speccy-core/tests/lint_registry.rs` pins it. The summary below
@@ -2628,6 +2715,16 @@ RPT-003  Scenario id in `<coverage scenarios="...">` does not resolve
          dangling scenario id. Suppressed for rows where RPT-002
          already fired (the row is already broken at the requirement
          level; one diagnostic per row rather than N).
+
+XML-001  Orphan foreign (non-whitelisted) XML tag in a parsed
+         artifact (Level::Error): a close tag with no matching
+         preceding open, or a non-void open tag with no matching
+         following close. One diagnostic per orphan tag, naming the
+         artifact path and the offending 1-indexed source line.
+         Covers SPEC.md, TASKS.md, REPORT.md, and existing per-task
+         `journal/T-NNN.md` files. Balance is name-scoped (a
+         per-name stack) and fence-aware; cross-name nesting is not
+         enforced.
 ```
 
 `REQ-002` and `REQ-003` are registry-only entries kept for stability:
@@ -2655,14 +2752,14 @@ These are not v1 features. Each was considered and rejected.
 | Capability map (`CAP-NNN`) | Mission folders (`specs/[focus]/MISSION.md`) cover grouping. No second taxonomy. |
 | Milestone state machine | Replaced by tag-based releases + a checklist file if the project wants one. Missions are *scope*, not lifecycle. |
 | Release readiness as separate gate | Same: git tag + checklist. Not first-class. |
-| Decision (ADR) as a separate noun | Decisions live inline in SPEC.md as `### Decisions` blocks. No separate folder, no CLI command, no lifecycle machinery. |
+| Decision (ADR) as a separate artifact | Decisions live inline in SPEC.md as `<decision id="DEC-NNN">` elements (ids parsed and validated). No separate folder, no CLI command, no lifecycle machinery. |
 | Amendment as TOML | Replaced by SPEC.md frontmatter `status` + `## Changelog` table. |
 | Assumption / Constraint / Invariant / Question as TOML | All collapse into SPEC.md narrative sections. |
-| Scenario as separate noun | Folded into `Requirement.done_when` prose. |
+| Scenario as a standalone artifact | Scenarios are `<scenario>` elements nested inside their parent `<requirement>` in SPEC.md; there is no separate scenario file, registry, or lifecycle. |
 | Per-requirement delta markers (`[ADDED]`/`[MODIFIED]`/`[REMOVED]`) | SPEC.md frontmatter `status` + `supersedes` + `## Changelog` table cover lifecycle. |
-| Archive folder for completed specs | Frontmatter `status` is the indicator. Filesystem reorganization adds friction with no information gain. |
+| Automatic archiving of completed specs | `speccy archive` relocates a spec to `.speccy/archive/` only when explicitly invoked; the CLI never archives on its own, and frontmatter `status` remains the lifecycle indicator. |
 | Task `writes` globs and scope enforcement | LLMs declare them wrong; enforcement was net-negative. |
-| Claim files / leases for task pickup | No locking on the task-claim race: `state="in-progress"` + session marker on the `<task>` element is enough, and a git conflict resolves a double-claim. This exclusion is scoped to task claiming — it does *not* forbid append serialization. `speccy journal append` does take a per-file advisory lock around journal writes (SPEC-0055's append-serialization decision); that is internal to the append command, not a task-claim lease. |
+| Claim files / leases for task pickup | No locking on the task-claim race: `state="in-progress"` on the `<task>` element is enough, and a git conflict resolves a double-claim. This exclusion is scoped to task claiming — it does *not* forbid append serialization. `speccy journal append` does take a per-file advisory lock around journal writes (SPEC-0055's append-serialization decision); that is internal to the append command, not a task-claim lease. |
 | TDD exception registry | Don't gate on TDD. Review's job. |
 | `critical` flag on requirements | All requirements equal. |
 | `origin` field | Brownfield context is the planner skill's responsibility, not a TOML field. |
@@ -2683,7 +2780,7 @@ These are not v1 features. Each was considered and rejected.
 | Mutation testing | Out of scope. |
 | Semantic dependency analysis | Out of scope. |
 | Bad-test detection beyond no-op commands | Review owns this. |
-| Public `speccy fmt` command | The deterministic SPEC.md renderer ships as library functionality (used by CLI internals and tests); a user-facing formatter is out of scope for v1. |
+| Public `speccy fmt` command | The canonical SPEC.md form is a grammar contract enforced by the parser; a user-facing formatter is out of scope for v1. |
 
 The point is not that these features are wrong. The point is that
 v1 is small enough to trust.
@@ -2842,7 +2939,7 @@ headings are ignored, not flagged.
 ## Frontmatter dates
 
 - `created`: ISO 8601 date (`YYYY-MM-DD`)
-- `generated_at`, `recorded_at`: ISO 8601 datetime in UTC
+- `generated_at`: ISO 8601 datetime in UTC
   (`YYYY-MM-DDTHH:MM:SSZ`)
 
 Missing optional frontmatter fields are treated identically to
@@ -2868,8 +2965,12 @@ as a user-owned file thereafter and will not overwrite it without
 ## Subdirectory naming
 
 Spec folders: `NNNN-slug-with-hyphens`. Slug is lowercase ASCII
-only. Lint warns on uppercase or non-ASCII. Mismatch between
-`frontmatter.slug` and the actual folder name is a lint error.
+only: the workspace scanner enumerates only directories matching
+`^\d{4}-[a-z0-9-]+$`, so a folder with an uppercase or non-ASCII
+name is simply not recognised as a spec (no lint fires). There is
+no lint cross-checking `frontmatter.slug` against the folder name;
+the field is required to be present (SPC-004) but its value is not
+validated against the directory.
 
 ## `speccy verify` exit code
 
@@ -2916,14 +3017,16 @@ or workspace errors.
 
 ## Reviewer diff scoping
 
-The diff the reviewer sub-agent reasons over is fetched by the
-`/speccy-review` orchestrator (or the persona body itself, depending
-on the persona) via `git diff HEAD` — the implementer's
-uncommitted edits, which is the natural moment of review. When the
-working tree is clean (the implementer already committed) the
-fallback is `git diff HEAD~1 HEAD`; if that yields nothing relevant,
-the persona body falls back to SPEC.md plus task notes alone. The
-CLI is not in this loop; it does not invoke git.
+The diff a reviewer sub-agent reasons over is fetched by the
+sub-agent itself, never inlined into its spawn prompt. The command
+comes from the `diff_command` field of the `speccy context` bundle
+the persona opens with: a merge-base diff against the repository's
+default branch (`git diff <base>...HEAD`, where `<base>` is e.g.
+`origin/main`), optionally scoped with `-- <suggested-files>` from
+the task body. The CLI derives the suggestion via read-only git
+probes and degrades to a `main`-baseline string when the probe
+fails (no remote, detached HEAD, git unavailable); it never fetches
+the diff itself and never mutates the repository.
 
 ---
 
@@ -2948,9 +3051,15 @@ end state:
 9. `speccy vacancy` (next free SPEC-NNNN; `--json schema_version: 1`).
 10. `speccy archive` (relocate shipped/dropped/superseded specs to
     `.speccy/archive/`; `--json schema_version: 1`).
-11. Skill packs: shipped under `resources/modules/{personas,phases,skills,references}/`
+11. Lifecycle write commands: `speccy task transition` (byte-surgical
+    state splice over the closed legal graph) and `speccy journal
+    append` / `speccy journal show` (validated journal blocks behind
+    a per-file append lock).
+12. `speccy context` (task-scoped JSON bundle for loop subagents;
+    `--json schema_version: 1`).
+13. Skill packs: shipped under `resources/modules/{personas,phases,skills,references}/`
     plus per-host MiniJinja wrappers under `resources/agents/`.
-12. Dogfood: Speccy's own development tracked under
+14. Dogfood: Speccy's own development tracked under
     `.speccy/specs/` during implementation and preserved under
     `.speccy/archive/` after each spec ships, with every shipped
     CLI verb proven by its own SPEC.
