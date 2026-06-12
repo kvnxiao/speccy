@@ -16,12 +16,14 @@
 //! Validation runs *before* any byte is produced
 //! ([`validate_and_render_block`] returns `Err` without emitting output):
 //! required attributes per block type, `persona` against the registry,
-//! `verdict` against `{pass, blocking}`, a non-empty body, and a body free
-//! of nested journal markup. Every block this module renders, appended to a
-//! file that already parses, leaves a file that [`super::parse`] accepts.
+//! `verdict` against `{pass, blocking}`, and a non-empty body. The caller
+//! re-parses the assembled would-be-new file through [`super::parse`] before
+//! writing (DEC-001), so a body whose own line is journal markup is rejected
+//! there rather than by a pre-scan here. Every block this module renders,
+//! appended to a file that already parses, leaves a file that [`super::parse`]
+//! accepts.
 
 use crate::parse::journal_xml::ALLOWED_REVIEW_VERDICTS;
-use crate::parse::journal_xml::JOURNAL_ELEMENT_NAMES;
 use crate::parse::journal_xml::JournalDoc;
 use crate::personas::ALL as PERSONAS_ALL;
 use thiserror::Error;
@@ -115,13 +117,6 @@ pub enum SerializeError {
     /// The block body was empty (or whitespace-only).
     #[error("block body is empty; a journal block must carry a non-empty body on stdin")]
     EmptyBody,
-    /// The body contains a nested journal element open tag, which would
-    /// corrupt the file's block structure.
-    #[error("block body must not contain nested journal markup; found `<{element}>` in the body")]
-    NestedJournalMarkup {
-        /// The offending element name.
-        element: String,
-    },
     /// `--model` was supplied but empty.
     #[error("`{block}` requires a non-empty `--model`")]
     EmptyModel {
@@ -184,13 +179,11 @@ pub fn render_fresh_frontmatter(spec: &str, task: &str, generated_at: &str) -> S
 pub fn validate_and_render_block(inputs: &BlockInputs<'_>) -> Result<String, SerializeError> {
     let element = inputs.kind.element_name();
 
-    // Body checks first: an empty or markup-bearing body is invalid for
-    // every block type.
+    // An empty body is invalid for every block type. A body whose own line is
+    // journal markup is caught by the caller's write-time round-trip through
+    // `super::parse` (DEC-001), not pre-scanned here.
     if inputs.body.trim().is_empty() {
         return Err(SerializeError::EmptyBody);
-    }
-    if let Some(name) = first_nested_journal_element(inputs.body) {
-        return Err(SerializeError::NestedJournalMarkup { element: name });
     }
 
     // Per-block-type required attributes (SPEC-0037 schema).
@@ -262,31 +255,6 @@ pub fn validate_and_render_block(inputs: &BlockInputs<'_>) -> Result<String, Ser
     // the reference template shape (`<implementer ...>\n<body>\n</implementer>`).
     let body = inputs.body.trim_end_matches('\n');
     Ok(format!("{open}\n{body}\n</{element}>\n"))
-}
-
-/// Scan `body` for the first nested journal element open tag, if any.
-///
-/// Matches `<implementer`, `<review`, `<blockers` (case-sensitive, the
-/// on-disk form) followed by a tag boundary (`>` or whitespace) so that a
-/// prose word like `reviewer` does not trip the check. A bare `<` in prose
-/// is harmless.
-fn first_nested_journal_element(body: &str) -> Option<String> {
-    for name in JOURNAL_ELEMENT_NAMES {
-        let needle = format!("<{name}");
-        let mut from = 0usize;
-        while let Some(rel) = body.get(from..).and_then(|s| s.find(&needle)) {
-            let start = from + rel;
-            let after = start + needle.len();
-            // A tag boundary (`>` or whitespace) after the name means a real
-            // element open tag; anything else (e.g. `<reviewer`) is prose and
-            // we keep scanning.
-            if let Some(b'>' | b' ' | b'\t' | b'\n' | b'\r') = body.as_bytes().get(after) {
-                return Some((*name).to_owned());
-            }
-            from = after;
-        }
-    }
-    None
 }
 
 #[cfg(test)]
@@ -412,47 +380,6 @@ mod tests {
             body: "   \n  ",
         });
         assert!(matches!(err, Err(SerializeError::EmptyBody)));
-    }
-
-    #[test]
-    fn nested_journal_markup_rejected() {
-        for body in [
-            "before <implementer> nested",
-            "<review date=\"x\">",
-            "text\n<blockers>\nmore",
-        ] {
-            let err = validate_and_render_block(&BlockInputs {
-                kind: TaskBlockKind::Implementer,
-                date: "2026-06-09T18:00:00Z",
-                round: 1,
-                model: Some("m"),
-                persona: None,
-                verdict: None,
-                body,
-            });
-            assert!(
-                matches!(err, Err(SerializeError::NestedJournalMarkup { .. })),
-                "body {body:?} should be rejected"
-            );
-        }
-    }
-
-    #[test]
-    fn prose_word_reviewer_is_not_nested_markup() {
-        // `<reviewer>` is not a journal element; the substring guard must
-        // not trip on the longer word. (A literal `<reviewer>` tag would be
-        // an unknown element to the parser, but it is not one of our three.)
-        let rendered = validate_and_render_block(&BlockInputs {
-            kind: TaskBlockKind::Implementer,
-            date: "2026-06-09T18:00:00Z",
-            round: 1,
-            model: Some("m"),
-            persona: None,
-            verdict: None,
-            body: "the reviewers approved",
-        })
-        .expect("plain prose mentioning reviewers is fine");
-        assert!(rendered.contains("the reviewers approved"));
     }
 
     #[test]

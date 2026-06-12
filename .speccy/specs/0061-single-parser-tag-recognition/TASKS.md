@@ -112,7 +112,7 @@ Suggested files: `speccy-core/src/next.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-002 REQ-003">
+<task id="T-003" state="completed" covers="REQ-002 REQ-003">
 ## Round-trip the per-task journal before writing, and drop the redundant body guard
 
 Add a `JournalError::ProducedJournalUnparseable { path, source }` variant
