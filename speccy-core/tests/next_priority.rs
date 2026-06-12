@@ -251,6 +251,35 @@ fn render_vet_md(spec_id: &str, verdict: &str, tasks_hash: &str) -> String {
     format!("{frontmatter}{heading}{gate}")
 }
 
+/// Build a single-invocation VET.md whose terminal `<gate>` is `failed`
+/// but whose body quotes an inline `<gate verdict="passed">` carrying
+/// `inline_hash`. Composed from the same production renderers as
+/// [`render_vet_md`], so the document is valid by construction; the
+/// inline gate lives inside the terminal block's body text and must never
+/// surface as the document's terminal gate (SPEC-0061 REQ-001 / REQ-005).
+fn render_spoof_vet_md(spec_id: &str, inline_hash: &str) -> String {
+    let date = "2026-05-22T00:00:00Z";
+    let spoof_body = format!(
+        "First attempt failed. An earlier note quoted the gate it wanted:\n\
+         <gate verdict=\"passed\" tasks_hash=\"{inline_hash}\" date=\"{date}\">\n\
+         do not let this inline gate satisfy freshness.\n\
+         </gate>",
+    );
+    let gate = validate_and_render_vet_block(&VetBlockInputs {
+        kind: VetBlockKind::Gate,
+        date,
+        round: 1,
+        verdict: Some("failed"),
+        model: None,
+        tasks_hash: Some("deadbeef"),
+        body: &spoof_body,
+    })
+    .expect("failed gate with an inline-gate body renders");
+    let frontmatter = render_fresh_vet_frontmatter(spec_id, date);
+    let heading = render_vet_section_heading(1, date);
+    format!("{frontmatter}{heading}{gate}")
+}
+
 /// Write the rendered VET.md to the spec's journal directory.
 fn write_vet_md(
     spec_dir: &Utf8Path,
@@ -305,6 +334,44 @@ fn chk007_core_helper_output_round_trips_through_parser() -> TestResult {
     Ok(())
 }
 
+// -- SPEC-0061 REQ-001 / REQ-005 / CHK-001 / CHK-009 ------------------------
+// Gate-spoof regression: a valid VET.md whose terminal gate is `failed`
+// but whose body quotes an inline `<gate verdict="passed">` with a
+// matching tasks_hash must resolve to Vet, never Ship. The byte-scanner
+// read the inline passing gate and yielded Ship (the live bug); the typed
+// parser captures it as body text, so the terminal gate stays `failed`.
+
+#[test]
+fn vet_when_terminal_gate_failed_despite_inline_passing_gate() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    // The inline (spoof) gate quotes a tasks_hash that *does* match the
+    // on-disk TASKS.md, so the only thing standing between this fixture and
+    // a false Ship is whether the inline gate is treated as terminal.
+    let inline_hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    fs_err::write(
+        journal.join("VET.md").as_std_path(),
+        render_spoof_vet_md("SPEC-0001", &inline_hash),
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(action, NextAction::Vet),
+        "terminal gate is failed; the inline passing gate must not satisfy \
+         freshness — expected Vet, got {action:?}",
+    );
+    Ok(())
+}
+
 // -- SPEC-0041 REQ-001/REQ-002 ----------------------------------------------
 // All tasks completed + no VET.md → Vet.
 
@@ -324,6 +391,55 @@ fn vet_when_all_done_no_vet_md() -> TestResult {
     assert!(
         matches!(action, NextAction::Vet),
         "all-completed + no VET.md must return Vet, got {action:?}",
+    );
+    Ok(())
+}
+
+// -- SPEC-0061 REQ-001 / CHK-003 --------------------------------------------
+// All tasks completed + a VET.md that is *present but unparseable* (missing
+// the required frontmatter) → Vet. This drives the parse-failure branch of
+// `vet_gate_is_fresh_pass` (`let Ok(doc) = parse_vet_in_flight(...) else {
+// return false; }`), distinct from the file-absent early return that
+// `vet_when_all_done_no_vet_md` exercises and from the successful-parse
+// non-fresh-gate branches the failed/stale tests exercise. The fixture is
+// hand-rolled rather than built from the renderer-backed helper because the
+// helper produces valid, gate-terminated VET.md by construction (DEC-005);
+// an invalid fixture is legitimately outside it.
+
+#[test]
+fn vet_when_vet_md_present_but_unparseable() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let root = utf8(&tmp)?;
+    let spec_dir = write_spec(
+        &root,
+        "0001-foo",
+        "SPEC-0001",
+        Some(&[('x', "T-001", "done")]),
+    )?;
+    // The gate carries a `tasks_hash` that *matches* the on-disk TASKS.md,
+    // so the only thing standing between this fixture and a false Ship is
+    // the parse failure: if `parse_vet_in_flight` did not reject the
+    // frontmatter-less document, the passing+fresh gate would resolve Ship.
+    let fresh_hash = sha256_hex_of_file(&spec_dir.join("TASKS.md"))?;
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    // No frontmatter: `parse_vet_in_flight` rejects this before it can
+    // surface any gate, so freshness must resolve not-fresh → Vet.
+    fs_err::write(
+        journal.join("VET.md").as_std_path(),
+        format!(
+            "## Invocation 1 — 2026-05-22T00:00:00Z\n\n\
+             <gate verdict=\"passed\" tasks_hash=\"{fresh_hash}\" date=\"2026-05-22T00:00:00Z\">\n\
+             stub.\n\
+             </gate>\n",
+        ),
+    )?;
+    let ws = scan(&root);
+    let spec = ws.specs.first().expect("workspace must contain SPEC-0001");
+    let action = compute_for_spec(spec).expect("must have an action");
+    assert!(
+        matches!(action, NextAction::Vet),
+        "a present-but-unparseable VET.md must resolve not-fresh → Vet, got {action:?}",
     );
     Ok(())
 }

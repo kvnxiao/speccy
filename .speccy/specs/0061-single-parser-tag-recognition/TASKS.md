@@ -56,7 +56,7 @@ Suggested files: `speccy-cli/tests/common/mod.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-005 REQ-003">
+<task id="T-002" state="completed" covers="REQ-001 REQ-005 REQ-003">
 ## Reroute gate-freshness onto the typed VET parser, with a gate-spoof regression test
 
 Rewrite `vet_gate_is_fresh_pass` in `speccy-core/src/next.rs` to derive the
