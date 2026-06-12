@@ -324,6 +324,23 @@ fn journal_two_rounds(spec_id: &str) -> String {
     )
 }
 
+/// A single-round per-task journal: one implementer plus two reviews, all
+/// at round 1. Proves the latest-round slice keeps *every* block when the
+/// journal has only one round (CHK-003) — `journal_one_round` carries a lone
+/// block, too thin to distinguish "all blocks" from "the first block".
+fn journal_single_round(spec_id: &str) -> String {
+    format!(
+        "---\nspec: {spec_id}\ntask: T-001\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n\
+         <implementer date=\"2026-06-10T01:00:00Z\" model=\"m/low\" round=\"1\">\n\
+         SINGLE_IMPL_MARKER\n</implementer>\n\n\
+         <review date=\"2026-06-10T02:00:00Z\" model=\"m/low\" persona=\"business\" verdict=\"pass\" round=\"1\">\n\
+         SINGLE_REVIEW_BUSINESS_MARKER\n</review>\n\n\
+         <review date=\"2026-06-10T02:01:00Z\" model=\"m/low\" persona=\"tests\" verdict=\"pass\" round=\"1\">\n\
+         SINGLE_REVIEW_TESTS_MARKER\n</review>\n",
+    )
+}
+
 /// Write a per-task journal at `<spec-dir>/journal/<task-id>.md`.
 fn write_journal(spec_dir: &Utf8Path, task_id: &str, body: &str) -> TestResult {
     let journal = spec_dir.join("journal");
@@ -782,14 +799,15 @@ fn bundle_carries_task_entry_with_raw_body_and_parsed_fields() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-006 (REQ-004): a fixture journal with rounds 1–2, five review blocks,
-// and one blockers block. The bundle's journal section contains all eight
-// blocks (2 implementer + 5 review + 1 blockers) with round attributes
-// matching the file.
+// CHK-001 (REQ-001): the two-round fixture journal (five round-1 blocks,
+// three round-2 blocks). The bundle inlines only the round-2 blocks in full;
+// no round-1 body marker survives in the serialized `blocks` array. This
+// reverses SPEC-0056's full-inline behaviour (the prior `blocks.len() == 8` /
+// `rounds == [1,1,1,1,1,2,2,2]` assertions encoded what this SPEC removes).
 // ---------------------------------------------------------------------------
 
 #[test]
-fn bundle_inlines_full_journal_with_all_blocks_and_rounds() -> TestResult {
+fn bundle_inlines_only_latest_round_blocks() -> TestResult {
     let ws = Workspace::new()?;
     let spec_dir = write_spec(
         &ws.root,
@@ -813,74 +831,160 @@ fn bundle_inlines_full_journal_with_all_blocks_and_rounds() -> TestResult {
         .get("blocks")
         .and_then(serde_json::Value::as_array)
         .expect("journal carries a blocks array");
+
+    // Only the three round-2 blocks survive (implementer + 2 reviews); the
+    // five round-1 blocks are sliced out.
     assert_eq!(
         blocks.len(),
-        8,
-        "all eight blocks (2 implementer + 5 review + 1 blockers) are inlined; got {}",
+        3,
+        "only the round-2 blocks are inlined; got {}",
         blocks.len(),
     );
 
-    // The block kinds and their counts match the file.
+    // Every surviving block is round 2 with a non-empty body.
+    for block in blocks {
+        assert_eq!(
+            block.get("round").and_then(serde_json::Value::as_u64),
+            Some(2),
+            "every inlined block is from the latest round; got {block:?}",
+        );
+        let body = block
+            .get("body")
+            .and_then(serde_json::Value::as_str)
+            .expect("each block carries a body");
+        assert!(
+            !body.trim().is_empty(),
+            "block body is non-empty; got {block:?}"
+        );
+    }
+
+    // The kinds match the round-2 slice: one implementer, two reviews, and no
+    // blockers (the lone blockers block is round 1, so it is sliced out).
     let kinds: Vec<&str> = blocks
         .iter()
         .filter_map(|b| b.get("block").and_then(serde_json::Value::as_str))
         .collect();
     assert_eq!(
         kinds.iter().filter(|k| **k == "implementer").count(),
-        2,
-        "two implementer blocks; got kinds {kinds:?}",
+        1,
+        "one round-2 implementer block; got kinds {kinds:?}",
     );
     assert_eq!(
         kinds.iter().filter(|k| **k == "review").count(),
-        5,
-        "five review blocks; got kinds {kinds:?}",
+        2,
+        "two round-2 review blocks; got kinds {kinds:?}",
     );
     assert_eq!(
         kinds.iter().filter(|k| **k == "blockers").count(),
-        1,
-        "one blockers block; got kinds {kinds:?}",
+        0,
+        "the round-1 blockers block is sliced out; got kinds {kinds:?}",
     );
 
-    // Round attributes match the file: the first five blocks are round 1
-    // (implementer + 3 reviews + blockers), the last three are round 2
-    // (implementer + 2 reviews), in file order.
-    let rounds: Vec<u64> = blocks
+    // The round-2 bodies are present in full; none of the round-1 body
+    // markers survive in any inlined block body (markers live only in bodies,
+    // so concatenating them is a faithful read of the serialized blocks).
+    let bodies: String = blocks
         .iter()
-        .filter_map(|b| b.get("round").and_then(serde_json::Value::as_u64))
+        .filter_map(|b| b.get("body").and_then(serde_json::Value::as_str))
         .collect();
-    assert_eq!(
-        rounds,
-        [1, 1, 1, 1, 1, 2, 2, 2],
-        "round attributes match the file in order; got {rounds:?}",
-    );
-
-    // The blocks-in-file-order projection preserves each block's body
-    // verbatim, so the retry context (prior handoffs, verdicts, blockers
-    // directives) is all present.
     for marker in [
-        "IMPL_R1_MARKER",
-        "REVIEW_R1_SECURITY_MARKER",
-        "BLOCKERS_R1_MARKER",
         "IMPL_R2_MARKER",
+        "REVIEW_R2_SECURITY_MARKER",
         "REVIEW_R2_STYLE_MARKER",
     ] {
         assert!(
-            stdout.contains(marker),
-            "journal body marker {marker} must appear in the payload",
+            bodies.contains(marker),
+            "round-2 body marker {marker} must appear in the inlined blocks",
+        );
+    }
+    for marker in [
+        "IMPL_R1_MARKER",
+        "REVIEW_R1_BUSINESS_MARKER",
+        "REVIEW_R1_TESTS_MARKER",
+        "REVIEW_R1_SECURITY_MARKER",
+        "BLOCKERS_R1_MARKER",
+    ] {
+        assert!(
+            !bodies.contains(marker),
+            "round-1 body marker {marker} must NOT survive the latest-round slice",
         );
     }
 
-    // A blocking review block carries its persona and verdict (sufficient
-    // for retry context); the security round-1 review blocked.
-    let blocking = blocks
+    // Round-2 review metadata still projects: the style review carries its
+    // persona and pass verdict.
+    let style = blocks
         .iter()
-        .find(|b| b.get("verdict").and_then(serde_json::Value::as_str) == Some("blocking"))
-        .expect("the round-1 security review is a blocking verdict");
+        .find(|b| b.get("persona").and_then(serde_json::Value::as_str) == Some("style"))
+        .expect("the round-2 style review is inlined");
     assert_eq!(
-        blocking.get("persona").and_then(serde_json::Value::as_str),
-        Some("security"),
-        "the blocking review carries its persona",
+        style.get("verdict").and_then(serde_json::Value::as_str),
+        Some("pass"),
+        "the round-2 style review carries its verdict",
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-003 (REQ-001): a single-round journal fixture. Round 1 is the only —
+// and therefore the latest — round, so the slice keeps every block in full.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bundle_inlines_single_round_journal_in_full() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    write_journal(&spec_dir, "T-001", &journal_single_round("SPEC-0042"))?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let journal = value.get("journal").expect("bundle has journal section");
+    assert_eq!(
+        journal.get("exists").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "journal section marks the file present",
+    );
+
+    let blocks = journal
+        .get("blocks")
+        .and_then(serde_json::Value::as_array)
+        .expect("journal carries a blocks array");
+
+    // All three round-1 blocks survive — the only round is the latest round.
+    assert_eq!(
+        blocks.len(),
+        3,
+        "every block of the single-round journal is inlined; got {}",
+        blocks.len(),
+    );
+    for block in blocks {
+        assert_eq!(
+            block.get("round").and_then(serde_json::Value::as_u64),
+            Some(1),
+            "the sole round is round 1; got {block:?}",
+        );
+    }
+
+    // Every block's full body is present in the inlined blocks.
+    let bodies: String = blocks
+        .iter()
+        .filter_map(|b| b.get("body").and_then(serde_json::Value::as_str))
+        .collect();
+    for marker in [
+        "SINGLE_IMPL_MARKER",
+        "SINGLE_REVIEW_BUSINESS_MARKER",
+        "SINGLE_REVIEW_TESTS_MARKER",
+    ] {
+        assert!(
+            bodies.contains(marker),
+            "single-round body marker {marker} must appear in the inlined blocks",
+        );
+    }
     Ok(())
 }
 

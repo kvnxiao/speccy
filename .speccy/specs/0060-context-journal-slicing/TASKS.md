@@ -5,7 +5,7 @@ generated_at: 2026-06-12T04:40:04Z
 ---
 # Tasks: SPEC-0060 Context bundle journal slicing — latest round inlined in full, prior rounds as an attributes-only index
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Slice `journal.blocks` to the latest round only
 
 Today `build_journal` (`speccy-cli/src/context.rs:322`) projects every

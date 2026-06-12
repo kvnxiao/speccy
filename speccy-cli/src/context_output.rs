@@ -153,12 +153,15 @@ pub struct ScenarioEntry {
     pub body: String,
 }
 
-/// The selected task's per-task journal, inlined into the bundle (REQ-004).
+/// The selected task's per-task journal, sliced to its latest round and
+/// inlined into the bundle (SPEC-0056 REQ-004, narrowed by SPEC-0060 REQ-001).
 ///
 /// When `<spec-dir>/journal/<task-id>.md` exists, `exists` is `true`,
 /// the frontmatter fields carry the parsed `spec` / `task` / `generated_at`,
-/// and `blocks` holds every `<implementer>` / `<review>` / `<blockers>`
-/// entry across all rounds in file order. When the file does not exist,
+/// and `blocks` holds the `<implementer>` / `<review>` / `<blockers>` entries
+/// of the journal's highest round in file order. Prior rounds are not
+/// inlined — they remain reachable on demand via
+/// `speccy journal show <selector> --round N`. When the file does not exist,
 /// `exists` is `false`, the frontmatter fields are absent, and `blocks` is
 /// empty — a round-1 implementer legitimately has no journal yet (DEC-004),
 /// so absence is normal and the command still exits 0.
@@ -181,7 +184,8 @@ pub struct BundleJournal {
     /// `generated_at:` frontmatter field; present only when the file exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generated_at: Option<String>,
-    /// Every journal block in file order; empty when the file is absent.
+    /// The latest round's journal blocks in file order; empty when the file
+    /// is absent or parses to zero entries.
     pub blocks: Vec<JsonJournalBlock>,
 }
 

@@ -52,6 +52,7 @@ use speccy_core::consistency::detect as detect_consistency;
 use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::SpecDoc;
+use speccy_core::parse::latest_round;
 use speccy_core::parse::parse_journal_xml;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskLocation;
@@ -319,7 +320,18 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
             source,
         })?;
 
-    let blocks = doc.entries.iter().map(to_json_journal_block).collect();
+    // Inline only the latest round's blocks (SPEC-0060 REQ-001); prior
+    // rounds are reachable via `speccy journal show --round N`. `latest_round`
+    // is the shared resolver `journal show --round latest` also calls, so the
+    // two views cannot drift (DEC-001). A journal that parses to zero entries
+    // yields `None` here, hence an empty `blocks` with `exists: true`.
+    let highest = latest_round(&doc.entries);
+    let blocks = doc
+        .entries
+        .iter()
+        .filter(|entry| highest.is_some_and(|r| entry.round() == r))
+        .map(to_json_journal_block)
+        .collect();
     Ok(BundleJournal {
         exists: true,
         spec: Some(doc.spec),

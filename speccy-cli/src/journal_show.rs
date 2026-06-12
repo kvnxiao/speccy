@@ -35,6 +35,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use speccy_core::parse::JournalEntry;
 use speccy_core::parse::VetBlock;
+use speccy_core::parse::latest_round;
 use speccy_core::parse::parse_journal_xml;
 use speccy_core::parse::parse_vet_in_flight;
 use speccy_core::task_lookup::LookupError;
@@ -206,7 +207,7 @@ fn resolve_task(
 
     // Round filter first: resolve `latest` against the whole file, then keep
     // only the named round's blocks. The other filters compose on top.
-    let highest = doc.entries.iter().map(JournalEntry::round).max();
+    let highest = latest_round(&doc.entries);
     let (target_round, latest_round) = match round {
         Some(RoundFilter::Latest) => (highest, highest),
         Some(RoundFilter::Exact(n)) => (Some(n), None),
