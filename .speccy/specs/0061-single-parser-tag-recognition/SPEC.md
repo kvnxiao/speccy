@@ -358,6 +358,41 @@ spoof unless fence exclusion were re-added), and would preserve three
 recognizers rather than collapsing to one.
 </decision>
 
+<decision id="DEC-004">
+REQ-004's "one shared helper" is realized as **one renderer-backed helper per
+test crate**, not a single function. The VET.md-constructing fixtures span two
+integration-test crates (`next_priority.rs` in `speccy-core`; the rest in
+`speccy-cli`), and Rust integration-test binaries cannot share a `mod common`
+across crates. The contract REQ-004 enforces is therefore "every test VET.md is
+built from the exported production renderers (`render_fresh_vet_frontmatter`,
+`render_vet_section_heading`) — no hand-rolled `## Invocation` / `<gate>` string
+outside such a helper," with one helper living in each crate's test-support
+module, both built on the same renderers. Rationale: the renderers are the
+shared authority that makes fixtures grammar-valid by construction; a single
+literal function would force a test-only construction surface onto the
+production `speccy-core` crate, a smell the per-crate split avoids. The two
+helpers are structural rhyme over the same renderers, not divergent logic — the
+same shape DEC-002 accepts for the two inline round-trips.
+</decision>
+
+<decision id="DEC-005">
+The renderer-backed helper produces **valid, gate-terminated** VET.md — CHK-007
+requires `parse_vet_in_flight` to accept its output. Fixtures that must be
+*invalid* or structurally special to exercise a specific grammar condition are
+therefore legitimately outside it and keep hand-rolling by design. Concretely,
+`lint_vet.rs` (despite REQ-004's "valid-but-hand-rolled" characterization) builds
+deliberately-malformed VET.md to drive the `VET-*` lint family — a missing
+frontmatter to fire VET-001, an out-of-domain `verdict="maybe"`, a gate-ordering
+violation to fire VET-002 — none of which a valid-only helper can produce. Its
+hand-rolling is the test, not drift. The `journal_show.rs` intentionally-open
+(gate-less) fixture is the same kind of exception. CHK-008's "no `## Invocation`
+/ `<gate>` string outside the helper" audit therefore covers **valid** VET.md
+construction; intentionally grammar-edge fixtures that test the lint/parse
+boundary are carved out and recorded as such in REPORT.md. The migration set that
+actually routes through the helpers is `next_priority.rs`, `next_text.rs`,
+`next_json.rs`, `common/mod.rs`, and the valid VET.md in `journal_show.rs`.
+</decision>
+
 ## Notes
 
 This SPEC finishes the work DEC-008 (SPEC-0055) began. That decision made the
@@ -380,10 +415,19 @@ for the vet path: the write-time round-trip is a complete superset of what the
 open-tags-only guard checked, so a second hand-rolled guard would only re-introduce
 the divergence being removed.
 
+The CHK-006 audit (REQ-003) targets hand-rolled tag _recognizers_ — code that
+scans input text for a tag (`find("<…")`). It deliberately excludes the block
+_renderers_ (e.g. the `format!("<{element} verdict=…")` calls in
+`vet_xml/serialize.rs` and the journal serializer), which emit tags rather than
+recognize them and are the canonical output path. A naive grep for the
+`format!("<{` pattern will match those renderers; they are expected hits, not
+violations, and the audit recorded in REPORT.md should note them as such.
+
 ## Changelog
 
 <changelog>
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-12 | Kevin Xiao | Initial SPEC: single parser authority for tag recognition; delete the gate-read and journal-write hand-rolled scanners (refines SPEC-0055 DEC-008). |
+| 2026-06-12 | speccy-decompose | Promoted decompose-time decisions: DEC-004 (REQ-004's "one helper" is realized per-crate, not one shared function), DEC-005 (the renderer-backed helper is valid-only, so `lint_vet.rs`'s intentionally-invalid fixtures stay hand-rolled and are carved out of CHK-008), and a Note that CHK-006's audit excludes block renderers. No requirement text changed. |
 </changelog>
