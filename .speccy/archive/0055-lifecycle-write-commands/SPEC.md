@@ -5,6 +5,7 @@ title: Mechanical lifecycle write commands — task state transitions, validated
 status: implemented
 created: 2026-06-09
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0055: Mechanical lifecycle write commands — task state transitions, validated journal appends, and direct subagent journal writes

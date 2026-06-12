@@ -5,6 +5,7 @@ title: Branch-guard and consolidated git commits for the authoring skills (plan 
 status: implemented
 created: 2026-06-11
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0059: Branch-guard and consolidated git commits for the authoring skills (plan / decompose / amend)

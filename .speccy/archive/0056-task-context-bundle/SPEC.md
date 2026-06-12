@@ -5,6 +5,7 @@ title: Task-scoped context bundle — `speccy context` emits one JSON read for l
 status: implemented
 created: 2026-06-09
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0056: Task-scoped context bundle — `speccy context` emits one JSON read for loop subagents

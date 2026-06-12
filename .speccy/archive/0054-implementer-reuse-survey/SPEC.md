@@ -5,6 +5,7 @@ title: Implementer pre-implementation reuse survey, forked reuse guidance, and `
 status: implemented
 created: 2026-05-31
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0054: Implementer pre-implementation reuse survey, forked reuse guidance, and `speccy-work` opus/high repin

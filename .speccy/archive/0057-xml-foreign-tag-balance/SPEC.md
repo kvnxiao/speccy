@@ -5,6 +5,7 @@ title: Unbalanced foreign-tag lint — `speccy verify` flags leaked orphan XML t
 status: implemented
 created: 2026-06-10
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0057: Unbalanced foreign-tag lint — `speccy verify` flags leaked orphan XML tags in parsed artifacts

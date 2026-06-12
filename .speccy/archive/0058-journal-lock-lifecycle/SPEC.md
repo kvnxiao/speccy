@@ -5,6 +5,7 @@ title: Journal lock-file lifecycle — reap advisory lock sidecars at terminal l
 status: implemented
 created: 2026-06-10
 supersedes: []
+archived_at: 2026-06-12
 ---
 
 # SPEC-0058: Journal lock-file lifecycle — reap advisory lock sidecars at terminal lifecycle boundaries
