@@ -2,7 +2,7 @@
 id: SPEC-0060
 slug: context-journal-slicing
 title: Context bundle journal slicing — latest round inlined in full, prior rounds as an attributes-only index
-status: in-progress
+status: implemented
 created: 2026-06-11
 supersedes: []
 ---
