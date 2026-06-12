@@ -2,7 +2,7 @@
 id: SPEC-0061
 slug: single-parser-tag-recognition
 title: Single parser authority for tag recognition — gate-read and journal-write paths use the canonical parser, deleting both hand-rolled scanners
-status: in-progress
+status: implemented
 created: 2026-06-12
 supersedes: []
 ---
