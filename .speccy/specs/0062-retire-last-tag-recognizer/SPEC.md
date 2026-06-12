@@ -2,7 +2,7 @@
 id: SPEC-0062
 slug: retire-last-tag-recognizer
 title: Retire the last hand-rolled tag recognizer — reconcile's recovery offset derives from the canonical scanner
-status: in-progress
+status: implemented
 created: 2026-06-12
 supersedes: []
 ---
