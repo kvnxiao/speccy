@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0061
-spec_hash_at_generation: d9eba5875234949bcf654acf42934c1942e64a591c3ce5bfdee2b11cc96e5c80
-generated_at: 2026-06-12T07:14:13Z
+spec_hash_at_generation: bc67d4ca6718d8938241fdb921edae4f362e5856dc73723eb1f19ec2acc7644c
+generated_at: 2026-06-12T07:25:09Z
 ---
 # Tasks: SPEC-0061 Single parser authority for tag recognition — gate-read and journal-write paths use the canonical parser, deleting both hand-rolled scanners
 

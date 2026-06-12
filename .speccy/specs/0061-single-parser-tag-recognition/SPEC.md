@@ -42,8 +42,8 @@ so the spoof dies by construction), and the per-task write path gains a
 scanners — and their helpers, their dead error variant, and the stale module
 doc that described them — are deleted. The same divergence class lives in the
 test layer too (four fixtures hand-roll an invalid VET.md the real parser
-rejects), so all VET.md test construction is routed through one shared helper
-built on the production renderers.
+rejects), so valid VET.md test construction is routed through renderer-backed
+helpers (one per test crate) built on the production renderers.
 
 ## Goals
 
@@ -58,8 +58,9 @@ built on the production renderers.
   absent for a new journal).
 - No hand-rolled tag scanner remains in production code: the canonical
   `xml_scanner`-backed parsers are the sole tag recognizers.
-- All test VET.md is constructed through one shared helper built on the
-  production renderers, so fixtures cannot diverge from the real grammar.
+- All valid test VET.md is constructed through renderer-backed helpers (one per
+  test crate) built on the production renderers, so fixtures cannot diverge from
+  the real grammar.
 </goals>
 
 ## Non-goals
@@ -105,8 +106,8 @@ built on the production renderers.
 - `parse_vet_in_flight`, `VetBlock`, and the production VET renderers are
   reachable from the call sites that need them (`next.rs` already imports
   `crate::parse`; the renderers are exported from `speccy_core::parse`).
-- Routing all test VET.md through the production renderers makes fixture validity
-  a guarantee by construction, eliminating the test-side instance of the
+- Routing valid test VET.md through the production renderers makes fixture
+  validity a guarantee by construction, eliminating the test-side instance of the
   grammar-divergence class.
 </assumptions>
 
@@ -231,8 +232,11 @@ prose that described `next`'s independent tolerant `<gate>` scanner.
   nested markup.
 - The `vet_xml` module doc no longer references a separate tolerant `<gate>`
   scanner in `next`.
-- No `find("<…")` / `format!("<{…")`-style hand-rolled tag scan remains in
-  non-test `speccy-core` or `speccy-cli` source.
+- No hand-rolled tag *recognizer* (a `find("<…")` / `format!("<{…")` scan over
+  input text) remains in non-test `speccy-core` or `speccy-cli` source. Block
+  *renderers* that emit tags (e.g. the `format!("<{element} …")` calls in the VET
+  and journal serializers) are the canonical output path and are explicitly not
+  in scope.
 </done-when>
 
 <behavior>
@@ -245,37 +249,45 @@ prose that described `next`'s independent tolerant `<gate>` scanner.
 Given the post-SPEC `speccy-core` and `speccy-cli` source,
 when a reviewer audits production (non-test) code for hand-rolled tag-scan
 patterns (`find("<`, `find("</`, `format!("<{`),
-then no match remains and the audit is recorded in REPORT.md.
+then the only matches are block renderers that emit tags (not recognizers
+scanning input) — no hand-rolled recognizer remains — and the audit is recorded
+in REPORT.md.
 </scenario>
 </requirement>
 
 <requirement id="REQ-004">
-### REQ-004: All test VET.md is built through one shared renderer-backed helper
+### REQ-004: All test VET.md is built through renderer-backed helpers
 
-A single test helper constructs VET.md by calling the exported production
-renderers (`render_fresh_vet_frontmatter`, `render_vet_section_heading`) plus a
-gate block, so every fixture matches the real grammar by construction. Every
-VET.md-constructing test routes through it, replacing the hand-rolled
+A renderer-backed test helper constructs VET.md by calling the exported
+production renderers (`render_fresh_vet_frontmatter`, `render_vet_section_heading`)
+plus a gate block, so every fixture matches the real grammar by construction.
+Because Rust integration-test binaries cannot share a module, there is one such
+helper per test crate (`speccy-core`'s tests and `speccy-cli`'s tests), both
+built on the same renderers (DEC-004). Every test that constructs a *valid*
+VET.md routes through its crate's helper, replacing the hand-rolled
 `## Invocation N` / `<gate>` strings.
 
 <done-when>
-- A single shared helper builds VET.md from the production renderers, and no
-  test hand-rolls a `## Invocation N` / `<gate>` VET.md string outside it.
-- The four previously-invalid fixtures (`next_priority.rs`, `next_text.rs`,
-  `common/mod.rs`, `next_json.rs`) and the valid-but-hand-rolled ones
-  (`lint_vet.rs`, `journal_show.rs`) all construct their VET.md through the
-  helper.
-- `cargo test --workspace` is green with the fixtures routed through the helper.
+- Each test crate has one renderer-backed VET.md helper, and no test hand-rolls a
+  *valid* `## Invocation N` / `<gate>` VET.md string outside such a helper.
+- The parser-invalid fixtures (`next_priority.rs`, `next_text.rs`, `next_json.rs`,
+  `common/mod.rs`) and the valid hand-rolled VET.md in `journal_show.rs` are
+  routed through a helper.
+- `lint_vet.rs` and the intentionally-open (gate-less) fixture in
+  `journal_show.rs` stay hand-rolled and are out of scope: they build
+  deliberately-invalid or structurally-edge VET.md to exercise the parse/lint
+  boundary, which a valid-only helper cannot produce (DEC-005).
+- `cargo test --workspace` is green with the fixtures routed through the helpers.
 </done-when>
 
 <behavior>
-- Given the shared helper, when any test constructs a VET.md for an arbitrary
-  `(verdict, tasks_hash)`, then the produced document is accepted by
+- Given a renderer-backed helper, when any test constructs a VET.md for an
+  arbitrary `(verdict, tasks_hash)`, then the produced document is accepted by
   `parse_vet_in_flight` and its terminal gate carries that verdict and hash.
 </behavior>
 
 <scenario id="CHK-007">
-Given the shared test helper,
+Given a renderer-backed test helper,
 when it renders a VET.md for a `(verdict, tasks_hash)` pair,
 then `parse_vet_in_flight` accepts the result and its terminal `VetBlock::Gate`
 carries that verdict and `tasks_hash`.
@@ -283,9 +295,11 @@ carries that verdict and `tasks_hash`.
 
 <scenario id="CHK-008">
 Given the test suite after migration,
-when a reviewer audits the test modules,
-then no module hand-rolls a `## Invocation` / `<gate>` VET.md string outside the
-shared helper, and the audit is recorded in REPORT.md.
+when a reviewer audits the test modules for hand-rolled *valid* VET.md
+construction,
+then none remains outside a renderer-backed helper — excepting the
+intentionally-invalid / gate-less fixtures in `lint_vet.rs` and `journal_show.rs`
+that exercise the parse/lint boundary — and the audit is recorded in REPORT.md.
 </scenario>
 </requirement>
 
@@ -380,8 +394,8 @@ The renderer-backed helper produces **valid, gate-terminated** VET.md — CHK-00
 requires `parse_vet_in_flight` to accept its output. Fixtures that must be
 *invalid* or structurally special to exercise a specific grammar condition are
 therefore legitimately outside it and keep hand-rolling by design. Concretely,
-`lint_vet.rs` (despite REQ-004's "valid-but-hand-rolled" characterization) builds
-deliberately-malformed VET.md to drive the `VET-*` lint family — a missing
+`lint_vet.rs` builds deliberately-malformed VET.md to drive the `VET-*` lint
+family — a missing
 frontmatter to fire VET-001, an out-of-domain `verdict="maybe"`, a gate-ordering
 violation to fire VET-002 — none of which a valid-only helper can produce. Its
 hand-rolling is the test, not drift. The `journal_show.rs` intentionally-open
@@ -415,6 +429,14 @@ for the vet path: the write-time round-trip is a complete superset of what the
 open-tags-only guard checked, so a second hand-rolled guard would only re-introduce
 the divergence being removed.
 
+REQ-004 (the helper migration) must land before REQ-001 (the read-path change).
+Several existing fixtures currently hand-roll a frontmatter-less VET.md that the
+byte-scanner tolerates but `parse_vet_in_flight` rejects; the moment the read
+path moves to the parser, those fixtures would parse-fail and flip `ship`→`vet`.
+Routing them through the renderer-backed helpers first makes them grammar-valid,
+so the read-path change is a no-op for them. (Sequencing detail for the task
+list; the requirement set itself is order-independent.)
+
 The CHK-006 audit (REQ-003) targets hand-rolled tag _recognizers_ — code that
 scans input text for a tag (`find("<…")`). It deliberately excludes the block
 _renderers_ (e.g. the `format!("<{element} verdict=…")` calls in
@@ -430,4 +452,5 @@ violations, and the audit recorded in REPORT.md should note them as such.
 | --- | --- | --- |
 | 2026-06-12 | Kevin Xiao | Initial SPEC: single parser authority for tag recognition; delete the gate-read and journal-write hand-rolled scanners (refines SPEC-0055 DEC-008). |
 | 2026-06-12 | speccy-decompose | Promoted decompose-time decisions: DEC-004 (REQ-004's "one helper" is realized per-crate, not one shared function), DEC-005 (the renderer-backed helper is valid-only, so `lint_vet.rs`'s intentionally-invalid fixtures stay hand-rolled and are carved out of CHK-008), and a Note that CHK-006's audit excludes block renderers. No requirement text changed. |
+| 2026-06-12 | speccy-amend | Folded DEC-004/DEC-005 into the requirement text so REQ-004 and REQ-003/CHK-006 stop contradicting themselves: REQ-004 now states per-crate renderer-backed helpers and the corrected migration set (dropped "single helper" and the false "valid-but-hand-rolled" label on `lint_vet.rs`; carved out `lint_vet.rs` and the open `journal_show.rs` fixture); REQ-003 done-when + CHK-006 scope the audit to recognizers, excluding block renderers; added a Notes sequencing line (REQ-004 before REQ-001). Clarification for implementation clarity — no requirement added, dropped, or behaviorally changed. |
 </changelog>
