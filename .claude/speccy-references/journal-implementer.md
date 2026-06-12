@@ -193,4 +193,3 @@ contents (it does not modify earlier blocks), stamps the next
 monotonic `round`, and leaves the original `generated_at` frontmatter
 timestamp untouched. The agent supplies only the new body and
 `--model`.
-

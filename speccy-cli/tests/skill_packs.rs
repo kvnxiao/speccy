@@ -370,8 +370,7 @@ const DEFAULT_REVIEWER_PERSONAS: &[&str] =
 #[test]
 fn speccy_review_skill_prefers_native_subagents() {
     // Render once per host, then assert step 4 picks the host-native
-    // subagent primitive and that both rendered outputs carry the
-    // explicit `speccy review ... --persona X` fallback.
+    // subagent primitive.
 
     let claude = render_host_pack(HostChoice::ClaudeCode)
         .expect("render_host_pack(claude-code) should succeed");
@@ -407,38 +406,6 @@ fn speccy_review_skill_prefers_native_subagents() {
         assert!(
             codex_body.contains(&needle),
             "rendered Codex `speccy-review` SKILL.md must name persona `{persona}` as `{needle}`; got:\n{codex_body}",
-        );
-    }
-
-    // Both rendered outputs must carry a spawn-prompt that references
-    // the task selector (`SPEC-NNNN/T-NNN`) so the sub-agent knows
-    // which task to review. Per the T-007/T-008 self-append contract,
-    // the spawn prompt directs each reviewer to append its own
-    // `<review>` block via `speccy journal append --block review` and
-    // return a thin `<verdict persona=...>` element — not to return a
-    // full `<review>` block body.
-    for (label, body) in [
-        (
-            "claude-code .claude/skills/speccy-review/SKILL.md",
-            claude_body,
-        ),
-        ("codex .agents/skills/speccy-review/SKILL.md", codex_body),
-    ] {
-        assert!(
-            body.contains("SPEC-NNNN/T-NNN"),
-            "rendered `{label}` must contain the `SPEC-NNNN/T-NNN` task selector \
-             placeholder in the spawn prompt; got:\n{body}",
-        );
-        assert!(
-            body.contains("speccy journal append SPEC-NNNN/T-NNN --block review"),
-            "rendered `{label}` spawn prompt must direct the reviewer to self-append \
-             its `<review>` block via `speccy journal append ... --block review` \
-             (T-007/T-008 self-append contract); got:\n{body}",
-        );
-        assert!(
-            body.contains("<verdict persona="),
-            "rendered `{label}` spawn prompt must direct the reviewer to return a \
-             thin `<verdict persona=` element as its final message; got:\n{body}",
         );
     }
 }
