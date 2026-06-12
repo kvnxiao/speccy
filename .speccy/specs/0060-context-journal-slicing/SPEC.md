@@ -169,6 +169,7 @@ when the bundle is emitted,
 then `journal.blocks` contains every block of that journal with
 full bodies.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -236,6 +237,7 @@ then the journal section renders the round-2 block bodies and a
 prior-rounds index naming each round-1 block's type and attributes,
 with no round-1 body content.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -292,6 +294,7 @@ prior-rounds index, names the `journal show --round N` drill-down,
 and makes no full-journal claim. (Review-verified; prose content is
 not substring-gated by tests per AGENTS.md.)
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -329,6 +332,7 @@ then the journal-section documentation matches the emitted JSON
 field-for-field and no full-journal claim remains.
 (Review-verified.)
 </scenario>
+
 </requirement>
 
 ## Decisions
