@@ -23,10 +23,10 @@
 //! non-empty string (the slash-suffix effort convention is not
 //! parser-validated, matching [`crate::parse::journal_xml`]).
 //!
-//! This module is the source of truth for the grammar (DEC-005). The
-//! tolerant `<gate>` scanner in [`crate::next`] keeps its independent
-//! read path for the freshness check; both are expected to agree on the
-//! final passing gate.
+//! This module is the source of truth for the grammar (DEC-005), and the
+//! sole recognizer of it: the gate-freshness check in [`crate::next`]
+//! resolves the terminal gate through [`parse_in_flight`]'s typed
+//! [`VetDoc`], not an independent scan (SPEC-0061 REQ-001).
 
 pub mod serialize;
 

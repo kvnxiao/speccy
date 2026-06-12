@@ -29,6 +29,8 @@
 
 use crate::lint::ParsedSpec;
 use crate::parse::TaskState;
+use crate::parse::VetBlock;
+use crate::parse::parse_vet_in_flight;
 use crate::personas;
 use crate::workspace::Workspace;
 use sha2::Digest as _;
@@ -158,15 +160,20 @@ fn report_md_exists(spec: &ParsedSpec) -> bool {
     fs_err::metadata(path.as_std_path()).is_ok_and(|m| m.is_file())
 }
 
-/// Returns true when `<spec-dir>/journal/VET.md` exists, its final
-/// non-whitespace `<gate ...>` element block has `verdict="passed"`,
-/// and its `tasks_hash="X"` attribute equals the lowercase hex SHA-256
-/// of the current `<spec-dir>/TASKS.md` byte contents.
+/// Returns true when `<spec-dir>/journal/VET.md` exists, its terminal
+/// `<gate>` block (the last block of the last invocation section, per
+/// the typed [`VetDoc`](crate::parse::VetDoc)) has `verdict="passed"`,
+/// and its `tasks_hash` attribute equals the lowercase hex SHA-256 of
+/// the current `<spec-dir>/TASKS.md` byte contents.
 ///
-/// Returns false on any other shape (file absent, no `<gate>` block,
-/// failed verdict, stale hash, parse failure, or read error). Treating
-/// parse failures as "not fresh" is deliberate: re-vetting is safer
-/// than shipping on a malformed artifact.
+/// Returns false on any other shape (file absent, parse failure, empty
+/// document, a terminal block that is not a `Gate`, a failed verdict, a
+/// stale hash, or a read error). Recognition flows entirely through
+/// [`parse_vet_in_flight`] (SPEC-0061 REQ-001): a `<gate>` quoted inside
+/// a block body is captured in that block's body text and never surfaces
+/// as the terminal gate, so it cannot satisfy freshness. Treating parse
+/// failures as "not fresh" is deliberate: re-vetting is safer than
+/// shipping on a malformed artifact.
 fn vet_gate_is_fresh_pass(spec: &ParsedSpec) -> bool {
     let vet_path = spec.dir.join("journal").join("VET.md");
     let Ok(vet_bytes) = fs_err::read(vet_path.as_std_path()) else {
@@ -175,10 +182,18 @@ fn vet_gate_is_fresh_pass(spec: &ParsedSpec) -> bool {
     let Ok(vet_text) = std::str::from_utf8(&vet_bytes) else {
         return false;
     };
-    let Some(gate) = last_gate_block(vet_text) else {
+    let Ok(doc) = parse_vet_in_flight(vet_text, &vet_path) else {
         return false;
     };
-    if gate.verdict != "passed" {
+    let Some(VetBlock::Gate {
+        verdict,
+        tasks_hash,
+        ..
+    }) = doc.invocations.last().and_then(|inv| inv.blocks.last())
+    else {
+        return false;
+    };
+    if verdict != "passed" {
         return false;
     }
     let tasks_path = spec.dir.join("TASKS.md");
@@ -186,71 +201,7 @@ fn vet_gate_is_fresh_pass(spec: &ParsedSpec) -> bool {
         return false;
     };
     let actual_hash = const_hex::encode(Sha256::digest(&tasks_bytes));
-    gate.tasks_hash.eq_ignore_ascii_case(&actual_hash)
-}
-
-#[derive(Debug, Clone)]
-struct GateBlock {
-    verdict: String,
-    tasks_hash: String,
-}
-
-/// Scan the VET.md text for the final `<gate ...>` opening tag and
-/// extract its `verdict` and `tasks_hash` attributes. Returns `None`
-/// when no `<gate ...>` tag is present or the required attributes are
-/// missing.
-///
-/// This is a deliberately small, tolerant parser: the `<gate>` block
-/// grammar is owned by the skill layer (SPEC-0041 REQ-003), and a
-/// strict XML parse would couple this resolver to that grammar's
-/// whitespace and ordering. The resolver only needs the two
-/// attributes off the most recent opening tag.
-fn last_gate_block(text: &str) -> Option<GateBlock> {
-    let mut last: Option<GateBlock> = None;
-    let mut cursor = text;
-    while let Some(open_idx) = cursor.find("<gate") {
-        let after_open = cursor.get(open_idx..)?;
-        // Require the next char after "<gate" to be whitespace or '>',
-        // so we do not match a hypothetical `<gateway>` tag.
-        let following = after_open.get("<gate".len()..)?;
-        let first_char = following.chars().next();
-        if !matches!(first_char, Some(c) if c.is_whitespace() || c == '>' || c == '/') {
-            // Advance past this `<gate` literal and keep scanning.
-            cursor = following;
-            continue;
-        }
-        // A malformed `<gate` tag (no closing `>`, or missing the
-        // required `verdict` / `tasks_hash` attributes) must not poison
-        // the scan — earlier well-formed gates already accumulated in
-        // `last` are still the source of truth.
-        let Some(close_idx) = following.find('>') else {
-            cursor = following;
-            continue;
-        };
-        let attrs = following.get(..close_idx)?;
-        if let (Some(verdict), Some(tasks_hash)) = (
-            attribute_value(attrs, "verdict"),
-            attribute_value(attrs, "tasks_hash"),
-        ) {
-            last = Some(GateBlock {
-                verdict,
-                tasks_hash,
-            });
-        }
-        cursor = following.get(close_idx..)?;
-    }
-    last
-}
-
-/// Extract a double-quoted attribute value from an opening-tag attribute
-/// string, e.g. `verdict` from ` verdict="passed" tasks_hash="..."`.
-fn attribute_value(attrs: &str, name: &str) -> Option<String> {
-    let needle = format!("{name}=\"");
-    let start = attrs.find(&needle)?;
-    let value_start = start.checked_add(needle.len())?;
-    let rest = attrs.get(value_start..)?;
-    let end = rest.find('"')?;
-    Some(rest.get(..end)?.to_owned())
+    tasks_hash.eq_ignore_ascii_case(&actual_hash)
 }
 
 fn first_task_with_state(
@@ -274,9 +225,7 @@ pub fn default_personas() -> &'static [&'static str] {
 
 #[cfg(test)]
 mod tests {
-    use super::attribute_value;
     use super::default_personas;
-    use super::last_gate_block;
 
     #[test]
     fn default_personas_is_the_first_five_of_all() {
@@ -284,52 +233,5 @@ mod tests {
             default_personas(),
             &["business", "tests", "security", "style", "correctness"],
         );
-    }
-
-    #[test]
-    fn attribute_value_extracts_simple() {
-        assert_eq!(
-            attribute_value(" verdict=\"passed\" tasks_hash=\"abc123\"", "verdict")
-                .expect("present"),
-            "passed",
-        );
-        assert_eq!(
-            attribute_value(" verdict=\"passed\" tasks_hash=\"abc123\"", "tasks_hash")
-                .expect("present"),
-            "abc123",
-        );
-        assert!(attribute_value(" verdict=\"passed\"", "missing").is_none());
-    }
-
-    #[test]
-    fn last_gate_block_picks_final_block() {
-        let text = r#"
-## Invocation 1
-
-<gate verdict="failed" tasks_hash="deadbeef" date="2026-01-01T00:00:00Z">
-First attempt failed.
-</gate>
-
-## Invocation 2
-
-<gate verdict="passed" tasks_hash="cafef00d" date="2026-01-02T00:00:00Z">
-Second attempt passed.
-</gate>
-"#;
-        let block = last_gate_block(text).expect("two gate blocks present");
-        assert_eq!(block.verdict, "passed");
-        assert_eq!(block.tasks_hash, "cafef00d");
-    }
-
-    #[test]
-    fn last_gate_block_returns_none_when_no_gate_tag() {
-        assert!(last_gate_block("# VET\n\nno gate here.\n").is_none());
-    }
-
-    #[test]
-    fn last_gate_block_ignores_unrelated_prefixes() {
-        // A made-up `<gateway>` tag must not be treated as a `<gate>`.
-        let text = "<gateway verdict=\"passed\" tasks_hash=\"x\">body</gateway>\n";
-        assert!(last_gate_block(text).is_none());
     }
 }

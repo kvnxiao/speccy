@@ -191,6 +191,27 @@ pub enum JournalError {
         #[source]
         source: Box<speccy_core::error::ParseError>,
     },
+    /// The would-be new per-task journal content (existing bytes + the freshly
+    /// rendered block) does not parse under [`parse_journal_xml`], so the
+    /// append is refused before any write (DEC-001, mirroring the vet path's
+    /// [`JournalError::ProducedVetUnparseable`]). The parser is the single
+    /// authority over what lands on disk: any body that would produce an
+    /// unparseable file — e.g. one whose own line is a journal tag the scanner
+    /// reads as a nested block — is rejected at write time, leaving the journal
+    /// byte-identical (or still absent). Distinct from
+    /// [`JournalError::ExistingJournalUnparseable`], which surfaces a corrupt
+    /// file that was *already* on disk.
+    #[error(
+        "the appended block would make the journal at {path} unparseable; \
+         refusing to write (journal left unchanged)"
+    )]
+    ProducedJournalUnparseable {
+        /// Path of the journal that would have become unparseable.
+        path: Utf8PathBuf,
+        /// Underlying parse error from the round-trip.
+        #[source]
+        source: Box<speccy_core::error::ParseError>,
+    },
     /// Lock acquisition timed out after [`LOCK_TIMEOUT`].
     #[error(
         "timed out after {timeout_secs}s waiting for the journal lock at {path}; \
@@ -505,6 +526,20 @@ fn append_under_lock(inputs: &AppendInputs<'_>) -> Result<(), JournalError> {
         let frontmatter = render_fresh_frontmatter(spec_id, task_id, &date);
         format!("{frontmatter}{rendered}")
     };
+
+    // Round-trip the COMPLETE would-be new file through the journal parser
+    // before writing a byte (DEC-001), mirroring the vet path's write-time
+    // round-trip. This is the single authority over what lands on disk: any
+    // body that would produce an unparseable file — e.g. one whose own line is
+    // a journal tag the scanner reads as a nested block — is rejected here, so
+    // no separate body-markup pre-scan is needed. A body that merely mentions
+    // an element name inline as prose stays inert and parses cleanly.
+    parse_journal_xml(&new_content, journal_path).map_err(|source| {
+        JournalError::ProducedJournalUnparseable {
+            path: journal_path.to_path_buf(),
+            source,
+        }
+    })?;
 
     fs_err::write(journal_path.as_std_path(), new_content).map_err(|source| JournalError::Io {
         path: journal_path.to_path_buf(),

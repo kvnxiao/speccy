@@ -209,6 +209,93 @@ fn empty_body_exits_nonzero() -> TestResult {
     Ok(())
 }
 
+/// SPEC-0061 CHK-004 (REQ-002): an `implementer` append whose body carries a
+/// line-isolated `</implementer>` is refused at write time by the per-task
+/// journal round-trip — the scanner reads the in-body close tag as a
+/// structural close (close without matching open), so the would-be-new file
+/// fails `parse_journal_xml`. The command exits non-zero, stderr names the
+/// produced-unparseable condition (distinct from the existing-unparseable
+/// one), and the journal is byte-identical to before.
+#[test]
+fn line_isolated_close_tag_in_body_is_rejected_at_write_time() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+
+    // Seed a parseable journal with one implementer round, then snapshot it.
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("Completed: seed.")
+        .assert()
+        .success();
+
+    let before = fs_err::read(jpath.as_std_path())?;
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("intro\n</implementer>\ntail")
+        .assert()
+        .failure()
+        .stderr(contains("unparseable"));
+
+    let after = fs_err::read(jpath.as_std_path())?;
+    assert_eq!(
+        before, after,
+        "a body smuggling a line-isolated close tag must leave the journal byte-identical",
+    );
+    Ok(())
+}
+
+/// SPEC-0061 CHK-005 (REQ-002): an `implementer` append against a fresh
+/// journal whose body mentions `<review>` inline within a prose sentence is
+/// accepted — the scanner does not read a mid-sentence tag as structural — so
+/// the command exits 0 and the produced journal re-parses under
+/// `parse_journal_xml`. Confirms the round-trip does not over-reject inert
+/// inline-tag prose.
+#[test]
+fn inline_element_mention_in_prose_is_accepted_and_reparses() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+    assert!(!jpath.as_std_path().exists(), "journal must start absent");
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("Completed: noted an inline <review> mention in prose.")
+        .assert()
+        .success();
+
+    let src = fs_err::read_to_string(jpath.as_std_path())?;
+    let doc = parse_journal_xml(&src, &jpath)?;
+    assert_eq!(doc.entries.len(), 1, "exactly one block");
+    Ok(())
+}
+
 /// CHK-008: eight concurrent processes each append one distinct `review`
 /// block to the same journal; the result holds eight well-formed review
 /// blocks (plus the seed implementer) with no interleaving, and the parser
