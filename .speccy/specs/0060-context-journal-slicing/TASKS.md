@@ -180,7 +180,7 @@ Suggested files: `resources/modules/phases/speccy-work.md`,
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-004">
+<task id="T-004" state="completed" covers="REQ-004">
 ## Document the sliced journal envelope in ARCHITECTURE.md
 
 Update the `speccy context` envelope documentation in

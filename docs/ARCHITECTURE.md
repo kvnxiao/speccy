@@ -199,11 +199,21 @@ speccy context TASK-SELECTOR      Emit one task-scoped JSON bundle for a loop su
                                                  scenarios), resolved via the same shared
                                                  speccy-core walk `speccy check` uses,
                                                  deduplicated in declared order
-                                    journal      the full per-task journal inlined — all
-                                                 <implementer>/<review>/<blockers> blocks
-                                                 across rounds; absent journal is an
-                                                 explicit empty marker, not an error
-                                                 (exit 0)
+                                    journal      the per-task journal sliced to its
+                                                 latest round: `blocks` holds that
+                                                 round's <implementer>/<review>/
+                                                 <blockers> entries with full bodies,
+                                                 and `prior_rounds` is an
+                                                 attributes-only index (block, date,
+                                                 round, + model/persona/verdict per
+                                                 type — no body) of every pre-latest
+                                                 block. Prior-round prose is never
+                                                 inlined; drill into it on demand with
+                                                 `speccy journal show <selector>
+                                                 --round N`. Absent journal is an
+                                                 explicit empty marker (`exists:false`,
+                                                 empty `blocks`/`prior_rounds`), not an
+                                                 error (exit 0)
                                     siblings     every other task as id, state, covers
                                                  only — never bodies
                                     paths        repo-relative SPEC.md, TASKS.md, journal
@@ -221,7 +231,11 @@ speccy context TASK-SELECTOR      Emit one task-scoped JSON bundle for a loop su
                                   bounded ways — one added sibling adds exactly one
                                   `siblings` entry; an uncovered requirement adds
                                   nothing; a journal round on another task adds nothing.
-                                  Enforced by a property-style test, not left as prose.
+                                  Within the task itself, the journal section scales with
+                                  the latest round plus a bounded index: each prior round
+                                  adds only its attributes-only `prior_rounds` entries,
+                                  never its bodies. Enforced by a property-style test, not
+                                  left as prose.
 speccy verify                     CI gate: proof-shape validation only.
                                     --include-archive:   also scan `.speccy/archive/`
                                     --json:              schema_version=1 envelope
@@ -527,8 +541,9 @@ In either case the session:
 
 - opens its per-task context with one `speccy context SPEC-NNNN/T-NNN
   --json` call — the bundle carries the task entry, covering
-  requirements with scenarios, the full journal (the retry-shape rule
-  reads its journal from the bundle), the sibling index for the reuse
+  requirements with scenarios, the latest journal round in full plus
+  an attributes-only index of prior rounds (the retry-shape rule reads
+  its latest round from the bundle), the sibling index for the reuse
   survey, and the suggested diff command; it replaces the former
   recipe of reading full SPEC.md, full TASKS.md, and the journal and
   invoking `speccy check` for scenarios;
@@ -584,7 +599,8 @@ In either case the session:
   one `speccy context SPEC-NNNN/T-NNN --json` call (dispatched from
   the shared fan-out spawn prompt), not a full SPEC.md / TASKS.md
   read or a `speccy check` entry call — the bundle hands it the task,
-  its requirements and scenarios, the journal, and the suggested diff
+  its requirements and scenarios, the latest journal round in full
+  (with the prior rounds indexed by attributes), and the suggested diff
   command in a single roundtrip. (`reviewer-tests` keeps its separate
   caveat that `speccy check` exit codes are not test evidence —
   that is unrelated to the entry read.) Vet personas are excluded:
