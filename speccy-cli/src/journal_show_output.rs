@@ -142,6 +142,36 @@ pub struct JsonJournalBlock {
     pub body: String,
 }
 
+/// The attributes-only projection of one per-task journal block: the same
+/// attribute fields as [`JsonJournalBlock`] with **no `body` field at all**
+/// (SPEC-0060 REQ-002 / DEC-004). Used by `speccy context`'s
+/// `journal.prior_rounds` index so within-task history stays visible without
+/// paying for its prose.
+///
+/// A separate struct (rather than a serde-skip flag on [`JsonJournalBlock`])
+/// keeps the full-block type's `body` invariant intact for `journal show`
+/// consumers, and guarantees the `body` key is absent from this shape's
+/// serialization — never emitted empty — so index entries are unambiguously
+/// distinguishable from full blocks.
+#[derive(Debug, Clone, Serialize)]
+pub struct JsonJournalBlockAttrs {
+    /// Element local name: `implementer`, `review`, or `blockers`.
+    pub block: &'static str,
+    /// ISO8601 timestamp.
+    pub date: String,
+    /// Round counter.
+    pub round: u32,
+    /// Model identity; present for `implementer` and `review`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Reviewer persona; present for `review`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persona: Option<String>,
+    /// Verdict; present for `review`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verdict: Option<String>,
+}
+
 /// One vet-journal block, flattened for JSON. Round-less block types omit
 /// `round`/`model`; only `gate` carries `tasks_hash`.
 #[derive(Debug, Clone, Serialize)]
@@ -273,6 +303,50 @@ pub fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
             persona: None,
             verdict: None,
             body: body.clone(),
+        },
+    }
+}
+
+/// Project one parsed [`JournalEntry`] into its attributes-only
+/// [`JsonJournalBlockAttrs`] shape — the same attribute mapping as
+/// [`to_json_journal_block`] minus the `body` (SPEC-0060 REQ-002 / DEC-004).
+/// Mirrors the full-block projection so the two cannot drift in which
+/// optionals each block type carries.
+#[must_use = "the projected attrs are an entry of the bundle's prior-rounds index"]
+pub fn to_json_journal_block_attrs(entry: &JournalEntry) -> JsonJournalBlockAttrs {
+    match entry {
+        JournalEntry::Implementer {
+            date, model, round, ..
+        } => JsonJournalBlockAttrs {
+            block: "implementer",
+            date: date.clone(),
+            round: *round,
+            model: Some(model.clone()),
+            persona: None,
+            verdict: None,
+        },
+        JournalEntry::Review {
+            date,
+            model,
+            persona,
+            verdict,
+            round,
+            ..
+        } => JsonJournalBlockAttrs {
+            block: "review",
+            date: date.clone(),
+            round: *round,
+            model: Some(model.clone()),
+            persona: Some(persona.clone()),
+            verdict: Some(verdict.clone()),
+        },
+        JournalEntry::Blockers { date, round, .. } => JsonJournalBlockAttrs {
+            block: "blockers",
+            date: date.clone(),
+            round: *round,
+            model: None,
+            persona: None,
+            verdict: None,
         },
     }
 }

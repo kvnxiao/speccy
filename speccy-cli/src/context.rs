@@ -44,6 +44,7 @@ use crate::context_output::SiblingEntry;
 use crate::context_output::SpecIdentity;
 use crate::context_output::TaskEntry;
 use crate::journal_show_output::to_json_journal_block;
+use crate::journal_show_output::to_json_journal_block_attrs;
 use crate::paths::to_repo_relative;
 use camino::Utf8Path;
 use speccy_core::consistency::ConsistencyBlock;
@@ -309,6 +310,7 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
                 task: None,
                 generated_at: None,
                 blocks: Vec::new(),
+                prior_rounds: Vec::new(),
             });
         }
         Err(e) => return Err(ContextError::Io(e)),
@@ -321,10 +323,16 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
         })?;
 
     // Inline only the latest round's blocks (SPEC-0060 REQ-001); prior
-    // rounds are reachable via `speccy journal show --round N`. `latest_round`
-    // is the shared resolver `journal show --round latest` also calls, so the
-    // two views cannot drift (DEC-001). A journal that parses to zero entries
-    // yields `None` here, hence an empty `blocks` with `exists: true`.
+    // rounds become an attributes-only index (REQ-002), with their full prose
+    // reachable via `speccy journal show --round N`. `latest_round` is the
+    // shared resolver `journal show --round latest` also calls, so the two
+    // views cannot drift (DEC-001). A journal that parses to zero entries
+    // yields `None` here, hence empty `blocks` and `prior_rounds` with
+    // `exists: true`.
+    //
+    // The two partitions are total and disjoint: every entry's round either
+    // equals the highest (→ `blocks`, in full) or is strictly below it
+    // (→ `prior_rounds`, attributes only); none is dropped or duplicated.
     let highest = latest_round(&doc.entries);
     let blocks = doc
         .entries
@@ -332,12 +340,19 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
         .filter(|entry| highest.is_some_and(|r| entry.round() == r))
         .map(to_json_journal_block)
         .collect();
+    let prior_rounds = doc
+        .entries
+        .iter()
+        .filter(|entry| highest.is_some_and(|r| entry.round() < r))
+        .map(to_json_journal_block_attrs)
+        .collect();
     Ok(BundleJournal {
         exists: true,
         spec: Some(doc.spec),
         task: Some(doc.task),
         generated_at: Some(doc.generated_at),
         blocks,
+        prior_rounds,
     })
 }
 
@@ -466,28 +481,7 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
         }
     }
 
-    if bundle.journal.exists {
-        writeln!(out, "\n## Journal")?;
-        for block in &bundle.journal.blocks {
-            let persona = block
-                .persona
-                .as_deref()
-                .map_or_else(String::new, |p| format!(" persona={p}"));
-            let verdict = block
-                .verdict
-                .as_deref()
-                .map_or_else(String::new, |v| format!(" verdict={v}"));
-            writeln!(
-                out,
-                "\n### {} round={}{persona}{verdict}\n{}",
-                block.block,
-                block.round,
-                block.body.trim_end(),
-            )?;
-        }
-    } else {
-        writeln!(out, "\n## Journal\n(none — task has no journal yet)")?;
-    }
+    render_journal(&bundle.journal, out)?;
 
     if bundle.siblings.is_empty() {
         writeln!(out, "\n## Sibling tasks\n(none)")?;
@@ -510,6 +504,55 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
 
     writeln!(out, "\n## Suggested diff command\n{}", bundle.diff_command)?;
     render_consistency(&bundle.consistency, out)?;
+    Ok(())
+}
+
+/// Render the journal section in the text form: the latest round's blocks in
+/// full, then — when the journal carries earlier rounds — an attributes-only
+/// prior-rounds index (SPEC-0060 REQ-002). An absent journal renders an
+/// explicit empty marker. `--json` toggles representation only, so this walks
+/// the same `blocks` / `prior_rounds` partition the JSON renderer emits.
+fn render_journal(journal: &BundleJournal, out: &mut dyn Write) -> Result<(), ContextError> {
+    if !journal.exists {
+        writeln!(out, "\n## Journal\n(none — task has no journal yet)")?;
+        return Ok(());
+    }
+    writeln!(out, "\n## Journal")?;
+    for block in &journal.blocks {
+        let persona = block
+            .persona
+            .as_deref()
+            .map_or_else(String::new, |p| format!(" persona={p}"));
+        let verdict = block
+            .verdict
+            .as_deref()
+            .map_or_else(String::new, |v| format!(" verdict={v}"));
+        writeln!(
+            out,
+            "\n### {} round={}{persona}{verdict}\n{}",
+            block.block,
+            block.round,
+            block.body.trim_end(),
+        )?;
+    }
+    if !journal.prior_rounds.is_empty() {
+        writeln!(out, "\n### Prior rounds (index)")?;
+        for attrs in &journal.prior_rounds {
+            let persona = attrs
+                .persona
+                .as_deref()
+                .map_or_else(String::new, |p| format!(" persona={p}"));
+            let verdict = attrs
+                .verdict
+                .as_deref()
+                .map_or_else(String::new, |v| format!(" verdict={v}"));
+            writeln!(
+                out,
+                "- {} round={}{persona}{verdict}",
+                attrs.block, attrs.round,
+            )?;
+        }
+    }
     Ok(())
 }
 

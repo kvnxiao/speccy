@@ -72,7 +72,7 @@ Suggested files: `speccy-core/src/parse/journal_xml/mod.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002">
+<task id="T-002" state="completed" covers="REQ-002">
 ## Add the attributes-only `journal.prior_rounds` index
 
 Add the prior-rounds index so within-task history stays visible

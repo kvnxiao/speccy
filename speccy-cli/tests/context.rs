@@ -362,6 +362,22 @@ fn invoke_json(root: &Utf8Path, selector: &str) -> TestResult<String> {
     Ok(String::from_utf8(out)?)
 }
 
+/// Invoke `speccy context` in the human-readable text form (`--json` off)
+/// and return its stdout. `--json` toggles representation only, so the text
+/// form carries the same content the JSON form does (CHK-006).
+fn invoke_text(root: &Utf8Path, selector: &str) -> TestResult<String> {
+    let mut out: Vec<u8> = Vec::new();
+    run(
+        ContextArgs {
+            selector: selector.to_owned(),
+            json: false,
+        },
+        root,
+        &mut out,
+    )?;
+    Ok(String::from_utf8(out)?)
+}
+
 /// Parse `stdout` as exactly one JSON document. Kept in a non-`Result`
 /// helper so the `.expect()` lives outside the `-> TestResult` test
 /// bodies (matching the project's `unwrap_in_result` clippy posture).
@@ -1025,6 +1041,217 @@ fn bundle_journal_absent_yields_explicit_empty_marker_and_success() -> TestResul
         "an absent journal carries zero blocks; got {}",
         blocks.len(),
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-004 (REQ-002): the two-round fixture. `journal.prior_rounds` is an
+// attributes-only index of the five round-1 blocks in file order — the
+// round-1 security review carries its persona and verdict, no entry
+// serializes a `body` key, and no round-1 body marker survives in the
+// `prior_rounds` array.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn prior_rounds_indexes_pre_latest_blocks_without_bodies() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    write_journal(&spec_dir, "T-001", &journal_two_rounds("SPEC-0042"))?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
+    let value = parse_one_json(&stdout);
+
+    let journal = value.get("journal").expect("bundle has journal section");
+    let prior = journal
+        .get("prior_rounds")
+        .and_then(serde_json::Value::as_array)
+        .expect("journal carries a prior_rounds array");
+
+    // One entry per round-1 block: implementer, business review, tests review,
+    // security review, blockers — five, in file order.
+    let kinds: Vec<&str> = prior
+        .iter()
+        .filter_map(|e| e.get("block").and_then(serde_json::Value::as_str))
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["implementer", "review", "review", "review", "blockers"],
+        "prior_rounds lists the five round-1 blocks in file order; got {kinds:?}",
+    );
+
+    // Every entry is round 1 (strictly below the highest round, 2).
+    for entry in prior {
+        assert_eq!(
+            entry.get("round").and_then(serde_json::Value::as_u64),
+            Some(1),
+            "every prior-round entry is from round 1; got {entry:?}",
+        );
+    }
+
+    // No entry serializes a `body` key — the attrs shape omits it entirely
+    // (not an empty string), which is what distinguishes index entries from
+    // full blocks.
+    for entry in prior {
+        assert!(
+            entry.get("body").is_none(),
+            "no prior_rounds entry serializes a body key; got {entry:?}",
+        );
+    }
+
+    // The round-1 security review carries its persona and verdict.
+    let security = prior
+        .iter()
+        .find(|e| e.get("persona").and_then(serde_json::Value::as_str) == Some("security"))
+        .expect("the round-1 security review is indexed");
+    assert_eq!(
+        security.get("verdict").and_then(serde_json::Value::as_str),
+        Some("blocking"),
+        "the round-1 security review carries its verdict",
+    );
+
+    // No round-1 body marker survives anywhere in the serialized prior_rounds
+    // array (the whole subtree, serialized, must contain none of them).
+    let prior_text = serde_json::to_string(prior)?;
+    for marker in [
+        "IMPL_R1_MARKER",
+        "REVIEW_R1_BUSINESS_MARKER",
+        "REVIEW_R1_TESTS_MARKER",
+        "REVIEW_R1_SECURITY_MARKER",
+        "BLOCKERS_R1_MARKER",
+    ] {
+        assert!(
+            !prior_text.contains(marker),
+            "round-1 body marker {marker} must NOT appear in the prior_rounds index",
+        );
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-005 (REQ-002): a single-round journal and (separately) an absent
+// journal both yield `prior_rounds: []`. A single round has nothing strictly
+// below the highest round, and an absent journal has no entries at all.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn prior_rounds_is_empty_for_single_round_and_absent_journals() -> TestResult {
+    // Single-round journal: every block is the latest round, none prior.
+    let single = Workspace::new()?;
+    let single_dir = write_spec(
+        &single.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    write_journal(&single_dir, "T-001", &journal_single_round("SPEC-0042"))?;
+    let single_value = parse_one_json(&invoke_json(&single.root, "SPEC-0042/T-001")?);
+    let single_prior = single_value
+        .get("journal")
+        .and_then(|j| j.get("prior_rounds"))
+        .and_then(serde_json::Value::as_array)
+        .expect("single-round journal carries a prior_rounds array");
+    assert!(
+        single_prior.is_empty(),
+        "single-round journal yields prior_rounds: []; got {} entries",
+        single_prior.len(),
+    );
+
+    // Absent journal: no entries, hence an empty index.
+    let absent = Workspace::new()?;
+    write_spec(
+        &absent.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    let absent_value = parse_one_json(&invoke_json(&absent.root, "SPEC-0042/T-001")?);
+    let absent_prior = absent_value
+        .get("journal")
+        .and_then(|j| j.get("prior_rounds"))
+        .and_then(serde_json::Value::as_array)
+        .expect("absent journal carries a prior_rounds array");
+    assert!(
+        absent_prior.is_empty(),
+        "absent journal yields prior_rounds: []; got {} entries",
+        absent_prior.len(),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// CHK-006 (REQ-002): the text representation of the two-round fixture renders
+// the round-2 block bodies in full, followed by a prior-rounds index naming
+// each round-1 block's type, round, and persona / verdict where present —
+// with no round-1 body content.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn text_journal_renders_latest_bodies_then_prior_rounds_index() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_covering("SPEC-0042", "REQ-001")),
+    )?;
+    write_journal(&spec_dir, "T-001", &journal_two_rounds("SPEC-0042"))?;
+
+    let text = invoke_text(&ws.root, "SPEC-0042/T-001")?;
+
+    // Round-2 bodies render in full.
+    for marker in [
+        "IMPL_R2_MARKER",
+        "REVIEW_R2_SECURITY_MARKER",
+        "REVIEW_R2_STYLE_MARKER",
+    ] {
+        assert!(
+            text.contains(marker),
+            "round-2 body marker {marker} must render in the text journal",
+        );
+    }
+
+    // A prior-rounds index section follows, after the round-2 bodies.
+    let index_at = text
+        .find("Prior rounds (index)")
+        .expect("text renders a prior-rounds index header");
+    let last_r2_body = text
+        .find("REVIEW_R2_STYLE_MARKER")
+        .expect("round-2 style body renders");
+    assert!(
+        index_at > last_r2_body,
+        "the prior-rounds index renders after the round-2 block bodies",
+    );
+
+    // The index names each round-1 block's type and round; the security
+    // review line carries its persona and verdict. No round-1 body content.
+    // The index header precedes every block line, so these substrings can
+    // only come from the index (no round-1 body content survives — asserted
+    // below).
+    assert!(
+        text.contains("blockers round=1"),
+        "index names the round-1 blockers block; got:\n{text}",
+    );
+    assert!(
+        text.contains("review round=1 persona=security verdict=blocking"),
+        "index names the round-1 security review's persona and verdict; got:\n{text}",
+    );
+    for marker in [
+        "IMPL_R1_MARKER",
+        "REVIEW_R1_BUSINESS_MARKER",
+        "REVIEW_R1_TESTS_MARKER",
+        "REVIEW_R1_SECURITY_MARKER",
+        "BLOCKERS_R1_MARKER",
+    ] {
+        assert!(
+            !text.contains(marker),
+            "round-1 body marker {marker} must NOT render in the text journal",
+        );
+    }
     Ok(())
 }
 
