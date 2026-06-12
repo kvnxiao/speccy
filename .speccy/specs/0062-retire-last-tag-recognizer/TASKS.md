@@ -94,7 +94,7 @@ Suggested files: `speccy-core/src/parse/journal_xml/mod.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002">
+<task id="T-002" state="completed" covers="REQ-002">
 ## Pin the fence-blindness fix with a recovery-offset regression test
 
 Add a regression test proving that a line-isolated journal close tag inside a

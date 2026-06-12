@@ -278,6 +278,87 @@ fn detect_journal_xml_malformed_is_blocking_with_forward_slash_path() -> TestRes
 }
 
 #[test]
+fn detect_journal_xml_malformed_recovery_offset_ignores_fenced_close() -> TestResult {
+    // SPEC-0062 REQ-002 / CHK-004 regression. A journal with valid
+    // frontmatter and one well-formed `<implementer>` block whose
+    // structural close ends at byte X, then a second `<implementer>`
+    // open whose only following `</implementer>` is line-isolated
+    // *inside a fenced code block* (its close ending at byte Y > X),
+    // then no real close. Strict `journal_xml::parse` fails (the
+    // round-2 open never closes, because the fence-aware `scan_tags`
+    // excludes the fenced occurrence), so the malformed branch runs.
+    //
+    // The recovery offset must be X (the real structural close), not Y
+    // (the fenced occurrence). Because T-001 moved the read path onto
+    // the fence-aware `journal_xml::last_well_formed_offset`, the fenced
+    // close is excluded for free.
+    //
+    // Recorded pre-fix measurement (CHK-004 "recorded pre-fix run"):
+    // the pre-SPEC hand-rolled `find('<')` scan (recovered from the
+    // merged SPEC-0061 revision and run once against this exact fixture)
+    // counted the fenced close and yielded Y = 235 — the fence-blindness
+    // bug this test guards. The post-fix value asserted below is X = 153.
+    // The blank line before the fence is load-bearing: it makes the
+    // markdown block parser recognize a fenced code block rather than
+    // folding the ``` into the preceding HTML block.
+    let malformed = concat!(
+        "---\nspec: SPEC-0099\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n",
+        "<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\n",
+        "body\n",
+        "</implementer>\n",
+        "<implementer date=\"2026-05-21T19:00:00Z\" model=\"m\" round=\"2\">\n",
+        "\n",
+        "```\n",
+        "</implementer>\n",
+        "```\n",
+    );
+    // X: end of the first (real, structural) close. The marker is the
+    // unique boundary between the first close and the second open.
+    let first_close_marker = "</implementer>\n<implementer date=\"2026-05-21T19";
+    let x = malformed
+        .find(first_close_marker)
+        .ok_or("first close present")?
+        + "</implementer>".len();
+    // Y: end of the fenced (non-structural) close — the last occurrence.
+    let y = malformed
+        .rfind("</implementer>")
+        .ok_or("fenced close present")?
+        + "</implementer>".len();
+    assert!(
+        y > x,
+        "fenced close (Y={y}) must be after structural close (X={x})"
+    );
+
+    let (_tmp, spec_dir) = make_spec_dir(&one_task("completed"), &[("T-001.md", malformed)])?;
+    let spec = parse_spec_dir(&spec_dir);
+    let sha = "0".repeat(40);
+    let probe = FakeProbe::new().with_commit("[SPEC-0099/T-001]:", &sha);
+
+    let block = detect("SPEC-0099", &spec, &probe);
+
+    assert_eq!(block.status, ConsistencyStatus::Blocked);
+    let d = block
+        .drifts
+        .iter()
+        .find(|d| d.kind == DriftKind::JournalXmlMalformed)
+        .ok_or("journal_xml_malformed drift expected")?;
+    match &d.details {
+        DriftDetails::JournalXmlMalformed {
+            last_well_formed_byte_offset,
+            ..
+        } => {
+            assert_eq!(
+                *last_well_formed_byte_offset, x,
+                "recovery offset must be the structural close X={x}, \
+                 not the fenced occurrence Y={y}",
+            );
+        }
+        other => return Err(format!("unexpected details: {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn detect_all_healthy_is_ok() -> TestResult {
     // Completed task with a matching commit and clean tree.
     let (_tmp, spec_dir) = make_spec_dir(&one_task("completed"), &[])?;
