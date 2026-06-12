@@ -27,8 +27,10 @@ the primitive — adversarial diversity comes from fresh contexts per
 persona — and is bounded to one round of five sub-agents on one
 task.
 
-Because sub-agents cannot spawn sub-agents, this skill must run in the
-top-level session — either a human invocation
+Sub-agents cannot spawn sub-agents, so the fan-out runs inline in the
+top-level session.
+This skill must run in the top-level session — either a human
+invocation
 (`/speccy-review …`) or the
 `/speccy-orchestrate` outer loop inlining this body at
 its `review` dispatch.

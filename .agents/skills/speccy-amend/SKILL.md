@@ -38,9 +38,7 @@ reconciliation are not forgotten.
    SPEC.md diff and appending the Changelog row. Do not re-check after
    applying fixes.
 
-   <!-- Note: the amend self-review below is an independent copy.
-        The parallel copy for plan lives in speccy-plan.md (per DEC-001 /
-        OQ-b: two independent copies, no shared partial). -->
+   <!-- Shared self-review core for plan + amend; supersedes SPEC-0034 DEC-001 (lists stabilized → extracted). Brainstorm's pre-check is intentionally separate. -->
 
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
@@ -59,7 +57,7 @@ reconciliation are not forgotten.
    any existing sequence, and `{issue}` is a one-line description of
    the problem. Do not substitute freeform prose.
 
-   **The seven check properties:**
+   **The check properties:**
 
    - **Routing fidelity.** Brainstorm artifacts landed in the
      correct SPEC.md sections: restated ask → Summary +
@@ -89,6 +87,8 @@ reconciliation are not forgotten.
      two materially different ways that would lead to different
      implementations. If the requirement is ambiguous, surface it
      as a semantic issue.
+
+   Amend adds two deltas beyond the shared core:
 
    - **Changelog row presence.** The `## Changelog` section contains
      a new row explaining *why* this amendment was needed. A missing

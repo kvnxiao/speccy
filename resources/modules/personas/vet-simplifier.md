@@ -86,9 +86,9 @@ prompt gives you the `SPEC-NNNN` selector), then return a thin
 verdict. The CLI stamps the block's `date` and manages VET.md's
 invocation sectioning; the simplifier blocks carry no `round` —
 **do not compute, supply, or mention `date`, `round`, or invocation
-numbers**. The skill orchestrator owns all code-state rollback. Do
-not edit code-state files for rollback purposes (`git stash` /
-`reset` / `restore` / `clean`).
+numbers**. The skill orchestrator owns all code-state rollback.
+
+{% include "modules/personas/vet-no-rollback.md" %}
 
 {% include "modules/references/identity-sourcing.md" %}
 

@@ -65,6 +65,8 @@ is already agreed.
 3. **Self-review pass.** Run this pass exactly once after writing
    SPEC.md. Do not re-check after applying fixes.
 
+   <!-- Shared self-review core for plan + amend; supersedes SPEC-0034 DEC-001 (lists stabilized → extracted). Brainstorm's pre-check is intentionally separate. -->
+
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
    "and"/"also" inside `<requirement>` blocks, untouched `<...>`
@@ -82,7 +84,7 @@ is already agreed.
    any existing sequence, and `{issue}` is a one-line description of
    the problem. Do not substitute freeform prose.
 
-   **The five check properties:**
+   **The check properties:**
 
    - **Routing fidelity.** Brainstorm artifacts landed in the
      correct SPEC.md sections: restated ask → Summary +
@@ -112,9 +114,6 @@ is already agreed.
      two materially different ways that would lead to different
      implementations. If the requirement is ambiguous, surface it
      as a semantic issue.
-
-   <!-- Note: the plan self-review above is an independent copy.
-        The parallel copy for amend lives in speccy-amend.md. -->
 
 4. Surface any material questions inline in `## Open Questions` using
    the alpha-prefix format: `- [ ] a.`, `- [ ] b.`, ..., `- [ ] z.`.

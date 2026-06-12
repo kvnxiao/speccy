@@ -13,15 +13,16 @@ counter, and (for review and ship steps) the multi-persona /
 multi-round fan-out — all leaf work happens in sub-agent contexts
 that exit when done.
 
-**Why fan-outs run inline in this skill's session.** Sub-agents
-cannot spawn sub-agents, so the fan-outs in `speccy-review` (five
-reviewer personas) and `speccy-vet` (reviewer + implementer +
-simplifier across up to three rounds) cannot be delegated to a
-wrapper sub-agent — it would fail to spawn its leaves. This
-orchestrator therefore follows those two skill bodies **inline in its
-own session** and spawns the leaf sub-agents directly; only
-`speccy-work` (which never fans out) is delegated. Later sections
-reference this as "Why fan-outs run inline".
+**Why fan-outs run inline in this skill's session.**
+Sub-agents cannot spawn sub-agents, so the fan-out runs inline in the
+top-level session.
+The fan-outs in `speccy-review` (five reviewer personas) and
+`speccy-vet` (reviewer + implementer + simplifier across up to three
+rounds) cannot be delegated to a wrapper sub-agent — it would fail to
+spawn its leaves. This orchestrator therefore follows those two skill
+bodies **inline in its own session** and spawns the leaf sub-agents
+directly; only `speccy-work` (which never fans out) is delegated.
+Later sections reference this as "Why fan-outs run inline".
 
 ## When to use
 

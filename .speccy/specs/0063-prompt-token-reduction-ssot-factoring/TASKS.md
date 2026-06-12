@@ -318,7 +318,7 @@ Suggested files: `resources/modules/references/cli-stamps.md`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-004 REQ-005 REQ-006 REQ-007">
+<task id="T-002" state="completed" covers="REQ-004 REQ-005 REQ-006 REQ-007">
 ## Track 2 — factor six duplicated passages into shared modules and supersede SPEC-0034 DEC-001 (commit 2)
 
 Track 2 is **commit 2** of two and runs **after** T-001 lands, so it factors the

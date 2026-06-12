@@ -45,19 +45,28 @@ yourself in the existing implementation:
 git diff <base-ref>
 ```
 
-**Use `git diff <base-ref>`** (no `...HEAD`). The working tree
-contains uncommitted changes from prior fix rounds in this
-invocation; `...HEAD` would miss them. **Leave your own changes
-uncommitted too** — the next round's reviewer reads the same
-command and picks up everything in the working tree.
+**Use `git diff <base-ref>`** (no `...HEAD`). That command compares
+the **working tree** against the ref, capturing both committed and
+uncommitted changes. The vet-implementer leaves its changes
+uncommitted between rounds, so the `...HEAD` form would silently miss
+them.
 
-If the caller did not pass resolved paths, fall back to:
+If the caller did not pass resolved paths (a human invoked you
+directly, the prompt got mangled, etc.), fall back to resolving them
+yourself:
 
 ```bash
+# Spec dir: pick the directory matching the SPEC ID
 ls -d .speccy/specs/NNNN-*/  # NNNN from SPEC-NNNN
+
+# Base ref: default branch name
 git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
 # Fall back to "main" if empty.
 ```
+
+**Leave your own changes uncommitted too** — the next round's
+reviewer reads the same command and picks up everything in the
+working tree.
 
 ## What you may modify
 
@@ -93,9 +102,10 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/ori
 This skill's caller (`/speccy-vet`)
 snapshots the working tree before invoking you and reverts the
 snapshot if you return `verdict="stuck"`. **You do not need to and
-must not manage rollback yourself.** Specifically, do not call
-`git stash`, `git reset`, `git restore`, or `git clean` — the
-caller owns all of those.
+must not manage rollback yourself.**
+
+Do not call `git stash`, `git reset`, `git restore`, or `git clean`
+— the caller owns all of those.
 
 If you make exploratory edits and then realize the drift can't be
 fixed by code (`stuck`), just return the verdict block. The

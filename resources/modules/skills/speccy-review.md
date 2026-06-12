@@ -23,8 +23,9 @@ the primitive — adversarial diversity comes from fresh contexts per
 persona — and is bounded to one round of five sub-agents on one
 task.
 
-Because sub-agents cannot spawn sub-agents, this skill must run in the
-top-level session — either a human invocation
+{% include "modules/skills/partials/inline-fanout-rationale.md" %}
+This skill must run in the top-level session — either a human
+invocation
 (`{{ cmd_prefix }}speccy-review …`) or the
 `{{ cmd_prefix }}speccy-orchestrate` outer loop inlining this body at
 its `review` dispatch.

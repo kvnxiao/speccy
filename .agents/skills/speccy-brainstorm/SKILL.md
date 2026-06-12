@@ -128,11 +128,6 @@ own judgment.
    when brainstorm is used as a front-end to amendment flows (since
    amendments routed through brainstorm are still brainstorm sessions).
 
-   <!-- Note: the brainstorm pre-check below is an independent copy.
-        The parallel copies for plan and amend live in speccy-plan.md
-        and speccy-amend.md respectively (per DEC-001 / OQ-b: two
-        independent copies, no shared partial). -->
-
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the draft artifacts: `TBD`/`TODO` strings,
    "and"/"also" inside a single restated requirement, untouched

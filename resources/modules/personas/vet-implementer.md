@@ -39,19 +39,11 @@ yourself in the existing implementation:
 git diff <base-ref>
 ```
 
-**Use `git diff <base-ref>`** (no `...HEAD`). The working tree
-contains uncommitted changes from prior fix rounds in this
-invocation; `...HEAD` would miss them. **Leave your own changes
-uncommitted too** — the next round's reviewer reads the same
-command and picks up everything in the working tree.
+{% include "modules/personas/vet-input-resolution.md" %}
 
-If the caller did not pass resolved paths, fall back to:
-
-```bash
-ls -d .speccy/specs/NNNN-*/  # NNNN from SPEC-NNNN
-git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
-# Fall back to "main" if empty.
-```
+**Leave your own changes uncommitted too** — the next round's
+reviewer reads the same command and picks up everything in the
+working tree.
 
 ## What you may modify
 
@@ -87,9 +79,9 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/ori
 This skill's caller (`{{ cmd_prefix }}speccy-vet`)
 snapshots the working tree before invoking you and reverts the
 snapshot if you return `verdict="stuck"`. **You do not need to and
-must not manage rollback yourself.** Specifically, do not call
-`git stash`, `git reset`, `git restore`, or `git clean` — the
-caller owns all of those.
+must not manage rollback yourself.**
+
+{% include "modules/personas/vet-no-rollback.md" %}
 
 If you make exploratory edits and then realize the drift can't be
 fixed by code (`stuck`), just return the verdict block. The

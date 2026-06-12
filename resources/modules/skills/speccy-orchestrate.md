@@ -9,15 +9,15 @@ counter, and (for review and ship steps) the multi-persona /
 multi-round fan-out — all leaf work happens in sub-agent contexts
 that exit when done.
 
-**Why fan-outs run inline in this skill's session.** Sub-agents
-cannot spawn sub-agents, so the fan-outs in `speccy-review` (five
-reviewer personas) and `speccy-vet` (reviewer + implementer +
-simplifier across up to three rounds) cannot be delegated to a
-wrapper sub-agent — it would fail to spawn its leaves. This
-orchestrator therefore follows those two skill bodies **inline in its
-own session** and spawns the leaf sub-agents directly; only
-`speccy-work` (which never fans out) is delegated. Later sections
-reference this as "Why fan-outs run inline".
+**Why fan-outs run inline in this skill's session.**
+{% include "modules/skills/partials/inline-fanout-rationale.md" %}
+The fan-outs in `speccy-review` (five reviewer personas) and
+`speccy-vet` (reviewer + implementer + simplifier across up to three
+rounds) cannot be delegated to a wrapper sub-agent — it would fail to
+spawn its leaves. This orchestrator therefore follows those two skill
+bodies **inline in its own session** and spawns the leaf sub-agents
+directly; only `speccy-work` (which never fans out) is delegated.
+Later sections reference this as "Why fan-outs run inline".
 
 ## When to use
 
@@ -193,13 +193,7 @@ enforced by the loop owner. The `speccy-work` skill body re-runs
 the same retry-aware precondition defensively at its own entry as
 a second-level guard.
 
-**Retry shape.** A task is in retry shape iff its journal contains
-both an `<implementer>` element and a `<blockers>` element whose
-`round` attribute matches the highest implementer round. Otherwise
-it's first-attempt shape — the strict clean-tree gate applies. See
-`{{ speccy_references_path }}/retry-shape.md` for the full rule
-statement, read-only scope, worked examples, and the
-"implementer awaiting review" edge case.
+{% include "modules/references/retry-shape-summary.md" %}
 
 Spawn a sub-agent that runs the `speccy-work` primitive for the
 resolved task. Prompt:

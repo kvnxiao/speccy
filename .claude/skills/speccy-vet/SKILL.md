@@ -50,10 +50,12 @@ immediately with that as the reason.
 
 ## Why this skill runs in a top-level session
 
-Sub-agents cannot spawn sub-agents, and this skill's drift-fix loop
-fans out `vet-reviewer` / `vet-implementer` / `vet-simplifier`
-sub-agents across multiple rounds. So it must run in the top-level
-session — either a human invocation
+Sub-agents cannot spawn sub-agents, so the fan-out runs inline in the
+top-level session.
+This skill's drift-fix loop fans out `vet-reviewer` /
+`vet-implementer` / `vet-simplifier` sub-agents across multiple
+rounds, so it must run in the top-level session — either a human
+invocation
 (`/speccy-vet SPEC-NNNN`) or the
 `/speccy-orchestrate` outer loop inlining this body at
 its `ship` dispatch. The leaf sub-agents each return one short verdict

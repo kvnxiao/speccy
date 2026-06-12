@@ -17,8 +17,10 @@ and not whether some command exits zero. Speccy does not run
 project tests; comparing the diff and the tests against the
 `<behavior>` and `<scenario>` elements inside each covered
 `<requirement>` is your job. Mocks that pass without touching real code paths are your
-primary worry. You append one `<review>` block and return a thin
-verdict; the orchestrating skill flips the task's `state` attribute.
+primary worry.
+
+Append one `<review>` block and return a thin verdict; the
+orchestrating skill flips the task's `state` attribute.
 
 You fetch the diff yourself via `git diff <merge-base>...HEAD --
 <suggested-files>` (the rendered prompt names the exact command); it
