@@ -1,239 +1,181 @@
 # AGENTS.md
 
-> Canonical instruction file for AI agents working on **speccy**. `CLAUDE.md` is a symlink to this file. On platforms that don't honor symlinks, treat the two filenames as required-to-be-identical.
+> Canonical instruction file for AI agents working on **speccy**.
+> `CLAUDE.md` is a symlink to this file; on platforms without
+> symlinks, keep the two identical.
 
 ## Product north star
 
-> This is the project-wide product context — what we're building, who
-> for, what "done enough to ship v1" looks like. The `speccy-init`
-> skill writes (or updates) this section when bootstrapping a
-> new repo. Speccy itself has no separate `VISION.md`; the
-> always-loaded `AGENTS.md` carries this content for every prompt.
->
-> The word "Mission" is reserved for the Speccy noun (a focus-area
-> grouping under `.speccy/specs/[focus]/MISSION.md`). Don't conflate.
-> Mission folders are **optional**: a flat single-focus project may
-> have zero `MISSION.md` files, with every spec living directly
-> under `.speccy/specs/NNNN-slug/`. Mission folders earn their
-> existence only when 2+ related specs share enough context that
-> loading them together at plan time is cheaper than rediscovering
-> it.
+> Maintained by the `speccy-init` skill; Speccy has no separate
+> `VISION.md`. Note: "Mission" is reserved for the Speccy noun (a
+> focus-area grouping under `.speccy/specs/[focus]/MISSION.md`).
+> Mission folders are optional — they earn their existence only when
+> 2+ related specs share plan-time context.
 
 Speccy is a lightweight CLI that lets humans and AI agents collaborate
 on software with bounded drift. LLM non-determinism accumulates: small
 misreadings of intent compound until what shipped no longer matches
-what was asked for.
+what was asked for. Speccy doesn't try to make LLMs deterministic — it
+makes the contract between intent and shipped behavior **visible**, so
+drift is loud the moment it happens. A feedback engine, not an
+enforcement system.
 
-Speccy does not try to make LLMs deterministic. It makes the contract
-between intent and shipped behavior **visible**, so drift is loud the
-moment it happens. Speccy is a feedback engine, not an enforcement
-system.
-
-Speccy's shipped skills and subagent packs drive the per-task work + review
-loop and the pre-ship drift gate end-to-end on a single host. Beyond that, speccy
-aims to be the substrate underneath cross-host and cross-repository
-harnesses that move projects toward completion without humans
-re-explaining intent at every step.
+Shipped skills and subagent packs drive the per-task work + review
+loop and the pre-ship drift gate end-to-end on a single host. Beyond
+that, Speccy aims to be the substrate for cross-host and
+cross-repository harnesses that move projects toward completion
+without humans re-explaining intent at every step.
 
 ### Users
 
-- Solo developers bootstrapping new projects with AI assistance
-  who want drift detection without orchestration overhead.
+- Solo developers bootstrapping new projects with AI assistance who
+  want drift detection without orchestration overhead.
 - AI coding agents driven by host skill packs (Claude Code, Codex)
   through a Plan → Tasks → Impl → Review → Report loop.
 - Multi-agent harnesses building on Speccy's deterministic feedback
-  substrate — the in-pack orchestration loop ships in v1; cross-host
-  and cross-repository harnesses remain future work.
+  substrate (in-pack orchestration ships in v1; cross-host and
+  cross-repo harnesses are future work).
 
 ### V1.0 outcome
 
-- A lean Rust CLI implementing the surface in
-  `docs/ARCHITECTURE.md`. The surface is intentionally small — see
-  the `## Core principles` "Stay small" rule — but the exact command
-  list lives in the architecture doc, not in this north star, so
-  additions like `archive` do not require this section to churn.
-  Phase prompts (plan / tasks / implement / review / report) live in
-  the shipped skill bodies, not in the CLI; the binary never renders
-  natural-text prompts.
-- Shipped skill packs for Claude Code and Codex driving the full
-  development loop end-to-end without humans chaining commands.
-- A shipped orchestration loop in both skill packs
-  (`/speccy-orchestrate` chained with `/speccy-vet`) that
-  drives one SPEC from first-task implementation through pre-ship
-  drift review without humans chaining per-task commands.
-- Speccy's own implementation tracked in `.speccy/specs/` — by the
-  time the CLI is real, its history is the proof that it works.
-- `speccy verify` runs as a CI gate that fails on broken proof shape
-  and passes when intact, with no flakes attributable to its own
-  state.
+- A lean Rust CLI implementing the surface in `docs/ARCHITECTURE.md`.
+  Phase prompts live in the shipped skill bodies; the binary never
+  renders natural-text prompts.
+- Skill packs for Claude Code and Codex driving the full development
+  loop, including an orchestration loop (`/speccy-orchestrate`
+  chained with `/speccy-vet`) from first-task implementation through
+  pre-ship drift review, without humans chaining commands.
+- Speccy's own implementation tracked in `.speccy/specs/` — its
+  history is the proof that it works.
+- `speccy verify` as a CI gate: fails on broken proof shape, passes
+  when intact, no flakes attributable to its own state.
 
 ### Quality bar
 
-"Useful for my next project" is the bar. Features justified only
-by hypothetical broader audiences are out of scope for v1.
+"Useful for my next project" is the bar. Features justified only by
+hypothetical broader audiences are out of scope for v1.
 
-- A solo developer can run `speccy init` in a fresh repo and reach
-  their first green check via shipped skills without inventing process.
-- An AI agent driven by shipped skills can complete a full
-  Plan → Tasks → Impl → Review → Report loop on a non-trivial spec
-  without humans chaining commands.
+- A solo developer can run `speccy init` in a fresh repo and reach a
+  first green check via shipped skills without inventing process.
+- An agent completes a full Plan → Tasks → Impl → Review → Report
+  loop on a non-trivial spec without humans chaining commands.
 - Reviewer personas catch at least one class of drift per review run
-  on representative work (proven via dogfooding Speccy on itself).
+  on representative work (proven by dogfooding Speccy on itself).
 - Every command has stable text output and, where contracted, stable
-  JSON output. JSON breaks are versioned via `schema_version`.
+  JSON output; JSON breaks are versioned via `schema_version`.
 
 ### Known unknowns
 
-- Optimal balance between skill-pack richness and CLI determinism
-  surfaces only through dogfooding.
-- Persona prompt definitions will iterate as host models change;
-  shipped defaults are best-effort starting points.
-- Whether the default persona fan-out (business / tests / security /
-  style) holds on real work, or whether it needs to become
-  project-configurable before v1.
-- Whether the `serde-saphyr` `0.0.x` dependency surfaces stabilization
-  pain (API churn, behavioral changes) before Speccy's first release.
+- The right balance between skill-pack richness and CLI determinism
+  (only dogfooding will tell).
+- Persona prompts will iterate as host models change; shipped
+  defaults are starting points.
+- Whether the default persona fan-out holds on real work or needs to
+  become project-configurable before v1.
+- Whether the `serde-saphyr` `0.0.x` dependency causes stabilization
+  pain before first release.
 
-Non-goals and the full list of "what we deliberately don't do" are
-catalogued in `docs/ARCHITECTURE.md`'s "What We Deliberately Don't
-Do" table. Constraints are catalogued in `## Core principles` below
-and in `## Standard hygiene`.
+Non-goals live in `docs/ARCHITECTURE.md` → "What We Deliberately
+Don't Do".
 
 ## Core principles
 
-Durable beliefs. Schema and CLI will evolve; these shouldn't.
+Durable beliefs; schema and CLI will evolve, these shouldn't.
 
 1. **Feedback, not enforcement.** Speccy makes drift visible; it does
-   not block agents from making mistakes. `speccy verify` fails CI when
-   proof shape is broken. Everything else is informational. No
-   `--strict` mode, no policy file, no configurable enforcement.
+   not block mistakes. `speccy verify` fails CI on broken proof
+   shape; everything else is informational. No `--strict` mode, no
+   policy file, no configurable enforcement.
 
 2. **Deterministic core, intelligent edges.** The CLI is mechanical:
-   renders prompts, queries state, runs checks. Workflow loops, persona
-   definitions, and "what to do next" intelligence live in the skill
-   layer. The Rust CLI does not call LLMs.
+   renders prompts, queries state, runs checks. Workflow loops,
+   personas, and "what next" intelligence live in the skill layer.
+   The CLI never calls LLMs.
 
 3. **Proof shape, not proof scores.** Every Requirement maps to ≥1
    Check; every Check declares what it proves. The CLI flags
-   structural breakage only (a requirement with no scenario, an
-   empty scenario body, dangling references). Everything else about
-   check quality goes to review.
+   structural breakage only (requirement with no scenario, empty
+   scenario body, dangling references); check *quality* goes to
+   review.
 
-4. **Review owns semantic judgment.** Multi-persona adversarial review
-   (business, tests, security, style, correctness by default) is where
-   drift gets caught. Personas live as markdown skills; the CLI just
-   renders their prompts. Speccy never tries to grade tests
+4. **Review owns semantic judgment.** Multi-persona adversarial
+   review is where drift gets caught. Personas are markdown skills;
+   the CLI just renders their prompts. Speccy never grades tests
    algorithmically.
 
-5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check),
-   a small, flat command surface (see `docs/ARCHITECTURE.md` for the
-   current list), no mode toggles, no orchestration runtime. Speccy
-   works identically in any project state — there is no
-   greenfield/brownfield distinction.
+5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task,
+   Check), a small flat command surface (list in
+   `docs/ARCHITECTURE.md`), no mode toggles, no orchestration
+   runtime, no greenfield/brownfield distinction.
 
 6. **Surface unknowns; never invent.** Ambiguous spec → stop and
-   surface it. Can't validate something → say so. Don't fabricate
-   check commands. Don't add agent-behavior knobs to the CLI.
+   surface it. Can't validate → say so. Don't fabricate check
+   commands.
 
 ## Where the design lives
 
-`docs/ARCHITECTURE.md` is the only source of truth for the schema, CLI
-surface, lint codes, and implementation sequence. Read it before
-touching any code. If a design decision isn't documented, ask before
+`docs/ARCHITECTURE.md` is the only source of truth for the schema,
+CLI surface, lint codes, and implementation sequence. Read it before
+touching code. If a design decision isn't documented, ask before
 deciding.
 
 ## Skill pack source of truth
 
-Everything an agent sees as a skill, subagent, or reference file
-under `.claude/`, `.agents/`, or `.codex/` is **ejected output**, not
-source. The single source of truth lives under `resources/`:
+Everything under `.claude/`, `.agents/`, and `.codex/` is **ejected
+output**, never source. Source lives under `resources/`:
 
-- `resources/modules/skills/*.md` — host-neutral skill bodies
-  (`speccy-orchestrate.md`, `speccy-vet.md`, …).
-- `resources/modules/skills/partials/*.md` — sharable skill fragments
-  (`vet-phases.md`, `review-fanout.md`).
+- `resources/modules/skills/*.md` — host-neutral skill bodies.
+- `resources/modules/skills/partials/*.md` — shared skill fragments.
 - `resources/modules/phases/*.md` — agent body templates used by
-  subagent wrappers (`speccy-work.md`, `speccy-ship.md`, …).
+  subagent wrappers.
 - `resources/modules/personas/*.md` — reviewer/vet persona bodies
-  plus shared persona snippets (`verdict_return_contract.md`,
-  `inline_note_format.md`, `diff_fetch_command.md`,
-  `no_tasks_md_writes.md`).
-- `resources/modules/references/*.md` — shared rule files
-  (`reconcile-policy.md`, `retry-shape.md`, `evidence.md`,
-  `journal-*.md`, …).
+  plus shared persona snippets.
+- `resources/modules/references/*.md` — shared rule files.
 - `resources/agents/.<host>/…` — per-host wrappers (`*.md.tmpl` for
-  Claude Code and Codex skills; `*.toml.tmpl` for Codex subagents).
-  Wrappers carry frontmatter and pull module bodies in via MiniJinja
-  `{% include %}` directives at render time.
+  skills, `*.toml.tmpl` for Codex subagents) carrying frontmatter
+  and pulling module bodies in via MiniJinja `{% include %}`.
 
-The MiniJinja variables those wrappers may reference (the per-host
-`TemplateContext` fields plus template-local `{% set %}` bindings) are
-catalogued in `docs/ARCHITECTURE.md` → "Per-host template variables".
+Template variables wrappers may reference are catalogued in
+`docs/ARCHITECTURE.md` → "Per-host template variables".
 
-`speccy init --force --host <host>` (or `just reeject` to refresh
-both Claude Code and Codex at once) renders every wrapper, expands
-includes, and writes the result to `.claude/`, `.agents/`, and
-`.codex/`.
+Rules:
 
-**Editing rule:** never edit files under `.claude/`, `.agents/`, or
-`.codex/` directly. Edit the source under `resources/` and then
-run `just reeject` to regenerate the ejected output. Any change
-made to the harness folders is overwritten on the next init.
-
-**Deduplicating snippets:** when the same text would appear in
-multiple wrappers or modules, extract it to a `resources/modules/…`
-file and `{% include %}` it from each callsite. Verbatim inlined
-copies that shadow a canonical source are a bug — replace them with
-the include.
-
-**Verifying prose-template changes:** frame acceptance criteria for
-prose edits around content, not size. Content checks ("does
-canonical rule text leak into non-canonical files?", "does this
-wrapper include the right module?") are fine. Mechanical size gates
-like "wrapper ≤ N lines" or "module is exactly N lines" create
-friction for legitimate prose edits without catching anything
-content checks don't — avoid them. Prose under `resources/` is
-meant to be easy to revise by humans and agents alike.
-
-**Keep ejected content lean.** Everything under `resources/modules/`
-and `resources/agents/` ejects into users' repos and reloads into
-agent context on every prompt, so prefer terse phrasing. Write what an
-agent needs to act on and cut the rest: meta-annotation (cross-file
-"single source of truth" notes, explanations of how modules relate,
-rationale that doesn't change agent behavior) is fluff in shipped
-content even when it reads well in the source. Terse over complete.
-This is an authoring judgment, not a test gate — consistent with
-"Verifying prose-template changes" above, don't enforce it with size
-limits.
-
-**Read-only agent tool grants — Claude Code vs Codex parity.** The ten
-read-only agents (`plan-explorer`, `plan-architect`,
-`reviewer-correctness`, the six `reviewer-*`, and `vet-reviewer`)
-declare an explicit read-only `tools:` grant in their Claude Code
-wrapper frontmatter (`Read`, `Grep`, `Glob`, `LS`, `Bash`, `WebFetch`;
-no `Edit`/`Write`/`NotebookEdit`). Codex does **not** honor a
-per-subagent tool restriction: its agent definition format
-(`.codex/agents/*.toml`) exposes only `config_file`, `description`, and
-`nickname_candidates` per agent, with tool gating living at MCP-server,
-app/connector, and global scope rather than on the individual agent
-(verified against the Codex config reference at
-developers.openai.com/codex/config-reference, 2026-05). The Codex
-read-only posture therefore remains **prose-enforced** through each
-persona body's advisory contract — it is not assumed to have Claude
-Code's mechanical `tools:` parity. Do not add a `tools` field to the
-Codex `.toml` wrappers expecting it to be honored.
+- **Never edit `.claude/`, `.agents/`, or `.codex/` directly.** Edit
+  `resources/` and run `just reeject` (or `speccy init --force
+  --host <host>` per host); ejected edits are overwritten on the
+  next init.
+- **Deduplicate snippets.** Text shared by multiple wrappers or
+  modules goes in a `resources/modules/…` file, `{% include %}`d
+  from each callsite. Inlined copies shadowing a canonical source
+  are bugs.
+- **Acceptance criteria for prose edits check content, not size.**
+  "Does the wrapper include the right module?" is fine; "wrapper ≤ N
+  lines" gates add friction without catching anything content checks
+  don't.
+- **Keep ejected content lean.** Modules and wrappers eject into
+  users' repos and reload into agent context on every prompt. Write
+  what an agent needs to act on; cut meta-annotation (cross-file
+  source-of-truth notes, module-relationship explanations, rationale
+  that doesn't change behavior). Authoring judgment, not a test
+  gate.
+- **Read-only tool grants are Claude Code-only.** The read-only
+  agents (`plan-explorer`, `plan-architect`, `reviewer-*`,
+  `vet-reviewer`) declare a read-only `tools:` grant in their Claude
+  Code wrapper frontmatter. Codex honors no per-subagent tool
+  restriction (per its config reference,
+  developers.openai.com/codex/config-reference, 2026-05) — its
+  read-only posture is prose-enforced via each persona body. Don't
+  add a `tools` field to Codex `.toml` wrappers expecting it to be
+  honored.
 
 ## Authoritative references
 
-These rule files are authoritative for their domains. Load them when
-editing files in scope.
+Load these when editing files in their scope:
 
-- `.claude/rules/rust/*.md` — Rust conventions (code quality, defensive
-  programming, dependencies, documentation, performance, workspaces).
-  Conflicts between this file and a rule are bugs in *this* file — fix
-  this file, not the rule.
-- `.claude/rules/github-actions/*.md` — CI workflow conventions (action
-  versioning, runner selection, caching).
+- `.claude/rules/rust/*.md` — Rust conventions. Conflicts between
+  this file and a rule are bugs in *this* file — fix this file, not
+  the rule.
+- `.claude/rules/github-actions/*.md` — CI workflow conventions.
 
 ## Standard hygiene
 
@@ -250,80 +192,57 @@ Before any commit lands, all four must pass:
 - Prefer narrow, well-scoped commits over sprawling ones.
 - If a test you wrote is flaky, investigate the flake — don't retry
   until green.
-- Don't write vacuous tests. A test must gate a real invariant of the
-  system under test — not editorial decisions, not its own source
-  constant, not the build's own ability to compile. Specifically, do
-  not:
+- Don't write vacuous tests. A test must gate a real invariant of
+  the system under test. Specifically, never:
   - Substring-match human-curated prose (`AGENTS.md`, `README.md`,
-    `SPEC.md` bodies). Such tests break on legitimate rewrites and
-    gate editorial decisions, not behavior. If a concept must be
-    discoverable in docs, enforce it socially via review or via a
-    lint over a stable structural surface (section IDs, frontmatter
-    fields), not by `.contains("a specific sentence")`.
-  - Re-assert a hard-coded copy of a production constant. A test
-    that copies the source value and compares them proves only that
-    someone updated both sites in sync — it cannot fail in any
-    interesting way. Either derive a property of the constant
-    (length, ordering, prefix relation to another constant) or
-    delete the test.
-  - Assert only file existence or non-emptiness without checking any
-    property of the content. `read_to_string` failing already gates
-    readability; `assert!(!body.is_empty())` after a successful read
-    is tautological.
+    `SPEC.md` bodies) — that gates editorial decisions and breaks on
+    legitimate rewrites. Enforce doc concepts via review or a lint
+    over a stable structural surface (section IDs, frontmatter
+    fields) instead.
+  - Re-assert a hard-coded copy of a production constant — it can
+    only prove both sites were updated in sync. Derive a property
+    (length, ordering, prefix relation) or delete the test.
+  - Assert only file existence or non-emptiness — `read_to_string`
+    failing already gates readability.
   - Mock the function under test and assert the mock was called.
-  - Assert outcomes so loose any input passes — `is_ok()` on an
+  - Assert outcomes so loose any input passes (`is_ok()` on an
     infallible function, `!is_empty()` on a function that always
-    returns non-empty.
+    returns non-empty).
 
-  When in doubt, ask: "If I delete this test, what real regression
-  could land that the suite no longer catches?" If the answer is
-  "none," the test is vacuous.
+  Heuristic: "If I delete this test, what real regression goes
+  uncaught?" If none, the test is vacuous.
 - Never `unwrap()` / `expect()` / `panic!()` / `unreachable!()` /
   `todo!()` / `unimplemented!()` in production code. Tests may use
   `.expect("descriptive message")`.
-- Don't index with `[i]` on slices, `Vec`, or `serde_json::Value`. Use
+- Don't index slices, `Vec`, or `serde_json::Value` with `[i]`; use
   `.get(i)` and handle the `Option`.
-- Don't add `#[allow(...)]` to silence a lint. Use
-  `#[expect(..., reason = "...")]` so the suppression is auto-removed
+- Don't silence lints with `#[allow(...)]`; use
+  `#[expect(..., reason = "...")]` so the suppression auto-expires
   when the underlying issue resolves.
-- If you're tempted to add agent-behavior knobs to the CLI, stop — that
-  belongs in skills or prompts, not in deterministic code.
-- Never put real Speccy-repo identifiers in shipped template /
-  reference / skill bodies. Anything under `resources/modules/`,
-  `resources/agents/`, and the ejected packs at `.claude/`,
-  `.agents/`, `.codex/` will land in other people's repositories
-  via `speccy init`, where Speccy's own spec IDs, slugs, repo URLs,
-  and branch names are meaningless and confusing. When an
-  illustrative example needs concrete values, use obviously
+- Agent-behavior knobs belong in skills or prompts, never in the
+  CLI.
+- Never put real Speccy identifiers (spec IDs, slugs, repo URLs,
+  branch names) in shipped template / reference / skill bodies —
+  they land in other people's repos via `speccy init`. Use obviously
   fictional placeholders (`SPEC-0042`, `0042-example-slug`,
-  `acme/widget`, `feature/example-branch`) and label the block as
-  "illustrative example — substitute your own values." Speccy's
-  own spec artifacts under `.speccy/specs/` are a different
-  matter — those are local dogfood evidence and stay
+  `acme/widget`, `feature/example-branch`) labeled "illustrative
+  example — substitute your own values." Speccy's own artifacts
+  under `.speccy/specs/` are local dogfood evidence and stay
   Speccy-specific.
-- When you hit friction caused by a stale or wrong instruction in a
-  shipped skill (wrong command, missing environment variable, an
-  undocumented step), do this: update the relevant source module
-  under `resources/modules/` (or wrapper under `resources/agents/`)
-  before you finish the task, run `just reeject`, then call out the
-  edit under `Procedural compliance` in your `<implementer>` block.
-  Never patch the ejected file under `.claude/`, `.agents/`, or
-  `.codex/` directly — see `## Skill pack source of truth`. Speccy
-  dogfoods this loop: the same friction-to-skill-update pattern the
-  shipped implementer prompt asks downstream users to follow applies
-  here, so the next contributor inherits the fix instead of
-  re-discovering it.
+- Hit friction from a stale or wrong instruction in a shipped skill
+  (wrong command, missing env var, undocumented step)? Fix the
+  source module under `resources/` before finishing the task, run
+  `just reeject`, and call out the edit under `Procedural
+  compliance` in your `<implementer>` block. Never patch the ejected
+  file.
 
 ## Implementer / reviewer activity records
 
-Implementer handoff prose, reviewer verdicts, and amendment-driven
-blocker directives live in `.speccy/specs/NNNN-slug/journal/T-NNN.md`
-— a per-task journal file sibling to `SPEC.md` and `TASKS.md`. The
-journal carries the closed-set XML elements `<implementer>`,
-`<review>`, and `<blockers>` under a small YAML frontmatter
-(`spec`, `task`, `generated_at`). These elements do not appear
-inside `<task>` bodies in `TASKS.md`; the parser rejects them
-there. See `docs/ARCHITECTURE.md` "TASKS.md per-task journal"
-for the full grammar, attribute schemas, the `JNL-001` / `JNL-002`
-/ `JNL-003` lint family, and the `TSK-006` "no journal elements in
-TASKS.md" rule.
+Implementer handoffs, reviewer verdicts, and blocker directives live
+in `.speccy/specs/NNNN-slug/journal/T-NNN.md` (sibling to `SPEC.md`
+and `TASKS.md`): YAML frontmatter (`spec`, `task`, `generated_at`)
+plus the closed-set elements `<implementer>`, `<review>`, and
+`<blockers>`. These elements are rejected inside `TASKS.md` `<task>`
+bodies (`TSK-006`). Full grammar, attribute schemas, and the
+`JNL-001`/`JNL-002`/`JNL-003` lints: `docs/ARCHITECTURE.md` →
+"TASKS.md per-task journal".
