@@ -577,16 +577,16 @@ fn unqualified_task_selector_renders_covered_scenarios() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Task selector with overlapping check lists: first-occurrence order, dedup
+// Task selector with overlapping check lists: first-occurrence order, dedupe
 // ---------------------------------------------------------------------------
 
 #[test]
-fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestResult {
+fn task_selector_dedupes_overlapping_checks_in_first_occurrence_order() -> TestResult {
     // A scenario is owned by exactly one requirement (element
     // containment), so the "two REQs reference the same CHK" scenario
     // can't be constructed at the element-tree level. This test acts as
     // a regression guard for first-occurrence ordering across
-    // requirements covered by one task; the dedup-on-overlap assertion
+    // requirements covered by one task; the dedupe-on-overlap assertion
     // below still holds vacuously.
     let ws = Workspace::new()?;
     let spec_md = indoc! {r#"
@@ -655,7 +655,7 @@ fn task_selector_dedups_overlapping_checks_in_first_occurrence_order() -> TestRe
         </changelog>
     "#};
     let tasks = tasks_md_fixture("SPEC-0020", &[("T-001", "REQ-100 REQ-200")]);
-    write_spec(&ws.root, "0020-dedup", spec_md, Some(&tasks))?;
+    write_spec(&ws.root, "0020-dedupe", spec_md, Some(&tasks))?;
 
     let (code, out, _err) = invoke(&ws.root, Some("SPEC-0020/T-001"))?;
     assert_eq!(code, 0);

@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0064
-spec_hash_at_generation: 06a10bdcc1c12b16848a86b8c31e62601a7567044181e8070f3208a6dc4fbf98
-generated_at: 2026-06-13T05:43:15Z
+spec_hash_at_generation: 9a7bf5fb167528bf89f937ffe50c946b222206404ae3fcc6d20d3f39e703e58a
+generated_at: 2026-06-13T06:01:31Z
 ---
 # Tasks: SPEC-0064 Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implementer reads before acting, grown by a ship-time retro from the loop's own conventions and mistakes
 
@@ -148,7 +148,7 @@ fresh re-derivation of the work (REQ-004). It:
 - Proposes promoting stable, repeatedly-affirmed entries up into the durable
   tier (`AGENTS.md` / rules) for **human approval**; on approval the entry
   moves to the durable tier and is removed from the ledger so it is not stored
-  twice. Dedups candidates within the ledger and against the repo's existing
+  twice. Dedupes candidates within the ledger and against the repo's existing
   durable docs, dropping anything already covered. Promotion is never silent
   or automatic (REQ-005, DEC-006).
 - Re-validates existing ledger entries against the current tree and
@@ -161,7 +161,7 @@ The resulting ledger mutation lands in the same ship commit as REPORT.md.
 After editing, run `just reeject` and commit the regenerated host trees.
 
 All three covered requirements verify by dogfooding only (CHK-005/006/007):
-the retro's capture, consolidation/dedup, and phantom-GC are semantic and have
+the retro's capture, consolidation/dedupe, and phantom-GC are semantic and have
 no automated gate beyond `just reeject` cleanliness. SPEC-0064 shipping through
 the loop is itself the first dogfood instance.
 

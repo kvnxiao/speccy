@@ -137,12 +137,12 @@ The placeholders below are illustrative — substitute your own values.
      ("no durable lesson this loop") rather than inventing one. Create
      the file if it does not yet exist.
 
-   - **Consolidate and dedup (human-gated).** Propose promoting stable,
+   - **Consolidate and dedupe (human-gated).** Propose promoting stable,
      repeatedly-affirmed entries up into the durable tier (`AGENTS.md`
      / rules) and surface each promotion for **human approval** — never
      promote silently or automatically. On approval, make the
      durable-tier edit and **remove the promoted entry from
-     `.speccy/MEMORY.md`** so it is not stored in both tiers. Dedup
+     `.speccy/MEMORY.md`** so it is not stored in both tiers. Dedupe
      candidates within the ledger and against the repo's existing
      durable docs (`AGENTS.md`, rule files, anything they point at):
      drop a candidate already covered there rather than appending it.

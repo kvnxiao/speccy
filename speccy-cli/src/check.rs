@@ -300,7 +300,7 @@ fn run_task(
     // returns the covering requirements deduplicated in covers-list
     // order; flattening each requirement's scenarios reproduces the prior
     // inlined scenario accumulation. Scenarios are owned by exactly one
-    // requirement, so no cross-requirement scenario dedup is needed.
+    // requirement, so no cross-requirement scenario dedupe is needed.
     let collected: Vec<CollectedCheck> = resolve_covering_requirements(location.task, spec_doc)
         .into_iter()
         .flat_map(|req| {

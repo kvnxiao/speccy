@@ -289,12 +289,12 @@ turns real friction into a durable lesson.
 </requirement>
 
 <requirement id="REQ-005">
-### REQ-005: The retro consolidates stable entries into the durable tier and dedups, keeping the ledger bounded
+### REQ-005: The retro consolidates stable entries into the durable tier and dedupes, keeping the ledger bounded
 
 The same retro step bounds the ledger so it does not grow monotonically. It
 proposes promoting stable, repeatedly-affirmed entries up into the durable
 tier (`AGENTS.md` / rules) for **human approval**; on approval the entry moves
-to the durable tier and is removed from the ledger. It dedups candidates both
+to the durable tier and is removed from the ledger. It dedupes candidates both
 within the ledger and against the repo's existing durable docs, so guidance
 already stated in `AGENTS.md`, a rule file, or whatever the repo points at is
 not re-recorded. Promotion never happens silently.
@@ -323,7 +323,7 @@ covered by `AGENTS.md`,
 when the retro runs during dogfooding,
 then the stable entry is offered for human-gated promotion (and on approval
 leaves the ledger) while the already-covered candidate is dropped — a dogfood
-check that consolidation and dedup keep the ledger bounded.
+check that consolidation and dedupe keep the ledger bounded.
 </scenario>
 
 </requirement>
@@ -534,5 +534,5 @@ DEC-001 through DEC-009.
 <changelog>
 | Date | Author | Summary |
 | --- | --- | --- |
-| 2026-06-13 | Kevin Xiao | Initial SPEC: per-repo two-tier loop memory — eject-safe `.speccy/MEMORY.md` ledger (REQ-001) with a four-part entry shape (REQ-002), implementer-only feed-forward (REQ-003), a ship-time retro that captures both conventions and mistakes (REQ-004), consolidates into the durable tier and dedups (REQ-005), and retires phantom references (REQ-006); all soft, never a verify gate (REQ-007). |
+| 2026-06-13 | Kevin Xiao | Initial SPEC: per-repo two-tier loop memory — eject-safe `.speccy/MEMORY.md` ledger (REQ-001) with a four-part entry shape (REQ-002), implementer-only feed-forward (REQ-003), a ship-time retro that captures both conventions and mistakes (REQ-004), consolidates into the durable tier and dedupes (REQ-005), and retires phantom references (REQ-006); all soft, never a verify gate (REQ-007). |
 </changelog>
