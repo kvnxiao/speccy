@@ -22,3 +22,33 @@ Side discoveries:
 <gate verdict="failed" tasks_hash="dbeaca3fb2c0306779999a2d7ab7e2df3a536c0ccf081512bc0d848533a69072" date="2026-06-12T22:41:42Z">
 Round 1 drift review blocking on a SPEC-internal contradiction; implementer returned stuck. REQ-001 A6/C6 (delete the feature-dev provenance lines) conflicts with REQ-006's SPEC-0053 attribution guardrail (skill_packs.rs:1793 asserts those lines exist). Needs /speccy-amend, not a code fix.
 </gate>
+## Invocation 2 — 2026-06-13T03:19:34Z
+
+<drift-review verdict="pass" round="1" date="2026-06-13T03:19:34Z" model="claude-opus-4-8[1m]">
+Invocation-1 contradiction fully resolved: the DEC-002/REQ-008 amendment retired the brittle feature-dev substring guardrail and T-003 completed the deferred A6/C6 provenance-line deletion; the full branch diff now coheres against the amended SPEC, with all four hygiene gates green and no scope creep.
+
+Verified each requirement against the working tree (git diff main, clean tree, T-001/T-002/T-003 committed):
+- REQ-008/REQ-001 (the round-1 blocker): the `persona_body.contains("feature-dev")` assertion and its `read_persona` binding are gone, the test is renamed to `feature_dev_personas_declare_speccy_model_conventions`, and the `model: opus[1m]` / `model = "gpt-5.5"` / no-`sonnet` structural assertions are retained; `read_persona` is still used by other tests so no dangling helper. `grep -rn 'Ported from' resources/ .claude/ .agents/ .codex/` returns nothing — all three A6/C6 provenance blockquotes are gone from source and eject.
+- REQ-002/REQ-003: work phase post-append re-read replaced with validate-before-write reliance + `speccy next --json` (speccy-work.md:362); ship phase carries only the negated "no separate `speccy status` call is needed".
+- REQ-004: six factored modules each `{% include %}`d at exactly the enumerated callsites (retry-shape-summary ×3, review-role-tail ×7, vet-input-resolution ×2, vet-no-rollback ×2, inline-fanout-rationale ×3, spec-self-review-core ×2 plan+amend); retry-shape-summary expands to the full inline sentence plus pointer (act-without-read preserved, SPEC-0049 DEC-002).
+- REQ-005: supersession comment present in spec-self-review-core.md:1; speccy-brainstorm retains independent inline self-review (0 includes of the core); no DEC-001/OQ-b stale comments remain in plan/amend/brainstorm.
+- REQ-006: cargo test --workspace, clippy -D warnings, +nightly fmt --check, and cargo deny check all pass (the lone deny output is a pre-existing MPL-2.0 unmatched-allowance warning, exit 0).
+- REQ-007: no `{%` marker survives in any ejected file; the .codex eject for reviewer-correctness mirrors source (blockquote deleted, role-tail include expanded, cli-stamps compressed) — include-expansion + prose-compression, no unexplained change.
+- Scope: only `skill_packs.rs` changed under Rust (the single REQ-008-authorized edit); no production code, no new CLI command/env var/git-mutating helper — non-goals respected.
+- REPORT.md is not yet present, but every audit-recording `<done-when>` bullet is explicitly "at ship time" per all three task close-outs; the pre-ship vet gate runs before that, so its absence is not drift.
+</drift-review>
+<simplifier-scan verdict="clean">
+No behavior-preserving simplification candidates worth applying.
+
+The diff is a prose-factoring + determinism-trim + test-hygiene change set; the conventional code touched is a single vacuous-test retirement (speccy-cli/tests/skill_packs.rs). Reviewed:
+
+- Four new shared modules (retry-shape-summary, spec-self-review-core, review-role-tail, vet-input-resolution, vet-no-rollback, inline-fanout-rationale) each have 2+ genuine callsites — correct dedup, verified no shadow inline copies remain via grep sweep.
+- The two work/ship determinism trims remove redundant CLI re-check calls the SPEC deliberately retires — behavior-preserving by design, not simplifier scope.
+- evidence.md's 37-line delta is a canonical-example trim (Scenario 3 removed); the module file and both .tmpl wrappers stay intact — no orphan.
+- Persona prose compressions preserve every load-bearing distinction (diff-side caution, fabrication patterns, scope exclusions).
+
+Further prose compression would be editorial churn; AGENTS.md explicitly gates prose on content not size, so it is out of simplifier scope.
+</simplifier-scan>
+<gate verdict="passed" tasks_hash="a700d100b5b4bb9b21aa85d3de6bc330c7979eb0a53987e3f4b1d9a95d7c5d11" date="2026-06-13T03:21:17Z">
+Drift cleared on invocation 2 round 1 after the DEC-002/REQ-008 amendment and T-003 retired the brittle feature-dev guardrail; simplifier clean. No drift.
+</gate>

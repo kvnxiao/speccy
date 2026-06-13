@@ -2,7 +2,7 @@
 id: SPEC-0063
 slug: prompt-token-reduction-ssot-factoring
 title: Prompt token reduction + SSOT factoring for `resources/` modules — compress SDLC-loop prose, defer two procedures to existing CLI guarantees, then factor duplicated passages into shared modules
-status: in-progress
+status: implemented
 created: 2026-06-12
 supersedes: []
 ---
