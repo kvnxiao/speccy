@@ -1,16 +1,15 @@
 //! Compile-time embedded resource bundle.
 //!
 //! `include_dir!` snapshots the workspace `resources/` tree into the
-//! binary at build time (per SPEC-0002 DEC-001, re-targeted by
-//! SPEC-0016 T-007). The bundle is structured into two top-level
+//! binary at build time. The bundle is structured into two top-level
 //! subtrees:
 //!
 //! - `agents/.<install_root>/...` -- host-specific wrapper templates whose
 //!   folder structure mirrors the install destination 1:1. For `.claude/`
 //!   Claude Code wrappers land under
 //!   `agents/.claude/skills/speccy-<verb>/SKILL.md.tmpl`; Codex wrappers split
-//!   between `agents/.agents/` (skill packs, per SPEC-0015) and
-//!   `agents/.codex/` (subagents, per `OpenAI`'s Codex subagents docs).
+//!   between `agents/.agents/` (skill packs) and `agents/.codex/` (subagents,
+//!   per `OpenAI`'s Codex subagents docs).
 //! - `modules/...` -- host-neutral content, single-source for every wrapper to
 //!   `{% include %}`. Personas live at
 //!   `modules/personas/reviewer-<persona>.md`; skill bodies live at

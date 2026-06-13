@@ -1,6 +1,6 @@
 //! VET-* rules: pre-ship vet journal (`journal/VET.md`) validation.
 //!
-//! SPEC-0055 REQ-007. The lints run **only** when
+//! The lints run **only** when
 //! `<spec-dir>/journal/VET.md` exists — a spec without a VET.md emits no
 //! `VET-*` diagnostics, because absence is the resolver's concern
 //! (`speccy next`), not lint's. The two rules are:

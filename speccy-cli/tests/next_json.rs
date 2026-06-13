@@ -8,7 +8,7 @@
 )]
 //! JSON output contract tests for `speccy next --json`.
 //!
-//! Tests the new derived-kind JSON envelopes (SPEC-0033 REQ-004).
+//! Tests the new derived-kind JSON envelopes.
 //! Per-spec `--json` form is covered by `next_derived.rs`. This file
 //! covers additional workspace-form and per-spec-form JSON contract
 //! checks not duplicated there.
@@ -59,7 +59,7 @@ fn render_per_spec(ws: &Workspace, spec_id: &str) -> Result<String, Box<dyn std:
     Ok(String::from_utf8(buf)?)
 }
 
-// -- SPEC-0061 REQ-004 / CHK-007 ---------------------------------------------
+// ----------------------------------------------------------------------------
 // The cli crate's renderer-backed helper produces a VET.md that
 // `parse_vet_in_flight` accepts, whose terminal gate carries the given
 // (verdict, tasks_hash).
@@ -92,7 +92,7 @@ fn chk007_cli_helper_output_round_trips_through_parser() -> TestResult {
     Ok(())
 }
 
-// -- CHK-007: per-spec JSON envelope shape -----------------------------------
+// -- per-spec JSON envelope shape -----------------------------------
 
 #[test]
 fn per_spec_json_envelope_shape_review() -> TestResult {
@@ -141,7 +141,7 @@ fn per_spec_json_envelope_shape_review() -> TestResult {
     Ok(())
 }
 
-// -- CHK-007: per-spec JSON envelope shape (work) ----------------------------
+// -- per-spec JSON envelope shape (work) ----------------------------
 
 #[test]
 fn per_spec_json_envelope_shape_work() -> TestResult {
@@ -209,7 +209,7 @@ fn workspace_json_envelope_shape() -> TestResult {
     Ok(())
 }
 
-// -- SPEC-0041 REQ-001/REQ-002: vet kind in JSON -----------------------------
+// -- vet kind in JSON -----------------------------
 
 #[test]
 fn workspace_json_emits_vet_when_all_completed_and_no_vet_md() -> TestResult {
@@ -310,7 +310,7 @@ fn determinism() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0043 REQ-003: terminal-state exit code 2 and stderr line.
+// Terminal-state exit code 2 and stderr line.
 // ---------------------------------------------------------------------------
 
 fn run_per_spec_capture(
@@ -390,7 +390,7 @@ fn per_spec_terminal_completed_exits_2_with_stderr_and_envelope() -> TestResult 
 fn per_spec_terminal_dropped_exits_2_with_dropped_reason() -> TestResult {
     let ws = Workspace::new()?;
     // status: dropped, with a pending task — frontmatter status
-    // wins per SPEC-0043 REQ-003.
+    // wins.
     let tasks_xml = task_xml("T-001", "pending");
     write_spec(
         &ws.root,

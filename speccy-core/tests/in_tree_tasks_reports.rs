@@ -3,9 +3,9 @@
     reason = "test code may .expect() with descriptive messages"
 )]
 
-//! SPEC-0022 T-006 corpus integration test.
+//! Corpus integration test.
 //!
-//! After the SPEC-0022 migration runs across every in-tree
+//! Across every in-tree
 //! `.speccy/specs/NNNN-*/TASKS.md` and `REPORT.md`, three invariants must
 //! hold:
 //!

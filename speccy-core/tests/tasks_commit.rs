@@ -3,8 +3,7 @@
     reason = "test code may .expect() with descriptive messages"
 )]
 //! Integration tests for `speccy_core::tasks::commit_frontmatter`.
-//! Covers SPEC-0006 REQ-003 (hash/timestamp recording) and REQ-004
-//! (body-byte preservation).
+//! Covers hash/timestamp recording and body-byte preservation.
 
 use camino::Utf8PathBuf;
 use indoc::indoc;
@@ -430,8 +429,8 @@ fn commit_returns_id_triple_mismatch_when_spec_md_id_disagrees() {
 #[test]
 fn commit_leaves_file_unchanged_when_tasks_md_spec_disagrees_with_folder_and_spec_md() {
     // Folder digits = SPEC-0001, SPEC.md.id = SPEC-0001, TASKS.md.spec = SPEC-9999.
-    // Either IdTripleMismatch or SpecIdMismatch is acceptable per the
-    // SPEC's REQ-003 <behavior>; both leave TASKS.md untouched.
+    // Either IdTripleMismatch or SpecIdMismatch is acceptable here;
+    // both leave TASKS.md untouched.
     let src = indoc! {r"
         ---
         spec: SPEC-9999

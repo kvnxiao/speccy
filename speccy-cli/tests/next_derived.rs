@@ -6,8 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy next` with derived action-kind logic
-//! (SPEC-0033 REQ-004, CHK-007, CHK-008).
+//! Integration tests for `speccy next` with derived action-kind logic.
 //!
 //! Covers: per-spec form with `--json` and `--kind`-removal.
 
@@ -23,9 +22,9 @@ use common::write_fresh_pass_vet_md;
 use common::write_spec;
 use predicates::str::contains;
 
-// -- CHK-007 ------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
-/// CHK-007: per-spec JSON with in-review task, `next_action.kind` == "review".
+/// Per-spec JSON with in-review task, `next_action.kind` == "review".
 #[test]
 fn chk007_per_spec_json_in_review_priority() -> TestResult {
     let ws = Workspace::new()?;
@@ -108,9 +107,9 @@ fn chk007_per_spec_json_work_after_review_done() -> TestResult {
     Ok(())
 }
 
-// -- CHK-008 ------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
-/// CHK-008: workspace form (no args, text) with SPEC-0002 (no TASKS.md) gives
+/// Workspace form (no args, text) with SPEC-0002 (no TASKS.md) gives
 /// one line containing "decompose" and SPEC-0002; no task-id in the line.
 #[test]
 fn chk008_workspace_text_decompose_when_no_tasks_md() -> TestResult {
@@ -203,12 +202,12 @@ fn per_spec_json_null_when_all_done_and_report_present() -> TestResult {
         Some(&tasks_md),
     )?;
     // Write a fresh-pass VET.md so the resolver advances past the vet
-    // step (SPEC-0041) and REPORT.md presence drives the omission.
+    // step and REPORT.md presence drives the omission.
     write_fresh_pass_vet_md(&spec_dir, "SPEC-0003", &tasks_md)?;
     // Write REPORT.md so kind resolution lands on "completed".
     fs_err::write(spec_dir.join("REPORT.md").as_std_path(), "# Report\n")?;
 
-    // SPEC-0043 REQ-003: terminal per-spec resolutions now exit 2.
+    // Terminal per-spec resolutions now exit 2.
     let output = Command::cargo_bin("speccy")?
         .args(["next", "SPEC-0003", "--json"])
         .current_dir(ws.root.as_std_path())
@@ -280,7 +279,7 @@ fn workspace_text_completed_spec_omitted() -> TestResult {
 
 // -- --kind flag is removed ---------------------------------------------------
 
-/// CHK-007 scenario 5: `speccy next --kind work` → clap error.
+/// `speccy next --kind work` → clap error.
 #[test]
 fn kind_flag_is_rejected() -> TestResult {
     let ws = Workspace::new()?;
@@ -307,7 +306,7 @@ fn per_spec_json_ship_when_all_done_no_report() -> TestResult {
         Some(&tasks_md),
     )?;
     // Write a fresh-pass VET.md so the resolver advances past the new
-    // vet step to ship (SPEC-0041).
+    // vet step to ship.
     write_fresh_pass_vet_md(&spec_dir, "SPEC-0001", &tasks_md)?;
     // No REPORT.md → kind should be "ship".
     let output = Command::cargo_bin("speccy")?

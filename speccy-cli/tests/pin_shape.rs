@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! REQ-005 / CHK-005: pin-shape invariants for SPEC-0032 T-006.
+//! Pin-shape invariants.
 //!
 //! Scans every shipped agent/skill file under the templated host-pack
 //! source at `resources/agents/` and the in-tree dogfood pack at
@@ -11,7 +11,7 @@
 //! 1. No long-form versioned snapshot IDs (`claude-opus-`, `claude-sonnet-`,
 //!    `claude-haiku-`) appear in any `model` value.
 //! 2. No `model` value contains the substring `haiku` — Haiku is not used
-//!    anywhere in SPEC-0032's pin assignment.
+//!    anywhere in the pin assignment.
 //! 3. Every Claude Code pinned `model:` value matches `^(opus|sonnet)\[1m\]$` —
 //!    the `[1m]` 1M-context-window suffix is load-bearing for the headroom
 //!    phase workers and reviewers need.
@@ -25,7 +25,7 @@
 //! 8. The four mechanical-phase Claude Code SKILL.md files plus
 //!    `speccy-review`'s SKILL.md (rendered and templated) carry no `model`,
 //!    `effort`, `context`, or `agent` keys — slash-command invocation runs in
-//!    the parent session per REQ-001 / REQ-002.
+//!    the parent session.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -125,7 +125,7 @@ struct TomlPins {
 /// `model` / `reasoning_effort` apply on the Codex side (Codex has no
 /// `effort` axis on the model identifier). The Claude-Code-only
 /// `context` / `agent` auto-fork wiring keys are not captured here:
-/// REQ-005 only requires their absence on the explicit unpinned skill
+/// their absence is only required on the explicit unpinned skill
 /// list, which `unpinned_claude_skills_have_no_pin_keys` checks
 /// directly via `read_yaml_pins`.
 #[derive(Debug)]
@@ -217,11 +217,10 @@ fn collect_pin_records(root: &Utf8Path) -> Vec<PinRecord> {
             if !matches_shape(&file, *shape) {
                 continue;
             }
-            // SPEC-0038: reference files under `<skill>/references/` and
+            // Reference files under `<skill>/references/` and
             // `speccy-references/` are plain Markdown with no YAML/TOML
-            // frontmatter (per SPEC-0038's non-goal "No YAML frontmatter
-            // on reference files"). They carry no `model:` / `effort:`
-            // pins and are out of scope for REQ-005 pin-shape checks.
+            // frontmatter. They carry no `model:` / `effort:`
+            // pins and are out of scope for the pin-shape checks.
             let file_str = file.as_str().replace('\\', "/");
             if file_str.contains("/references/") || file_str.contains("/speccy-references/") {
                 continue;
@@ -402,8 +401,7 @@ fn opus_pinned_effort_is_valid() {
 
 #[test]
 fn sonnet_pinned_effort_is_valid_and_never_xhigh() {
-    // Sonnet does not support the xhigh tier (verified fact from
-    // SPEC-0032's brainstorm; REQ-005 / CHK-005 codify it).
+    // Sonnet does not support the xhigh tier.
     let allowed = ["low", "medium", "high", "max"];
     let records = collect_pin_records(&workspace_root());
     let mut violations: Vec<String> = Vec::new();
@@ -439,7 +437,7 @@ fn sonnet_pinned_effort_is_valid_and_never_xhigh() {
 #[test]
 fn codex_pinned_reasoning_effort_is_valid() {
     // Codex `gpt-5.5` accepts `low`, `medium`, `high`, `xhigh` as
-    // `model_reasoning_effort` tiers. SPEC-0032's shipped Codex pins
+    // `model_reasoning_effort` tiers. The shipped Codex pins
     // use `low/medium/high` only; `xhigh` is permitted so future
     // heavier reviewer work can opt into the higher tier without test
     // churn.
@@ -475,7 +473,7 @@ fn codex_pinned_reasoning_effort_is_valid() {
 }
 
 /// The five Claude Code phase-skill SKILL.md files (and their templated
-/// sources) the SPEC declares unpinned per REQ-001 / REQ-002 / DEC-001.
+/// sources) that are declared unpinned.
 /// Slash-command invocation runs in the parent session; the
 /// cost-and-time pin lives in the matching subagent files instead.
 const UNPINNED_CLAUDE_SKILLS: &[&str] = &[

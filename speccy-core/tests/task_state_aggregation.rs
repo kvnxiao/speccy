@@ -7,7 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Tests for `workspace::TaskCounts::from_tasks` and the
-//! workspace-level wiring. Covers SPEC-0004 CHK-004.
+//! workspace-level wiring.
 
 use camino::Utf8PathBuf;
 use indoc::indoc;

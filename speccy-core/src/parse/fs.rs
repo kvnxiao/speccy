@@ -4,8 +4,7 @@
 //! `fs_err::read_to_string` errors into [`crate::error::ParseError::Io`]
 //! with the offending path attached. The wrapper is consumed by
 //! [`crate::parse::spec_md`] and [`crate::workspace`]; it was relocated
-//! here by SPEC-0040 when the surrounding TOML parser module was
-//! deleted.
+//! here when the surrounding TOML parser module was deleted.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;

@@ -7,8 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Tests that `assemble`'s lint partitioning routes diagnostics to the
-//! correct per-spec or workspace-level bucket. Covers SPEC-0004
-//! CHK-006.
+//! correct per-spec or workspace-level bucket.
 
 mod common;
 

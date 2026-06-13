@@ -6,22 +6,20 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy context` (SPEC-0056).
+//! Integration tests for `speccy context`.
 //!
-//! T-002 establishes the command, the selector contract, and the JSON
-//! skeleton with spec identity (REQ-001 / REQ-002) and the intent block
-//! (REQ-002) populated. T-003 adds the task entry and the covering
-//! requirements via the shared core walk (REQ-003). T-004 inlines the
-//! per-task journal in full, with an explicit empty marker when the file is
-//! absent (REQ-004). T-005 adds the navigation aids: the sibling-task index
-//! (id/state/covers only), the repo-relative paths, and the suggested
-//! merge-base diff command (REQ-005). T-006 extends the same envelope with
-//! the consistency section; its tests land with that task. T-007 pins the
-//! governing size invariant (REQ-007): a property-style test emits a
-//! bundle, grows the spec around a fixed task (one uncovered requirement,
-//! one new sibling task, one foreign-task journal round, hash re-locked),
-//! re-emits, and asserts the two payloads differ by exactly one
-//! sibling-index entry once the consistency section is normalized.
+//! Cover the command and selector contract; the JSON skeleton with spec
+//! identity and the intent block populated; the task entry and covering
+//! requirements via the shared core walk; the per-task journal inlined in
+//! full, with an explicit empty marker when the file is absent; and the
+//! navigation aids: the sibling-task index (id/state/covers only), the
+//! repo-relative paths, and the suggested merge-base diff command. The
+//! consistency section rides the same envelope. A property-style test pins
+//! the governing size invariant: it emits a bundle, grows the spec around a
+//! fixed task (one uncovered requirement, one new sibling task, one
+//! foreign-task journal round, hash re-locked), re-emits, and asserts the two
+//! payloads differ by exactly one sibling-index entry once the consistency
+//! section is normalized.
 
 mod common;
 
@@ -45,7 +43,7 @@ use std::process::Command as StdCommand;
 
 /// A SPEC.md whose intent surfaces carry distinctive marker strings, and
 /// whose Summary narrative carries its own distinct marker. The Summary
-/// marker must never appear in the emitted bundle (REQ-002 / CHK-003).
+/// marker must never appear in the emitted bundle.
 ///
 /// `__ID__` substitutes the spec id; the slug/title are fixed.
 fn spec_md_intent_markers(spec_id: &str) -> String {
@@ -117,7 +115,7 @@ fn spec_md_intent_markers(spec_id: &str) -> String {
 /// A SPEC.md with five requirements, each carrying a distinctive marker
 /// in its body, done-when, behavior, and one scenario. The task covers
 /// only two of them, so the bundle must surface exactly those two and
-/// none of the other three (REQ-003 / CHK-004).
+/// none of the other three.
 ///
 /// `__ID__` substitutes the spec id.
 fn spec_md_five_requirements(spec_id: &str) -> String {
@@ -190,7 +188,7 @@ fn tasks_md_covering(spec_id: &str, covers: &str) -> String {
 /// A TASKS.md with six tasks T-001..T-006, each body carrying a
 /// distinctive `SIBLING_BODY_MARKER_N` string. The sibling index for any
 /// one task must surface the other five as id/state/covers only — no body
-/// marker may leak into the payload (REQ-005 / CHK-008). Each task has a
+/// marker may leak into the payload. Each task has a
 /// distinct state so the index's state field can be asserted.
 fn tasks_md_six(spec_id: &str) -> String {
     use std::fmt::Write as _;
@@ -220,7 +218,7 @@ fn tasks_md_six(spec_id: &str) -> String {
 }
 
 /// A TASKS.md whose tasks carry the given per-task states, in order from
-/// `T-001`. Used by the consistency tests (REQ-006): a task `completed` in
+/// `T-001`. Used by the consistency tests: a task `completed` in
 /// TASKS.md with no matching `[SPEC/T-NNN]:` commit in git log surfaces a
 /// `state_completed_no_commit` blocking drift, so marking several tasks
 /// `completed` in a fresh repo (no per-task commits) drifts exactly those.
@@ -300,7 +298,7 @@ fn tasks_md_single(spec_id: &str) -> String {
 /// laid out in a round-monotonic file order the `journal_xml` parser
 /// accepts (round 1 first, then round 2). Each block carries a distinctive
 /// body marker so the bundle's projection can be asserted against file
-/// content (REQ-004 / CHK-006).
+/// content.
 fn journal_two_rounds(spec_id: &str) -> String {
     format!(
         "---\nspec: {spec_id}\ntask: T-001\n\
@@ -326,7 +324,7 @@ fn journal_two_rounds(spec_id: &str) -> String {
 
 /// A single-round per-task journal: one implementer plus two reviews, all
 /// at round 1. Proves the latest-round slice keeps *every* block when the
-/// journal has only one round (CHK-003) — `journal_one_round` carries a lone
+/// journal has only one round — `journal_one_round` carries a lone
 /// block, too thin to distinguish "all blocks" from "the first block".
 fn journal_single_round(spec_id: &str) -> String {
     format!(
@@ -364,7 +362,7 @@ fn invoke_json(root: &Utf8Path, selector: &str) -> TestResult<String> {
 
 /// Invoke `speccy context` in the human-readable text form (`--json` off)
 /// and return its stdout. `--json` toggles representation only, so the text
-/// form carries the same content the JSON form does (CHK-006).
+/// form carries the same content the JSON form does.
 fn invoke_text(root: &Utf8Path, selector: &str) -> TestResult<String> {
     let mut out: Vec<u8> = Vec::new();
     run(
@@ -396,9 +394,7 @@ fn invoke_json_err(root: &Utf8Path, selector: &str) -> ContextError {
         &mut out,
     )
     .expect_err("expected ContextError");
-    // A selector failure must not write any partial bundle to stdout
-    // (REQ-001 done-when: selector failures exit non-zero without partial
-    // output).
+    // A selector failure must not write any partial bundle to stdout.
     assert!(
         out.is_empty(),
         "selector failure must produce no partial stdout; got {} bytes",
@@ -408,7 +404,7 @@ fn invoke_json_err(root: &Utf8Path, selector: &str) -> ContextError {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-001: unqualified selector ambiguous across two specs → same
+// unqualified selector ambiguous across two specs → same
 // diagnostic class `speccy check` produces (an `Ambiguous` LookupError).
 // ---------------------------------------------------------------------------
 
@@ -451,7 +447,7 @@ fn ambiguous_unqualified_selector_surfaces_lookup_ambiguity() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-002: a single spec + qualified selector → stdout parses as one JSON
+// a single spec + qualified selector → stdout parses as one JSON
 // document whose first serialized field is `schema_version` = 1.
 // ---------------------------------------------------------------------------
 
@@ -490,7 +486,7 @@ fn qualified_selector_emits_json_with_schema_version_first() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-003: goals, non-goals, and both decision ids+bodies are present;
+// goals, non-goals, and both decision ids+bodies are present;
 // the Summary narrative marker is absent from the payload.
 // ---------------------------------------------------------------------------
 
@@ -507,7 +503,7 @@ fn bundle_carries_intent_and_excludes_summary_marker() -> TestResult {
     let stdout = invoke_json(&ws.root, "SPEC-0042/T-001")?;
     let value = parse_one_json(&stdout);
 
-    // Identity (REQ-002): id / title / status from frontmatter.
+    // Identity: id / title / status from frontmatter.
     let spec = value.get("spec").expect("bundle has spec identity");
     assert_eq!(
         spec.get("id").and_then(serde_json::Value::as_str),
@@ -573,7 +569,7 @@ fn bundle_carries_intent_and_excludes_summary_marker() -> TestResult {
 
     // The Summary narrative marker, user-story marker, and the
     // (uncovered-here) nothing-else surfaces must be absent from the whole
-    // payload (REQ-002: Summary / user stories excluded).
+    // payload.
     assert!(
         !stdout.contains("SUMMARY_NARRATIVE_MARKER"),
         "Summary narrative must be excluded from the bundle; payload: {stdout}",
@@ -586,7 +582,7 @@ fn bundle_carries_intent_and_excludes_summary_marker() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-001 at the CLI boundary: the rendered ambiguity diagnostic class
+// At the CLI boundary: the rendered ambiguity diagnostic class
 // matches `speccy check`'s. Both commands route the same `LookupError`
 // through `report_lookup_error`, so the binary exits non-zero and emits
 // the shared "is ambiguous; matches in N specs" wording plus a
@@ -640,7 +636,7 @@ fn binary_ambiguous_selector_matches_check_diagnostic_class() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// REQ-001 done-when: an invalid-format selector fails fast with the shared
+// An invalid-format selector fails fast with the shared
 // InvalidFormat diagnostic and writes no partial stdout.
 // ---------------------------------------------------------------------------
 
@@ -666,7 +662,7 @@ fn invalid_selector_format_surfaces_lookup_invalid_format() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-004 (REQ-003): a five-requirement spec, a task covering two of them.
+// A five-requirement spec, a task covering two of them.
 // The two covered requirements appear with done-when, behavior, and
 // scenario content; none of the other three requirement ids appear
 // anywhere in the payload.
@@ -764,7 +760,7 @@ fn bundle_carries_only_the_two_covered_requirements_with_full_content() -> TestR
 }
 
 // ---------------------------------------------------------------------------
-// REQ-003 behavior: the task's raw `<task>` body bytes appear alongside
+// The task's raw `<task>` body bytes appear alongside
 // the parsed id, state, and covers.
 // ---------------------------------------------------------------------------
 
@@ -815,11 +811,9 @@ fn bundle_carries_task_entry_with_raw_body_and_parsed_fields() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-001 (REQ-001): the two-round fixture journal (five round-1 blocks,
+// The two-round fixture journal (five round-1 blocks,
 // three round-2 blocks). The bundle inlines only the round-2 blocks in full;
-// no round-1 body marker survives in the serialized `blocks` array. This
-// reverses SPEC-0056's full-inline behaviour (the prior `blocks.len() == 8` /
-// `rounds == [1,1,1,1,1,2,2,2]` assertions encoded what this SPEC removes).
+// no round-1 body marker survives in the serialized `blocks` array.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -941,7 +935,7 @@ fn bundle_inlines_only_latest_round_blocks() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-003 (REQ-001): a single-round journal fixture. Round 1 is the only —
+// A single-round journal fixture. Round 1 is the only —
 // and therefore the latest — round, so the slice keeps every block in full.
 // ---------------------------------------------------------------------------
 
@@ -1005,7 +999,7 @@ fn bundle_inlines_single_round_journal_in_full() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-007 (REQ-004): a fixture task with no journal file. The exit code is 0
+// A fixture task with no journal file. The exit code is 0
 // and the journal section carries an explicit absence marker with zero
 // blocks.
 // ---------------------------------------------------------------------------
@@ -1045,7 +1039,7 @@ fn bundle_journal_absent_yields_explicit_empty_marker_and_success() -> TestResul
 }
 
 // ---------------------------------------------------------------------------
-// CHK-004 (REQ-002): the two-round fixture. `journal.prior_rounds` is an
+// The two-round fixture. `journal.prior_rounds` is an
 // attributes-only index of the five round-1 blocks in file order — the
 // round-1 security review carries its persona and verdict, no entry
 // serializes a `body` key, and no round-1 body marker survives in the
@@ -1133,7 +1127,7 @@ fn prior_rounds_indexes_pre_latest_blocks_without_bodies() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-005 (REQ-002): a single-round journal and (separately) an absent
+// A single-round journal and (separately) an absent
 // journal both yield `prior_rounds: []`. A single round has nothing strictly
 // below the highest round, and an absent journal has no entries at all.
 // ---------------------------------------------------------------------------
@@ -1184,7 +1178,7 @@ fn prior_rounds_is_empty_for_single_round_and_absent_journals() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-006 (REQ-002): the text representation of the two-round fixture renders
+// The text representation of the two-round fixture renders
 // the round-2 block bodies in full, followed by a prior-rounds index naming
 // each round-1 block's type, round, and persona / verdict where present —
 // with no round-1 body content.
@@ -1256,7 +1250,7 @@ fn text_journal_renders_latest_bodies_then_prior_rounds_index() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// REQ-004 / CHK-007 at the binary boundary: a task with no journal exits 0.
+// At the binary boundary: a task with no journal exits 0.
 // The library-level test proves the empty marker; this proves the process
 // exit code is genuinely 0 (not just an absence of a Rust error).
 // ---------------------------------------------------------------------------
@@ -1281,7 +1275,7 @@ fn binary_journal_absent_exits_zero() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-008 (REQ-005): a six-task spec whose bodies each carry a distinctive
+// A six-task spec whose bodies each carry a distinctive
 // marker. The bundle for T-003 carries a sibling index of the other five
 // tasks (T-001, T-002, T-004, T-005, T-006) with only id/state/covers
 // fields, and no sibling body marker appears anywhere in the payload.
@@ -1345,8 +1339,8 @@ fn bundle_sibling_index_carries_id_state_covers_only_no_bodies() -> TestResult {
 
     // No sibling task body marker leaks into the payload. The five
     // siblings of T-003 (T-001/2/4/5/6) must be body-free; the selected
-    // task T-003's own body legitimately appears in the `task` entry
-    // (REQ-003), so its marker is excluded from this check.
+    // task T-003's own body legitimately appears in the `task` entry,
+    // so its marker is excluded from this check.
     for n in [1, 2, 4, 5, 6] {
         assert!(
             !stdout.contains(&format!("SIBLING_BODY_MARKER_{n}")),
@@ -1364,7 +1358,7 @@ fn bundle_sibling_index_carries_id_state_covers_only_no_bodies() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// REQ-005: the three repo-relative paths resolve to the actual files from
+// The three repo-relative paths resolve to the actual files from
 // the repo root, and the suggested diff command is in merge-base form
 // against the default branch.
 // ---------------------------------------------------------------------------
@@ -1430,7 +1424,7 @@ fn bundle_carries_repo_relative_paths_and_diff_command() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// REQ-005 behavior: on a real git feature branch with an `origin/HEAD`
+// On a real git feature branch with an `origin/HEAD`
 // pointing at the default branch, the suggested diff command names the
 // resolved default branch in merge-base form and runs as-is from the repo
 // root. This exercises the live default-branch + merge-base git machinery
@@ -1520,7 +1514,7 @@ fn diff_command_uses_resolved_default_branch_and_runs_from_repo_root() -> TestRe
 }
 
 // ---------------------------------------------------------------------------
-// CHK-009 (REQ-006): a fixture workspace with drift affecting two tasks.
+// A fixture workspace with drift affecting two tasks.
 // Bundles for one drifted task and one undrifted task both exit 0, both
 // carry the non-ok workspace status, the drifted task's bundle carries only
 // its own drift entries, and the undrifted task's bundle carries an empty
@@ -1596,7 +1590,7 @@ fn drifted_and_undrifted_bundles_share_status_but_scope_drifts_to_self() -> Test
 }
 
 // ---------------------------------------------------------------------------
-// REQ-006 behavior: drift affecting three tasks including T-002. The bundle
+// Drift affecting three tasks including T-002. The bundle
 // for T-002 carries a non-ok status and exactly T-002's drift entries, with
 // no other task's drift entries present.
 // ---------------------------------------------------------------------------
@@ -1632,9 +1626,9 @@ fn three_task_drift_surfaces_only_the_selected_tasks_entries() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-010 (REQ-007): the size invariant as an executable contract. Emit a
-// bundle for a fixed task, then grow the spec in three ways that REQ-007
-// declares must NOT enlarge the bundle (one uncovered requirement) plus the
+// The size invariant as an executable contract. Emit a
+// bundle for a fixed task, then grow the spec in three ways: one that must
+// NOT enlarge the bundle (one uncovered requirement) plus the
 // one that adds exactly one bounded line (one sibling task) plus one that
 // must NOT enlarge it (a journal round on a *different* task). Re-lock the
 // SPEC hash in TASKS.md frontmatter and re-emit. After normalizing the
@@ -1702,7 +1696,7 @@ fn tasks_md_with_hash(spec_id: &str, spec_hash: &str, task_specs: &[(&str, &str,
 
 /// A minimal single-round per-task journal: one `<implementer>` block. Used
 /// to add a journal round on a *foreign* task (one the selected task does
-/// not read), which REQ-007 declares must not enlarge the bundle.
+/// not read), which must not enlarge the bundle.
 fn journal_one_round(spec_id: &str, task_id: &str) -> String {
     format!(
         "---\nspec: {spec_id}\ntask: {task_id}\n\
@@ -1716,9 +1710,9 @@ fn journal_one_round(spec_id: &str, task_id: &str) -> String {
 /// with a fixed sentinel. The consistency section is the only bundle field a
 /// SPEC.md edit can perturb (its status reflects task-state-vs-git
 /// correlation; re-locking the hash and editing requirements can shift what
-/// the workspace scan reports), so REQ-007's "differs only by one sibling
-/// entry" claim is asserted modulo this field, exactly as CHK-010 prescribes
-/// ("consistency fields normalized").
+/// the workspace scan reports), so the "differs only by one sibling
+/// entry" claim is asserted modulo this field ("consistency fields
+/// normalized").
 fn normalize_consistency(value: &mut serde_json::Value) {
     if let Some(obj) = value.as_object_mut() {
         obj.insert("consistency".to_owned(), serde_json::json!("NORMALIZED"));
@@ -1750,7 +1744,7 @@ fn bundle_size_scales_with_task_not_spec() -> TestResult {
         "the single-task spec has no siblings before growth",
     );
 
-    // Grow the spec in three ways REQ-007 enumerates:
+    // Grow the spec in three ways:
     //   (1) one requirement T-001 does NOT cover (REQ-004) — adds nothing;
     //   (2) one new sibling task T-002 — adds exactly one index entry;
     //   (3) one journal round on the foreign task T-002 — adds nothing to

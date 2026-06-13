@@ -1,13 +1,13 @@
 //! Parser for per-task journal files (`journal/T-NNN.md`).
 //!
-//! SPEC-0037 REQ-001 introduces a sibling artifact under each spec
-//! directory at `.speccy/specs/NNNN-slug/journal/T-NNN.md`. The file
+//! A sibling artifact lives under each spec directory at
+//! `.speccy/specs/NNNN-slug/journal/T-NNN.md`. The file
 //! shape is YAML frontmatter (`spec`, `task`, `generated_at`) followed
 //! by a chronological sequence of bare `<implementer>`, `<review>`,
 //! and `<blockers>` element blocks. No wrapper element groups them —
 //! the filename + frontmatter bind the file to its task and spec.
 //!
-//! Element attribute schemas (SPEC-0037 REQ-003):
+//! Element attribute schemas:
 //! - `<implementer>`: `date`, `model`, `round` (all required).
 //! - `<review>`: `date`, `model`, `persona`, `verdict`, `round`.
 //! - `<blockers>`: `date`, `round`.
@@ -48,9 +48,9 @@ pub const JOURNAL_ELEMENT_NAMES: &[&str] = &["implementer", "review", "blockers"
 /// Parsed per-task journal file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JournalDoc {
-    /// `spec:` field from the frontmatter, e.g. `SPEC-0037`.
+    /// `spec:` field from the frontmatter, e.g. `SPEC-NNNN`.
     pub spec: String,
-    /// `task:` field from the frontmatter, e.g. `T-001`.
+    /// `task:` field from the frontmatter, e.g. `T-NNN`.
     pub task: String,
     /// `generated_at:` field from the frontmatter.
     pub generated_at: String,
@@ -131,8 +131,7 @@ impl JournalEntry {
 ///
 /// The single definition both journal views resolve "latest round"
 /// through: `speccy journal show --round latest` and `speccy context`'s
-/// inlined-journal section call this so the two cannot drift
-/// (SPEC-0060 DEC-001).
+/// inlined-journal section call this so the two cannot drift.
 #[must_use = "the resolved round selects which blocks to keep"]
 pub fn latest_round(entries: &[JournalEntry]) -> Option<u32> {
     entries.iter().map(JournalEntry::round).max()
@@ -144,7 +143,7 @@ pub fn latest_round(entries: &[JournalEntry]) -> Option<u32> {
 ///
 /// Returns [`ParseError`] when frontmatter is missing or malformed,
 /// any required attribute is absent, any attribute value fails the
-/// schema regex, or the round counter sequence violates REQ-004
+/// schema regex, or the round counter sequence is invalid
 /// (first round must be 1, monotonic non-decreasing, no skips).
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
     let (yaml_raw, body, body_offset) = split_required(source, path, "journal file")?;
@@ -208,13 +207,13 @@ pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<JournalDoc> {
 /// per-task journal `source`, for reconcile to truncate a malformed
 /// journal to.
 ///
-/// Reuses the canonical [`scan_tags`] recognizer (SPEC-0062 DEC-001) over
+/// Reuses the canonical [`scan_tags`] recognizer over
 /// the same preamble [`parse`] composes — the [`split_required`]
 /// frontmatter split, [`collect_code_fence_byte_ranges`], and a
 /// [`ScanConfig`] keyed on [`JOURNAL_ELEMENT_NAMES`] — then walks the
 /// resulting [`RawTag`] stream with a depth counter, recording each depth-0
-/// close tag's `span.end` (the byte just past its `>`). Per DEC-002 the
-/// offset comes from the token stream, never from the failed parse's
+/// close tag's `span.end` (the byte just past its `>`). The offset
+/// comes from the token stream, never from the failed parse's
 /// `ParseError.offset` (which can fall mid-element). A line-isolated close
 /// tag inside a fenced code block is excluded by the fence ranges, so it
 /// does not count as a structural close.
@@ -559,7 +558,7 @@ mod tests {
 
     #[test]
     fn correctness_review_persona_parses_as_registry_valid() {
-        // REQ-005 behavior: a `correctness` review block must be accepted
+        // A `correctness` review block must be accepted
         // as registry-valid, not rejected as an unknown persona. This is
         // coupled to `personas::ALL` via the `PERSONAS_ALL.contains(...)`
         // validation; reverting that check to a hardcoded four-name list
@@ -642,7 +641,7 @@ mod tests {
     #[test]
     fn last_well_formed_offset_zero_when_frontmatter_missing() {
         // No frontmatter: split_required short-circuits to 0 before any
-        // tag scan (CHK-003).
+        // tag scan.
         let src = "<implementer date=\"2026-01-01T00:00:00Z\" model=\"x\" round=\"1\">\nbody\n</implementer>\n";
         assert_eq!(last_well_formed_offset(src, path()), 0);
     }

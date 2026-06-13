@@ -6,13 +6,13 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for the `VET-*` lint family (SPEC-0055 REQ-007).
+//! Integration tests for the `VET-*` lint family.
 //!
 //! `speccy verify` lints `journal/VET.md` only when the file exists. The
 //! file's frontmatter status drives demotion: VET-* fires at `Level::Error`,
 //! so the fixture spec is `status: implemented` everywhere a gating exit is
 //! asserted (an in-progress spec would demote the error to info, matching
-//! the RPT-* posture). Scenario coverage maps to T-006's `<task-scenarios>`.
+//! the RPT-* posture).
 
 mod common;
 
@@ -69,7 +69,7 @@ fn error_codes(json: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// CHK-010: a `verdict="maybe"` drift-review fails the frozen grammar, so
+/// A `verdict="maybe"` drift-review fails the frozen grammar, so
 /// `speccy verify --json` lists a VET-001 error naming the file and exits 1.
 #[test]
 fn out_of_domain_verdict_fires_vet_001_and_gates() -> TestResult {

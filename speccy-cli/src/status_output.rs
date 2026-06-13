@@ -2,7 +2,7 @@
 //!
 //! Hand-defined serde structs with declared field order so two runs
 //! with no filesystem change produce byte-identical pretty-printed
-//! output. See SPEC-0004 REQ-007.
+//! output.
 
 use serde::Serialize;
 
@@ -63,7 +63,7 @@ pub struct JsonSpec {
     /// UTC archive date from frontmatter (`YYYY-MM-DD`). Omitted from
     /// the JSON output when the underlying frontmatter has no
     /// `archived_at` field — non-archived specs render byte-identically
-    /// to pre-SPEC-0042 output. See SPEC-0042 REQ-007.
+    /// to the output for specs with no archive metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<String>,
     /// Free-form archive reason from frontmatter. Omitted when absent

@@ -1,8 +1,7 @@
 //! Spec ID allocator (`max + 1`; no gap recycling).
 //!
-//! Per SPEC-0005 DEC-005 ("Spec ID allocation"): gaps left by dropped
-//! specs are not recycled so historical SPEC IDs retain unambiguous
-//! meaning in commits and PR descriptions.
+//! Gaps left by dropped specs are not recycled so historical SPEC IDs
+//! retain unambiguous meaning in commits and PR descriptions.
 //!
 //! Walks `specs_dir` recursively so flat specs (`specs/NNNN-slug/`) and
 //! mission-grouped specs (`specs/[focus]/NNNN-slug/`) share one ID
@@ -34,7 +33,7 @@ pub fn allocate_next_spec_id(specs_dir: &Utf8Path) -> String {
 /// numeric prefix across the union, and return the next available
 /// 4+ digit ID.
 ///
-/// Per SPEC-0042 REQ-005: archived specs at `.speccy/archive/` still
+/// Archived specs at `.speccy/archive/` still
 /// occupy their SPEC-NNNN slot, so vacancy resolution scans both
 /// `.speccy/specs/` and `.speccy/archive/` to compute the smallest
 /// unused ID. Directories that do not exist are treated as empty —
@@ -195,7 +194,7 @@ mod tests {
         assert_eq!(allocate_next_spec_id(&specs), "0011");
     }
 
-    // ----- allocate_next_spec_id_across_dirs (SPEC-0042 REQ-005) -----
+    // ----- allocate_next_spec_id_across_dirs -----
 
     #[test]
     fn across_dirs_unions_specs_and_archive() {

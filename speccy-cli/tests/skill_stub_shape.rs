@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! CHK-010: stub-shape invariants for SPEC-0032 T-009.
+//! Stub-shape invariants.
 //!
 //! Asserts that for `phase` in {`decompose`, `work`, `ship`}:
 //! (i)  each rendered SKILL.md body contains the literal substring
@@ -11,8 +11,7 @@
 //! (ii) the rendered SKILL.md bodies for the stub-delegate phases
 //!      (`decompose`, `ship`) do not contain `## Steps` or
 //!      `## When to use`; the two `speccy-work` SKILL.md bodies are
-//!      recipe-shape and carry both headings per SPEC-0049 /
-//!      DEC-001(a).
+//!      recipe-shape and carry both headings.
 
 use camino::Utf8PathBuf;
 use regex::Regex;
@@ -28,7 +27,7 @@ fn workspace_root() -> Utf8PathBuf {
 }
 
 const PINNED_PHASES: &[&str] = &["decompose", "work", "ship"];
-// SPEC-0049 / REQ-003 / DEC-001: `work` migrated from stub-delegate
+// `work` migrated from stub-delegate
 // to pure-include shape, so its SKILL.md body now carries the full
 // `## When to use` and `## Steps` sections of a recipe skill. The
 // stub-only invariants (no `## Steps`, no `## When to use`) no

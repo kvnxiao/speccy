@@ -2,10 +2,10 @@
 //!
 //! Resolves the selector via the same `task_lookup` seam `speccy check`
 //! uses, classifies the requested `from -> to` edge against the closed
-//! legal state graph (SPEC-0055 REQ-002), and — when the edge is legal —
+//! legal state graph, and — when the edge is legal —
 //! byte-surgically rewrites the task's `state` attribute in TASKS.md,
-//! preserving every other byte (SPEC-0055 REQ-001). A same-state request
-//! is an idempotent no-op (DEC-003); an illegal edge or an unresolved
+//! preserving every other byte. A same-state request
+//! is an idempotent no-op; an illegal edge or an unresolved
 //! selector exits non-zero with the file untouched.
 //!
 //! The rewrite delegates to [`speccy_core::parse::splice_task_state`],
@@ -39,7 +39,7 @@ pub enum TransitionError {
     /// message matches `speccy check` against the same reference.
     #[error(transparent)]
     TaskLookup(#[from] LookupError),
-    /// The requested edge is not in the legal state graph (REQ-002). The
+    /// The requested edge is not in the legal state graph. The
     /// diagnostic names both states and the fact that the edge is illegal.
     #[error(
         "illegal transition: `{from}` -> `{to}` is not in the legal state graph; \
@@ -81,7 +81,7 @@ pub struct TransitionArgs {
 ///
 /// Resolves the selector, classifies the requested edge, and — on a legal
 /// edge — splices the new state into TASKS.md byte-surgically. A
-/// same-state request returns `Ok(())` without writing (DEC-003).
+/// same-state request returns `Ok(())` without writing.
 ///
 /// # Errors
 ///
@@ -100,7 +100,7 @@ pub fn run(args: TransitionArgs, cwd: &Utf8Path) -> Result<(), TransitionError> 
     let from = location.task.state;
     match classify_transition(from, to) {
         TransitionKind::NoOp => {
-            // DEC-003: same-state target is an idempotent success that
+            // A same-state target is an idempotent success that
             // leaves the file byte-identical. Write nothing.
             Ok(())
         }
@@ -117,7 +117,7 @@ pub fn run(args: TransitionArgs, cwd: &Utf8Path) -> Result<(), TransitionError> 
                     source,
                 }
             })?;
-            // SPEC-0058 REQ-001 / REQ-003: the `--to completed` edge is a
+            // The `--to completed` edge is a
             // terminal lifecycle boundary, so after the state rewrite lands
             // reap the task journal's advisory-lock sidecar. The reap is
             // guarded by a `try_lock` and is infallible by design (it runs

@@ -6,8 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Tests for `workspace::scan`'s supersession integration. Covers
-//! SPEC-0004 CHK-005.
+//! Tests for `workspace::scan`'s supersession integration.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;

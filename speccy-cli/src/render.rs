@@ -1,6 +1,6 @@
 //! `MiniJinja`-backed renderer for host skill packs.
 //!
-//! Per SPEC-0016, `speccy init --host <host>` walks the embedded
+//! `speccy init --host <host>` walks the embedded
 //! [`crate::embedded::RESOURCES`] bundle under `agents/.<install_root>/`
 //! for each install root the chosen [`crate::host::HostChoice`] writes
 //! to, renders every `.tmpl` file through `MiniJinja`, strips the
@@ -13,8 +13,6 @@
 //! [`crate::host::HostChoice::template_context`], so the same module
 //! body file produces slash-prefixed command references for Claude
 //! Code and bare command names for Codex.
-//!
-//! See `.speccy/specs/0016-templated-host-resources/SPEC.md`.
 
 use crate::embedded::RESOURCES;
 use crate::host::HostChoice;
@@ -108,9 +106,8 @@ pub fn render_host_pack(host: HostChoice) -> Result<Vec<RenderedFile>, RenderErr
     for install_root in host.install_roots() {
         let subpath = format!("agents/{install_root}");
         let Some(dir) = RESOURCES.get_dir(subpath.as_str()) else {
-            // Missing per-host wrapper subtree is allowed: T-009/T-010
-            // add `.codex/agents/` later, and `.codex/` may have no
-            // skills today.
+            // Missing per-host wrapper subtree is allowed: `.codex/agents/`
+            // may be absent, and `.codex/` may have no skills today.
             continue;
         };
         let mut entries: Vec<&'static include_dir::File<'static>> = Vec::new();
@@ -131,7 +128,7 @@ pub fn render_host_pack(host: HostChoice) -> Result<Vec<RenderedFile>, RenderErr
                     })?;
             let rendered = render_template(&mut env, bundle_path, template_body, &ctx)?;
             let rel_path = destination_rel_path(bundle_path)?;
-            // SPEC-0032 T-003 retry: `.editorconfig` requires
+            // `.editorconfig` requires
             // `insert_final_newline = true` for `*.toml`. The `.tmpl`
             // exemption (`[*.tmpl] insert_final_newline = false`) applies
             // to template sources only, not rendered outputs. The renderer
@@ -163,7 +160,7 @@ pub fn render_host_pack(host: HostChoice) -> Result<Vec<RenderedFile>, RenderErr
 /// - Strict undefined behaviour so a missing context variable becomes a
 ///   render-time error instead of silently inserting an empty string.
 /// - Trailing-newline preservation so the rendered output ends with the same
-///   final byte as the source body (T-003 discovery).
+///   final byte as the source body.
 /// - A loader rooted at `modules/...` inside the embedded [`RESOURCES`] bundle,
 ///   so wrappers can `{% include "modules/skills/speccy-<verb>.md" %}` and
 ///   resolve to the matching module body without needing on-disk template

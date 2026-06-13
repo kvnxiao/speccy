@@ -6,8 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "assert!/assert_eq! inside TestResult-returning tests is idiomatic"
 )]
-//! End-to-end tests for `speccy init`.
-//! Exercises SPEC-0002 REQ-001..REQ-005 through the binary entry point.
+//! End-to-end tests for `speccy init` through the binary entry point.
 
 use assert_cmd::Command;
 use camino::Utf8Path;
@@ -50,7 +49,7 @@ fn split_frontmatter(source: &str) -> Option<(&str, &str)> {
 }
 
 /// Skill names shipped by both host packs, mirrored from
-/// `skill_packs::SKILL_NAMES`. Per SPEC-0015 each ships at
+/// `skill_packs::SKILL_NAMES`. Each ships at
 /// `<host>/<name>/SKILL.md` in the bundle and at
 /// `<dest>/<name>/SKILL.md` in the user's project.
 const SKILL_NAMES: [&str; 8] = [
@@ -200,7 +199,7 @@ fn force_preserves_user_files() -> TestResult {
     Ok(())
 }
 
-// SPEC-0064 REQ-001 / CHK-001 — `.speccy/MEMORY.md` is a repo-owned ledger
+// `.speccy/MEMORY.md` is a repo-owned ledger
 // the eject pipeline never enumerates. Like `.speccy/BACKLOG.md`, it sits in
 // the never-planned-against bucket: `speccy init` only scaffolds `.speccy/`
 // and renders the host pack, so neither a first `init` nor `init --force`
@@ -211,7 +210,7 @@ fn force_preserves_speccy_memory_ledger() -> TestResult {
     // Seed `.speccy/MEMORY.md` with arbitrary non-empty content, run
     // `init --force` for both shipped hosts in the same fixture, and assert
     // the file is byte-identical after each — proving the ledger sits outside
-    // the set of files the eject pipeline enumerates (CHK-001).
+    // the set of files the eject pipeline enumerates.
     let fx = project_with_name("memory-preserve")?;
     let seed =
         "## Learned conventions\n\n- entry one\n- entry two\n\n<garbage> not a real grammar\n";
@@ -250,7 +249,7 @@ fn force_preserves_speccy_memory_ledger() -> TestResult {
 #[test]
 fn fresh_init_does_not_create_speccy_memory_ledger() -> TestResult {
     // A fresh `init` in a repo without `.speccy/MEMORY.md` must not create
-    // one; its absence is normal and silent (SPEC-0064 REQ-001).
+    // one; its absence is normal and silent.
     let fx = project_with_name("memory-absent")?;
     let mut cmd = Command::cargo_bin("speccy")?;
     cmd.arg("init")
@@ -448,7 +447,7 @@ fn copy_codex_pack_skill_md() -> TestResult {
 
 #[test]
 fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult {
-    // SPEC-0016 T-009 obligation: `speccy init --host claude-code`
+    // `speccy init --host claude-code`
     // materialises one `.claude/agents/reviewer-<persona>.md` file per
     // shipped reviewer persona, each opening with `---` (YAML fence)
     // and each parseable.
@@ -499,7 +498,7 @@ fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult
     // The security reviewer's body must carry the persona module body
     // with its `{% include %}` expanded — the structural `## Focus`
     // section heading from the persona body proves the expansion
-    // happened (REQ-003's observable for the security persona).
+    // happened.
     let security = read_file(&fx.root, ".claude/agents/reviewer-security.md")?;
     assert!(
         security.contains("## Focus"),
@@ -510,7 +509,7 @@ fn t009_claude_code_reviewer_subagents_land_at_dot_claude_agents() -> TestResult
 
 #[test]
 fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
-    // SPEC-0016 T-010 obligation: `speccy init --host codex`
+    // `speccy init --host codex`
     // materialises one `.codex/agents/reviewer-<persona>.toml` file per
     // shipped reviewer persona, each parseable as flat TOML with the
     // three required top-level keys (`name`, `description`,
@@ -574,8 +573,7 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
     // The security reviewer's `developer_instructions` body must carry
     // the persona module body with its `{% include %}` expanded — the
     // structural `## Focus` section heading from the persona body
-    // proves the expansion happened (REQ-003's observable for the
-    // security persona on the Codex host).
+    // proves the expansion happened.
     let security_body = read_file(&fx.root, ".codex/agents/reviewer-security.toml")?;
     let security_parsed: toml::Value = toml::from_str(&security_body)
         .map_err(|err| format!("rendered reviewer-security.toml must parse as TOML: {err}"))?;
@@ -591,9 +589,9 @@ fn t010_codex_reviewer_subagents_land_at_dot_codex_agents() -> TestResult {
     Ok(())
 }
 
-// SPEC-0027 REQ-001 — `.speccy/skills/` is no longer written by
-// `speccy init`. Pre-existing files inside that subtree (from a
-// pre-SPEC init or from manual user creation) are left alone — init
+// `.speccy/skills/` is no longer written by
+// `speccy init`. Pre-existing files inside that subtree (from an older
+// init or from manual user creation) are left alone — init
 // neither rewrites nor deletes them.
 
 #[test]
@@ -657,11 +655,11 @@ fn t003_init_force_preserves_pre_existing_speccy_skills_overrides() -> TestResul
     Ok(())
 }
 
-// SPEC-0044 REQ-001 — host-native reviewer files participate in the
+// Host-native reviewer files participate in the
 // uniform Create / Unchanged / Conflict classification with every
 // other rendered host-pack file. Under `--force`, a reviewer file
-// that differs from the shipped bundle is overwritten; the
-// SPEC-0027 Skip-on-exists carve-out is removed.
+// that differs from the shipped bundle is overwritten; the prior
+// Skip-on-exists carve-out is removed.
 
 #[test]
 fn t002_claude_reviewer_agent_files_overwrite_user_edits_under_force() -> TestResult {
@@ -711,7 +709,7 @@ fn t002_claude_reviewer_agent_files_overwrite_user_edits_under_force() -> TestRe
 
 #[test]
 fn t002_claude_reviewer_agent_files_recreate_when_deleted() -> TestResult {
-    // SPEC-0044 REQ-001: deletion still triggers a fresh render under
+    // Deletion still triggers a fresh render under
     // the uniform classification (Create on absent applies to every
     // shipped file, with or without `--force`).
     let fx = project_with_name("t002-claude-recreate")?;
@@ -858,8 +856,8 @@ fn exit_codes() -> TestResult {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-013 / CHK-008 / CHK-009 / CHK-010: dogfood byte-identity,
-// renderer idempotency, and unsubstituted-token guard.
+// Dogfood byte-identity, renderer idempotency, and
+// unsubstituted-token guard.
 // --------------------------------------------------------------------
 
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
@@ -875,7 +873,7 @@ fn workspace_root() -> std::path::PathBuf {
 
 #[test]
 fn dogfood_outputs_match_committed_tree() -> TestResult {
-    // CHK-008: rendered outputs from `render_host_pack` for both hosts
+    // Rendered outputs from `render_host_pack` for both hosts
     // must match the committed dogfood tree byte-for-byte; the
     // host-neutral persona and prompt bundles copied to `.speccy/skills/`
     // by `speccy init` must also match the committed `.speccy/skills/`
@@ -917,7 +915,7 @@ fn dogfood_outputs_match_committed_tree() -> TestResult {
 
 #[test]
 fn render_is_idempotent() -> TestResult {
-    // CHK-009: rendering the full host pack twice must produce the
+    // Rendering the full host pack twice must produce the
     // same `RenderedFile` set in the same order with byte-identical
     // contents. A divergence here means the renderer is non-deterministic
     // (e.g. iterates an unordered set or interpolates a time/random
@@ -952,7 +950,7 @@ fn render_is_idempotent() -> TestResult {
 
 #[test]
 fn rendered_outputs_have_no_unsubstituted_tokens() -> TestResult {
-    // CHK-010: no rendered output file may contain the literal
+    // No rendered output file may contain the literal
     // substrings `{{` or `{%` outside fenced code blocks. Inside a
     // ```fenced block the substring is allowed (example template
     // syntax in documentation is legitimate); outside, it indicates
@@ -992,10 +990,10 @@ fn assert_no_unsubstituted_token(body: &str, label: &str, needle: &str) {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0032 T-007 / REQ-006: `speccy init` end-to-end against fresh
+// `speccy init` end-to-end against fresh
 // tempdirs renders the per-phase model and effort pin assignments that
-// the in-tree dogfood pack already encodes. The shape covered here is
-// the full slice REQ-006 owns: Claude Code phase-worker subagent files,
+// the in-tree dogfood pack already encodes. The full slice covered here
+// is: Claude Code phase-worker subagent files,
 // Codex phase-worker TOML files, reviewer files on both hosts, and the
 // four mechanical-phase SKILL.md files (plus speccy-review's SKILL.md)
 // carrying no pin keys. The drift check enforced by
@@ -1018,8 +1016,8 @@ struct ClaudePinFrontmatter {
     effort: Option<String>,
 }
 
-/// Mechanical-phase and `speccy-review` SKILL.md frontmatter. REQ-001 /
-/// REQ-002 / DEC-001 require zero pin keys on these files; the
+/// Mechanical-phase and `speccy-review` SKILL.md frontmatter. These
+/// files carry zero pin keys; the
 /// `Option<String>` fields surface as `None` when the keys are absent
 /// and as `Some` when a regression leaks one in.
 #[derive(Debug, Deserialize)]
@@ -1076,7 +1074,7 @@ fn assert_no_pin_keys(rel: &str, fm: &SkillNoPinsFrontmatter) {
 }
 
 /// Assert a phase-worker SKILL.md rendered file carries a thin-stub
-/// body per REQ-010 / T-009: the body references the matching agent
+/// body: the body references the matching agent
 /// file path and the `/agent speccy-<phase>` invocation pointer, and
 /// it is short (no leakage of the full phase prompt body).
 fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &str) -> TestResult {
@@ -1093,8 +1091,8 @@ fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &s
         "rendered {rel} thin-stub body must mention the `{invocation}` invocation pointer; got:\n{post_fm}",
     );
     // Exclude lines that fall inside the `reconcile-policy` shared-partial
-    // marker block from the non-empty-line count. SPEC-0045/REQ-008 inlines
-    // the shared partial verbatim into a handful of phase-worker stubs;
+    // marker block from the non-empty-line count. The shared partial is
+    // inlined verbatim into a handful of phase-worker stubs;
     // those marker-bounded regions are explicit, auditable exemptions
     // from the "stub body stays short" cap. The cap still polices any
     // prose outside the markers — full-body leakage is still caught.
@@ -1107,7 +1105,7 @@ fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &s
 }
 
 /// Assert the `speccy-init` SKILL.md rendered file retains its full
-/// body. REQ-010 explicitly exempts `speccy-init` from the thin-stub
+/// body. `speccy-init` is exempt from the thin-stub
 /// transformation because there is no pinned subagent to delegate to.
 fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     let body = read_file(root, rel)?;
@@ -1126,13 +1124,13 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
 }
 
 const CLAUDE_PINNED_PHASES: [&str; 3] = ["decompose", "work", "ship"];
-// SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+// `speccy-work` migrated from
 // stub-delegate to pure-include, so its SKILL.md body now expands
 // the full `modules/skills/speccy-work.md` body instead of a thin
 // delegation pointer. The pinned-phase agent pins (model/effort)
 // still apply to `work`; only the SKILL.md body shape changed.
 // Stub-delegate body assertions therefore cover only decompose and
-// ship, both of which remain stub-delegate per DEC-001(b).
+// ship, both of which remain stub-delegate.
 const CLAUDE_STUB_DELEGATE_PHASES: [&str; 2] = ["decompose", "ship"];
 const CLAUDE_OPUS_XHIGH_REVIEWERS: [&str; 3] = ["business", "tests", "architecture"];
 const CLAUDE_OPUS_HIGH_REVIEWERS: [&str; 1] = ["security"];
@@ -1168,7 +1166,7 @@ fn assert_codex_pin(table: &toml::Table, rel: &str, expected_effort: &str) {
 
 #[test]
 fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> TestResult {
-    // REQ-006 / CHK-006 (Claude Code half): `speccy init` against a
+    // Claude Code half: `speccy init` against a
     // fresh empty directory must materialise the per-phase model/effort
     // pin assignments that the in-tree dogfood pack already encodes.
     let fx = project_with_name("t007-claude-pins")?;
@@ -1261,7 +1259,7 @@ fn assert_claude_reviewer_pins(root: &Utf8Path) -> TestResult {
 
 #[test]
 fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult {
-    // REQ-006 / CHK-006 (Codex half): mirror of the Claude Code test
+    // Codex half: mirror of the Claude Code test
     // against the Codex host pack. Asserts the three pinned phase-worker
     // TOMLs, the absence invariants for `speccy-review.toml` and
     // `speccy-init.toml`, the asymmetric reviewer assignment, the

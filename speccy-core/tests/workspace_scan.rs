@@ -8,7 +8,7 @@
 )]
 //! Tests for `workspace::scan` covering discovery, ignored
 //! subdirectories, per-spec parse failure, missing directories, and
-//! ascending spec-ID ordering. Covers SPEC-0004 CHK-001 and CHK-002.
+//! ascending spec-ID ordering.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;

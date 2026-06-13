@@ -1,5 +1,4 @@
-//! Drift detection for the `speccy next` JSON envelope (SPEC-0045
-//! REQ-005 / REQ-006).
+//! Drift detection for the `speccy next` JSON envelope.
 //!
 //! Given a parsed spec, this module compares TASKS.md task state against
 //! the git log of commits whose title begins with `[SPEC-NNNN/T-NNN]: `
@@ -7,7 +6,7 @@
 //! journal file. The CLI calls [`detect`] and serialises the returned
 //! [`ConsistencyBlock`] into its JSON output.
 //!
-//! The detection is read-only by design (DEC-001). Callers supply a
+//! The detection is read-only by design. Callers supply a
 //! [`GitProbe`] trait object that walks `git log` and `git status`; the
 //! shipped [`ShellGitProbe`] shells out to the `git` binary in
 //! read-only mode (`git log --grep`, `git status --porcelain`). No
@@ -39,7 +38,7 @@ pub enum ConsistencyStatus {
     Blocked,
 }
 
-/// Closed enum of drift kinds (SPEC-0045 REQ-006).
+/// Closed enum of drift kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DriftKind {
@@ -56,7 +55,7 @@ pub enum DriftKind {
     /// working tree is clean (a crashed implementer pass whose
     /// partial work was already discarded, or whose changes never
     /// reached disk). The reconcile pass owns this case autonomously
-    /// per SPEC-0045 REQ-006/REQ-007 — it must not surface as a
+    /// — it must not surface as a
     /// user-facing fork in the orchestrator startup check.
     StateInProgressClean,
     /// The per-task journal file failed to parse against the closed
@@ -379,7 +378,7 @@ pub fn detect(spec_id: &str, spec: &ParsedSpec, probe: &dyn GitProbe) -> Consist
             }
             (TaskState::InProgress, None) => {
                 // Clean tree, no matching commit — the reconcile pass
-                // owns this autonomously (SPEC-0045 REQ-006). Roll
+                // owns this autonomously. Roll
                 // TASKS.md state back to `pending`; no git mutation.
                 drifts.push(DriftEntry {
                     task_id: task.id.clone(),

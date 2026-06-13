@@ -10,28 +10,23 @@
 //! produce the same selector diagnostics) and bundle assembly. The
 //! envelope's `Serialize` shape lives in [`crate::context_output`].
 //!
-//! SPEC-0056 grows the bundle across tasks T-002..T-006. T-002
-//! established the command, the selector contract, and the JSON skeleton
-//! with spec identity (REQ-001 / REQ-002) and the intent block (REQ-002).
-//! T-003 adds the selected task's verbatim `<task>` entry and the
-//! covering requirements — resolved through the shared core walk so
-//! `context` and `check` cannot diverge (REQ-003 / DEC-002). T-004 inlines
+//! The bundle carries spec identity and the intent block; the selected
+//! task's verbatim `<task>` entry and the covering requirements — resolved
+//! through the shared core walk so `context` and `check` cannot diverge;
 //! the selected task's per-task journal in full, reusing `journal show`'s
 //! block projection so the two JSON journal views cannot drift; an absent
-//! journal yields an explicit empty marker and a successful exit
-//! (REQ-004 / DEC-004). T-005 adds the navigation aids: a sibling-task
-//! index (id/state/covers only), the repo-relative SPEC.md / TASKS.md /
-//! journal paths, and a best-effort suggested merge-base diff command
-//! computed from git state — git unavailability degrades the diff command
-//! to a `main`-baseline fallback, never errors the bundle (REQ-005). T-006
-//! adds the consistency section: the workspace-level status `speccy next`
-//! computes (via the shared `consistency::detect` through `ShellGitProbe`)
-//! plus only the drift entries scoped to the selected task — other tasks'
-//! drifts never appear. `speccy context` is a read command and never
-//! refuses on drift; surfacing the status at read time is the feedback
-//! mechanism (REQ-006 / DEC-005). The command performs no writes anywhere.
-//!
-//! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
+//! journal yields an explicit empty marker and a successful exit. The
+//! navigation aids are a sibling-task index (id/state/covers only), the
+//! repo-relative SPEC.md / TASKS.md / journal paths, and a best-effort
+//! suggested merge-base diff command computed from git state — git
+//! unavailability degrades the diff command to a `main`-baseline fallback,
+//! never errors the bundle. The consistency section carries the
+//! workspace-level status `speccy next` computes (via the shared
+//! `consistency::detect` through `ShellGitProbe`) plus only the drift
+//! entries scoped to the selected task — other tasks' drifts never appear.
+//! `speccy context` is a read command and never refuses on drift; surfacing
+//! the status at read time is the feedback mechanism. The command performs
+//! no writes anywhere.
 
 use crate::context_output::BundleJournal;
 use crate::context_output::BundlePaths;
@@ -71,7 +66,7 @@ use thiserror::Error;
 pub enum ContextError {
     /// Selector parsing or resolution failure. Wraps the shared
     /// [`LookupError`] so the dispatcher renders the same selector
-    /// diagnostic class `speccy check` produces (REQ-001), via the shared
+    /// diagnostic class `speccy check` produces, via the shared
     /// `report_lookup_error` helper.
     #[error(transparent)]
     TaskLookup(#[from] LookupError),
@@ -127,9 +122,9 @@ pub struct ContextArgs {
 /// Run `speccy context` from `cwd`, writing the rendered bundle to `out`.
 ///
 /// Resolves the selector through `task_lookup::parse_ref` then
-/// `task_lookup::find` (REQ-001), assembles the identity + intent bundle
-/// (REQ-002) along with the selected task entry and its covering
-/// requirements (REQ-003), and serialises it. Selector failures and parse
+/// `task_lookup::find`, assembles the identity + intent bundle along with
+/// the selected task entry and its covering requirements, and serialises
+/// it. Selector failures and parse
 /// failures return an error without writing any partial bundle to `out`.
 /// The command performs no writes anywhere in the workspace.
 ///
@@ -165,10 +160,9 @@ pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
     Ok(())
 }
 
-/// Assemble the context bundle (identity + intent from REQ-002; task
-/// entry and covering requirements from REQ-003; inlined journal from
-/// REQ-004; sibling index, paths, and suggested diff command from REQ-005)
-/// from a resolved task location.
+/// Assemble the context bundle (identity + intent; task entry and covering
+/// requirements; inlined journal; sibling index, paths, and suggested diff
+/// command) from a resolved task location.
 ///
 /// `project_root` relativises the surfaced file paths; `cwd` roots the
 /// best-effort git probe for the suggested diff command.
@@ -224,10 +218,10 @@ fn assemble_bundle(
 /// `speccy next` computes (via the shared [`detect_consistency`] through a
 /// [`ShellGitProbe`] rooted at the project root, exactly as `next.rs`
 /// does), with the drift list filtered to the selected task only — other
-/// tasks' drifts never appear regardless of count (REQ-006). The
+/// tasks' drifts never appear regardless of count. The
 /// aggregate `status` is preserved verbatim from the workspace scan: a
 /// task with no drift of its own still surfaces a non-ok status when other
-/// tasks drift, so the read-time feedback is honest (DEC-005). `speccy
+/// tasks drift, so the read-time feedback is honest. `speccy
 /// context` never refuses on drift, so this never affects the exit code.
 fn build_consistency(
     spec: &ParsedSpec,
@@ -248,8 +242,8 @@ fn build_consistency(
 }
 
 /// Resolve `<spec-dir>/journal/<task-id>.md` — the canonical per-task
-/// journal path, shared by the journal section (REQ-004) and the surfaced
-/// journal path field (REQ-005), so the two cannot disagree.
+/// journal path, shared by the journal section and the surfaced
+/// journal path field, so the two cannot disagree.
 fn journal_path(location: &TaskLocation<'_>) -> camino::Utf8PathBuf {
     location
         .spec_dir
@@ -259,7 +253,7 @@ fn journal_path(location: &TaskLocation<'_>) -> camino::Utf8PathBuf {
 
 /// Build the sibling-task index: every other task in the spec as
 /// id/state/covers only — never any body text — in TASKS.md declared order,
-/// excluding the selected task (REQ-005).
+/// excluding the selected task.
 fn build_siblings(location: &TaskLocation<'_>) -> Vec<SiblingEntry> {
     let selected = &location.task.id;
     location
@@ -276,7 +270,7 @@ fn build_siblings(location: &TaskLocation<'_>) -> Vec<SiblingEntry> {
 }
 
 /// Build the repo-relative path triple — SPEC.md, TASKS.md, and the task's
-/// journal file — for follow-up targeted reads (REQ-005). The journal path
+/// journal file — for follow-up targeted reads. The journal path
 /// is surfaced whether or not the file exists yet.
 fn build_paths(
     location: &TaskLocation<'_>,
@@ -290,16 +284,15 @@ fn build_paths(
     }
 }
 
-/// Inline the selected task's per-task journal into the bundle (REQ-004).
+/// Inline the selected task's per-task journal into the bundle.
 ///
 /// Resolves `<spec-dir>/journal/<task-id>.md` (the same path `speccy journal
 /// show` uses) and, when it exists, parses it via `journal_xml` and projects
-/// every block in file order through SPEC-0055's shared
+/// every block in file order through the shared
 /// [`to_json_journal_block`] mapping — so `context` and `journal show`
-/// cannot drift (REQ-004 / DEC-002). When the file is absent the bundle
+/// cannot drift. When the file is absent the bundle
 /// carries an explicit `exists: false` marker with zero blocks and emission
-/// still succeeds: a round-1 implementer legitimately has no journal yet
-/// (DEC-004).
+/// still succeeds: a round-1 implementer legitimately has no journal yet.
 fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError> {
     let src = match fs_err::read_to_string(journal_path.as_std_path()) {
         Ok(s) => s,
@@ -322,11 +315,11 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
             source,
         })?;
 
-    // Inline only the latest round's blocks (SPEC-0060 REQ-001); prior
-    // rounds become an attributes-only index (REQ-002), with their full prose
+    // Inline only the latest round's blocks; prior
+    // rounds become an attributes-only index, with their full prose
     // reachable via `speccy journal show --round N`. `latest_round` is the
     // shared resolver `journal show --round latest` also calls, so the two
-    // views cannot drift (DEC-001). A journal that parses to zero entries
+    // views cannot drift. A journal that parses to zero entries
     // yields `None` here, hence empty `blocks` and `prior_rounds` with
     // `exists: true`.
     //
@@ -357,7 +350,7 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
 }
 
 /// Project the resolved task's `<task>` entry into the bundle: the parsed
-/// `id`, `state`, and `covers` alongside the verbatim body bytes (REQ-003).
+/// `id`, `state`, and `covers` alongside the verbatim body bytes.
 fn build_task_entry(location: &TaskLocation<'_>) -> TaskEntry {
     let task = location.task;
     TaskEntry {
@@ -369,7 +362,7 @@ fn build_task_entry(location: &TaskLocation<'_>) -> TaskEntry {
 }
 
 /// Resolve the task's covering requirements through the shared core walk
-/// (so `context` and `check` cannot diverge — REQ-003 / DEC-002) and
+/// (so `context` and `check` cannot diverge) and
 /// project each into the bundle with its done-when, behavior, and
 /// scenarios. Requirements arrive deduplicated in covers-list order; a
 /// `covers` token referencing a missing requirement is skipped by the
@@ -398,7 +391,7 @@ fn build_requirements(location: &TaskLocation<'_>, spec_doc: &SpecDoc) -> Vec<Co
 /// the `<goals>` and `<non-goals>` bodies plus every `<decision>` with
 /// its id and body, in declared order. The Summary narrative,
 /// `<user-stories>`, and non-covered requirement bodies are excluded by
-/// construction — they are never read here (REQ-002).
+/// construction — they are never read here.
 fn build_intent(spec_doc: &SpecDoc) -> Intent {
     let decisions = spec_doc
         .decisions
@@ -509,7 +502,7 @@ fn render_text(bundle: &ContextBundle, out: &mut dyn Write) -> Result<(), Contex
 
 /// Render the journal section in the text form: the latest round's blocks in
 /// full, then — when the journal carries earlier rounds — an attributes-only
-/// prior-rounds index (SPEC-0060 REQ-002). An absent journal renders an
+/// prior-rounds index. An absent journal renders an
 /// explicit empty marker. `--json` toggles representation only, so this walks
 /// the same `blocks` / `prior_rounds` partition the JSON renderer emits.
 fn render_journal(journal: &BundleJournal, out: &mut dyn Write) -> Result<(), ContextError> {
@@ -558,7 +551,7 @@ fn render_journal(journal: &BundleJournal, out: &mut dyn Write) -> Result<(), Co
 
 /// Render the task-scoped consistency section in the text form: the
 /// workspace-level status plus one line per drift entry scoped to the
-/// selected task (REQ-006). Enum values are rendered through their serde
+/// selected task. Enum values are rendered through their serde
 /// `snake_case` form so the text and JSON labels agree.
 fn render_consistency(
     consistency: &ConsistencyBlock,

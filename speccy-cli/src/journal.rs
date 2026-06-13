@@ -1,9 +1,9 @@
 //! `speccy journal append <selector> --block
 //! {implementer|review|blockers|drift-review|holistic-fix|simplifier-scan|simplifier-apply|gate}`
-//! command logic (SPEC-0055 REQ-003, REQ-004, REQ-005).
+//! command logic.
 //!
-//! Appends exactly one validated block to a journal. Target inference follows
-//! DEC-004: task block types require a task selector (`T-NNN` /
+//! Appends exactly one validated block to a journal. Target inference works
+//! by block type: task block types require a task selector (`T-NNN` /
 //! `SPEC-NNNN/T-NNN`) and route to `<spec-dir>/journal/<task-id>.md`; vet
 //! block types require a bare spec selector (`SPEC-NNNN`) and route to
 //! `<spec-dir>/journal/VET.md`. A mismatched block-type/selector pairing is
@@ -15,12 +15,12 @@
 //! `Z`), `round` (derived from existing file state), the vet journal's
 //! invocation sectioning, and a `gate` block's `tasks_hash` (lowercase hex
 //! SHA-256 of the sibling TASKS.md read at append time). There is no flag to
-//! override any of these — DEC-001 / DEC-004.
+//! override any of these.
 //!
 //! The derive→validate→append sequence runs under an advisory per-journal
-//! file lock (REQ-005, DEC-007), so concurrent appenders serialize and each
+//! file lock, so concurrent appenders serialize and each
 //! observes a consistent round. Acquisition blocks until free with a
-//! 10-second timeout (DEC-002); on timeout the command exits non-zero with
+//! 10-second timeout; on timeout the command exits non-zero with
 //! the journal byte-identical. Validation runs before any write, so a
 //! malformed block leaves the journal untouched (or still absent).
 
@@ -61,7 +61,7 @@ use thiserror::Error;
 
 /// The block type a `journal append` invocation names, partitioned by which
 /// journal it targets. The CLI value-parser maps `--block <name>` to one of
-/// these; target inference (DEC-004) then checks the selector shape against
+/// these; target inference then checks the selector shape against
 /// the variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JournalBlock {
@@ -71,7 +71,7 @@ pub enum JournalBlock {
     Vet(VetBlockKind),
 }
 
-/// How long lock acquisition blocks before giving up (DEC-002).
+/// How long lock acquisition blocks before giving up.
 const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Poll interval while waiting for a contended lock.
@@ -91,7 +91,7 @@ pub enum JournalError {
     #[error(transparent)]
     TaskLookup(#[from] LookupError),
     /// A task block type was requested with a bare spec selector, or a vet
-    /// block type with a task selector (DEC-004). The block type carries the
+    /// block type with a task selector. The block type carries the
     /// target journal, so a mismatched pairing is an argument error.
     #[error(
         "`{block}` is a {expected} block type but the selector `{selector}` is a {got} selector; \
@@ -129,7 +129,7 @@ pub enum JournalError {
     VetValidation(#[from] VetSerializeError),
     /// The would-be new VET.md content (existing bytes + the freshly rendered
     /// block) does not parse under the VET parser, so the append is refused
-    /// before any write (DEC-008). The parser is the single authority over
+    /// before any write. The parser is the single authority over
     /// what lands on disk: any body that would produce an unparseable file —
     /// e.g. one whose own line is a vet tag the scanner reads as a nested
     /// block — is rejected at write time, leaving VET.md byte-identical (or
@@ -193,7 +193,7 @@ pub enum JournalError {
     },
     /// The would-be new per-task journal content (existing bytes + the freshly
     /// rendered block) does not parse under [`parse_journal_xml`], so the
-    /// append is refused before any write (DEC-001, mirroring the vet path's
+    /// append is refused before any write (mirroring the vet path's
     /// [`JournalError::ProducedVetUnparseable`]). The parser is the single
     /// authority over what lands on disk: any body that would produce an
     /// unparseable file — e.g. one whose own line is a journal tag the scanner
@@ -241,7 +241,7 @@ pub struct AppendArgs {
     /// task block types, or a bare spec selector (`SPEC-NNNN`) for vet block
     /// types.
     pub selector: String,
-    /// Block type to append (carries the target journal — DEC-004).
+    /// Block type to append (carries the target journal).
     pub block: JournalBlock,
     /// `--model` value (required for `implementer`/`review`, and for the
     /// round-bearing vet blocks `drift-review`/`holistic-fix`).
@@ -255,7 +255,7 @@ pub struct AppendArgs {
 /// Run `speccy journal append` from `cwd`, reading the block body from
 /// `body_source`.
 ///
-/// Routes by block type (DEC-004): task block types resolve a task selector
+/// Routes by block type: task block types resolve a task selector
 /// to `<spec-dir>/journal/<task-id>.md`; vet block types resolve a bare spec
 /// selector to `<spec-dir>/journal/VET.md`. In both cases it acquires the
 /// advisory file lock, derives state (round / invocation), validates and
@@ -322,7 +322,7 @@ fn run_task_append(
     verdict: Option<&str>,
     body: &str,
 ) -> Result<(), JournalError> {
-    // A vet selector with a task block type is the DEC-004 mismatch.
+    // A vet selector with a task block type is a selector/block-type mismatch.
     if bare_spec_regex().is_match(selector) {
         return Err(JournalError::SelectorBlockMismatch {
             block: kind.element_name(),
@@ -376,7 +376,7 @@ fn run_vet_append(
     verdict: Option<&str>,
     body: &str,
 ) -> Result<(), JournalError> {
-    // A task selector with a vet block type is the DEC-004 mismatch.
+    // A task selector with a vet block type is a selector/block-type mismatch.
     if !bare_spec_regex().is_match(selector) {
         // Distinguish "looks like a task selector" from "not a spec id at all"
         // for a clearer message.
@@ -419,7 +419,7 @@ fn run_vet_append(
     // --- critical section: derive → validate → append → write ---
     // The append result is bound, then the guard is dropped by closing its
     // lexical scope, so the lock is provably released before the terminal-gate
-    // reap below observes the sidecar (SPEC-0058 REQ-002).
+    // reap below observes the sidecar.
     let appended = {
         let _guard = LockGuard::acquire(&lock_path)?;
         let inputs = VetAppendInputs {
@@ -434,12 +434,12 @@ fn run_vet_append(
         append_vet_under_lock(&inputs)
     };
 
-    // SPEC-0058 REQ-002 / DEC-003: the `<gate>` is the terminal vet write on
+    // The `<gate>` is the terminal vet write on
     // every exit path, so after the gate append lands reap `VET.md.lock`. Only
     // the gate reaps — every non-gate vet block (`drift-review`,
     // `holistic-fix`, `simplifier-scan`, `simplifier-apply`) leaves the
     // sidecar in place for the next sequential appender. The append's own
-    // `_guard` released above, so the reap's `try_lock` (REQ-003) observes the
+    // `_guard` released above, so the reap's `try_lock` observes the
     // lock as free; terminal-boundary quiescence is the real safety contract.
     // The reap is infallible by design (it runs only after the load-bearing
     // append succeeded) — it runs solely on the `Ok` path and an absent
@@ -528,7 +528,7 @@ fn append_under_lock(inputs: &AppendInputs<'_>) -> Result<(), JournalError> {
     };
 
     // Round-trip the COMPLETE would-be new file through the journal parser
-    // before writing a byte (DEC-001), mirroring the vet path's write-time
+    // before writing a byte, mirroring the vet path's write-time
     // round-trip. This is the single authority over what lands on disk: any
     // body that would produce an unparseable file — e.g. one whose own line is
     // a journal tag the scanner reads as a nested block — is rejected here, so
@@ -561,7 +561,7 @@ struct VetAppendInputs<'a> {
 /// The parse → plan → validate → render → round-trip → write sequence for a
 /// vet block, run with the lock held.
 ///
-/// The VET parser is the single authority throughout (DEC-008): the existing
+/// The VET parser is the single authority throughout: the existing
 /// file is parsed with [`parse_vet_in_flight`] (which tolerates the open
 /// trailing section that exists mid-vet-run), the invocation/round placement
 /// is derived from that typed [`VetDoc`] — mirroring how the per-task path
@@ -650,7 +650,7 @@ fn append_vet_under_lock(inputs: &VetAppendInputs<'_>) -> Result<(), JournalErro
     new_content.push_str(&rendered);
 
     // Round-trip the COMPLETE would-be new file through the VET parser before
-    // writing a byte (DEC-008). This is the single authority over what lands
+    // writing a byte. This is the single authority over what lands
     // on disk: any body that would produce an unparseable file — e.g. one
     // whose own line is a vet tag the scanner reads as a nested block — is
     // rejected here, so no separate body-markup guard is needed. The in-flight
@@ -690,7 +690,7 @@ impl LockGuard {
     /// Acquire the exclusive advisory lock on `lock_path`, polling
     /// [`FileExt::try_lock`] until the [`LOCK_TIMEOUT`] deadline.
     ///
-    /// Blocking-with-timeout (DEC-002) rather than `lock()`'s unbounded
+    /// Blocking-with-timeout rather than `lock()`'s unbounded
     /// block, so a wedged holder errors loudly instead of hanging forever.
     fn acquire(lock_path: &Utf8Path) -> Result<Self, JournalError> {
         let file = fs_err::OpenOptions::new()
@@ -742,8 +742,7 @@ impl Drop for LockGuard {
 
 /// Delete a journal advisory-lock sidecar at a terminal lifecycle boundary,
 /// guarded by a non-blocking `try_lock` so a mistimed or repeated reap is a
-/// safe no-op rather than a mutual-exclusion break (DEC-001, DEC-004,
-/// REQ-003).
+/// safe no-op rather than a mutual-exclusion break.
 ///
 /// Unlike [`LockGuard::acquire`], this opens the sidecar **without**
 /// `create(true)`: an absent sidecar (`NotFound`) is the idempotent no-op and
@@ -754,12 +753,12 @@ impl Drop for LockGuard {
 /// identically on Windows (where deleting a path with a live open handle
 /// fails with a sharing violation) and POSIX.
 ///
-/// Infallible by design (DEC-004): the reap runs only after the owning
+/// Infallible by design: the reap runs only after the owning
 /// command's load-bearing mutation has already landed, so a reap failure must
 /// never fail the command. The expected no-ops (`NotFound` open, `WouldBlock`
 /// lock) return silently; any error short of a clean reap — an open error
 /// other than `NotFound`, a `try_lock` `Error`, or a `remove_file` error —
-/// emits exactly one `WARN` naming the sidecar path (REQ-005, DEC-005) and
+/// emits exactly one `WARN` naming the sidecar path and
 /// still returns.
 pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path) {
     let file = match fs_err::OpenOptions::new()
@@ -797,8 +796,7 @@ pub(crate) fn reap_lock_sidecar(lock_path: &Utf8Path) {
     }
 
     // Drop the handle (releasing the advisory lock and the OS handle) before
-    // unlinking, so the unlink behaves identically on Windows and POSIX
-    // (DEC-004).
+    // unlinking, so the unlink behaves identically on Windows and POSIX.
     drop(file);
 
     if let Err(source) = fs_err::remove_file(lock_path.as_std_path()) {
@@ -985,7 +983,7 @@ mod tests {
     // Inducing a `remove_file` failure after a successful `try_lock` relies on a
     // read-only parent directory, which only blocks deletion on POSIX; Windows
     // ignores the directory's read-only attribute for child deletion. Gate the
-    // induction to Unix per the task's allowance (CHK-009, REQ-005).
+    // induction to Unix.
     #[cfg(unix)]
     #[test]
     fn induced_unlink_failure_emits_one_warn_naming_the_sidecar() {

@@ -6,10 +6,12 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! End-to-end tests for `speccy archive SPEC-NNNN` (SPEC-0042 T-002).
+//! End-to-end tests for `speccy archive SPEC-NNNN`.
 //!
-//! Covers CHK-001 through CHK-009 except the `git status --porcelain`
-//! rename assertion, which is exercised in [`archive_git_rename`] below.
+//! Covers the directory move, `archived_at`/`archived_reason`
+//! frontmatter, force/refusal behaviour, and missing-spec handling. The
+//! `git status --porcelain` rename assertion is exercised in
+//! [`archive_git_rename`] below.
 
 mod common;
 

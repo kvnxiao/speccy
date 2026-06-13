@@ -6,10 +6,8 @@
     clippy::panic_in_result_fn,
     reason = "assert!/assert_eq! inside TestResult-returning tests is idiomatic"
 )]
-//! Tests for SPEC-0033 T-008: three-way init classification and
-//! interactive skill body ejection.
-//!
-//! Covers CHK-011, CHK-019, CHK-020, CHK-021, and CHK-022.
+//! Tests for three-way init classification and interactive skill body
+//! ejection.
 
 use assert_cmd::Command;
 use camino::Utf8PathBuf;
@@ -57,7 +55,7 @@ fn run_init(root: &Utf8PathBuf, extra_args: &[&str]) -> assert_cmd::assert::Asse
 }
 
 // -----------------------------------------------------------------------
-// CHK-011: fresh init creates a speccy-plan SKILL.md with substantive
+// Fresh init creates a speccy-plan SKILL.md with substantive
 // body and no MiniJinja markup.
 // -----------------------------------------------------------------------
 
@@ -90,7 +88,7 @@ fn chk011_fresh_init_creates_speccy_plan_skill_md_with_substantive_body() -> Tes
 }
 
 // -----------------------------------------------------------------------
-// CHK-019: all files byte-identical → exit 0, every file logged `unchanged`.
+// All files byte-identical → exit 0, every file logged `unchanged`.
 // -----------------------------------------------------------------------
 
 #[test]
@@ -152,7 +150,7 @@ fn chk019_byte_identical_no_mtime_change() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// CHK-020: one differing file → exit non-zero, stderr names the file
+// One differing file → exit non-zero, stderr names the file
 // and `--force`, offending file unchanged, no other file written.
 // -----------------------------------------------------------------------
 
@@ -255,7 +253,7 @@ fn chk020_atomic_refuse_no_other_file_written() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// CHK-021: --force with differing file → exit 0, file overwritten as
+// --force with differing file → exit 0, file overwritten as
 // `(!) overwritten`, byte-identical files logged `unchanged`.
 // -----------------------------------------------------------------------
 
@@ -340,7 +338,7 @@ fn chk021_force_differing_file_content_matches_planned() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// CHK-022: no .claude/agents/speccy-init.md, no
+// No .claude/agents/speccy-init.md, no
 // .claude/agents/speccy-review.md, no .codex/agents/speccy-init.toml, no
 // .codex/agents/speccy-review.toml.
 // -----------------------------------------------------------------------

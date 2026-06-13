@@ -6,7 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Tests for `git::repo_sha`. Covers SPEC-0004 T-010.
+//! Tests for `git::repo_sha`.
 
 use camino::Utf8PathBuf;
 use speccy_cli::git::repo_sha;

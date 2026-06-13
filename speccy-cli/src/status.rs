@@ -67,7 +67,6 @@ pub struct StatusArgs {
     /// specs in the rendered output. Archived specs never participate
     /// in the attention-list filter (their inclusion is purely opt-in
     /// via this flag) and do not count toward the hidden-specs footer.
-    /// See SPEC-0042 REQ-007.
     pub include_archive: bool,
     /// Emit JSON instead of the filtered text view.
     pub json: bool,
@@ -148,7 +147,7 @@ pub fn assemble(
 /// `.speccy/archive/`. Archived specs contribute no lint diagnostics
 /// (lint runs only on the active workspace) and never appear in the
 /// default text-mode attention filter; they are listed in workspace
-/// order after the active specs. See SPEC-0042 REQ-007.
+/// order after the active specs.
 #[must_use = "the assembled report is the input to the renderers"]
 pub fn assemble_with_archive<'a>(
     workspace: &'a Workspace,
@@ -296,7 +295,6 @@ fn first_parse_error(parsed: &speccy_core::lint::ParsedSpec) -> Option<String> {
 pub fn show_in_text_view(view: &SpecView<'_>) -> bool {
     // Archived specs are never part of the attention-list view; they
     // are surfaced solely because `--include-archive` opted them in.
-    // See SPEC-0042 REQ-007.
     if view.archived {
         return false;
     }
@@ -390,7 +388,7 @@ pub fn resolve_specs<'a>(
             // Archived specs are always-shown when present in the
             // report (their presence already implies the caller passed
             // `--include-archive`) and never count toward the hidden
-            // active-spec footer. See SPEC-0042 REQ-007.
+            // active-spec footer.
             let active_total = report.specs.iter().filter(|v| !v.archived).count();
             let shown: Vec<&SpecView<'_>> = report
                 .specs

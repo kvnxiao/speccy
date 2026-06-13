@@ -53,7 +53,7 @@ enum Command {
         /// Also include specs under `.speccy/archive/` in the scan.
         /// Archived specs never participate in the attention-list
         /// filter; they are surfaced solely because this flag opts
-        /// them in. Independent of `--all`. See SPEC-0042 REQ-007.
+        /// them in. Independent of `--all`.
         #[arg(long)]
         include_archive: bool,
         /// Emit JSON envelope (`schema_version = 1`).
@@ -195,7 +195,7 @@ enum JournalCommand {
     /// Append one validated block to a journal.
     ///
     /// Reads the block body from stdin and appends exactly one block to the
-    /// journal the block type implies (DEC-004): a task block type
+    /// journal the block type implies: a task block type
     /// (`implementer` / `review` / `blockers`) routes a task selector to
     /// `<spec-dir>/journal/<task-id>.md`; a vet block type (`drift-review` /
     /// `holistic-fix` / `simplifier-scan` / `simplifier-apply` / `gate`)
@@ -229,7 +229,7 @@ enum JournalCommand {
     },
     /// Show a journal's frontmatter and blocks, filtered.
     ///
-    /// Parses the resolved journal (DEC-004: a task selector resolves
+    /// Parses the resolved journal (a task selector resolves
     /// `<spec-dir>/journal/<task-id>.md`; a bare `SPEC-NNNN` resolves
     /// `<spec-dir>/journal/VET.md`) and emits the blocks that survive the
     /// three conjunctive filters. `--json` toggles representation, never
@@ -274,7 +274,7 @@ fn parse_round_filter(raw: &str) -> Result<speccy_cli::journal_show::RoundFilter
 /// clap value parser for `--block`: accepts the three task-journal block
 /// types and the five vet-journal block types, rejecting any other value at
 /// argument-parse time. The returned [`JournalBlock`] carries which journal
-/// the block targets (DEC-004).
+/// the block targets.
 fn parse_journal_block(raw: &str) -> Result<speccy_cli::journal::JournalBlock, String> {
     use speccy_cli::journal::JournalBlock;
     use speccy_core::parse::TaskBlockKind;
@@ -301,8 +301,7 @@ fn main() -> ExitCode {
     ExitCode::from(dispatch(cli.command))
 }
 
-/// Initialize the process-wide `tracing` subscriber exactly once
-/// (SPEC-0058 REQ-005 / DEC-005).
+/// Initialize the process-wide `tracing` subscriber exactly once.
 ///
 /// Diagnostics are written to **stderr** so the stable stdout / JSON
 /// command-output contract is unaffected. The level is governed solely by
@@ -330,7 +329,7 @@ fn init_tracing() {
     // binary version. It is below the default `warn` level, so a normal
     // invocation never sees it; under `RUST_LOG=trace` it is emitted to
     // stderr, where it proves the stdout / JSON contract holds even with a
-    // diagnostic in flight (SPEC-0058 CHK-008) — and would corrupt stdout
+    // diagnostic in flight — and would corrupt stdout
     // were the subscriber ever miswired to it.
     tracing::trace!(version = env!("CARGO_PKG_VERSION"), "speccy starting");
 }
@@ -514,7 +513,7 @@ fn run_archive(spec_id: String, reason: Option<String>, force: bool, json: bool)
     match result {
         Ok(outcome) => {
             // Emit one warning line per orphan candidate to stderr, in
-            // both text and JSON modes. SPEC-0042 REQ-008 / CHK-020.
+            // both text and JSON modes.
             for orphan in &outcome.orphan_warnings {
                 eprintln!(
                     "warning: archiving {archiving} will orphan {orphan} ({orphan} has status: superseded and no other active spec declares supersedes: [{orphan}]; SPC-006 will fire on {orphan} after the move).",
@@ -700,7 +699,7 @@ fn run_context(selector: String, json: bool) -> u8 {
     match result {
         Ok(()) => 0,
         // Route selector failures through the shared helper so the
-        // diagnostic class matches `speccy check` (SPEC-0056 REQ-001).
+        // diagnostic class matches `speccy check`.
         Err(ContextError::TaskLookup(e)) => report_lookup_error("context", "", &e),
         Err(e) => {
             eprintln!("speccy context: {e}");

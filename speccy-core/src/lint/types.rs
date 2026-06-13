@@ -123,7 +123,7 @@ pub struct Workspace<'a> {
     /// Every spec directory discovered under `.speccy/specs/`, parsed.
     pub specs: &'a [ParsedSpec],
     /// Inverse `supersedes` relation. Computed once per workspace scan
-    /// (typically by SPEC-0004 `status`).
+    /// (typically by the `status` command).
     pub supersession: &'a SupersessionIndex,
 }
 

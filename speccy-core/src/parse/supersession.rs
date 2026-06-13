@@ -2,8 +2,7 @@
 //!
 //! Computes the inverse of every SPEC.md's `frontmatter.supersedes` so
 //! consumers can answer "which specs replace SPEC-X?" without
-//! re-scanning every file. See
-//! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-008.
+//! re-scanning every file.
 
 use crate::parse::SpecMd;
 use crate::parse::spec_md::SpecStatus;
@@ -27,8 +26,6 @@ use std::collections::BTreeSet;
 ///
 /// Returns an empty `Vec` when `archiving` has an empty `supersedes`
 /// list, is absent from the active set, or no candidate matches.
-///
-/// See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-008.
 #[must_use = "the returned list drives the archive warning output"]
 pub fn orphan_candidates_on_archive(active: &[&SpecMd], archiving: &str) -> Vec<String> {
     // Locate the archiving spec in the active set; if absent, no
@@ -76,7 +73,7 @@ pub struct SupersessionIndex {
     /// `supersedes: [Y]`, in declared order across the input slice.
     by_target: BTreeMap<String, Vec<String>>,
     /// IDs referenced via `supersedes` that are absent from the input
-    /// slice. Used by SPEC-0003 lint without re-scanning.
+    /// slice. Used by the dangling-reference lint without re-scanning.
     dangling: Vec<String>,
 }
 

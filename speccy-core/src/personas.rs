@@ -4,8 +4,8 @@
 //! ([`ALL`][`ALL`]`[..5]` = `business`, `tests`, `security`, `style`,
 //! `correctness`) plus two off-by-default personas (`architecture`,
 //! `docs`). Adding a new persona is a single-line change to [`ALL`];
-//! SPEC-0007 consumes `&ALL[..5]` as its `DEFAULT_PERSONAS`, so the two
-//! lists are mechanically derived from one source.
+//! the default persona set consumes `&ALL[..5]` as its `DEFAULT_PERSONAS`,
+//! so the two lists are mechanically derived from one source.
 //!
 //! Persona body content lives in
 //! `resources/modules/personas/reviewer-<name>.md` and is shipped to
@@ -17,16 +17,14 @@
 //! The host loads that file as the sub-agent's system context when
 //! `speccy-review` spawns it. Host-native files are the sole canonical
 //! persona surface.
-//!
-//! See `.speccy/specs/0009-review-command/SPEC.md` REQ-001 / REQ-002.
 
 /// All reviewer personas shipped with Speccy, in declared order.
 ///
 /// The first five entries are the **default fan-out** consumed by
-/// SPEC-0007 (`speccy next --kind review`); the trailing two
+/// `speccy next --kind review`; the trailing two
 /// (`architecture`, `docs`) are off-by-default and only run when a
-/// reviewer explicitly passes `--persona`. SPEC-0007 must reference
-/// `&ALL[..5]` so both lists evolve together.
+/// reviewer explicitly passes `--persona`. The default fan-out must
+/// reference `&ALL[..5]` so both lists evolve together.
 pub const ALL: &[&str] = &[
     "business",
     "tests",

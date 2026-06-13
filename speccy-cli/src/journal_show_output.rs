@@ -1,9 +1,9 @@
-//! Text and JSON renderers for `speccy journal show` (SPEC-0055 REQ-006).
+//! Text and JSON renderers for `speccy journal show`.
 //!
 //! `speccy journal show <selector>` parses the resolved journal — a task
 //! selector resolves `<spec-dir>/journal/<task-id>.md` via the per-task
 //! `journal_xml` parser, a bare `SPEC-NNNN` selector resolves
-//! `<spec-dir>/journal/VET.md` via the `vet_xml` parser (DEC-004) — applies
+//! `<spec-dir>/journal/VET.md` via the `vet_xml` parser — applies
 //! the three conjunctive filters (`--round`, `--verdict`, `--block`), and
 //! emits the surviving blocks. `--json` toggles representation, never
 //! content: the same filtered blocks render either as a schema-versioned
@@ -24,7 +24,7 @@ use speccy_core::parse::VetBlock;
 use speccy_core::parse::VetDoc;
 
 /// The resolved-and-filtered view of a journal, ready to render in either
-/// representation. One variant per journal kind (DEC-004).
+/// representation. One variant per journal kind.
 #[derive(Debug, Clone)]
 pub enum FilteredJournal {
     /// A per-task journal (`journal/<task-id>.md`).
@@ -143,8 +143,8 @@ pub struct JsonJournalBlock {
 }
 
 /// The attributes-only projection of one per-task journal block: the same
-/// attribute fields as [`JsonJournalBlock`] with **no `body` field at all**
-/// (SPEC-0060 REQ-002 / DEC-004). Used by `speccy context`'s
+/// attribute fields as [`JsonJournalBlock`] with **no `body` field at all**.
+/// Used by `speccy context`'s
 /// `journal.prior_rounds` index so within-task history stays visible without
 /// paying for its prose.
 ///
@@ -255,9 +255,9 @@ pub enum JournalShowJson {
 
 /// Project one parsed [`JournalEntry`] into its flat [`JsonJournalBlock`]
 /// JSON shape. Shared so `speccy context`'s inlined-journal section
-/// (SPEC-0056 REQ-004) reuses this exact mapping rather than re-deriving a
-/// parallel journal-to-JSON projection — the same anti-drift discipline the
-/// SPEC applies to `check`/`context`.
+/// reuses this exact mapping rather than re-deriving a
+/// parallel journal-to-JSON projection — the same anti-drift discipline
+/// applied to `check`/`context`.
 #[must_use = "the projected block is the journal section of the bundle / show envelope"]
 pub fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
     match entry {
@@ -309,7 +309,7 @@ pub fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
 
 /// Project one parsed [`JournalEntry`] into its attributes-only
 /// [`JsonJournalBlockAttrs`] shape — the same attribute mapping as
-/// [`to_json_journal_block`] minus the `body` (SPEC-0060 REQ-002 / DEC-004).
+/// [`to_json_journal_block`] minus the `body`.
 /// Mirrors the full-block projection so the two cannot drift in which
 /// optionals each block type carries.
 #[must_use = "the projected attrs are an entry of the bundle's prior-rounds index"]

@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Regression lock for SPEC-0057 T-004 / REQ-006 (CHK-009).
+//! Regression lock for the parsed-document `raw` field retention invariant.
 //!
 //! The `XML-001` foreign-tag-balance lint reads each parsed document's
 //! full raw source from its `raw: String` field. These tests pin that the

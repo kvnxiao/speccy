@@ -5,8 +5,7 @@
 //! and the element view from [`SpecDoc`] should agree on the same
 //! REQ-ID set.
 //!
-//! Pure, deterministic, idempotent. See
-//! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-006.
+//! Pure, deterministic, idempotent.
 //!
 //! # Workspace-load cross-reference validation
 //!
@@ -74,7 +73,7 @@ pub fn cross_ref(spec: &SpecMd, doc: &SpecDoc) -> CrossRef {
     }
 }
 
-/// SPEC-0022 cross-reference validation between SPEC, TASKS, and REPORT.
+/// Cross-reference validation between SPEC, TASKS, and REPORT.
 ///
 /// Surfaces four classes of drift as [`ParseError`] diagnostics:
 ///

@@ -2,16 +2,13 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation"
 )]
-//! SPEC-0057 integration tests for the XML-001 balance lint. T-002 covers
-//! the parsed-document artifacts (SPEC.md / TASKS.md / REPORT.md); T-003
-//! covers the on-demand per-task `journal/T-NNN.md` files.
+//! Integration tests for the XML-001 balance lint, across both the
+//! parsed-document artifacts (SPEC.md / TASKS.md / REPORT.md) and the
+//! on-demand per-task `journal/T-NNN.md` files.
 //!
-//! Scenario coverage is drawn directly from the tasks' `<task-scenarios>`
-//! blocks: T-002 covers CHK-001 … CHK-006, and T-003 adds CHK-007 (the
-//! journal-coverage scenarios). Fixtures live under tempdirs — never the
-//! real `.speccy/specs/` tree. The CHK-008 verify-exit scenario lives in
-//! `speccy-cli/tests/verify.rs` because it exercises the CLI exit-code
-//! path and the in-progress demotion gate.
+//! Fixtures live under tempdirs — never the real `.speccy/specs/` tree.
+//! The verify-exit scenario lives in `speccy-cli/tests/verify.rs` because
+//! it exercises the CLI exit-code path and the in-progress demotion gate.
 
 use camino::Utf8PathBuf;
 use speccy_core::lint::Diagnostic;
@@ -100,7 +97,7 @@ fn xml_001(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
     diags.iter().filter(|d| d.code == "XML-001").collect()
 }
 
-/// CHK-001: a TASKS.md ending in two bare orphan closes (`</content>` then
+/// A TASKS.md ending in two bare orphan closes (`</content>` then
 /// `</invoke>`) with no matching opens fires exactly two XML-001
 /// diagnostics, one per orphan close line, each naming that TASKS.md.
 #[test]
@@ -127,7 +124,7 @@ fn xml_001_fires_per_orphan_close_in_tasks_md() -> TestResult {
     Ok(())
 }
 
-/// CHK-002: a foreign non-void open on its own line with no matching close
+/// A foreign non-void open on its own line with no matching close
 /// fires exactly one XML-001 naming that open tag's line.
 #[test]
 fn xml_001_fires_for_dangling_non_void_open() -> TestResult {
@@ -152,7 +149,7 @@ fn xml_001_fires_for_dangling_non_void_open() -> TestResult {
     Ok(())
 }
 
-/// CHK-003: a balanced foreign pair (`<details>` … `</details>`) produces
+/// A balanced foreign pair (`<details>` … `</details>`) produces
 /// no XML-001.
 #[test]
 fn xml_001_silent_on_balanced_foreign_pair() -> TestResult {
@@ -165,9 +162,9 @@ fn xml_001_silent_on_balanced_foreign_pair() -> TestResult {
     Ok(())
 }
 
-/// CHK-004: a lone void-element open (`<br>`) fires no XML-001, while a
+/// A lone void-element open (`<br>`) fires no XML-001, while a
 /// lone non-void foreign open fires exactly one — the exemption is scoped
-/// to the void set (REQ-002).
+/// to the void set.
 #[test]
 fn xml_001_exempts_void_open_but_not_non_void() -> TestResult {
     let void_dir = make_workspace("<br>\n", CLEAN_TASK, None)?;
@@ -187,9 +184,9 @@ fn xml_001_exempts_void_open_but_not_non_void() -> TestResult {
     Ok(())
 }
 
-/// CHK-005: an orphan foreign close that sits only inside a fenced code
+/// An orphan foreign close that sits only inside a fenced code
 /// block fires no XML-001; a foreign close outside any fence still fires
-/// regardless of fenced occurrences of the same name (REQ-003).
+/// regardless of fenced occurrences of the same name.
 #[test]
 fn xml_001_exempts_fenced_orphan_close() -> TestResult {
     // Orphan close lives only inside a fence -> no fire.
@@ -215,10 +212,9 @@ fn xml_001_exempts_fenced_orphan_close() -> TestResult {
     Ok(())
 }
 
-/// CHK-006: a spec whose SPEC.md, TASKS.md, and REPORT.md each carry
+/// A spec whose SPEC.md, TASKS.md, and REPORT.md each carry
 /// exactly one dangling foreign tag fires exactly three XML-001
-/// diagnostics, one per artifact, each with the correct file path
-/// (REQ-004).
+/// diagnostics, one per artifact, each with the correct file path.
 #[test]
 fn xml_001_covers_all_three_parsed_artifacts() -> TestResult {
     let tasks = format!("{CLEAN_TASK}\n</orphantask>\n");
@@ -249,9 +245,9 @@ fn xml_001_covers_all_three_parsed_artifacts() -> TestResult {
 /// `CLEAN_TASK` id, so the lint derives `journal/T-001.md`.
 const JOURNAL_MD: &str = "---\nspec: SPEC-0042\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\n__BODY__\n</implementer>\n";
 
-/// CHK-007: a task whose `journal/T-001.md` exists and carries a dangling
+/// A task whose `journal/T-001.md` exists and carries a dangling
 /// foreign close fires exactly one XML-001 whose file is that journal file
-/// and whose line is the orphan tag's line (REQ-004).
+/// and whose line is the orphan tag's line.
 #[test]
 fn xml_001_fires_for_dangling_tag_in_journal() -> TestResult {
     let dir = make_workspace("", CLEAN_TASK, None)?;
@@ -284,7 +280,7 @@ fn xml_001_fires_for_dangling_tag_in_journal() -> TestResult {
     Ok(())
 }
 
-/// The journal half of REQ-004's silent case: a journal file with only
+/// The journal half of the silent case: a journal file with only
 /// balanced foreign tags (and a missing journal for the next task) fires
 /// no XML-001 for any journal file.
 #[test]

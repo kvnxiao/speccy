@@ -7,7 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Integration tests for the resolved-path fields in `speccy status --json`
-//! and `speccy next --json` (SPEC-0033 REQ-005, CHK-009, CHK-010).
+//! and `speccy next --json`.
 
 mod common;
 
@@ -24,7 +24,7 @@ fn tasks_md_xml_with_pending(spec_id: &str) -> String {
     )
 }
 
-/// CHK-009: `speccy status SPEC-0031 --json` includes `spec_md_path`,
+/// `speccy status SPEC-0031 --json` includes `spec_md_path`,
 /// `tasks_md_path`, and `mission_md_path: null` for a flat spec.
 /// The `schema_version` field must equal 1.
 #[test]
@@ -90,7 +90,7 @@ fn chk009_status_json_carries_resolved_paths_flat_spec() -> TestResult {
     Ok(())
 }
 
-/// CHK-009 supplement: `tasks_md_path` is null when TASKS.md is absent.
+/// `tasks_md_path` is null when TASKS.md is absent.
 #[test]
 fn status_json_tasks_md_path_null_when_absent() -> TestResult {
     let ws = Workspace::new()?;
@@ -125,7 +125,7 @@ fn status_json_tasks_md_path_null_when_absent() -> TestResult {
     Ok(())
 }
 
-/// CHK-010: `speccy next SPEC-0040 --json` carries `mission_md_path`
+/// `speccy next SPEC-0040 --json` carries `mission_md_path`
 /// equal to `.speccy/specs/auth/MISSION.md` when the spec lives under a
 /// mission folder and MISSION.md is present there.
 #[test]
@@ -178,7 +178,7 @@ fn chk010_next_json_carries_mission_md_path_for_mission_spec() -> TestResult {
     Ok(())
 }
 
-/// CHK-010 supplement: `mission_md_path` is null in `speccy next` per-spec
+/// `mission_md_path` is null in `speccy next` per-spec
 /// JSON when the spec does NOT live under a mission folder.
 #[test]
 fn next_json_mission_md_path_null_for_flat_spec() -> TestResult {

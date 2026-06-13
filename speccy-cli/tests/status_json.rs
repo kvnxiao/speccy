@@ -6,7 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Tests for the JSON output contract. Covers SPEC-0004 CHK-009.
+//! Tests for the JSON output contract.
 
 mod common;
 
@@ -69,7 +69,7 @@ fn contract() -> TestResult {
         .expect("specs must be an array");
     assert_eq!(specs.len(), 2);
 
-    // Each entry has the required fields per SPEC.md REQ-007.
+    // Each entry has the required fields.
     for spec in specs {
         for key in [
             "id",

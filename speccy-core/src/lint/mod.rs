@@ -35,17 +35,17 @@ pub fn run(workspace: &Workspace<'_>) -> Vec<Diagnostic> {
         rules::tsk::lint(spec, &mut diagnostics);
         rules::qst::lint(spec, &mut diagnostics);
         rules::rpt::lint(spec, &mut diagnostics);
-        // SPEC-0037 REQ-002: JNL-* validates per-task journal files
+        // JNL-* validates per-task journal files
         // gated by task state. The activation gate (skip when
         // state is `in-progress` or `in-review`) lives inside the
         // rule itself; per-task state is read from the parsed
         // TasksDoc.
         rules::jnl::lint(spec, &mut diagnostics);
-        // SPEC-0055 REQ-007: VET-* validates `journal/VET.md` against the
+        // VET-* validates `journal/VET.md` against the
         // frozen vet grammar. The lints run only when the file exists;
         // the existence gate lives inside the rule.
         rules::vet::lint(spec, &mut diagnostics);
-        // SPEC-0057: XML-* flags unbalanced foreign (non-whitelisted) XML
+        // XML-* flags unbalanced foreign (non-whitelisted) XML
         // tags leaked into the parsed SPEC.md / TASKS.md / REPORT.md
         // artifacts. Balance is name-scoped and fence-aware; the rule reads
         // the raw source already retained on each parsed document.

@@ -6,10 +6,8 @@
     clippy::panic_in_result_fn,
     reason = "assert!/assert_eq! inside TestResult-returning tests is idiomatic"
 )]
-//! Tests for SPEC-0033 T-009: pinned phase-worker agent files and thin
+//! Tests for the pinned phase-worker agent files and thin
 //! SKILL.md stubs ejected at `speccy init`.
-//!
-//! Covers CHK-017 and the T-009 task scenarios.
 
 use assert_cmd::Command;
 use camino::Utf8PathBuf;
@@ -77,7 +75,7 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
     let fx = make_fixture("t009-skill-stub-thin")?;
     run_init_claude(&fx.root, &[]).success();
 
-    // SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+    // `speccy-work` migrated from
     // stub-delegate to pure-include, so its SKILL.md body now expands
     // the full `modules/skills/speccy-work.md` body and no longer
     // satisfies the ≤10-line stub cap. Stub-delegate phases retain
@@ -204,7 +202,7 @@ fn phase_worker_agent_has_full_body_with_no_minijinja_markup() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// Scenario 3 (CHK-017): Codex path — thin SKILL.md stub names the TOML
+// Scenario 3: Codex path — thin SKILL.md stub names the TOML
 // agent file; TOML has model and model_reasoning_effort at top level.
 // -----------------------------------------------------------------------
 
@@ -213,7 +211,7 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
     let fx = make_fixture("chk017-codex-stub")?;
     run_init_codex(&fx.root, &[]).success();
 
-    // SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated to
+    // `speccy-work` migrated to
     // pure-include shape; the ≤10-line cap no longer applies to it.
     // The toml-pointer and `/agent` invocation references are still
     // present in the pure-include body (the module opens with the
@@ -314,7 +312,7 @@ fn chk017_codex_toml_has_full_developer_instructions() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// Scenario 4 (CHK-022 extension): Confirm the three phase-worker agents
+// Scenario 4: Confirm the three phase-worker agents
 // ARE created and that the two interactive-skill agents are NOT.
 // -----------------------------------------------------------------------
 

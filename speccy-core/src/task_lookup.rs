@@ -8,9 +8,8 @@
 //! - **Qualified** `SPEC-NNNN/T-NNN` — scopes the lookup to one spec. Bypasses
 //!   ambiguity entirely.
 //!
-//! Shared by SPEC-0008 (`speccy implement`) and SPEC-0009 (`speccy
-//! review`) so the lookup logic lives in one place. See
-//! `.speccy/specs/0008-implement-command/SPEC.md` DEC-001.
+//! Shared by `speccy implement` and `speccy review` so the lookup logic
+//! lives in one place.
 
 use crate::parse::SpecDoc;
 use crate::parse::SpecMd;

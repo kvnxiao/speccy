@@ -5,7 +5,7 @@
 //! - [`repo_sha`] — returns `HEAD`'s SHA for the JSON status contract.
 //! - [`suggested_diff_command`] — returns a `git diff` command string in
 //!   merge-base form against the repository's default branch, for the `speccy
-//!   context` bundle (SPEC-0056 REQ-005).
+//!   context` bundle.
 //!
 //! Treats git unavailability as a non-fatal lookup: shell-out failures
 //! degrade rather than propagating an error — `repo_sha` to the empty
@@ -50,8 +50,7 @@ pub fn repo_sha(cwd: &Utf8Path) -> String {
 }
 
 /// Build the suggested `git diff` command string for the `speccy context`
-/// bundle, in merge-base form against the repository's default branch
-/// (SPEC-0056 REQ-005).
+/// bundle, in merge-base form against the repository's default branch.
 ///
 /// The returned string is runnable as-is from the repo root:
 /// `git diff <base>...HEAD` where `<base>` is the resolved default branch

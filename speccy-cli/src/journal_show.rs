@@ -1,9 +1,9 @@
 //! `speccy journal show <selector> [--json] [--round latest|N]
-//! [--verdict V] [--block TYPE]` command logic (SPEC-0055 REQ-006).
+//! [--verdict V] [--block TYPE]` command logic.
 //!
 //! Parses the resolved journal and emits its frontmatter plus the blocks
-//! that survive the three conjunctive filters. Target inference follows
-//! DEC-004, identical to `journal append`: a task selector
+//! that survive the three conjunctive filters. Target inference is
+//! identical to `journal append`: a task selector
 //! (`T-NNN` / `SPEC-NNNN/T-NNN`) resolves the per-task journal at
 //! `<spec-dir>/journal/<task-id>.md` (parsed by `journal_xml`); a bare
 //! `SPEC-NNNN` selector resolves `<spec-dir>/journal/VET.md` (parsed
@@ -126,7 +126,7 @@ pub enum ShowError {
 /// Run `speccy journal show` from `cwd`, writing the rendered output to
 /// `out`.
 ///
-/// Routes by selector shape (DEC-004): a bare `SPEC-NNNN` resolves VET.md;
+/// Routes by selector shape: a bare `SPEC-NNNN` resolves VET.md;
 /// any other selector is parsed as a task reference and resolves the
 /// per-task journal. Parses the resolved file, applies the conjunctive
 /// filters, and writes the JSON envelope (`--json`) or the text form.

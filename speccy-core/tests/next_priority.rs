@@ -7,9 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Priority logic tests for `speccy_core::next::compute_for_spec` and
-//! `speccy_core::next::compute_workspace`. Covers SPEC-0007 CHK-001,
-//! CHK-002, CHK-005, and CHK-006 (the CHK-003/CHK-004 `--kind` filter
-//! tests were removed in SPEC-0033 T-010 when `KindFilter` was deleted).
+//! `speccy_core::next::compute_workspace`.
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -108,7 +106,7 @@ fn write_spec(
     Ok(dir)
 }
 
-// -- CHK-001 ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Within a single spec, in-review beats pending (priority rule 2 > 3).
 
 #[test]
@@ -156,7 +154,7 @@ fn chk001_in_review_beats_pending_within_spec() -> TestResult {
     Ok(())
 }
 
-// -- CHK-002 ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Workspace ordering: the lowest spec-ID entry is first in compute_workspace.
 
 #[test]
@@ -230,7 +228,7 @@ fn chk002_workspace_entries_ordered_by_spec_id() -> TestResult {
 /// Build a single-invocation VET.md for `spec_id` whose terminal `<gate>`
 /// carries `verdict` and `tasks_hash`, composed from the exported
 /// production renderers so the fixture matches the real grammar by
-/// construction (SPEC-0061 REQ-004 / DEC-004). This is the `speccy-core`
+/// construction. This is the `speccy-core`
 /// test crate's renderer-backed helper, the sibling of the `speccy-cli`
 /// one; Rust integration-test binaries cannot share a module, so each crate
 /// carries its own helper over the same renderers.
@@ -256,7 +254,7 @@ fn render_vet_md(spec_id: &str, verdict: &str, tasks_hash: &str) -> String {
 /// `inline_hash`. Composed from the same production renderers as
 /// [`render_vet_md`], so the document is valid by construction; the
 /// inline gate lives inside the terminal block's body text and must never
-/// surface as the document's terminal gate (SPEC-0061 REQ-001 / REQ-005).
+/// surface as the document's terminal gate.
 fn render_spoof_vet_md(spec_id: &str, inline_hash: &str) -> String {
     let date = "2026-05-22T00:00:00Z";
     let spoof_body = format!(
@@ -302,7 +300,7 @@ fn sha256_hex_of_file(path: &Utf8Path) -> TestResult<String> {
     Ok(const_hex::encode(sha2::Sha256::digest(&bytes)))
 }
 
-// -- SPEC-0061 REQ-004 / CHK-007 --------------------------------------------
+// ---------------------------------------------------------------------------
 // The core crate's renderer-backed helper produces a VET.md that
 // `parse_vet_in_flight` accepts, whose terminal gate carries the given
 // (verdict, tasks_hash).
@@ -334,7 +332,7 @@ fn chk007_core_helper_output_round_trips_through_parser() -> TestResult {
     Ok(())
 }
 
-// -- SPEC-0061 REQ-001 / REQ-005 / CHK-001 / CHK-009 ------------------------
+// ---------------------------------------------------------------------------
 // Gate-spoof regression: a valid VET.md whose terminal gate is `failed`
 // but whose body quotes an inline `<gate verdict="passed">` with a
 // matching tasks_hash must resolve to Vet, never Ship. The byte-scanner
@@ -372,7 +370,7 @@ fn vet_when_terminal_gate_failed_despite_inline_passing_gate() -> TestResult {
     Ok(())
 }
 
-// -- SPEC-0041 REQ-001/REQ-002 ----------------------------------------------
+// ---------------------------------------------------------------------------
 // All tasks completed + no VET.md → Vet.
 
 #[test]
@@ -395,7 +393,7 @@ fn vet_when_all_done_no_vet_md() -> TestResult {
     Ok(())
 }
 
-// -- SPEC-0061 REQ-001 / CHK-003 --------------------------------------------
+// ---------------------------------------------------------------------------
 // All tasks completed + a VET.md that is *present but unparseable* (missing
 // the required frontmatter) → Vet. This drives the parse-failure branch of
 // `vet_gate_is_fresh_pass` (`let Ok(doc) = parse_vet_in_flight(...) else {
@@ -403,7 +401,7 @@ fn vet_when_all_done_no_vet_md() -> TestResult {
 // `vet_when_all_done_no_vet_md` exercises and from the successful-parse
 // non-fresh-gate branches the failed/stale tests exercise. The fixture is
 // hand-rolled rather than built from the renderer-backed helper because the
-// helper produces valid, gate-terminated VET.md by construction (DEC-005);
+// helper produces valid, gate-terminated VET.md by construction;
 // an invalid fixture is legitimately outside it.
 
 #[test]
@@ -546,7 +544,7 @@ fn none_when_vet_passes_fresh_and_report_present() -> TestResult {
     Ok(())
 }
 
-// -- SPEC-0043 REQ-002 ------------------------------------------------------
+// ---------------------------------------------------------------------------
 // REPORT.md presence is terminal regardless of journal/VET.md state.
 
 // All tasks completed + REPORT.md present + no VET.md → None.
@@ -655,7 +653,7 @@ fn review_wins_over_fresh_pass_vet() -> TestResult {
     Ok(())
 }
 
-// -- CHK-005 ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // All tasks completed + fresh-pass VET.md + no REPORT.md → Ship; + REPORT.md
 // → omit from listing.
 
@@ -733,7 +731,7 @@ fn chk005_ship_when_all_done_no_report() -> TestResult {
     Ok(())
 }
 
-// -- CHK-006 ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Edge cases: empty workspace, all claimed.
 
 #[test]

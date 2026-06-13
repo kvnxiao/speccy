@@ -62,7 +62,7 @@ const WHITELIST_NAMES: &[&str] = &[
 /// three spaces of indent) is a run of >=3 backticks or >=3 tildes,
 /// optionally followed by an info string. The matching close has the same
 /// fence character with a run length >= the opener and no info string.
-/// This is the same line-aware rule the SPEC-0020 raw XML element scanner
+/// This is the same line-aware rule the raw XML element scanner
 /// already uses to decide which lines carry structure.
 #[derive(Default)]
 struct FenceTracker {

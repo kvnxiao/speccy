@@ -8,9 +8,8 @@
 )]
 //! Text-output tests for `speccy next` (no `--json`).
 //!
-//! Covers SPEC-0007 CHK-009 (one line per active spec, exit code 0) and
-//! SPEC-0033 REQ-004 (derived action kinds; workspace and per-spec text
-//! format).
+//! Covers one line per active spec (exit code 0) and the derived action
+//! kinds in workspace and per-spec text format.
 
 mod common;
 
@@ -43,7 +42,7 @@ fn render_text(ws: &Workspace) -> Result<String, Box<dyn std::error::Error>> {
     Ok(String::from_utf8(buf)?)
 }
 
-// -- CHK-009 ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 #[test]
 fn one_line_per_active_spec() -> TestResult {
@@ -102,7 +101,7 @@ fn one_line_per_active_spec() -> TestResult {
     );
 
     // vet: all done + no VET.md (the new lifecycle step between
-    // completed tasks and ship — SPEC-0041 REQ-001/REQ-002).
+    // completed tasks and ship).
     let ws4 = Workspace::new()?;
     let tasks_xml4 = task_xml("T-001", "completed");
     write_spec(
@@ -221,7 +220,7 @@ fn per_spec_form_text_output() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0043 REQ-003: CLI exit code 2 for terminal per-spec resolutions.
+// CLI exit code 2 for terminal per-spec resolutions.
 // ---------------------------------------------------------------------------
 
 #[test]
