@@ -307,8 +307,8 @@ fn main() -> ExitCode {
 /// command-output contract is unaffected. The level is governed solely by
 /// the standard `tracing-subscriber` environment filter (`RUST_LOG`),
 /// defaulting to `warn` when unset — no Speccy-specific configuration knob
-/// is introduced. `tracing` observes behavior; it never drives control flow
-/// (Core principle 2). A failed install is tolerated: a missing diagnostic
+/// is introduced. `tracing` observes behavior; it never drives control flow.
+/// A failed install is tolerated: a missing diagnostic
 /// channel must never abort the command, so `try_init`'s "already
 /// initialized" error is intentionally discarded.
 fn init_tracing() {
