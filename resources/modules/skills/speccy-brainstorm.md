@@ -218,7 +218,11 @@ not invent a new SPEC.md section for brainstorm output:
   record, promote it to a `<decision>` element block under
   `### Decisions` (DEC-NNN) instead.
 
-This recipe does not loop. After invoking
-`{{ cmd_prefix }}speccy-plan` (new SPEC) or
-`{{ cmd_prefix }}speccy-amend` (existing SPEC), the next step is
-`{{ cmd_prefix }}speccy-decompose SPEC-NNNN` (decompose into TASKS.md).
+## Exit
+
+Brainstorm writes nothing to disk — its output is the framing the user
+approved, which flows into SPEC.md via the routing list above when the writing
+skill runs. The skill ends by invoking `{{ cmd_prefix }}speccy-plan` (new SPEC)
+or `{{ cmd_prefix }}speccy-amend` (existing SPEC); the step after that is
+`{{ cmd_prefix }}speccy-decompose SPEC-NNNN` (decompose into TASKS.md). Single
+pass, no loop.

@@ -120,7 +120,7 @@ The placeholders below are illustrative — substitute your own values.
   the argument layer, not with an ad-hoc check inside the command body.
 - Corrective rule: reach for the existing range-value-parser helper before
   writing a fresh bounds check; keep validation at the parse boundary.
-- Provenance: SPEC-0042 / T-003 (0042-example-slug), reviewer-style pass.
+- Provenance: SPEC-0042 / T-001 (0042-widget-render-timeout), reviewer-style pass.
 ```
 
 
@@ -168,14 +168,18 @@ The placeholders below are illustrative — substitute your own values.
    makes the SPEC implemented, so the status flip belongs in the
    same PR, not in a follow-up. The status flip is hash-neutral
    because `status` is excluded from `spec_hash_at_generation`, so
-   TASKS.md does not need a hash refresh and `TSK-003` cannot fire —
-   no post-flip re-check is needed.
+   TASKS.md does not need a hash refresh and the spec-hash-mismatch
+   lint cannot fire — no post-flip re-check is needed.
 5. Run the CI gate locally as a dry-run *after* the status flip so
    verify reads the post-ship tree:
 
    ```bash
    speccy verify
    ```
+
+   → expected: exit 0. A non-zero exit means the proof shape is broken
+   (uncovered requirement, malformed task state, parser-rejected journal
+   element) — stop and fix before opening the PR.
 
 6. Commit SPEC.md, TASKS.md, REPORT.md, the `.speccy/MEMORY.md`
    mutation from the retro (step 3), and the code changes from the
@@ -219,4 +223,10 @@ The placeholders below are illustrative — substitute your own values.
    The status flip in step 4 lands in the same PR — no follow-up
    commit needed after merge.
 
-This recipe does not loop.
+## Exit
+
+REPORT.md is written, the SPEC's frontmatter status is flipped to
+`implemented`, the loop's uncommitted work is bundled into one atomic ship
+commit, and a PR is opened (or the existing branch PR updated by push).
+`speccy verify` passed as the CI dry-run. Single pass, no loop — the SPEC has
+shipped; run `speccy archive SPEC-NNNN` if it should leave the active tree.

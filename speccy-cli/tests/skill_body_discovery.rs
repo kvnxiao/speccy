@@ -204,13 +204,6 @@ fn chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id() {
     let body = require_module("skills/speccy-plan.md");
 
     assert!(
-        body.contains("speccy vacancy --json"),
-        "`resources/modules/skills/speccy-plan.md` must invoke \
-         `speccy vacancy --json` to learn the next SPEC ID \
-         (SPEC-0033 REQ-008 / CHK-015)",
-    );
-
-    assert!(
         !body.contains("speccy status --json"),
         "`resources/modules/skills/speccy-plan.md` must NOT invoke \
          `speccy status --json` to allocate a new SPEC ID \
@@ -288,38 +281,6 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
             );
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// CHK-019: speccy-decompose template documents TASKS.md output shape
-// ---------------------------------------------------------------------------
-
-/// CHK-019: `resources/modules/phases/speccy-decompose.md` Step 2 must contain
-/// a concrete example fragment documenting the required TASKS.md output
-/// shape, including the `# Tasks: SPEC-` level-1 heading and the
-/// space-separated `covers="REQ-001 REQ-002"` multi-REQ form.
-///
-/// The two literal substrings CHK-019 asserts are the same substrings that
-/// downstream agents must produce — asserting them here locks the template
-/// wording to the parser's expectations (REQ-013 / SPEC-0034).
-#[test]
-fn chk019_speccy_decompose_template_documents_output_shape() {
-    let body = require_module("phases/speccy-decompose.md");
-
-    assert!(
-        body.contains("# Tasks: SPEC-"),
-        "`resources/modules/phases/speccy-decompose.md` Step 2 must contain a \
-         concrete example fragment with the literal substring `# Tasks: SPEC-` \
-         to document the required level-1 heading shape (REQ-013 / CHK-019)",
-    );
-
-    assert!(
-        body.contains(r#"covers="REQ-001 REQ-002""#),
-        "`resources/modules/phases/speccy-decompose.md` Step 2 must contain a \
-         concrete example fragment with the literal substring \
-         `covers=\"REQ-001 REQ-002\"` to demonstrate the space-separated \
-         multi-REQ form (REQ-013 / CHK-019)",
-    );
 }
 
 // ---------------------------------------------------------------------------

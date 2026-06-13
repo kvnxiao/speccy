@@ -11,8 +11,9 @@ then re-records the spec hash.
 
 ## When to use
 
-When `speccy status` reports `TSK-003: spec hash mismatch`, or when the
-user signals that intent has shifted mid-loop. Use this rather than
+When `speccy status` reports a spec-hash mismatch (TASKS.md stale relative to
+SPEC.md), or when the user signals that intent has shifted mid-loop. Use this
+rather than
 manually editing SPEC.md so that the Changelog row and TASKS.md
 reconciliation are not forgotten.
 
@@ -38,7 +39,7 @@ reconciliation are not forgotten.
    SPEC.md diff and appending the Changelog row. Do not re-check after
    applying fixes.
 
-   <!-- Shared self-review core for plan + amend; supersedes SPEC-0034 DEC-001 (lists stabilized → extracted). Brainstorm's pre-check is intentionally separate. -->
+   <!-- Shared self-review core, included by the plan and amend skills. -->
 
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
@@ -155,10 +156,10 @@ byte-identical.
    speccy lock SPEC-NNNN
    ```
 
-6. Re-run `speccy status` to confirm `TSK-003` cleared.
+6. Re-run `speccy status` to confirm the spec-hash mismatch cleared.
 
 7. Branch-guard, then commit the amend's reconcile delta. After the
-   `TSK-003`-clear check in step 6 confirms the SPEC and tasks are back
+   mismatch-clear check in step 6 confirms the SPEC and tasks are back
    in sync, commit this amend's delta so the reconciled artifacts are
    recorded together. The commit covers the spec's `SPEC.md`, the
    reconciled `TASKS.md` **when one exists**, and any per-task journal

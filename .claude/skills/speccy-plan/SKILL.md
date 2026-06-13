@@ -65,7 +65,7 @@ is already agreed.
 3. **Self-review pass.** Run this pass exactly once after writing
    SPEC.md. Do not re-check after applying fixes.
 
-   <!-- Shared self-review core for plan + amend; supersedes SPEC-0034 DEC-001 (lists stabilized → extracted). Brainstorm's pre-check is intentionally separate. -->
+   <!-- Shared self-review core, included by the plan and amend skills. -->
 
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
@@ -359,7 +359,10 @@ fallback string
 `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
 
 
-6. Suggest the next step: `/speccy-decompose SPEC-NNNN` to
-   decompose into `TASKS.md`.
+## Exit
 
-This recipe does not loop.
+`SPEC.md` is written, self-reviewed once, and committed alone on a feature
+branch — `TASKS.md` is `/speccy-decompose`'s commit, not this
+skill's, so the new-spec path lands two commits (one per skill). Single pass,
+no loop. Next step: `/speccy-decompose SPEC-NNNN` to decompose
+into `TASKS.md`.

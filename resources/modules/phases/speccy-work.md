@@ -15,7 +15,7 @@ terminal, the `/loop` skill, or a future orchestrator).
 
 ## When to use
 
-- With a selector (`{{ cmd_prefix }}speccy-work SPEC-NNNN/T-003`):
+- With a selector (`{{ cmd_prefix }}speccy-work SPEC-NNNN/T-NNN`):
   when the next task to implement is already known — e.g., a retry
   after `{{ cmd_prefix }}speccy-review` flipped a task back to
   `state="pending"`.
@@ -48,7 +48,19 @@ incremented round).
 
 ## Steps
 
-**Entry precondition (SPEC-0045 REQ-002, extended by SPEC-0047 REQ-002 / REQ-003):** before any Task dispatch, (i) resolve the target task per step 1, then open the per-task context read with a single `speccy context SPEC-NNNN/T-NNN --json` call (the bundle carries the task entry, its covering requirements and scenarios, the latest-round journal blocks inline with prior rounds as an attributes-only index, the sibling index, the file paths, and a suggested merge-base diff command); (ii) apply the retry-shape rule summarized at step 2 (canonical statement at `{{ speccy_references_path }}/retry-shape.md`) against the bundle's journal section rather than a separate file read, (iii) run `git status --porcelain`. **First-attempt shape** with non-empty stdout exits the skill (surface dirty paths on stderr); empty stdout proceeds with the first-attempt branch (today's SPEC-0045/REQ-002 behaviour). **Retry shape** proceeds with the retry branch regardless of stdout — the dirty paths are the prior pass's WIP that the retry implementer amends in place; no dirty-paths surface is written. If `speccy next --json` then returns `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below rather than the normal implementer flow.
+**Entry precondition.** Before any Task dispatch: resolve the target task
+(step 1), then open its context bundle with a single `speccy context
+SPEC-NNNN/T-NNN --json` call. The bundle carries the task entry, its covering
+requirements and scenarios, the latest-round journal blocks (prior rounds as an
+attributes-only index), the sibling index, the file paths, and a suggested
+merge-base diff command — so the retry-shape classification (step 2) reads the
+bundle's journal section rather than a separate file read. Then apply the
+clean-tree gate:
+
+{% include "modules/references/entry-precondition.md" %}
+
+If `speccy next --json` then reports `next_action.kind == "reconcile"`, dispatch
+the reconcile pass (below) rather than the normal implementer flow.
 
 {% include "modules/references/reconcile-summary.md" %}
 
@@ -57,7 +69,7 @@ incremented round).
 {% set task_kind = "work" %}{% set task_adjective = "implementable" -%}
 {% include "modules/skills/partials/resolve-target-task.md" %}
 
-2. Apply the REQ-001 retry-shape rule summarized immediately below
+2. Apply the retry-shape rule summarized immediately below
    against the journal section of the bundle returned by the
    `speccy context` call in step 1 (no separate journal-file read).
    The rule inspects only that journal content — it makes no further
@@ -97,9 +109,8 @@ incremented round).
    - Flip state to `in-progress` via `speccy task transition
      SPEC-NNNN/T-NNN --to in-progress` and continue through the same
      hygiene gate and `speccy task transition … --to in-review` flip
-     the first-attempt branch uses (the SPEC-0045/REQ-001 hygiene gate
-     runs unchanged). Never edit the `state` attribute in TASKS.md
-     directly.
+     the first-attempt branch uses (the hygiene gate runs unchanged).
+     Never edit the `state` attribute in TASKS.md directly.
    - Append the next `<implementer>` block via `speccy journal
      append` (step 10); the CLI derives and stamps the incremented
      round. The retry-mode `Completed` field describes the amend
@@ -167,7 +178,7 @@ incremented round).
 
    {% include "modules/references/convention-checklist.md" %}
 
-10. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+10. Exit transition. **Hygiene gate.** Before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state` from `in-progress` to `in-review` through the transition
    command — never by editing the `state` attribute in TASKS.md
    directly:

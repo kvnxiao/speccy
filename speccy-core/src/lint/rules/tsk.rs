@@ -177,7 +177,7 @@ fn tsk_003_staleness(
             spec.spec_id.clone(),
             tasks_path.to_path_buf(),
             format!(
-                "TASKS.md has `spec_hash_at_generation: bootstrap-pending`; run `speccy tasks {id} --commit` to record the real sha256",
+                "TASKS.md has `spec_hash_at_generation: bootstrap-pending`; run `speccy lock {id}` to record the real sha256",
                 id = spec
                     .spec_id
                     .clone()

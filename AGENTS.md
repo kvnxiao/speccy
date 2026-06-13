@@ -150,6 +150,58 @@ Rules:
   is prose-enforced via each persona body. Don't add a `tools` field to Codex
   `.toml` wrappers expecting it to be honored.
 
+### Authoring resource prose
+
+Bodies under `resources/modules/**` are pseudocode-in-English, not essays. They
+reload into agent context on every prompt and eject into users' repos, so
+terseness is correctness. Every body — and every `.tmpl` wrapper — follows one
+shape:
+
+1. **Discovery layer (wrapper frontmatter).** `name` is kebab-case and matches
+   the folder; `description` is verb-first and carries both a "Use when …" and
+   a "Do NOT trigger …" clause. This routing metadata is load-bearing — keep it
+   sharp.
+2. **No redundant preamble.** The body opens straight into logic; it does not
+   restate the frontmatter description.
+3. **Numbered phases / logic blocks.** Number phases and sub-number logic
+   blocks. Lead with defensive early-exits so the happy path reads flat; order
+   each block precondition → action → exit transition. No nested `if → if`.
+4. **CLI steps name their success signal.** Where a step's success is not
+   self-evident, append one terse `→ expected: <signal>` clause — one clause,
+   never a paragraph.
+5. **Explicit Exit / Return contract.** Every skill body ends with what it
+   produced (artifact written, state flip, journal append, commit) and where
+   control goes next.
+6. **Progressive disclosure.** Skill and phase bodies stay focused; canonical
+   shapes and long worked examples live under `modules/references/`, pulled in
+   via `{% include %}`. No body inlines a shape a reference owns.
+7. **Examples are concrete worked instances.** The `modules/references/` files
+   carry one coherent worked example — the `SPEC-0042` widget-render-timeout
+   walkthrough — with concrete ids (`REQ-001`, `T-001`, `CHK-001`, `DEC-001`),
+   so `<task id="T-001" covers="REQ-001 REQ-002">` reads as an example, not a
+   blank. Slots, rule variables, command args (`speccy journal show
+   SPEC-NNNN/T-NNN`), and path templates (`.speccy/specs/NNNN-slug/…`) stay
+   placeholders even inside references.
+
+**No artifact-ID provenance outside references.** In every body that is *not* a
+worked-instance reference — skills, phases, personas, partials, shared rule
+files — never cite a real Speccy SPEC/REQ/DEC/task as rationale: an agent in
+another repo has no idea what a concrete id refers to, and the citation invites
+hallucination. Use only the generic placeholders `SPEC-NNNN` / `REQ-NNN` /
+`DEC-NNN` / `T-NNN` / `CHK-NNN`. The `modules/references/` worked instance is
+the sole carve-out (item 7) — concrete `REQ`/`DEC`/`CHK`/`T` ids and the
+whitelisted `SPEC-0042` are allowed there. Two bans hold everywhere, references
+included: any SPEC id other than `SPEC-0042`, and CLI lint codes cited by
+number.
+
+**CLI lint codes describe behavior, not history.** Name what a lint does ("the
+spec-hash-mismatch lint", "the misplaced-journal-element lint"); don't cite its
+code (`TSK-003`, `JNL-001`) — references included.
+
+**Enforced by** `speccy-cli/tests/resource_prose_hygiene.rs`: the ID-ban lint
+over `resources/modules/**`, which carves out the `modules/references/`
+directory for the worked-instance ids per item 7.
+
 ## Authoritative references
 
 Load these when editing files in their scope:
@@ -202,7 +254,11 @@ Before any commit lands, all four must pass:
   in shipped template / reference / skill bodies — they land in other people's
   repos via `speccy init`. Use obviously fictional placeholders (`SPEC-0042`,
   `0042-example-slug`, `acme/widget`, `feature/example-branch`) labeled
-  "illustrative example — substitute your own values." Speccy's own artifacts
+  "illustrative example — substitute your own values." Worked-instance
+  references under `resources/modules/references/` are the one place the
+  concrete `SPEC-0042` artifact-id family (`REQ-001`, `T-001`, `CHK-001`,
+  `DEC-001`, slug `0042-widget-render-timeout`) is load-bearing rather than
+  placeholder — see "Authoring resource prose" item 7. Speccy's own artifacts
   under `.speccy/specs/` are local dogfood evidence and stay Speccy-specific.
 - Hit friction from a stale or wrong instruction in a shipped skill (wrong
   command, missing env var, undocumented step)? Fix the source module under

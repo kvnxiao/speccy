@@ -29,7 +29,7 @@
 - `/speccy-work` — implement one Speccy task per invocation. With
   an optional `SPEC-NNNN/T-NNN` selector, implements that task;
   without one, resolves the next implementable task. Use when the
-  user says "implement T-003" or "work the next task".
+  user says "implement T-NNN" or "work the next task".
 - `/speccy-review` — review one Speccy task per invocation by
   fanning out adversarial multi-persona review (business, tests,
   security, style by default). Passes the task to `completed` or
