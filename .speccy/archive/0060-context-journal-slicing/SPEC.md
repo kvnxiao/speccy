@@ -5,6 +5,8 @@ title: Context bundle journal slicing — latest round inlined in full, prior ro
 status: implemented
 created: 2026-06-11
 supersedes: []
+archived_at: 2026-06-13
+archived_reason: "shipped"
 ---
 
 # SPEC-0060: Context bundle journal slicing — latest round inlined in full, prior rounds as an attributes-only index

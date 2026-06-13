@@ -5,6 +5,8 @@ title: Retire the last hand-rolled tag recognizer — reconcile's recovery offse
 status: implemented
 created: 2026-06-12
 supersedes: []
+archived_at: 2026-06-13
+archived_reason: "shipped"
 ---
 
 # SPEC-0062: Retire the last hand-rolled tag recognizer — reconcile's recovery offset derives from the canonical scanner
