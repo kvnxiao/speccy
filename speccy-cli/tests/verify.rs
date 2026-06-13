@@ -1009,6 +1009,51 @@ fn xml_001_unbalanced_foreign_tag_gates_verify_and_names_location() -> TestResul
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// SPEC-0064 CHK-008: `.speccy/MEMORY.md` is soft guidance — verify reads it
+// for no lint family. A malformed ledger produces the same lint output as no
+// ledger at all, so memory has no enforcement surface. Framed as "lint output
+// is unchanged whether or not the malformed file is present" so the test
+// cannot rot when an unrelated lint family is later added.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn malformed_speccy_memory_does_not_affect_verify_lint_output() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0001-memory-soft",
+        &spec_md_template("SPEC-0001", "in-progress"),
+        None,
+    )?;
+
+    // Baseline: lint output with no `.speccy/MEMORY.md` present.
+    let (baseline_code, baseline_out) = invoke(&ws.root, true)?;
+    let baseline_json: Value = serde_json::from_str(&baseline_out)?;
+    let baseline_lint = field(&baseline_json, "lint").clone();
+
+    // Write a deliberately malformed ledger: not valid SPEC/TASKS/REPORT
+    // grammar, unbalanced foreign tags, arbitrary prose.
+    fs_err::write(
+        ws.root.join(".speccy/MEMORY.md").as_std_path(),
+        "## garbage <unclosed tag\n\n<report spec= not really\n- [ ] dangling REQ-999 CHK-999\n",
+    )?;
+
+    let (code, out) = invoke(&ws.root, true)?;
+    let json: Value = serde_json::from_str(&out)?;
+    let lint = field(&json, "lint").clone();
+
+    assert_eq!(
+        code, baseline_code,
+        "SPEC-0064 CHK-008: a malformed .speccy/MEMORY.md must not change verify's exit code; baseline={baseline_code}, with-memory={code}",
+    );
+    assert_eq!(
+        lint, baseline_lint,
+        "SPEC-0064 CHK-008: verify's lint output (errors/warnings/info) must be identical whether or not a malformed .speccy/MEMORY.md is present — the ledger has no enforcement surface; baseline:\n{baseline_lint}\nwith-memory:\n{lint}",
+    );
+    Ok(())
+}
+
 /// In-progress demotion: same malformed REPORT.md (no `spec=`) but the spec's
 /// frontmatter is `status: in-progress`.  RPT-001 is demoted to `Level::Info`
 /// by `partition_lint`; exit code must be 0.

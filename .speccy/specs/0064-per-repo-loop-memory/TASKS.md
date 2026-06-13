@@ -191,7 +191,7 @@ Suggested files: `resources/modules/phases/speccy-ship.md`
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-001 REQ-007">
+<task id="T-004" state="completed" covers="REQ-001 REQ-007">
 ## Prove and document that the CLI treats `.speccy/MEMORY.md` as an invisible user file
 
 `.speccy/MEMORY.md` sits in the same never-planned-against bucket as

@@ -200,6 +200,72 @@ fn force_preserves_user_files() -> TestResult {
     Ok(())
 }
 
+// SPEC-0064 REQ-001 / CHK-001 — `.speccy/MEMORY.md` is a repo-owned ledger
+// the eject pipeline never enumerates. Like `.speccy/BACKLOG.md`, it sits in
+// the never-planned-against bucket: `speccy init` only scaffolds `.speccy/`
+// and renders the host pack, so neither a first `init` nor `init --force`
+// creates, edits, or deletes it.
+
+#[test]
+fn force_preserves_speccy_memory_ledger() -> TestResult {
+    // Seed `.speccy/MEMORY.md` with arbitrary non-empty content, run
+    // `init --force` for both shipped hosts in the same fixture, and assert
+    // the file is byte-identical after each — proving the ledger sits outside
+    // the set of files the eject pipeline enumerates (CHK-001).
+    let fx = project_with_name("memory-preserve")?;
+    let seed =
+        "## Learned conventions\n\n- entry one\n- entry two\n\n<garbage> not a real grammar\n";
+    write_file(&fx.root, ".speccy/MEMORY.md", seed)?;
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let after_claude = read_file(&fx.root, ".speccy/MEMORY.md")?;
+    assert_eq!(
+        after_claude, seed,
+        "SPEC-0064 REQ-001 / CHK-001: `init --force --host claude-code` must leave .speccy/MEMORY.md byte-identical",
+    );
+
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--force")
+        .arg("--host")
+        .arg("codex")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    let after_codex = read_file(&fx.root, ".speccy/MEMORY.md")?;
+    assert_eq!(
+        after_codex, seed,
+        "SPEC-0064 REQ-001 / CHK-001: `init --force --host codex` must leave .speccy/MEMORY.md byte-identical",
+    );
+    Ok(())
+}
+
+#[test]
+fn fresh_init_does_not_create_speccy_memory_ledger() -> TestResult {
+    // A fresh `init` in a repo without `.speccy/MEMORY.md` must not create
+    // one; its absence is normal and silent (SPEC-0064 REQ-001).
+    let fx = project_with_name("memory-absent")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    assert!(
+        !fx.root.join(".speccy/MEMORY.md").exists(),
+        "SPEC-0064 REQ-001: a fresh `speccy init` must not create .speccy/MEMORY.md",
+    );
+    Ok(())
+}
+
 #[test]
 fn host_detection_precedence() -> TestResult {
     // 1. --host wins over filesystem signals.
