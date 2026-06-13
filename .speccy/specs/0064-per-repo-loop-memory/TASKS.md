@@ -65,7 +65,7 @@ Suggested files: `resources/modules/references/memory-ledger.md`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-003">
+<task id="T-002" state="completed" covers="REQ-003">
 ## Add the implementer feed-forward read step to the work phase body
 
 Modify `resources/modules/phases/speccy-work.md` to instruct the implementer,

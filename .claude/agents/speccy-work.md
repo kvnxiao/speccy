@@ -117,10 +117,11 @@ statement, read-only scope, worked examples, and the
 3. Branch on the rule result.
 
    **First-attempt branch.** Proceed with the recipe below
-   (steps 4–10) unchanged: flip state to `in-progress`, read
-   scenarios, run the bounded reuse survey, implement from scratch,
-   self-review, run the hygiene gate, flip to `in-review`, append the
-   round-1 `<implementer>` block via `speccy journal append`.
+   (steps 4–11) unchanged: flip state to `in-progress`, read
+   scenarios, load the memory ledger slice, run the bounded reuse
+   survey, implement from scratch, self-review, run the hygiene gate,
+   flip to `in-review`, append the round-1 `<implementer>` block via
+   `speccy journal append`.
 
    **Retry branch.** Enter retry mode:
 
@@ -147,7 +148,7 @@ statement, read-only scope, worked examples, and the
      runs unchanged). Never edit the `state` attribute in TASKS.md
      directly.
    - Append the next `<implementer>` block via `speccy journal
-     append` (step 9); the CLI derives and stamps the incremented
+     append` (step 10); the CLI derives and stamps the incremented
      round. The retry-mode `Completed` field describes the amend
      (what changed this round in response to the blockers), not a
      restatement of the cumulative task work.
@@ -171,7 +172,75 @@ statement, read-only scope, worked examples, and the
    blocks. No separate entry read of SPEC.md, TASKS.md, or `speccy
    check` is needed here.
 
-6. Bounded reuse survey. Before writing any code, survey the
+6. Load the memory ledger slice. Before the bounded reuse survey and
+   any code write, read `.speccy/MEMORY.md` when it is present and
+   load the slice whose trigger matches the current task's area —
+   mirroring the "load the relevant slice, drill in on demand" shape
+   the journal context bundle uses. When the file is absent this step
+   is a silent no-op: proceed with no error or comment about memory.
+   The entry shape you are reading is defined here:
+
+   ## Memory ledger entry shape
+
+The repo's loop memory lives at `.speccy/MEMORY.md` — a user-owned,
+git-tracked file, a sibling of `.speccy/BACKLOG.md`. `speccy init` never
+enumerates or overwrites it, so a `--force` reeject leaves it byte-identical
+and learned content survives speccy CLI updates. Its **absence is normal and
+silent**: a missing or malformed ledger produces no `speccy verify` error or
+warning, and the implementer simply has no slice to load.
+
+This file is the single source of truth for what one ledger entry looks like.
+The implementer read step and the ship-time retro both point here rather than
+restating the format.
+
+### The four-part entry shape
+
+Every entry — whether it records a convention the loop followed or a mistake it
+made — carries the same four parts. Convention-flavoured and mistake-flavoured
+entries differ only by which feed produced them, never in shape:
+
+- **Trigger** — when the entry applies: a task area, a file region, or a
+  recurring situation. This is what a future implementer matches against to
+  decide the entry is relevant to the slice in front of them.
+- **Convention or mistake** — the thing observed: the convention that was
+  followed, or the mistake that was made.
+- **Corrective rule** — the actionable instruction to follow next time, stated
+  so the implementer can act on it without re-deriving the context.
+- **Provenance** — the SPEC / task / review that produced the entry, named by
+  real identifier so the entry is auditable back to its source.
+
+### Authoring discipline
+
+- **Prefer abstract, convention-level wording over fragile code coordinates.**
+  An entry phrased as a durable convention survives a refactor that moves or
+  renames the construct it came from; an entry pinned to a specific function,
+  line, or module name becomes a phantom reference the moment that construct
+  changes, and feeds a stale coordinate forward to the next implementer. Write
+  the rule, not the address.
+
+- **Provenance must resolve to a real SPEC / task / review identifier**, never
+  a fabricated one. Dangling SPEC/task provenance is the only structurally
+  checkable slice of ledger hygiene — the sole part a future CLI verb could
+  ever validate (the rest of phantom-reference hygiene is a semantic judgment
+  the ship-time retro owns, deliberately not a CLI freshness check). Keeping
+  provenance honest at authoring time is what makes that future check possible.
+
+### Worked example
+
+The placeholders below are illustrative — substitute your own values.
+
+```markdown
+- Trigger: implementing a new CLI subcommand that parses a bounded numeric
+  flag.
+- Convention: bounded numeric flags are validated with a range value parser at
+  the argument layer, not with an ad-hoc check inside the command body.
+- Corrective rule: reach for the existing range-value-parser helper before
+  writing a fresh bounds check; keep validation at the parse boundary.
+- Provenance: SPEC-0042 / T-003 (0042-example-slug), reviewer-style pass.
+```
+
+
+7. Bounded reuse survey. Before writing any code, survey the
    task-relevant area and classify the code you are about to add into
    reuse-as-is / extend / write-fresh, so reuse is a design input
    rather than a post-hoc cleanup. Scope the survey to the task's
@@ -220,13 +289,13 @@ and for each thing you decide to add, place it in one tier:
   per-symbol accounting even when the full area-map is not re-run.
 
 
-7. Implement the task. Write tests first, then code. Run the
+8. Implement the task. Write tests first, then code. Run the
    project's own test command (`cargo test`, `pnpm test`, etc.)
    locally. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
    scenarios being satisfied (it renders them, it does not run
    them).
 
-8. Self-review before handoff. Immediately after implementation and
+9. Self-review before handoff. Immediately after implementation and
    **before** the exit transition's `in-review` flip, re-read your
    own diff through the reviewers' lens and fix what you find in
    place. This is the cheap place to catch drift: a fix here is a
@@ -284,7 +353,7 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
     silencer.
 
 
-9. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+10. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state` from `in-progress` to `in-review` through the transition
    command — never by editing the `state` attribute in TASKS.md
    directly:
@@ -362,7 +431,7 @@ inherited environment variable.
    never lands and no re-read is needed; confirm `speccy next --json`
    reports no consistency drift.
 
-10. Exit. Do not continue to the next task. If the caller wants
+11. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.
 
 After exit, the next reasonable step depends on TASKS.md state: if
