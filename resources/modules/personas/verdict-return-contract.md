@@ -49,4 +49,4 @@ Do not restate the full review body in the thin verdict — it is
 already in the journal, and the thin shape lets the orchestrator
 narrate progress without re-reading every block.
 
-{% include "modules/personas/no_tasks_md_writes.md" %}
+{% include "modules/personas/no-tasks-md-writes.md" %}

@@ -10,9 +10,9 @@ fan-out -- invoked when a diff plausibly drifts documentation.
 
 {% include "modules/personas/review-role-tail.md" %}
 
-{% include "modules/personas/diff_fetch_command.md" %}
+{% include "modules/personas/diff-fetch-command.md" %}
 
-{% include "modules/personas/no_working_tree_mutation.md" %}
+{% include "modules/personas/no-working-tree-mutation.md" %}
 
 ## Focus
 
@@ -37,11 +37,11 @@ fan-out -- invoked when a diff plausibly drifts documentation.
 
 ## Verdict return contract
 
-{% include "modules/personas/verdict_return_contract.md" %}
+{% include "modules/personas/verdict-return-contract.md" %}
 
 ## Inline note format
 
-{% include "modules/personas/inline_note_format.md" %}
+{% include "modules/personas/inline-note-format.md" %}
 
 ## Example
 
