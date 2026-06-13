@@ -79,10 +79,6 @@ and learned content survives speccy CLI updates. Its **absence is normal and
 silent**: a missing or malformed ledger produces no `speccy verify` error or
 warning, and the implementer simply has no slice to load.
 
-This file is the single source of truth for what one ledger entry looks like.
-The implementer read step and the ship-time retro both point here rather than
-restating the format.
-
 ### The four-part entry shape
 
 Every entry — whether it records a convention the loop followed or a mistake it
@@ -105,14 +101,12 @@ entries differ only by which feed produced them, never in shape:
   An entry phrased as a durable convention survives a refactor that moves or
   renames the construct it came from; an entry pinned to a specific function,
   line, or module name becomes a phantom reference the moment that construct
-  changes, and feeds a stale coordinate forward to the next implementer. Write
-  the rule, not the address.
+  changes. Write the rule, not the address.
 
 - **Provenance must resolve to a real SPEC / task / review identifier**, never
   a fabricated one. Dangling SPEC/task provenance is the only structurally
-  checkable slice of ledger hygiene — the sole part a future CLI verb could
-  ever validate (the rest of phantom-reference hygiene is a semantic judgment
-  the ship-time retro owns, deliberately not a CLI freshness check). Keeping
+  checkable slice of ledger hygiene; the rest is a semantic judgment the
+  ship-time retro owns, deliberately not a CLI freshness check. Keeping
   provenance honest at authoring time is what makes that future check possible.
 
 ### Worked example

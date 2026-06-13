@@ -3,8 +3,10 @@
     reason = "test code may .expect() with descriptive messages"
 )]
 //! SPEC-0064 REQ-003 (CHK-004): the implementer feed-forward read step pulls
-//! the memory-ledger reference once from the canonical work-phase module body,
-//! and no host wrapper inlines a shadowing copy of that include directive.
+//! the memory-ledger *summary* once from the canonical work-phase module body,
+//! and no host wrapper inlines a shadowing copy of that include directive. The
+//! hot work path carries only the terse read protocol; the full entry shape and
+//! authoring discipline stay in `memory-ledger.md`, included by the ship phase.
 //!
 //! This keys on the `{% include %}` structural surface — not on curated prose —
 //! so it complies with DEC-009 (no scenario asserts specific sentences appear
@@ -20,8 +22,10 @@ fn workspace_root() -> PathBuf {
     )
 }
 
-/// The include directive that pulls the memory-ledger reference into a body.
-const MEMORY_LEDGER_INCLUDE: &str = r#"{% include "modules/references/memory-ledger.md" %}"#;
+/// The include directive that pulls the memory-ledger summary into a body — the
+/// read-side digest the implementer feed-forward step carries on the hot path.
+const MEMORY_LEDGER_SUMMARY_INCLUDE: &str =
+    r#"{% include "modules/references/memory-ledger-summary.md" %}"#;
 
 /// Recursively collect every file path under `dir`.
 fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -38,11 +42,11 @@ fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// The canonical work-phase module body carries the memory-ledger include
-/// exactly once — the feed-forward read step points at the shared reference
-/// rather than restating the entry shape.
+/// The canonical work-phase module body carries the memory-ledger summary
+/// include exactly once — the feed-forward read step points at the shared
+/// read-protocol digest rather than inlining the full entry shape.
 #[test]
-fn work_phase_body_includes_memory_ledger_reference_once() {
+fn work_phase_body_includes_memory_ledger_summary_once() {
     let body_path = workspace_root()
         .join("resources")
         .join("modules")
@@ -51,21 +55,22 @@ fn work_phase_body_includes_memory_ledger_reference_once() {
     let body = fs_err::read_to_string(&body_path)
         .expect("resources/modules/phases/speccy-work.md must be readable");
 
-    let count = body.matches(MEMORY_LEDGER_INCLUDE).count();
+    let count = body.matches(MEMORY_LEDGER_SUMMARY_INCLUDE).count();
     assert_eq!(
         count, 1,
-        "`{MEMORY_LEDGER_INCLUDE}` must appear exactly once in \
+        "`{MEMORY_LEDGER_SUMMARY_INCLUDE}` must appear exactly once in \
          resources/modules/phases/speccy-work.md (the feed-forward read step; \
          SPEC-0064 REQ-003 CHK-004); found {count}",
     );
 }
 
-/// No host wrapper under `resources/agents/` inlines the memory-ledger include.
-/// The reference reaches every host transitively through the phase-body include
-/// (`{% include "modules/phases/speccy-work.md" %}`), never as a shadowing copy
-/// — the no-duplicate-snippet invariant (SPEC-0064 REQ-003 CHK-004).
+/// No host wrapper under `resources/agents/` inlines the memory-ledger summary
+/// include. The summary reaches every host transitively through the phase-body
+/// include (`{% include "modules/phases/speccy-work.md" %}`), never as a
+/// shadowing copy — the no-duplicate-snippet invariant (SPEC-0064 REQ-003
+/// CHK-004).
 #[test]
-fn no_host_wrapper_inlines_memory_ledger_include() {
+fn no_host_wrapper_inlines_memory_ledger_summary_include() {
     let agents_root = workspace_root().join("resources").join("agents");
     let mut wrappers = Vec::new();
     collect_files(&agents_root, &mut wrappers);
@@ -75,9 +80,9 @@ fn no_host_wrapper_inlines_memory_ledger_include() {
         let contents = fs_err::read_to_string(wrapper)
             .expect("host wrapper under resources/agents/ must be readable");
         assert!(
-            !contents.contains(MEMORY_LEDGER_INCLUDE),
-            "host wrapper `{display}` must not inline `{MEMORY_LEDGER_INCLUDE}`; \
-             the memory-ledger reference reaches every host transitively via the \
+            !contents.contains(MEMORY_LEDGER_SUMMARY_INCLUDE),
+            "host wrapper `{display}` must not inline `{MEMORY_LEDGER_SUMMARY_INCLUDE}`; \
+             the memory-ledger summary reaches every host transitively via the \
              phase-body include, never as a shadowing copy (SPEC-0064 REQ-003 CHK-004)",
         );
     }

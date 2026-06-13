@@ -125,15 +125,9 @@ incremented round).
    blocks. No separate entry read of SPEC.md, TASKS.md, or `speccy
    check` is needed here.
 
-6. Load the memory ledger slice. Before the bounded reuse survey and
-   any code write, read `.speccy/MEMORY.md` when it is present and
-   load the slice whose trigger matches the current task's area —
-   mirroring the "load the relevant slice, drill in on demand" shape
-   the journal context bundle uses. When the file is absent this step
-   is a silent no-op: proceed with no error or comment about memory.
-   The entry shape you are reading is defined here:
+6. Load the memory ledger slice.
 
-   {% include "modules/references/memory-ledger.md" %}
+   {% include "modules/references/memory-ledger-summary.md" %}
 
 7. Bounded reuse survey. Before writing any code, survey the
    task-relevant area and classify the code you are about to add into
