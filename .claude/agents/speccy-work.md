@@ -117,10 +117,11 @@ statement, read-only scope, worked examples, and the
 3. Branch on the rule result.
 
    **First-attempt branch.** Proceed with the recipe below
-   (steps 4–10) unchanged: flip state to `in-progress`, read
-   scenarios, run the bounded reuse survey, implement from scratch,
-   self-review, run the hygiene gate, flip to `in-review`, append the
-   round-1 `<implementer>` block via `speccy journal append`.
+   (steps 4–11) unchanged: flip state to `in-progress`, read
+   scenarios, load the memory ledger slice, run the bounded reuse
+   survey, implement from scratch, self-review, run the hygiene gate,
+   flip to `in-review`, append the round-1 `<implementer>` block via
+   `speccy journal append`.
 
    **Retry branch.** Enter retry mode:
 
@@ -147,7 +148,7 @@ statement, read-only scope, worked examples, and the
      runs unchanged). Never edit the `state` attribute in TASKS.md
      directly.
    - Append the next `<implementer>` block via `speccy journal
-     append` (step 9); the CLI derives and stamps the incremented
+     append` (step 10); the CLI derives and stamps the incremented
      round. The retry-mode `Completed` field describes the amend
      (what changed this round in response to the blockers), not a
      restatement of the cumulative task work.
@@ -171,7 +172,19 @@ statement, read-only scope, worked examples, and the
    blocks. No separate entry read of SPEC.md, TASKS.md, or `speccy
    check` is needed here.
 
-6. Bounded reuse survey. Before writing any code, survey the
+6. Load the memory ledger slice.
+
+   **Memory ledger.** Before the bounded reuse survey and any code write, read
+`.speccy/MEMORY.md` when it is present and load the entries whose **trigger**
+matches the current task's area, then act on each one's **corrective rule** —
+mirroring the journal bundle's "load the relevant slice, drill in on demand"
+shape. A missing or malformed ledger is a silent no-op: proceed with no error
+and no comment about memory. The ship-time retro authors these entries in a
+four-part shape; the canonical memory-ledger reference it writes against holds
+the full shape and the authoring discipline.
+
+
+7. Bounded reuse survey. Before writing any code, survey the
    task-relevant area and classify the code you are about to add into
    reuse-as-is / extend / write-fresh, so reuse is a design input
    rather than a post-hoc cleanup. Scope the survey to the task's
@@ -220,13 +233,13 @@ and for each thing you decide to add, place it in one tier:
   per-symbol accounting even when the full area-map is not re-run.
 
 
-7. Implement the task. Write tests first, then code. Run the
+8. Implement the task. Write tests first, then code. Run the
    project's own test command (`cargo test`, `pnpm test`, etc.)
    locally. Use `speccy check SPEC-NNNN/T-NNN` to re-read the
    scenarios being satisfied (it renders them, it does not run
    them).
 
-8. Self-review before handoff. Immediately after implementation and
+9. Self-review before handoff. Immediately after implementation and
    **before** the exit transition's `in-review` flip, re-read your
    own diff through the reviewers' lens and fix what you find in
    place. This is the cheap place to catch drift: a fix here is a
@@ -284,7 +297,7 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
     silencer.
 
 
-9. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+10. Exit transition. **Hygiene gate (REQ-001):** before flipping `state` from `in-progress` to `in-review`, run the four standard hygiene gates in sequence — `cargo test --workspace`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`, `cargo deny check`. Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state` from `in-progress` to `in-review` through the transition
    command — never by editing the `state` attribute in TASKS.md
    directly:
@@ -362,7 +375,7 @@ inherited environment variable.
    never lands and no re-read is needed; confirm `speccy next --json`
    reports no consistency drift.
 
-10. Exit. Do not continue to the next task. If the caller wants
+11. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.
 
 After exit, the next reasonable step depends on TASKS.md state: if

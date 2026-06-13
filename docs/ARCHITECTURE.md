@@ -340,6 +340,12 @@ AGENTS.md                Project-wide product north star + agent conventions
                          (root, not inside .speccy/)
 
 .speccy/
+  MEMORY.md              User-owned, git-tracked loop-memory ledger. The
+                         working tier of per-repo memory; sibling of
+                         BACKLOG.md. `speccy init` never enumerates,
+                         creates, or overwrites it (not in the eject
+                         pipeline's file set), and `speccy verify` never
+                         reads it. Absent until the loop first writes it.
   specs/
     0001-user-signup/                Ungrouped spec (no mission folder)
       SPEC.md            Frontmatter + PRD prose + nested XML element tree
