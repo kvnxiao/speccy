@@ -2,7 +2,7 @@
 id: SPEC-0064
 slug: per-repo-loop-memory
 title: Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implementer reads before acting, grown by a ship-time retro from the loop's own conventions and mistakes
-status: in-progress
+status: implemented
 created: 2026-06-13
 supersedes: []
 ---
