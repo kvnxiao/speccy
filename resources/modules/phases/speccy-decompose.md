@@ -50,18 +50,14 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    - The `# Tasks: SPEC-` heading must appear on the line immediately
      after the closing `---` of the frontmatter block (no blank line
      between them).
-   - No `<tasks spec="...">` wrapper element; the parser rejects it
-     with an `UnknownMarkerName` error. Tasks are a flat sequence of
-     `<task>` elements at the top level of the document.
+   - No `<tasks spec="...">` wrapper element. Tasks are a flat sequence
+     of `<task>` elements at the top level of the document.
    - Multiple requirements in `covers=` are separated by single ASCII
-     spaces — `covers="REQ-001 REQ-002"` — never by commas. The parser
-     splits `covers` on single spaces and validates each token against
-     the REQ-ID shape, so a comma-bearing value fails to parse with an
-     `InvalidCoversFormat` error (a parse error, not a `TSK-*` lint).
+     spaces — `covers="REQ-001 REQ-002"` — never by commas.
    - Seed `spec_hash_at_generation` and `generated_at` with the
      `bootstrap-pending` sentinel; step 3 fills them in. Do not invoke
-     `speccy lock` before TASKS.md exists on disk — the command edits
-     the file in place and errors when it is missing.
+     `speccy lock` before TASKS.md exists on disk — it errors when the
+     file is missing.
 3. After writing, run `speccy lock SPEC-NNNN` to rewrite the two
    `bootstrap-pending` placeholders to the current SPEC.md sha256 and
    the UTC timestamp:
@@ -70,8 +66,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    speccy lock SPEC-NNNN
    ```
 
-   `speccy lock` edits TASKS.md's frontmatter in place; it does not
-   emit a hash to stdout, and it requires TASKS.md to already exist.
+   `speccy lock` requires TASKS.md to already exist.
 
 4. Branch-guard, then commit `TASKS.md` alone. This closes the
    bootstrap-commit gap that would otherwise trip the SPEC-0045/REQ-002

@@ -11,11 +11,11 @@
 //!   bodies.
 //! - [`no_partials_subdirectory`]: no `_partials/` directory under personas.
 //! - [`persona_bodies_include_verdict_contract_snippet`]: each persona uses `{%
-//!   include %}` for `verdict_return_contract.md`.
+//!   include %}` for `verdict-return-contract.md`.
 //! - [`persona_bodies_include_no_tasks_md_writes_snippet`]: each persona uses
-//!   `{% include %}` for `no_tasks_md_writes.md`.
+//!   `{% include %}` for `no-tasks-md-writes.md`.
 //! - [`persona_bodies_include_diff_fetch_snippet`]: each persona uses `{%
-//!   include %}` for `diff_fetch_command.md`.
+//!   include %}` for `diff-fetch-command.md`.
 //! - [`rendered_personas_contain_no_minijinja_markup`]: the ejected
 //!   `.claude/agents/reviewer-<persona>.md` files have no `{{`, `{%`, or `{#`.
 //! - [`rendered_persona_contains_no_tasks_md_prohibition`]: the rendered
@@ -84,10 +84,10 @@ fn panic_with_message(msg: &str) -> ! {
 }
 
 const EXPECTED_SNIPPET_FILES: &[&str] = &[
-    "verdict_return_contract.md",
-    "no_tasks_md_writes.md",
-    "inline_note_format.md",
-    "diff_fetch_command.md",
+    "verdict-return-contract.md",
+    "no-tasks-md-writes.md",
+    "inline-note-format.md",
+    "diff-fetch-command.md",
 ];
 
 /// All snippet files exist alongside the six persona body files.
@@ -126,10 +126,10 @@ fn no_partials_subdirectory() {
 }
 
 /// Each of the six reviewer persona body files uses `{% include %}` for the
-/// `verdict_return_contract.md` snippet exactly once.
+/// `verdict-return-contract.md` snippet exactly once.
 #[test]
 fn persona_bodies_include_verdict_contract_snippet() {
-    let expected_include = r#"{% include "modules/personas/verdict_return_contract.md" %}"#;
+    let expected_include = r#"{% include "modules/personas/verdict-return-contract.md" %}"#;
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
         let body = require_module_file(&file);
@@ -141,26 +141,26 @@ fn persona_bodies_include_verdict_contract_snippet() {
     }
 }
 
-/// The `no_tasks_md_writes.md` snippet contains the canonical prohibition text.
+/// The `no-tasks-md-writes.md` snippet contains the canonical prohibition text.
 ///
-/// The snippet is included transitively via `verdict_return_contract.md`; its
+/// The snippet is included transitively via `verdict-return-contract.md`; its
 /// presence in the rendered output is verified by
 /// `rendered_persona_contains_no_tasks_md_prohibition`.
 #[test]
 fn no_tasks_md_writes_snippet_is_non_empty() {
-    let body = require_module_file("no_tasks_md_writes.md");
+    let body = require_module_file("no-tasks-md-writes.md");
     assert!(
         body.contains("Do not edit TASKS.md directly"),
-        "`no_tasks_md_writes.md` must contain the canonical prohibition text \
+        "`no-tasks-md-writes.md` must contain the canonical prohibition text \
          `Do not edit TASKS.md directly`",
     );
 }
 
 /// Each of the six reviewer persona body files uses `{% include %}` for the
-/// `diff_fetch_command.md` snippet.
+/// `diff-fetch-command.md` snippet.
 #[test]
 fn persona_bodies_include_diff_fetch_snippet() {
-    let expected_include = r#"{% include "modules/personas/diff_fetch_command.md" %}"#;
+    let expected_include = r#"{% include "modules/personas/diff-fetch-command.md" %}"#;
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
         let body = require_module_file(&file);
@@ -172,11 +172,11 @@ fn persona_bodies_include_diff_fetch_snippet() {
     }
 }
 
-/// Each persona body uses `{% include %}` for the `inline_note_format.md`
+/// Each persona body uses `{% include %}` for the `inline-note-format.md`
 /// snippet.
 #[test]
 fn persona_bodies_include_inline_note_format_snippet() {
-    let expected_include = r#"{% include "modules/personas/inline_note_format.md" %}"#;
+    let expected_include = r#"{% include "modules/personas/inline-note-format.md" %}"#;
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
         let body = require_module_file(&file);
@@ -212,7 +212,7 @@ fn rendered_personas_contain_no_minijinja_markup() {
 
 /// The rendered content for each persona carries the "Do not edit TASKS.md
 /// directly" prohibition from the shared snippet (included transitively via
-/// `verdict_return_contract.md` which includes `no_tasks_md_writes.md`).
+/// `verdict-return-contract.md` which includes `no-tasks-md-writes.md`).
 #[test]
 fn rendered_persona_contains_no_tasks_md_prohibition() {
     let rendered = render_host_pack(HostChoice::ClaudeCode)
@@ -225,7 +225,7 @@ fn rendered_persona_contains_no_tasks_md_prohibition() {
         assert!(
             file.contents.contains("Do not edit TASKS.md directly"),
             "rendered `{rel}` must contain the `Do not edit TASKS.md directly` \
-             prohibition text, sourced from the `no_tasks_md_writes.md` snippet",
+             prohibition text, sourced from the `no-tasks-md-writes.md` snippet",
         );
     }
 }

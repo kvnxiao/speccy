@@ -34,61 +34,9 @@ reconciliation are not forgotten.
    SPEC.md diff and appending the Changelog row. Do not re-check after
    applying fixes.
 
-   <!-- Note: the amend self-review below is an independent copy.
-        The parallel copy for plan lives in speccy-plan.md (per DEC-001 /
-        OQ-b: two independent copies, no shared partial). -->
+   {% include "modules/references/spec-self-review-core.md" %}
 
-   **Mechanical/semantic split.** Mechanical issues are
-   string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
-   "and"/"also" inside `<requirement>` blocks, untouched `<...>`
-   template placeholders, missing alpha-prefix ordinals in
-   `## Open Questions`. Fix mechanical issues inline by editing
-   SPEC.md — do not write anything to `## Open Questions` or to
-   chat. If judging requires reading semantics, it is semantic.
-
-   Semantic issues surface as a row appended to `## Open Questions`
-   using this fixed template string verbatim:
-
-   `- [ ] {ordinal}. **Self-review caught:** {issue}`
-
-   where `{ordinal}` is the next free alpha-prefix letter continuing
-   any existing sequence, and `{issue}` is a one-line description of
-   the problem. Do not substitute freeform prose.
-
-   **The eight check properties:**
-
-   - **Routing fidelity.** Brainstorm artifacts landed in the
-     correct SPEC.md sections: restated ask → Summary +
-     Requirements; assumptions → `<assumptions>`; open questions →
-     `## Open Questions`; rejected framings → `## Notes` or
-     `<decision>` blocks. This check applies only when brainstorm
-     ran for this SPEC. When brainstorm was skipped, scope-traces
-     alone covers the equivalent verification against the user's
-     stated ask.
-
-   - **Atomization.** No `<requirement>` body contains "and"/"also"
-     multi-outcome wording that implies two distinct verifiable
-     outcomes in one requirement. A requirement that bundles two
-     outcomes should be split.
-
-   - **Scope-traces.** Every `<requirement>` traces to a brainstorm
-     artifact or to the user's explicitly stated ask. Requirements
-     that appeared without a visible source in the approved framing
-     are scope creep.
-
-   - **Internal consistency.** No contradictions exist across the
-     goals, non-goals, requirements, and assumptions sections. A
-     goal that a non-goal denies, or a requirement that violates an
-     assumption, is an internal contradiction.
-
-   - **Placeholder leakage.** No `TBD`, `TODO`, or untouched
-     `<...>` template-placeholder strings remain in SPEC.md.
-     These are mechanical and should be fixed inline, not surfaced.
-
-   - **Ambiguity.** No `<requirement>` wording is interpretable in
-     two materially different ways that would lead to different
-     implementations. If the requirement is ambiguous, surface it
-     as a semantic issue.
+   Amend adds two deltas beyond the shared core:
 
    - **Changelog row presence.** The `## Changelog` section contains
      a new row explaining *why* this amendment was needed. A missing
@@ -160,11 +108,7 @@ reconciliation are not forgotten.
    (`<spec-dir>/journal/T-NNN.md`). When the spec has no `TASKS.md` yet,
    the commit contains `SPEC.md` (plus any journal files) without failing
    on the absent tasks file — drop the missing `TASKS.md` from the
-   staging list rather than requiring it to exist. The step uses narrow
-   file-list staging (never `git add -A` or `git add .`), so any
-   unrelated dirty paths outside `<spec-dir>/` remain in the working tree
-   untouched. The step is idempotent: re-running with nothing new to
-   record produces no new commit.
+   staging list rather than requiring it to exist.
 
    First run the branch-guard prelude so the commit lands on a feature
    branch rather than the repository's default branch. Supply the
@@ -181,10 +125,7 @@ reconciliation are not forgotten.
      `<spec-dir>/TASKS.md` **only when it exists** (omit it from the list
      when the spec has no tasks file yet — do not let a missing path
      fail the stage), and each `<spec-dir>/journal/T-NNN.md` blocker file
-     appended this run. Do not use `git add -A` or `git add .`. Staging
-     unchanged content is a no-op, so passing the present paths
-     unconditionally is safe regardless of whether some were already
-     committed.
+     appended this run. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: amend — <why>` with `SPEC-NNNN`
        substituted for the resolved spec id, and `<why>` a title-length

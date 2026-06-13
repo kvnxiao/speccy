@@ -61,60 +61,7 @@ is already agreed.
 3. **Self-review pass.** Run this pass exactly once after writing
    SPEC.md. Do not re-check after applying fixes.
 
-   **Mechanical/semantic split.** Mechanical issues are
-   string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
-   "and"/"also" inside `<requirement>` blocks, untouched `<...>`
-   template placeholders, missing alpha-prefix ordinals in
-   `## Open Questions`. Fix mechanical issues inline by editing
-   SPEC.md — do not write anything to `## Open Questions` or to
-   chat. If judging requires reading semantics, it is semantic.
-
-   Semantic issues surface as a row appended to `## Open Questions`
-   using this fixed template string verbatim:
-
-   `- [ ] {ordinal}. **Self-review caught:** {issue}`
-
-   where `{ordinal}` is the next free alpha-prefix letter continuing
-   any existing sequence, and `{issue}` is a one-line description of
-   the problem. Do not substitute freeform prose.
-
-   **The six check properties:**
-
-   - **Routing fidelity.** Brainstorm artifacts landed in the
-     correct SPEC.md sections: restated ask → Summary +
-     Requirements; assumptions → `<assumptions>`; open questions →
-     `## Open Questions`; rejected framings → `## Notes` or
-     `<decision>` blocks. This check applies only when brainstorm
-     ran for this SPEC. When brainstorm was skipped, scope-traces
-     alone covers the equivalent verification against the user's
-     stated ask.
-
-   - **Atomization.** No `<requirement>` body contains "and"/"also"
-     multi-outcome wording that implies two distinct verifiable
-     outcomes in one requirement. A requirement that bundles two
-     outcomes should be split.
-
-   - **Scope-traces.** Every `<requirement>` traces to a brainstorm
-     artifact or to the user's explicitly stated ask. Requirements
-     that appeared without a visible source in the approved framing
-     are scope creep.
-
-   - **Internal consistency.** No contradictions exist across the
-     goals, non-goals, requirements, and assumptions sections. A
-     goal that a non-goal denies, or a requirement that violates an
-     assumption, is an internal contradiction.
-
-   - **Placeholder leakage.** No `TBD`, `TODO`, or untouched
-     `<...>` template-placeholder strings remain in SPEC.md.
-     These are mechanical and should be fixed inline, not surfaced.
-
-   - **Ambiguity.** No `<requirement>` wording is interpretable in
-     two materially different ways that would lead to different
-     implementations. If the requirement is ambiguous, surface it
-     as a semantic issue.
-
-   <!-- Note: the plan self-review above is an independent copy.
-        The parallel copy for amend lives in speccy-amend.md. -->
+   {% include "modules/references/spec-self-review-core.md" %}
 
 4. Surface any material questions inline in `## Open Questions` using
    the alpha-prefix format: `- [ ] a.`, `- [ ] b.`, ..., `- [ ] z.`.
@@ -130,11 +77,7 @@ is already agreed.
    committed. The commit covers only the spec's `SPEC.md` —
    `TASKS.md` is committed by `{{ cmd_prefix }}speccy-decompose`, not
    here, so the new-spec path lands two separate commits (one per
-   skill). The step uses narrow file-list staging (never `git add -A`
-   or `git add .`), so any unrelated dirty paths outside `<spec-dir>/`
-   remain in the working tree untouched. The step is idempotent:
-   re-running plan on an already-committed `SPEC.md` produces no new
-   commit.
+   skill).
 
    First run the branch-guard prelude so the commit lands on a feature
    branch rather than the repository's default branch. Supply the
@@ -148,9 +91,7 @@ is already agreed.
 
    - **Staging breadth: narrow `git add <spec-dir>/SPEC.md`.** Stage
      exactly the spec's `SPEC.md` and nothing else. Do not use
-     `git add -A` or `git add .`. Staging unchanged content is a no-op,
-     so passing the path unconditionally is safe regardless of whether
-     `SPEC.md` was already committed.
+     `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
        substituted for the resolved spec id.

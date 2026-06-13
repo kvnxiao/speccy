@@ -65,14 +65,7 @@ incremented round).
    (first-attempt shape or retry shape); the rest of the recipe
    branches on this result.
 
-   **Retry shape.** A task is in retry shape iff its journal
-   contains both an `<implementer>` element and a `<blockers>`
-   element whose `round` attribute matches the highest implementer
-   round. Otherwise it's first-attempt shape — the strict
-   clean-tree gate applies. See
-   `{{ speccy_references_path }}/retry-shape.md` for the full rule
-   statement, read-only scope, worked examples, and the
-   "implementer awaiting review" edge case.
+   {% include "modules/references/retry-shape-summary.md" %}
 
 3. Branch on the rule result.
 
@@ -155,26 +148,17 @@ incremented round).
    caught at review is a full bounce-and-respawn round. Address the
    findings now; do not defer them to the reviewers.
 
-   **Reviewer north-star map.** Each of the four review personas is
-   chasing one outcome. Hold your diff to all four — this is what
-   "good" looks like, not how the reviewers hunt for problems:
+   **Reviewer north-star map.** Hold your diff to all four review
+   outcomes:
 
-   - **Business.** The change does what the task's covered REQs
-     actually ask for — no more, no less. Every changed line traces
-     to a requirement; nothing in scope is left undone and nothing
-     out of scope sneaks in.
-   - **Tests.** Tests drive real behaviour and assert the specific
-     contract under test, and the evidence is honest and complete —
-     each covered CHK is accounted for, red/green pairs show what
-     they claim, and nothing is glossed.
-   - **Security.** Inputs are validated, errors are handled rather
-     than swallowed, and the change introduces no unsafe shortcut
-     (no panicking on attacker-influenced input, no secret or unsafe
-     default left in).
-   - **Style.** The diff reads as though the surrounding code's
-     author wrote it and re-applies the project's own conventions.
-     For the specifics, work the shared convention-drift checklist
-     below.
+   - **Business.** Every changed line traces to a covered REQ — no
+     more, no less.
+   - **Tests.** Tests drive real behaviour, each covered CHK is
+     accounted for, and the evidence is honest.
+   - **Security.** Inputs validated, errors handled not swallowed, no
+     unsafe shortcut or leaked secret.
+   - **Style.** Reads as the surrounding author wrote it; see the
+     convention-drift checklist below.
 
    {% include "modules/references/convention-checklist.md" %}
 
@@ -210,16 +194,7 @@ incremented round).
 
    {% include "modules/references/cli-stamps.md" %}
 
-   Here `round` derives as `max existing round + 1` (or `1` on a
-   fresh file, where the same append also creates the journal with
-   its three-field frontmatter). On a retry round the same command
-   appends after the existing journal contents and increments
-   `round` for you.
-
-   `--model` is required. Encode reasoning effort (when your host
-   harness exposes an effort knob) as a slash-suffix on the model
-   string (e.g. `claude-opus-4-8[1m]/low`); hosts without an effort
-   knob omit the suffix. The CLI validates `--model` is non-empty.
+   `--model` is required and validated non-empty.
 
    {% include "modules/references/identity-sourcing.md" %}
 
@@ -234,28 +209,12 @@ incremented round).
    `Evidence` field must include a CHK-by-CHK roll call labelling
    each CHK under the task's covered REQs as `demonstrated`,
    `hygiene`, or `judgment-only` -- see the canonical reference for
-   the format and what each label means.
+   the format and what each label means (the canonical reference
+   carries a full worked roll-call example).
 
-   Minimal Evidence roll-call shape -- substitute real CHK ids,
-   paths, and test names; the canonical reference carries the full
-   worked example:
-
-   ```
-   - Evidence: paper trail at `.speccy/specs/NNNN-slug/evidence/T-NNN.md`.
-     Roll call for CHKs under REQ-NNN:
-     - CHK-NNN (one-line CHK description): demonstrated →
-       evidence Scenario N covers <what the red/green pair shows>.
-     - CHK-NNN (one-line CHK description): hygiene →
-       `<test_name>` in `<file:path>` covers it under the project
-       test command.
-     - CHK-NNN (one-line CHK description): judgment-only →
-       no scriptable proof; reviewer-business / reviewer-style
-       judges on the diff.
-   ```
-
-   After the append, re-read the journal and confirm the new
-   `<implementer>` block landed and `speccy next --json` reports no
-   `journal_xml_malformed` consistency drift.
+   The CLI validates the block before any write, so a malformed body
+   never lands and no re-read is needed; confirm `speccy next --json`
+   reports no consistency drift.
 
 10. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.

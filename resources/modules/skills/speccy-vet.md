@@ -46,21 +46,16 @@ immediately with that as the reason.
 
 ## Why this skill runs in a top-level session
 
-The drift-fix loop fans out additional sub-agents over multiple
-rounds (`vet-reviewer`, `vet-implementer`, `vet-simplifier`).
-Sub-agents cannot spawn sub-agents, so this skill must run in a
-context that **is** the top-level session — either:
-
-- A human invocation (`{{ cmd_prefix }}speccy-vet SPEC-NNNN`), where
-  the host CLI session itself runs the skill body, or
-- The `{{ cmd_prefix }}speccy-orchestrate` outer loop, which
-  inlines this skill body into its own session at the `ship`
-  dispatch (it cannot delegate to a wrapper sub-agent that would
-  then try to spawn the leaves).
-
-In both cases the leaf sub-agents (reviewer / implementer /
-simplifier) return one short verdict block as their final message;
-only those final messages flow back into the running session.
+{% include "modules/skills/partials/inline-fanout-rationale.md" %}
+This skill's drift-fix loop fans out `vet-reviewer` /
+`vet-implementer` / `vet-simplifier` sub-agents across multiple
+rounds, so it must run in the top-level session — either a human
+invocation
+(`{{ cmd_prefix }}speccy-vet SPEC-NNNN`) or the
+`{{ cmd_prefix }}speccy-orchestrate` outer loop inlining this body at
+its `ship` dispatch. The leaf sub-agents each return one short verdict
+block as their final message; only those flow back into the running
+session.
 
 ## What this skill writes and commits
 
@@ -95,62 +90,22 @@ holistic loop:
 
 ### Single-writer rule
 
-The **CLI's per-file append lock owns write serialization** for
-VET.md. Every block reaches the file through `speccy journal append`:
-the vet sub-agents (reviewer / implementer / simplifier) append their
-own `<drift-review>` / `<holistic-fix>` / `<simplifier-scan>` /
-`<simplifier-apply>` blocks, and this skill's session appends the
-terminal `<gate>` block. No actor edits VET.md with file-editing
-tools, and no actor hand-bootstraps the file — the lock serializes
-the parallel appends so there is no race, and the CLI stamps `date`,
-derives `round`, computes the gate's `tasks_hash`, and manages
-invocation sectioning. This skill's session is the sole author of the
-`<gate>` block and (when invoked under the orchestrator) of git
-commits, but it does not transcribe sub-agent blocks.
+All VET writes go through `speccy journal append`; never edit the
+file by hand. The CLI's per-file append lock serializes the parallel
+appends: the vet sub-agents append their own `<drift-review>` /
+`<holistic-fix>` / `<simplifier-scan>` / `<simplifier-apply>` blocks,
+and this skill's session appends the terminal `<gate>` block (it is
+the sole author of `<gate>` and, under the orchestrator, of git
+commits, but it does not transcribe sub-agent blocks).
 
 ### File format
 
-The CLI creates VET.md with YAML frontmatter (`spec`,
-`generated_at`) on the first ever append and opens each
-`## Invocation N — <date>` section automatically when the file is
-absent or its last section is gate-terminated — the skill never
-writes the frontmatter or the invocation heading by hand. The
-resulting shape is:
-
-```markdown
----
-spec: SPEC-NNNN
-generated_at: 2026-05-21T22:00:00Z
----
-
-## Invocation 1 — 2026-05-21T22:00:00Z
-
-<drift-review verdict="blocking" round="1" date="..." model="...">
-...
-</drift-review>
-
-<holistic-fix verdict="addressed" round="1" date="..." model="...">
-...
-</holistic-fix>
-
-<drift-review verdict="pass" round="2" date="..." model="...">
-...
-</drift-review>
-
-<gate verdict="passed" tasks_hash="..." date="...">
-...
-</gate>
-
-## Invocation 2 — 2026-05-22T...
-
-<drift-review verdict="..." round="1" ...>
-...
-</drift-review>
-```
-
-The `round` attribute is **per-invocation**; the CLI resets it to 1
-at the start of each invocation section. `generated_at` in the
-frontmatter is the file-creation timestamp and is never rewritten.
+The CLI creates and stamps all of VET.md — frontmatter (`spec`,
+`generated_at`), each `## Invocation N — <date>` section, and every
+block's `date`/`round` attributes; the skill never writes any of it
+by hand. The `round` attribute is **per-invocation**; the CLI resets
+it to 1 at the start of each invocation section. `generated_at` is
+the file-creation timestamp and is never rewritten.
 
 If a prior invocation crashed mid-loop, its section is left as-is —
 the audit trail records what happened. The next append opens a fresh
@@ -200,19 +155,10 @@ in VET.md and the sub-agent contexts that produced them.
 
 ## When to invoke directly
 
-A human can run `{{ cmd_prefix }}speccy-vet SPEC-NNNN`
-by hand:
-
-- Before ever invoking `{{ cmd_prefix }}speccy-ship`, as a
-  final-defense check on a SPEC implemented manually.
-- After amending a SPEC and re-running
-  `{{ cmd_prefix }}speccy-work` on the affected tasks, to confirm
-  the patched implementation still adheres to the SPEC
-  holistically. (Each direct invocation gets its own section in
-  VET.md.)
-
-The skill behaves identically whether invoked by the orchestrator
-or by a human — only the caller of the verdict differs.
+A human can run `{{ cmd_prefix }}speccy-vet SPEC-NNNN` by hand (each
+direct invocation gets its own section in VET.md). The skill behaves
+identically whether invoked by the orchestrator or by a human — only
+the caller of the verdict differs.
 
 ## Next step after exit
 

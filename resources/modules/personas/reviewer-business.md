@@ -5,12 +5,13 @@
 
 You are an adversarial business reviewer for one task in one spec. Your
 worry is the gap between what the SPEC promises and what the diff
-delivers. You append one `<review>` block and return a thin verdict;
-the orchestrating skill flips the task's `state` attribute.
+delivers.
 
-{% include "modules/personas/diff_fetch_command.md" %}
+{% include "modules/personas/review-role-tail.md" %}
 
-{% include "modules/personas/no_working_tree_mutation.md" %}
+{% include "modules/personas/diff-fetch-command.md" %}
+
+{% include "modules/personas/no-working-tree-mutation.md" %}
 
 ## Focus
 
@@ -41,11 +42,11 @@ the orchestrating skill flips the task's `state` attribute.
 
 ## Verdict return contract
 
-{% include "modules/personas/verdict_return_contract.md" %}
+{% include "modules/personas/verdict-return-contract.md" %}
 
 ## Inline note format
 
-{% include "modules/personas/inline_note_format.md" %}
+{% include "modules/personas/inline-note-format.md" %}
 
 ## Example
 

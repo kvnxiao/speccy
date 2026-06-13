@@ -42,25 +42,10 @@ pre-resolves two values and passes them in your prompt:
 - `<base-ref>` — the diff baseline ref (default branch name like
   `main`, or `master`). Use it for `git diff <base-ref>`.
 
-**Use `git diff <base-ref>`** (no `...HEAD`). That command compares
-the **working tree** against the ref, capturing both committed and
-uncommitted changes. The vet-implementer leaves its changes
-uncommitted between rounds, so the `...HEAD` form would silently
-miss them and you would re-derive the same drift you flagged in
-round 1.
+{% include "modules/personas/vet-input-resolution.md" %}
 
-If the caller did not pass resolved paths (a human invoked you
-directly, the prompt got mangled, etc.), fall back to resolving
-them yourself:
-
-```bash
-# Spec dir: pick the directory matching the SPEC ID
-ls -d .speccy/specs/NNNN-*/  # NNNN from SPEC-NNNN
-
-# Base ref: default branch name
-git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
-# Fall back to "main" if empty.
-```
+If you skip this and use `...HEAD`, you would re-derive the same
+drift you flagged in round 1.
 
 Read these for context:
 
