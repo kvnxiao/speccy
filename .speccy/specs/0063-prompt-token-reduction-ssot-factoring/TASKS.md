@@ -506,7 +506,7 @@ Suggested files: `resources/modules/references/retry-shape-summary.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001 REQ-006 REQ-007 REQ-008">
+<task id="T-003" state="completed" covers="REQ-001 REQ-006 REQ-007 REQ-008">
 ## Reconciliation — retire the brittle feature-dev guardrail and complete the deferred A6/C6 provenance-line deletion (commit 3)
 
 This task lands as **commit 3**, an amendment-driven reconciliation after T-001/T-002.

@@ -1703,8 +1703,7 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
 // SPEC-0053 CHK-006: packaging conventions for the three feature-dev
 // ports (reviewer-correctness, plan-explorer, plan-architect). Each
 // Claude wrapper declares `model: opus[1m]`, each Codex wrapper
-// declares `model = "gpt-5.5"`, none declares `sonnet`, and each
-// persona body carries a `feature-dev` attribution line.
+// declares `model = "gpt-5.5"`, and none declares `sonnet`.
 // --------------------------------------------------------------------
 
 /// The three personas ported from `feature-dev` in SPEC-0053
@@ -1736,7 +1735,7 @@ struct AgentModelFrontmatter {
 }
 
 #[test]
-fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
+fn feature_dev_personas_declare_speccy_model_conventions() {
     let claude = render_host_pack(HostChoice::ClaudeCode)
         .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
     let codex = render_host_pack(HostChoice::Codex)
@@ -1785,13 +1784,6 @@ fn feature_dev_personas_declare_speccy_model_conventions_and_attribution() {
         assert!(
             !codex_body.contains("sonnet"),
             "Codex wrapper `{codex_path}` must not declare `sonnet`",
-        );
-
-        // The persona body carries a `feature-dev` attribution line.
-        let persona_body = read_persona(&format!("{persona}.md"));
-        assert!(
-            persona_body.contains("feature-dev"),
-            "persona body `personas/{persona}.md` must carry a `feature-dev` attribution line",
         );
     }
 }
