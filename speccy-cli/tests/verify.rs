@@ -8,10 +8,8 @@
 )]
 //! Integration tests for `speccy verify`.
 //!
-//! SPEC-0018 REQ-003 contract: verify is shape-only. It does not
-//! execute scenarios, does not spawn `speccy check`, and does not call
-//! into the (now-deleted-by-T-004) execution layer. Coverage is mapped
-//! one-to-one to the bullets under T-003 "Tests to write".
+//! Verify is shape-only: it does not execute scenarios, does not spawn
+//! `speccy check`, and does not call into any execution layer.
 
 mod common;
 
@@ -161,9 +159,9 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
     let errors = at(&json, &["lint", "errors"])
         .as_array()
         .expect("lint.errors array");
-    // After SPEC-0019 the marker parser itself rejects a requirement
-    // with no nested scenario marker, so the gating error surfaces as
-    // SPC-001 (marker tree invalid) rather than REQ-001 (lint-derived).
+    // The marker parser itself rejects a requirement with no nested
+    // scenario marker, so the gating error surfaces as SPC-001 (marker
+    // tree invalid) rather than REQ-001 (lint-derived).
     let spc1 = errors
         .iter()
         .find(|d| field(d, "code").as_str() == Some("SPC-001"))
@@ -177,9 +175,9 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
 }
 
 // ---------------------------------------------------------------------------
-// (Former REQ-002 / REQ-003 tests removed: SPEC-0019 marker containment
-// makes both "dangling CHK reference" and "orphan scenario row"
-// structurally unrepresentable, so neither code can fire.)
+// (Former REQ-002 / REQ-003 tests removed: marker containment makes
+// both "dangling CHK reference" and "orphan scenario row" structurally
+// unrepresentable, so neither code can fire.)
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -581,8 +579,8 @@ fn binary_propagates_exit_one_on_shape_failure() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0019 T-006: duplicate scenario id across two requirements -> verify
-// surfaces the marker parser's DuplicateMarkerId via SPC-001 and gates.
+// Duplicate scenario id across two requirements -> verify surfaces the
+// marker parser's DuplicateMarkerId via SPC-001 and gates.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -679,8 +677,7 @@ fn duplicate_scenario_id_across_requirements_gates_verify() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0035: RPT-* lint family integration tests (CHK-001 / CHK-002 / CHK-003
-// plus in-progress demotion)
+// RPT-* lint family integration tests (plus in-progress demotion)
 // ---------------------------------------------------------------------------
 
 /// Minimal valid REPORT.md frontmatter + heading, followed by a `<report>`
@@ -748,7 +745,7 @@ fn report_md_dangling_scenario() -> String {
     .to_owned()
 }
 
-/// CHK-001: REPORT.md with `<report>` but no `spec=` attribute triggers
+/// REPORT.md with `<report>` but no `spec=` attribute triggers
 /// RPT-001 on an `implemented` spec, gating verify (exit 1).
 #[test]
 fn report_md_missing_spec_attribute_fires_rpt_001() -> TestResult {
@@ -788,7 +785,7 @@ fn report_md_missing_spec_attribute_fires_rpt_001() -> TestResult {
     Ok(())
 }
 
-/// CHK-002: REPORT.md with `<coverage req="REQ-999">` on a SPEC that only
+/// REPORT.md with `<coverage req="REQ-999">` on a SPEC that only
 /// declares `REQ-001` triggers RPT-002 (naming REQ-999) and no RPT-003.
 #[test]
 fn report_md_dangling_req_fires_rpt_002() -> TestResult {
@@ -847,7 +844,7 @@ fn report_md_dangling_req_fires_rpt_002() -> TestResult {
     Ok(())
 }
 
-/// CHK-003: REPORT.md with `<coverage req="REQ-001" scenarios="CHK-001
+/// REPORT.md with `<coverage req="REQ-001" scenarios="CHK-001
 /// CHK-999">` where REQ-001 has only CHK-001 triggers RPT-003 for CHK-999
 /// and no diagnostic for CHK-001.
 #[test]
@@ -909,9 +906,9 @@ fn report_md_dangling_scenario_fires_rpt_003() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0057 CHK-008: an unbalanced foreign tag in a parsed artifact gates
-// verify (exit non-zero) and the rendered output names the artifact path and
-// the orphan tag's 1-indexed line.
+// An unbalanced foreign tag in a parsed artifact gates verify (exit
+// non-zero) and the rendered output names the artifact path and the
+// orphan tag's 1-indexed line.
 // ---------------------------------------------------------------------------
 
 /// SPEC.md (status injected) carrying a dangling foreign open tag
@@ -1010,7 +1007,7 @@ fn xml_001_unbalanced_foreign_tag_gates_verify_and_names_location() -> TestResul
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0064 CHK-008: `.speccy/MEMORY.md` is soft guidance — verify reads it
+// `.speccy/MEMORY.md` is soft guidance — verify reads it
 // for no lint family. A malformed ledger produces the same lint output as no
 // ledger at all, so memory has no enforcement surface. Framed as "lint output
 // is unchanged whether or not the malformed file is present" so the test

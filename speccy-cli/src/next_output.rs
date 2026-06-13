@@ -38,7 +38,7 @@ pub struct JsonPerSpec {
     /// Repo-relative forward-slash path to the mission folder's `MISSION.md`,
     /// or `null` for flat specs.
     pub mission_md_path: Option<String>,
-    /// SPEC-0045 REQ-005 consistency block. Always present; carries
+    /// Consistency block. Always present; carries
     /// `status: "ok"` with an empty `drifts` array when no drift was
     /// detected.
     pub consistency: ConsistencyBlock,
@@ -74,7 +74,7 @@ pub struct JsonWorkspaceEntry {
     /// Repo-relative forward-slash path to the mission folder's `MISSION.md`,
     /// or `null` for flat specs.
     pub mission_md_path: Option<String>,
-    /// SPEC-0045 REQ-005 consistency block.
+    /// Consistency block.
     pub consistency: ConsistencyBlock,
 }
 
@@ -82,11 +82,11 @@ pub struct JsonWorkspaceEntry {
 #[derive(Debug, Clone, Serialize)]
 pub struct JsonNextAction {
     /// Kind string: `"decompose"`, `"review"`, `"work"`, `"vet"`,
-    /// `"ship"`, or `"reconcile"` (SPEC-0045 REQ-005 override when
+    /// `"ship"`, or `"reconcile"` (override when
     /// consistency drift is detected).
     pub kind: &'static str,
     /// Task identifier; present for `review` and `work`. Absent for
-    /// `decompose`, `vet`, and `ship`. For the SPEC-0045 REQ-005
+    /// `decompose`, `vet`, and `ship`. For the
     /// `reconcile` override, the `task_id` from the underlying
     /// dispatch (when there was one) is preserved through the
     /// override so downstream skills can still see which task the
@@ -114,7 +114,7 @@ pub struct SpecPaths {
 }
 
 /// Terminal-state reason for the per-spec form when `next_action` is
-/// `null` (SPEC-0043 REQ-003). Maps to the `reason` field in JSON.
+/// `null`. Maps to the `reason` field in JSON.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalReason {
     /// REPORT.md present — the SPEC has shipped.
@@ -250,7 +250,7 @@ fn to_json_action(action: &NextAction) -> JsonNextAction {
     }
 }
 
-/// Apply the SPEC-0045 REQ-005 override: when `consistency.status` is
+/// Apply the reconcile override: when `consistency.status` is
 /// anything other than `Ok`, force `next_action.kind` to `"reconcile"`.
 /// The `task_id` is preserved when present so downstream skills can
 /// still see which task the unreconciled state pertains to.
@@ -278,7 +278,7 @@ fn apply_reconcile_override(
 /// Render the per-spec text output.
 ///
 /// Format: `SPEC-NNNN: <kind> [T-NNN]\n` or `SPEC-NNNN: completed\n`.
-/// The SPEC-0045 REQ-005 reconcile override applies exactly as in the
+/// The reconcile override applies exactly as in the
 /// JSON form: a non-`ok` consistency status renders `reconcile` (with
 /// the underlying dispatch's task id preserved when there is one).
 #[must_use = "the rendered line goes to stdout"]
@@ -293,7 +293,7 @@ pub fn render_text_per_spec(
 /// Render the per-spec text output with an explicit terminal reason.
 ///
 /// Used by the dispatcher when the spec is in a dropped or superseded
-/// terminal state (SPEC-0043 REQ-003) so the text line reflects the
+/// terminal state so the text line reflects the
 /// actual reason rather than the default `completed`.
 #[must_use = "the rendered line goes to stdout"]
 pub fn render_text_per_spec_with_reason(
@@ -453,7 +453,7 @@ mod tests {
         assert!(second.contains("T-001"));
     }
 
-    // ---- SPEC-0045 REQ-005 reconcile-override behaviour ----
+    // ---- reconcile-override behaviour ----
 
     use speccy_core::consistency::ConsistencyBlock;
     use speccy_core::consistency::ConsistencyStatus;

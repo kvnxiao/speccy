@@ -8,7 +8,7 @@
 )]
 //! REQ-* lint diagnostics.
 //!
-//! After SPEC-0019 the requirement-to-scenario graph lives in SPEC.md
+//! The requirement-to-scenario graph lives in SPEC.md
 //! marker nesting. The marker parser already rejects orphan scenarios,
 //! dangling references, AND a `speccy:requirement` block with zero
 //! nested `speccy:scenario` markers at parse time, so the REQ-001 lint

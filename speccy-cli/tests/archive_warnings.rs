@@ -7,7 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! End-to-end tests for `speccy archive` supersession-chain orphan
-//! warnings. Covers SPEC-0042 T-004 / REQ-008 / CHK-020, CHK-021, CHK-022.
+//! warnings.
 
 mod common;
 
@@ -60,7 +60,7 @@ fn spec_md_with_supersedes(id: &str, status: &str, supersedes: &[&str]) -> Strin
 
 #[test]
 fn archive_emits_orphan_warning_when_sole_declarer() -> TestResult {
-    // CHK-020: SPEC-0019 active superseded; SPEC-0021 sole declarer.
+    // SPEC-0019 active superseded; SPEC-0021 sole declarer.
     // Archiving SPEC-0021 must warn about SPEC-0019.
     let ws = Workspace::new()?;
     write_spec(
@@ -108,7 +108,7 @@ fn archive_emits_orphan_warning_when_sole_declarer() -> TestResult {
 
 #[test]
 fn archive_older_spec_in_pair_emits_no_warning() -> TestResult {
-    // CHK-021: archiving SPEC-0019 (the older, superseded one) — the
+    // Archiving SPEC-0019 (the older, superseded one) — the
     // natural archive case. No warnings.
     let ws = Workspace::new()?;
     write_spec(
@@ -146,7 +146,7 @@ fn archive_older_spec_in_pair_emits_no_warning() -> TestResult {
 
 #[test]
 fn archive_multi_declarer_emits_no_warning() -> TestResult {
-    // CHK-022: SPEC-0019 superseded; SPEC-0021 and SPEC-0022 both
+    // SPEC-0019 superseded; SPEC-0021 and SPEC-0022 both
     // declare supersedes: [SPEC-0019]. Archiving SPEC-0021 leaves
     // SPEC-0022 as an explainer — no orphan.
     let ws = Workspace::new()?;

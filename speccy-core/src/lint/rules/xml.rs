@@ -1,21 +1,21 @@
 //! XML-001 rule: unbalanced foreign-tag detection in parsed artifacts.
 //!
-//! SPEC-0057. A parsed artifact (SPEC.md / TASKS.md / REPORT.md) that
+//! A parsed artifact (SPEC.md / TASKS.md / REPORT.md) that
 //! leaks an orphan foreign (non-whitelisted) XML tag — a close with no
 //! matching preceding open, or a non-void open with no matching following
 //! close — produces exactly one `XML-001` Error diagnostic naming the
 //! artifact path and the offending 1-indexed source line.
 //!
-//! Detection lives here, in the lint engine, not in the scanner (SPEC
-//! DEC-001): the scanner keeps its SPEC-0020 DEC-002 foreign-HTML
+//! Detection lives here, in the lint engine, not in the scanner: the
+//! scanner keeps its foreign-HTML
 //! passthrough untouched and only exposes the foreign-tag view via
 //! [`scan_foreign_tags`]. Balance is computed name-scoped with a per-name
-//! stack, fence-aware, and does not enforce cross-name nesting (DEC-002).
+//! stack, fence-aware, and does not enforce cross-name nesting.
 //!
 //! This module covers the three parsed-document artifacts plus the
-//! on-demand `journal/T-NNN.md` files (SPEC DEC-003: journals are
+//! on-demand `journal/T-NNN.md` files: journals are
 //! defense-in-depth, reached on demand via the `JNL-*` path-derivation
-//! pattern rather than a `ParsedSpec` field).
+//! pattern rather than a `ParsedSpec` field.
 
 use crate::lint::types::Diagnostic;
 use crate::lint::types::Level;
@@ -64,8 +64,8 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
     journal_pass(spec, out);
 }
 
-/// Run the balance pass over each existing `journal/T-NNN.md` (SPEC
-/// DEC-003). Journal paths are derived from the parsed tasks the same way
+/// Run the balance pass over each existing `journal/T-NNN.md`.
+/// Journal paths are derived from the parsed tasks the same way
 /// the `JNL-*` rules do — `spec.dir.join("journal")` plus
 /// `T-NNN.md` per task — and read on demand; no journal field is added to
 /// `ParsedSpec`. Missing journal files are simply skipped (their
@@ -90,7 +90,7 @@ fn journal_pass(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
 }
 
 /// Run the name-scoped balance pass over one artifact's raw source and
-/// emit one `XML-001` per orphan foreign tag (SPEC DEC-002).
+/// emit one `XML-001` per orphan foreign tag.
 fn balance_pass(
     spec: &ParsedSpec,
     raw: &str,
@@ -116,7 +116,7 @@ fn balance_pass(
             }
         } else if !is_void_element_name(&tag.name) {
             // Void-named opens are never pushed: they have no close by
-            // definition (REQ-002).
+            // definition.
             open_lines
                 .entry(tag.name.clone())
                 .or_default()
@@ -133,10 +133,10 @@ fn balance_pass(
 }
 
 /// Build the shared `XML-001` diagnostic. One template, parameterized only
-/// by the tag name (REQ-001): the open-orphan and close-orphan cases share
+/// by the tag name: the open-orphan and close-orphan cases share
 /// this wording and differ solely in the substituted name and line. The
 /// path and 1-indexed line are carried by the diagnostic location and
-/// surfaced by the renderer (REQ-005).
+/// surfaced by the renderer.
 fn orphan_diagnostic(spec: &ParsedSpec, path: &Utf8Path, line: u32, name: &str) -> Diagnostic {
     Diagnostic::with_location(
         XML_001,

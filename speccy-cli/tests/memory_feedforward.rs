@@ -2,15 +2,15 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! SPEC-0064 REQ-003 (CHK-004): the implementer feed-forward read step pulls
+//! The implementer feed-forward read step pulls
 //! the memory-ledger *summary* once from the canonical work-phase module body,
 //! and no host wrapper inlines a shadowing copy of that include directive. The
 //! hot work path carries only the terse read protocol; the full entry shape and
 //! authoring discipline stay in `memory-ledger.md`, included by the ship phase.
 //!
 //! This keys on the `{% include %}` structural surface — not on curated prose —
-//! so it complies with DEC-009 (no scenario asserts specific sentences appear
-//! in any skill or subagent body).
+//! so it does not assert that specific sentences appear in any skill or
+//! subagent body.
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -67,8 +67,7 @@ fn work_phase_body_includes_memory_ledger_summary_once() {
 /// No host wrapper under `resources/agents/` inlines the memory-ledger summary
 /// include. The summary reaches every host transitively through the phase-body
 /// include (`{% include "modules/phases/speccy-work.md" %}`), never as a
-/// shadowing copy — the no-duplicate-snippet invariant (SPEC-0064 REQ-003
-/// CHK-004).
+/// shadowing copy — the no-duplicate-snippet invariant.
 #[test]
 fn no_host_wrapper_inlines_memory_ledger_summary_include() {
     let agents_root = workspace_root().join("resources").join("agents");

@@ -4,12 +4,6 @@
 //! the host-native location. Host detection lives in [`crate::host`];
 //! the embedded skill bundle lives in [`crate::embedded`]. This module
 //! owns the planning, summary, and mutation steps.
-//!
-//! See `.speccy/specs/0002-init-command/SPEC.md`.
-//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` (T-008: three-way
-//! classification).
-//! See `.speccy/specs/0044-force-overwrites-all-shipped-files/SPEC.md`
-//! (uniform `--force` rule; the reviewer-persona carve-out is removed).
 
 use crate::host::Detected;
 use crate::host::HostChoice;
@@ -154,7 +148,7 @@ pub fn run(
 
     let plan = build_plan(project_root, host)?;
 
-    // SPEC-0033 T-008: three-way classification.
+    // Three-way classification.
     // Without --force, if any item is `Conflict`, refuse the entire batch.
     if !force {
         let conflicts: Vec<String> = plan
@@ -190,7 +184,7 @@ struct Outcome {
 fn build_plan(project_root: &Utf8Path, host: HostChoice) -> Result<Vec<PlanItem>, InitError> {
     let mut plan: Vec<PlanItem> = Vec::new();
 
-    // SPEC-0040 REQ-001: `speccy init` scaffolds an empty
+    // `speccy init` scaffolds an empty
     // `.speccy/.gitkeep` placeholder so `workspace::find_root` keeps
     // locating `.speccy/` between init and the first spec. The file
     // content is empty bytes — stable across runs so the three-way
@@ -243,7 +237,7 @@ fn append_host_pack_items(
     Ok(())
 }
 
-/// Three-way file classification for SPEC-0033 T-008.
+/// Three-way file classification.
 ///
 /// - Destination absent → [`Action::Create`].
 /// - Destination exists, bytes match `planned` → [`Action::Unchanged`].

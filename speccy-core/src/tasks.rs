@@ -1,16 +1,14 @@
 //! TASKS.md `--commit` frontmatter rewriter.
 //!
-//! Narrow helper backing `speccy tasks SPEC-NNNN --commit` (SPEC-0006).
+//! Narrow helper backing `speccy tasks SPEC-NNNN --commit`.
 //! Rewrites the two managed frontmatter fields
 //! (`spec_hash_at_generation`, `generated_at`) while preserving every
 //! body byte after the closing `---` fence byte-identically.
 //!
 //! The rewrite is line-level: each top-level YAML key is either replaced
-//! in-place (preserving line ending and field order, per SPEC-0006 DEC-002
-//! and REQ-004 behaviour) or appended in canonical order if missing.
-//! Other frontmatter fields (e.g. agent-added notes) are copied verbatim.
-//!
-//! See `.speccy/specs/0006-tasks-command/SPEC.md`.
+//! in-place (preserving line ending and field order) or appended in
+//! canonical order if missing. Other frontmatter fields (e.g. agent-added
+//! notes) are copied verbatim.
 
 use crate::error::ParseError;
 use crate::parse::frontmatter::Split;
@@ -79,7 +77,7 @@ pub enum CommitError {
 /// 3-way ID consistency guard. `spec_md_sha256` is the SPEC.md content
 /// hash from [`crate::parse::SpecMd::sha256`]. `now_utc` is the moment
 /// captured at command start; truncated to second precision and rendered
-/// as `YYYY-MM-DDTHH:MM:SSZ` (SPEC-0006 DEC-004).
+/// as `YYYY-MM-DDTHH:MM:SSZ`.
 ///
 /// Before any write, the function performs a 3-way ID consistency check
 /// among the folder-derived ID (from the TASKS.md parent directory),

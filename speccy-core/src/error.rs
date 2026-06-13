@@ -180,8 +180,8 @@ pub enum ParseError {
         allowed: String,
     },
 
-    /// A SPEC.md is missing a top-level section element that SPEC-0021
-    /// requires exactly once (`<goals>`, `<non-goals>`, `<user-stories>`).
+    /// A SPEC.md is missing a top-level section element that is required
+    /// exactly once (`<goals>`, `<non-goals>`, `<user-stories>`).
     #[error("missing required top-level section `<{element_name}>` in {path}")]
     MissingRequiredSection {
         /// Path of the offending file.
@@ -191,7 +191,7 @@ pub enum ParseError {
     },
 
     /// A SPEC.md has two or more occurrences of a top-level section
-    /// element that SPEC-0021 caps at exactly one
+    /// element that is capped at exactly one
     /// (`<goals>`, `<non-goals>`, `<user-stories>`, `<assumptions>`).
     #[error(
         "duplicate top-level section `<{element_name}>` in {path} at byte offset {offset}: the section may appear at most once"
@@ -220,7 +220,7 @@ pub enum ParseError {
     },
 
     /// A `<requirement>` carries two or more occurrences of a sub-section
-    /// element that SPEC-0021 caps at exactly one
+    /// element that is capped at exactly one
     /// (`<done-when>`, `<behavior>`).
     #[error(
         "requirement `{requirement_id}` in {path} has duplicate `<{element_name}>` element at byte offset {offset}"
@@ -237,7 +237,7 @@ pub enum ParseError {
     },
 
     /// A `<task>` carried a `state` attribute value outside the closed set
-    /// (`pending | in-progress | in-review | completed`). SPEC-0022 REQ-001.
+    /// (`pending | in-progress | in-review | completed`).
     #[error("task `{task_id}` in {path} has invalid state `{value}`: must be one of {allowed}")]
     InvalidTaskState {
         /// Path of the offending file.
@@ -250,8 +250,7 @@ pub enum ParseError {
         allowed: String,
     },
 
-    /// A `<task>` was missing a required attribute (`covers`). SPEC-0022
-    /// REQ-001.
+    /// A `<task>` was missing a required attribute (`covers`).
     #[error("task `{task_id}` in {path} is missing required attribute `{attribute}`")]
     MissingTaskAttribute {
         /// Path of the offending file.
@@ -262,7 +261,7 @@ pub enum ParseError {
         attribute: String,
     },
 
-    /// A `<task>` `covers` attribute value did not match the SPEC-0022
+    /// A `<task>` `covers` attribute value did not match the
     /// grammar (single ASCII space separated `REQ-\d{3,}` ids). The
     /// diagnostic quotes the grammar verbatim.
     #[error(
@@ -278,7 +277,6 @@ pub enum ParseError {
     },
 
     /// A `<task>` is missing a required nested element (`task-scenarios`).
-    /// SPEC-0022 REQ-001.
     #[error("task `{task_id}` in {path} is missing required `<{element_name}>` element")]
     MissingTaskSection {
         /// Path of the offending file.
@@ -290,7 +288,7 @@ pub enum ParseError {
     },
 
     /// A `<task>` carries two or more occurrences of a nested element
-    /// that SPEC-0022 caps at exactly one (`task-scenarios`).
+    /// that is capped at exactly one (`task-scenarios`).
     #[error(
         "task `{task_id}` in {path} has duplicate `<{element_name}>` element at byte offset {offset}"
     )]
@@ -324,7 +322,7 @@ pub enum ParseError {
     },
 
     /// A `<coverage>` element was missing a required attribute
-    /// (`req`, `result`, or `scenarios`). SPEC-0022 REQ-002. The
+    /// (`req`, `result`, or `scenarios`). The
     /// `scenarios` attribute must be present even when empty.
     #[error(
         "coverage element in {path} at byte offset {offset} is missing required attribute `{attribute}`"
@@ -339,7 +337,7 @@ pub enum ParseError {
     },
 
     /// A `<coverage result="satisfied">` element carried no scenario ids.
-    /// SPEC-0022 REQ-002: `satisfied` requires ≥1 `CHK-\d{3,}` id in
+    /// `satisfied` requires ≥1 `CHK-\d{3,}` id in
     /// `scenarios`.
     #[error(
         "coverage for `{req}` in {path} has result `satisfied` but no scenario ids: `satisfied` requires at least one CHK id"
@@ -352,7 +350,7 @@ pub enum ParseError {
     },
 
     /// A `<coverage result="partial">` element carried no scenario ids.
-    /// SPEC-0022 REQ-002: `partial` requires ≥1 `CHK-\d{3,}` id in
+    /// `partial` requires ≥1 `CHK-\d{3,}` id in
     /// `scenarios`.
     #[error(
         "coverage for `{req}` in {path} has result `partial` but no scenario ids: `partial` requires at least one CHK id"
@@ -365,7 +363,7 @@ pub enum ParseError {
     },
 
     /// A `<coverage>` `scenarios` attribute value did not match the
-    /// SPEC-0022 grammar (single ASCII space separated `CHK-\d{3,}` ids).
+    /// grammar (single ASCII space separated `CHK-\d{3,}` ids).
     /// The diagnostic quotes the grammar verbatim.
     #[error(
         "coverage for `{req}` in {path} has invalid `scenarios` value `{value}`: must be single ASCII space separated `CHK-\\d{{3,}}` ids"
@@ -380,7 +378,7 @@ pub enum ParseError {
     },
 
     /// A `<task>` `covers` attribute names a requirement id that the
-    /// parent SPEC.md does not declare. SPEC-0022 REQ-001 cross-ref.
+    /// parent SPEC.md does not declare. Cross-reference check.
     #[error(
         "task `{task_id}` in {path} covers dangling requirement `{requirement_id}`: the parent SPEC.md has no `{requirement_id}`"
     )]
@@ -394,7 +392,7 @@ pub enum ParseError {
     },
 
     /// A `<coverage>` element names a requirement id that the parent
-    /// SPEC.md does not declare. SPEC-0022 REQ-002 cross-ref.
+    /// SPEC.md does not declare. Cross-reference check.
     #[error(
         "coverage for dangling requirement `{requirement_id}` in {path}: the parent SPEC.md has no `{requirement_id}`"
     )]
@@ -406,8 +404,8 @@ pub enum ParseError {
     },
 
     /// A `<coverage>` element lists a scenario id that is not nested
-    /// under the matching `<requirement>` in SPEC.md. SPEC-0022 REQ-002
-    /// cross-ref.
+    /// under the matching `<requirement>` in SPEC.md. Cross-reference
+    /// check.
     #[error(
         "coverage for `{requirement_id}` in {path} lists dangling scenario `{scenario_id}`: SPEC-side `{requirement_id}` has no `{scenario_id}`"
     )]
@@ -421,7 +419,7 @@ pub enum ParseError {
     },
 
     /// REPORT.md is present but one or more SPEC.md requirements have no
-    /// `<coverage>` row. SPEC-0022 REQ-002 cross-ref. Every uncovered
+    /// `<coverage>` row. Cross-reference check. Every uncovered
     /// requirement id is listed in the diagnostic.
     #[error(
         "REPORT.md at {path} is missing coverage for requirement(s): {}",
@@ -435,7 +433,7 @@ pub enum ParseError {
         requirement_ids: Vec<String>,
     },
 
-    /// A `<requirement>` violates the SPEC-0021 DEC-002 ordering rule
+    /// A `<requirement>` violates the ordering rule
     /// (`<done-when>` before `<behavior>` before any `<scenario>`).
     #[error(
         "requirement `{requirement_id}` in {path} violates section order at byte offset {offset}: {reason}"
@@ -452,7 +450,7 @@ pub enum ParseError {
     },
 
     /// A journal-file element carried an attribute value that failed
-    /// schema validation. SPEC-0037 REQ-003. Used for date (ISO8601),
+    /// schema validation. Used for date (ISO8601),
     /// round (positive integer), and model (non-empty) checks.
     #[error("{element} in {path} has invalid `{attribute}=\"{value}\"`: {reason}")]
     InvalidJournalAttribute {
@@ -470,9 +468,9 @@ pub enum ParseError {
         offset: usize,
     },
 
-    /// A journal file's `round` counter sequence violated REQ-004's
+    /// A journal file's `round` counter sequence violated the
     /// monotonic-from-1 rule (first round must be 1, no skips, no
-    /// decreases). SPEC-0037 REQ-004.
+    /// decreases).
     #[error("journal {path} has invalid round sequence: {reason}")]
     InvalidJournalRoundSequence {
         /// Path of the offending journal file.
@@ -485,7 +483,7 @@ pub enum ParseError {
     /// structure rule: a non-last section (or, under strict parsing, the
     /// last section) lacks a terminal `<gate>`, a `<gate>` is not the last
     /// block in its section, or a section holds more than one `<gate>`.
-    /// SPEC-0055 REQ-007 distinguishes this from other grammar failures so
+    /// This is distinguished from other grammar failures so
     /// `speccy verify` can route it to `VET-002` rather than `VET-001`.
     #[error("vet journal {path} gate-structure violation: {reason}")]
     VetGateStructure {

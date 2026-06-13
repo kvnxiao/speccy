@@ -2,8 +2,8 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Integration tests for `speccy_core::prompt::allocate_next_spec_id`.
-//! Covers SPEC-0005 REQ-003 via the public API.
+//! Integration tests for `speccy_core::prompt::allocate_next_spec_id`,
+//! exercised through the public API.
 
 use camino::Utf8PathBuf;
 use speccy_core::prompt::allocate_next_spec_id;

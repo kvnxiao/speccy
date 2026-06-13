@@ -19,8 +19,7 @@
 //! worked example, where `T-NNN covers="REQ-NNN REQ-NNN"` reads as a
 //! blank. Two bans still apply in references: any SPEC id other than the
 //! exact `SPEC-0042`, and CLI lint codes (`TSK-` / `JNL-`) cited by number
-//! rather than described by behavior. See AGENTS.md → "Authoring resource
-//! prose".
+//! rather than described by behavior.
 //!
 //! Source-only scan: the dogfood byte-identity test
 //! (`tests/init.rs::dogfood_outputs_match_committed_tree`) already proves

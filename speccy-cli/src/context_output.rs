@@ -7,22 +7,17 @@
 //!
 //! The envelope follows the workspace-wide convention established by
 //! `next_output.rs`: `schema_version` is the first serialized field,
-//! pinned at `1` pre-v1. SPEC-0056 grows this envelope across tasks
-//! T-002..T-006; this file carries the T-002 slice — spec identity
-//! (REQ-001's `schema_version` + REQ-002's id/title/status) and the
-//! intent block (REQ-002's goals / non-goals / decisions) — plus the
-//! T-003 slice: the selected task's verbatim `<task>` entry and the
-//! covering requirements resolved through the shared core walk
-//! (REQ-003); and the T-004 slice: the inlined per-task journal, whose
-//! per-block JSON shape reuses `journal show`'s `JsonJournalBlock` so the
-//! two journal views cannot drift (REQ-004); and the T-005 slice: the
-//! navigation aids — a sibling-task index (id/state/covers only), the
-//! repo-relative SPEC.md / TASKS.md / journal paths, and a suggested
-//! merge-base diff command (REQ-005); and the T-006 slice: the
-//! consistency section carrying the workspace-level status plus only the
-//! drift entries scoped to the selected task (REQ-006).
-//!
-//! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
+//! pinned at `1` pre-v1. The envelope carries spec identity
+//! (`schema_version` + id/title/status) and the intent block
+//! (goals / non-goals / decisions); the selected task's verbatim `<task>`
+//! entry and the covering requirements resolved through the shared core
+//! walk; the inlined per-task journal, whose per-block JSON shape reuses
+//! `journal show`'s `JsonJournalBlock` so the two journal views cannot
+//! drift; the navigation aids — a sibling-task index (id/state/covers
+//! only), the repo-relative SPEC.md / TASKS.md / journal paths, and a
+//! suggested merge-base diff command; and the consistency section carrying
+//! the workspace-level status plus only the drift entries scoped to the
+//! selected task.
 
 use crate::journal_show_output::JsonJournalBlock;
 use crate::journal_show_output::JsonJournalBlockAttrs;
@@ -37,39 +32,39 @@ use speccy_core::consistency::ConsistencyBlock;
 pub struct ContextBundle {
     /// Schema version. Pinned at `1` pre-v1.
     pub schema_version: u32,
-    /// Spec identity from SPEC.md frontmatter (REQ-002).
+    /// Spec identity from SPEC.md frontmatter.
     pub spec: SpecIdentity,
-    /// Authoring-intent slice: goals, non-goals, decisions (REQ-002).
+    /// Authoring-intent slice: goals, non-goals, decisions.
     pub intent: Intent,
     /// The selected task's verbatim `<task>` entry plus its parsed id,
-    /// state, and covers (REQ-003).
+    /// state, and covers.
     pub task: TaskEntry,
     /// The requirements the task covers, full bodies with scenarios,
-    /// deduplicated in covers-list order (REQ-003).
+    /// deduplicated in covers-list order.
     pub requirements: Vec<CoveringRequirement>,
     /// The selected task's per-task journal, inlined in full when present;
-    /// an explicit empty marker when the file does not yet exist (REQ-004).
+    /// an explicit empty marker when the file does not yet exist.
     pub journal: BundleJournal,
     /// Every other task in the spec as id/state/covers only — never any
-    /// body text — in TASKS.md declared order (REQ-005).
+    /// body text — in TASKS.md declared order.
     pub siblings: Vec<SiblingEntry>,
     /// Repo-relative paths to SPEC.md, TASKS.md, and the task's journal
-    /// file for follow-up targeted reads (REQ-005).
+    /// file for follow-up targeted reads.
     pub paths: BundlePaths,
     /// A suggested `git diff` command string in merge-base form against the
-    /// repo's default branch, runnable as-is from the repo root (REQ-005).
+    /// repo's default branch, runnable as-is from the repo root.
     pub diff_command: String,
     /// Workspace consistency status plus only the drift entries scoped to
-    /// the selected task — other tasks' drifts never appear (REQ-006). The
+    /// the selected task — other tasks' drifts never appear. The
     /// `status` is the same workspace-level classification `speccy next`
     /// computes; the `drifts` list is filtered to the selected task. A
     /// clean workspace yields `status == ok` with zero entries. Reuses
     /// `speccy next`'s [`ConsistencyBlock`] verbatim so the two
-    /// consistency views cannot drift (DEC-002 / DEC-005).
+    /// consistency views cannot drift.
     pub consistency: ConsistencyBlock,
 }
 
-/// Spec identity drawn from SPEC.md frontmatter (REQ-002).
+/// Spec identity drawn from SPEC.md frontmatter.
 #[derive(Debug, Clone, Serialize)]
 pub struct SpecIdentity {
     /// Frontmatter `id` (`SPEC-NNNN`).
@@ -81,7 +76,7 @@ pub struct SpecIdentity {
     pub status: String,
 }
 
-/// The authoring-intent slice of the bundle (REQ-002).
+/// The authoring-intent slice of the bundle.
 ///
 /// Carries the `<goals>` and `<non-goals>` bodies verbatim plus every
 /// `<decision>` with its DEC id and body. The Summary narrative,
@@ -98,7 +93,7 @@ pub struct Intent {
     pub decisions: Vec<DecisionEntry>,
 }
 
-/// One `<decision>` projected into the bundle (REQ-002).
+/// One `<decision>` projected into the bundle.
 #[derive(Debug, Clone, Serialize)]
 pub struct DecisionEntry {
     /// The `DEC-NNN` id.
@@ -107,7 +102,7 @@ pub struct DecisionEntry {
     pub body: String,
 }
 
-/// The selected task's `<task>` entry projected into the bundle (REQ-003).
+/// The selected task's `<task>` entry projected into the bundle.
 ///
 /// Carries the parsed `id`, `state`, and `covers` alongside the verbatim
 /// `<task>` body bytes, so a consumer reads the task entry from the bundle
@@ -124,7 +119,7 @@ pub struct TaskEntry {
     pub body: String,
 }
 
-/// One covering requirement projected into the bundle (REQ-003).
+/// One covering requirement projected into the bundle.
 ///
 /// Resolved through the shared `resolve_covering_requirements` walk so
 /// `context` and `check` cannot diverge. The `body` is the requirement's
@@ -145,7 +140,7 @@ pub struct CoveringRequirement {
     pub scenarios: Vec<ScenarioEntry>,
 }
 
-/// One `<scenario>` nested inside a covering requirement (REQ-003).
+/// One `<scenario>` nested inside a covering requirement.
 #[derive(Debug, Clone, Serialize)]
 pub struct ScenarioEntry {
     /// The `CHK-NNN` id.
@@ -155,20 +150,20 @@ pub struct ScenarioEntry {
 }
 
 /// The selected task's per-task journal, sliced to its latest round and
-/// inlined into the bundle (SPEC-0056 REQ-004, narrowed by SPEC-0060 REQ-001).
+/// inlined into the bundle.
 ///
 /// When `<spec-dir>/journal/<task-id>.md` exists, `exists` is `true`,
 /// the frontmatter fields carry the parsed `spec` / `task` / `generated_at`,
 /// and `blocks` holds the `<implementer>` / `<review>` / `<blockers>` entries
 /// of the journal's highest round in file order. Prior-round bodies are not
-/// inlined — `prior_rounds` carries an attributes-only index of them (REQ-002),
+/// inlined — `prior_rounds` carries an attributes-only index of them,
 /// and the full prose remains reachable on demand via
 /// `speccy journal show <selector> --round N`. When the file does not exist,
 /// `exists` is `false`, the frontmatter fields are absent, and `blocks` is
-/// empty — a round-1 implementer legitimately has no journal yet (DEC-004),
+/// empty — a round-1 implementer legitimately has no journal yet,
 /// so absence is normal and the command still exits 0.
 ///
-/// The per-block JSON shape reuses SPEC-0055's [`JsonJournalBlock`] (and its
+/// The per-block JSON shape reuses the shared [`JsonJournalBlock`] (and its
 /// `to_json_journal_block` mapping) so `context` and `journal show` cannot
 /// drift. The standalone `JsonTaskJournal` envelope is deliberately **not**
 /// nested here: its own `schema_version` would collide with the bundle's.
@@ -190,7 +185,7 @@ pub struct BundleJournal {
     /// is absent or parses to zero entries.
     pub blocks: Vec<JsonJournalBlock>,
     /// An attributes-only index of every block whose round is strictly below
-    /// the highest round, in file order (SPEC-0060 REQ-002). Prior-round
+    /// the highest round, in file order. Prior-round
     /// bodies are never inlined; this index tells an agent that history exists
     /// and what shape it has, with the full prose reachable on demand via
     /// `speccy journal show <selector> --round N`. Empty for single-round,
@@ -200,13 +195,13 @@ pub struct BundleJournal {
     pub prior_rounds: Vec<JsonJournalBlockAttrs>,
 }
 
-/// One sibling task projected into the bundle's navigation index (REQ-005).
+/// One sibling task projected into the bundle's navigation index.
 ///
 /// Carries only the parsed `id`, `state`, and `covers` — never any body
 /// text. The index lets an implementer's reuse survey see which adjacent
 /// slices already landed without reading TASKS.md, while keeping the bundle
 /// size bounded to one line per task (the only field that grows with task
-/// count, per REQ-007).
+/// count).
 #[derive(Debug, Clone, Serialize)]
 pub struct SiblingEntry {
     /// The sibling's `T-NNN` id.
@@ -217,8 +212,7 @@ pub struct SiblingEntry {
     pub covers: Vec<String>,
 }
 
-/// Repo-relative paths to the spec's files for follow-up targeted reads
-/// (REQ-005).
+/// Repo-relative paths to the spec's files for follow-up targeted reads.
 ///
 /// All paths are forward-slash strings relative to the project root, so a
 /// consumer can read SPEC.md, TASKS.md, or the journal directly when it

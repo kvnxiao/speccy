@@ -65,12 +65,12 @@ pub struct TasksDoc {
     /// Source-ordered record of every `<implementer>`, `<review>`, or
     /// `<blockers>` element observed inside any `<task>` body. Drives the
     /// TSK-006 "no notes elements in TASKS.md" lint. Empty in a
-    /// well-formed TASKS.md after SPEC-0037.
+    /// well-formed TASKS.md.
     pub misplaced_journal_elements: Vec<MisplacedJournalElement>,
 }
 
 /// One activity-prose element observed inside a TASKS.md `<task>` body.
-/// SPEC-0037 REQ-006: these should live in `journal/T-NNN.md` instead.
+/// These should live in `journal/T-NNN.md` instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MisplacedJournalElement {
     /// Element local name (`implementer`, `review`, or `blockers`).
@@ -125,10 +125,10 @@ impl TaskState {
     }
 }
 
-/// The closed set of legal state-graph edges (REQ-002).
+/// The closed set of legal state-graph edges.
 ///
 /// Each pair is `(from, to)`. Same-state edges are not listed here; they
-/// are handled separately as idempotent no-ops (DEC-003).
+/// are handled separately as idempotent no-ops.
 pub const LEGAL_TRANSITION_EDGES: &[(TaskState, TaskState)] = &[
     (TaskState::Pending, TaskState::InProgress),
     (TaskState::InProgress, TaskState::InReview),
@@ -139,14 +139,14 @@ pub const LEGAL_TRANSITION_EDGES: &[(TaskState, TaskState)] = &[
 ];
 
 /// Outcome of classifying a requested `(from, to)` transition against the
-/// legal state graph (REQ-002, DEC-003).
+/// legal state graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionKind {
     /// `to` differs from `from` and the edge is in [`LEGAL_TRANSITION_EDGES`].
     /// The caller should splice the new state and write.
     Legal,
     /// `to` equals `from`: an idempotent no-op that exits 0 and leaves the
-    /// file byte-identical (DEC-003).
+    /// file byte-identical.
     NoOp,
     /// `to` differs from `from` and the edge is not in the legal graph.
     /// The caller should refuse and exit non-zero.
@@ -154,10 +154,10 @@ pub enum TransitionKind {
 }
 
 /// Classify a requested `from -> to` transition against the legal state
-/// graph (REQ-002).
+/// graph.
 ///
-/// A target equal to the current state is a [`TransitionKind::NoOp`]
-/// (DEC-003). Otherwise the edge is [`TransitionKind::Legal`] iff it
+/// A target equal to the current state is a [`TransitionKind::NoOp`].
+/// Otherwise the edge is [`TransitionKind::Legal`] iff it
 /// appears in [`LEGAL_TRANSITION_EDGES`]; every other edge is
 /// [`TransitionKind::Illegal`].
 #[must_use = "the classification decides whether to write or refuse"]
@@ -919,7 +919,7 @@ mod tests {
         }
     }
 
-    /// CHK-001: a fixture with a multi-line body, unusual-but-legal
+    /// A fixture with a multi-line body, unusual-but-legal
     /// attribute spacing, and CRLF line endings rewrites byte-surgically.
     /// The result differs from the source only in the state value's bytes.
     #[test]
@@ -989,7 +989,7 @@ mod tests {
         );
     }
 
-    /// CHK-003: every ordered state pair (16 combinations). Exactly the
+    /// Every ordered state pair (16 combinations). Exactly the
     /// six legal edges plus the four same-state no-ops succeed; the other
     /// six are illegal.
     #[test]

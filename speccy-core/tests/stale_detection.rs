@@ -6,7 +6,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Tests for `workspace::stale_for`. Covers SPEC-0004 CHK-003.
+//! Tests for `workspace::stale_for`.
 
 use camino::Utf8PathBuf;
 use indoc::indoc;

@@ -5,9 +5,6 @@
 //! directory name. Before moving, edits SPEC.md's YAML frontmatter to
 //! append `archived_at: <UTC date>` (unconditional) and, when `--reason`
 //! is passed, `archived_reason: "<value>"`.
-//!
-//! See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-001,
-//! REQ-002, REQ-003.
 
 use crate::check_selector::bare_spec_regex;
 use camino::Utf8Path;
@@ -111,8 +108,7 @@ pub struct ArchiveOutcome {
     /// Reason text, if `--reason` was passed.
     pub archived_reason: Option<String>,
     /// SPEC-NNNN IDs of supersession-chain orphan candidates surfaced
-    /// by this archive (sorted). Empty when no orphans fired. See
-    /// SPEC-0042 REQ-008.
+    /// by this archive (sorted). Empty when no orphans fired.
     pub orphan_warnings: Vec<String>,
 }
 
@@ -246,7 +242,7 @@ pub fn run(args: ArchiveArgs, cwd: &Utf8Path) -> Result<ArchiveOutcome, ArchiveE
 /// `speccy archive --json` receipt envelope (`schema_version` = 1).
 ///
 /// Stable JSON shape returned on stdout when `--json` is passed and the
-/// archive succeeds. See SPEC-0042 REQ-009 / CHK-023.
+/// archive succeeds.
 #[derive(Debug, Clone, Serialize)]
 pub struct ArchiveReceipt {
     /// Envelope schema version. Always `1` for this revision.
@@ -254,7 +250,7 @@ pub struct ArchiveReceipt {
     /// The single archived spec.
     pub archived: ArchivedSpec,
     /// Warnings raised during the archive. Always present; empty when
-    /// no warnings fired. SPEC-0042 T-004 populates entries.
+    /// no warnings fired.
     pub warnings: Vec<ArchiveWarning>,
 }
 
@@ -272,16 +268,14 @@ pub struct ArchivedSpec {
     /// `YYYY-MM-DD` date recorded into SPEC.md frontmatter.
     pub archived_at: String,
     /// Reason text from `--reason`, or `null` when omitted. Serialized
-    /// as JSON `null` rather than omitted — REQ-009 requires the key
-    /// to be present.
+    /// as JSON `null` rather than omitted — the key is always present.
     pub archived_reason: Option<String>,
 }
 
 /// One warning entry inside [`ArchiveReceipt::warnings`].
 ///
-/// SPEC-0042 T-004 populates this. The struct is declared here so the
-/// receipt's `warnings` field has a concrete element type; T-004 fills
-/// in the orphan-supersession path.
+/// The struct gives the receipt's `warnings` field a concrete element
+/// type; the orphan-supersession path is filled in at archive time.
 #[derive(Debug, Clone, Serialize)]
 pub struct ArchiveWarning {
     /// SPEC-NNNN that the warning is about.
@@ -326,7 +320,7 @@ impl ArchiveReceipt {
 /// Normalize a path string to forward slashes regardless of host OS.
 ///
 /// `Utf8Path` preserves native separators (backslashes on Windows); the
-/// `--json` receipt contract (SPEC-0042 REQ-009) requires forward
+/// `--json` receipt contract requires forward
 /// slashes on all platforms.
 fn to_forward_slash(s: &str) -> String {
     if std::path::MAIN_SEPARATOR == '/' || !s.contains('\\') {

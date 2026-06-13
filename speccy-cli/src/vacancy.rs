@@ -9,13 +9,10 @@
 //!
 //! ID-walk logic is delegated to
 //! [`speccy_core::prompt::allocate_next_spec_id_across_dirs`] so the
-//! scan unions the active and archive directories per SPEC-0042
-//! REQ-005 (archived specs retain their SPEC-NNNN slots). A missing
+//! scan unions the active and archive directories (archived specs retain
+//! their SPEC-NNNN slots). A missing
 //! `.speccy/archive/` is treated as empty by the helper, so an
 //! absent archive directory is the no-op default.
-//!
-//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-003 and
-//! `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-005.
 
 use camino::Utf8Path;
 use serde::Serialize;
@@ -61,7 +58,7 @@ pub struct VacancyArgs {
 /// Resolves the workspace root, locates `.speccy/specs/` and
 /// `.speccy/archive/`, delegates the ID scan to
 /// [`allocate_next_spec_id_across_dirs`] (which unions both
-/// directories per SPEC-0042 REQ-005), and writes the result to `out`
+/// directories), and writes the result to `out`
 /// in either text or JSON form.
 ///
 /// # Errors
@@ -74,7 +71,7 @@ pub fn run(args: &VacancyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<()
 
     let specs_dir = project_root.join(".speccy").join("specs");
     let archive_dir = project_root.join(".speccy").join("archive");
-    // Per SPEC-0042 REQ-005: archived specs retain their SPEC-NNNN
+    // Archived specs retain their SPEC-NNNN
     // slots, so the vacancy scan unions the active and archive
     // directories. `allocate_next_spec_id_across_dirs` treats a
     // missing directory as empty, so an absent `.speccy/archive/`

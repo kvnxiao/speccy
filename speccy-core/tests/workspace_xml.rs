@@ -3,11 +3,10 @@
     clippy::panic,
     reason = "test code may .expect() with descriptive messages and panic! on unexpected enum variants"
 )]
-//! SPEC-0022 T-004 — workspace-load cross-reference validation between
+//! Workspace-load cross-reference validation between
 //! SPEC, TASKS, and REPORT.
 //!
-//! Each test drives the validation through the seam that T-007 will
-//! flip on after T-006 migrates the in-tree corpus:
+//! Each test drives the validation through the workspace-load seam:
 //! [`speccy_core::workspace::parse_one_spec_xml_artifacts`] reads the
 //! typed XML models off disk, and
 //! [`speccy_core::workspace::validate_workspace_xml`] consumes them

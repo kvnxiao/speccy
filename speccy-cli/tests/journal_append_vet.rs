@@ -7,16 +7,16 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Integration tests for `speccy journal append <SPEC-NNNN>` vet block
-//! routing (SPEC-0055 REQ-004).
+//! routing.
 //!
 //! Drives the built `speccy` binary against scratch workspaces. The
-//! load-bearing scenarios are CHK-006 (a `drift-review` → `holistic-fix` →
+//! load-bearing scenarios: a `drift-review` → `holistic-fix` →
 //! `gate --verdict passed` sequence produces a VET.md that parses, holds one
 //! invocation section ending in the gate, and lets `speccy next` resolve the
-//! spec past the vet step) and CHK-007 (a following `simplifier-scan` opens a
+//! spec past the vet step; and a following `simplifier-scan` opens a
 //! fresh `## Invocation 2` rather than landing in the gate-terminated first
-//! section). Two further tests pin the `tasks_hash` freshness contract and
-//! the DEC-004 selector/block-type pairing.
+//! section. Two further tests pin the `tasks_hash` freshness contract and
+//! the selector/block-type pairing.
 
 mod common;
 
@@ -64,7 +64,7 @@ fn append(ws: &Workspace, args: &[&str], body: &str) -> Command {
     cmd
 }
 
-/// CHK-006: a `drift-review` → `holistic-fix` → `gate --verdict passed`
+/// A `drift-review` → `holistic-fix` → `gate --verdict passed`
 /// sequence produces a VET.md that parses under the new parser, holds one
 /// invocation section ending in the gate, and lets `speccy next` resolve the
 /// spec past the vet step (the gate's `tasks_hash` is fresh).
@@ -147,7 +147,7 @@ fn drift_review_holistic_fix_gate_pass_resolves_past_vet() -> TestResult {
     Ok(())
 }
 
-/// CHK-007: a `simplifier-scan` append after a gate-terminated section lands
+/// A `simplifier-scan` append after a gate-terminated section lands
 /// under a freshly opened `## Invocation 2`, not the closed first section.
 #[test]
 fn simplifier_scan_after_gate_opens_invocation_two() -> TestResult {
@@ -223,7 +223,7 @@ fn simplifier_scan_after_gate_opens_invocation_two() -> TestResult {
     Ok(())
 }
 
-/// REQ-004 behavior: two gate appends straddling a TASKS.md edit carry
+/// Two gate appends straddling a TASKS.md edit carry
 /// different `tasks_hash` values, each equal to the file hash at its own
 /// append time. (Each gate is in its own invocation section.)
 #[test]
@@ -317,7 +317,7 @@ fn two_gates_across_a_tasks_edit_carry_distinct_fresh_hashes() -> TestResult {
     Ok(())
 }
 
-/// DEC-004: a vet block type with a task selector is an argument error, and
+/// A vet block type with a task selector is an argument error, and
 /// a task block type with a bare spec selector is too — VET.md untouched.
 #[test]
 fn mismatched_selector_block_pairing_is_an_argument_error() -> TestResult {
@@ -365,8 +365,8 @@ fn mismatched_selector_block_pairing_is_an_argument_error() -> TestResult {
 
 /// A `## Invocation N — <date>` line inside a drift-review body (plausible
 /// when a persona quotes a prior VET.md excerpt) must not be mistaken for a
-/// real section heading. Append derivation runs off the typed in-flight parse
-/// (DEC-008), and the parser already excludes heading-shaped lines inside a
+/// real section heading. Append derivation runs off the typed in-flight parse,
+/// and the parser already excludes heading-shaped lines inside a
 /// block body from its section count. Driven through the real append: a
 /// following holistic-fix must still attach (no spurious `NoRoundToAttach`),
 /// and a following drift-review must number the next invocation from the one
@@ -480,7 +480,7 @@ fn invocation_heading_in_body_does_not_skew_append_derivation() -> TestResult {
 /// silently written. The shared scanner reads the in-body `</drift-review>` as
 /// a structural close, so the would-be-new file fails the write-time
 /// `parse_vet_in_flight` round-trip (close tag without matching open) and the
-/// append is refused with VET.md absent (DEC-008) — no separate body guard
+/// append is refused with VET.md absent — no separate body guard
 /// needed.
 #[test]
 fn close_tag_in_body_is_rejected_at_write_time() -> TestResult {
@@ -517,7 +517,7 @@ fn close_tag_in_body_is_rejected_at_write_time() -> TestResult {
 /// `<gate\u{0c}verdict="passed">` as a line-isolated `<gate>` open tag, so the
 /// would-be-new file fails the `parse_vet_in_flight` round-trip (a nested
 /// block) and the append is refused with VET.md absent. Because the same
-/// parser is the authority for both reading and writing (DEC-008), there is no
+/// parser is the authority for both reading and writing, there is no
 /// whitespace-class gap between a body guard and the scanner to slip through.
 #[test]
 fn form_feed_separated_open_tag_in_body_is_rejected_at_write_time() -> TestResult {
@@ -559,7 +559,7 @@ fn form_feed_separated_open_tag_in_body_is_rejected_at_write_time() -> TestResul
 /// rejected at write time with VET.md absent. The scanner's close-tag
 /// predicate (`^</([a-z][a-z-]*)\s*>$`) reads these as structural close tags,
 /// so the would-be-new file fails the `parse_vet_in_flight` round-trip and the
-/// append is refused (DEC-008). Driven through the real binary across space,
+/// append is refused. Driven through the real binary across space,
 /// tab, and CRLF variants.
 #[test]
 fn whitespace_padded_close_tag_in_body_is_rejected_at_write_time() -> TestResult {
@@ -601,7 +601,7 @@ fn whitespace_padded_close_tag_in_body_is_rejected_at_write_time() -> TestResult
 /// Write-time round-trip invariant, driven through the real binary: any body
 /// the append accepts must produce a VET.md that strict-parses once its
 /// section is gate-terminated. The append re-parses the would-be-new file
-/// through the VET parser before writing (DEC-008), so this property holds by
+/// through the VET parser before writing, so this property holds by
 /// construction — the parser is the single authority for what lands on disk.
 ///
 /// For each accepted body we append a `drift-review` carrying it, then close
@@ -662,7 +662,7 @@ fn any_accepted_body_produces_a_strict_parseable_vet() -> TestResult {
 /// mention in prose is legitimate — the scanner does not read a mid-sentence
 /// `<gate ...>` as a structural tag — so the section closed by a real `gate`
 /// parses, the gate append succeeds, and `speccy next` resolves past the vet
-/// step. Confirms the `parse_vet_in_flight` round-trip (DEC-008) does not
+/// step. Confirms the `parse_vet_in_flight` round-trip does not
 /// over-reject a file whose body merely mentions a tag.
 #[test]
 fn gate_round_trip_accepts_legitimate_inline_tag_prose() -> TestResult {
@@ -708,7 +708,7 @@ fn vet_lock_path(spec_dir: &Utf8Path) -> Utf8PathBuf {
     spec_dir.join("journal").join("VET.md.lock")
 }
 
-/// CHK-003 (SPEC-0058 REQ-002): a spec whose `VET.md` and `VET.md.lock` exist
+/// A spec whose `VET.md` and `VET.md.lock` exist
 /// from prior vet blocks. After `speccy journal append SPEC-NNNN --block gate`
 /// runs, `VET.md.lock` no longer exists and `VET.md` parses cleanly with the
 /// gate as its last element.
@@ -768,7 +768,7 @@ fn gate_append_reaps_the_vet_lock_sidecar() -> TestResult {
     Ok(())
 }
 
-/// CHK-004 (SPEC-0058 REQ-002): after a `drift-review` vet append,
+/// After a `drift-review` vet append,
 /// `VET.md.lock` still exists — only the `gate` block reaps.
 #[test]
 fn drift_review_append_leaves_the_vet_lock_sidecar() -> TestResult {
@@ -798,7 +798,7 @@ fn drift_review_append_leaves_the_vet_lock_sidecar() -> TestResult {
     Ok(())
 }
 
-/// SPEC-0058 REQ-002: a non-gate vet block other than `drift-review` (here a
+/// A non-gate vet block other than `drift-review` (here a
 /// `holistic-fix` attached to a preceding drift-review) leaves the vet lock
 /// sidecar in place — only `gate` reaps.
 #[test]
@@ -844,7 +844,7 @@ fn holistic_fix_append_leaves_the_vet_lock_sidecar() -> TestResult {
     Ok(())
 }
 
-/// SPEC-0058 REQ-002 done-when (idempotent): a `--block gate` append whose
+/// Idempotent: a `--block gate` append whose
 /// `VET.md.lock` is already absent exits zero and still reaps cleanly.
 #[test]
 fn gate_append_with_absent_lock_is_idempotent() -> TestResult {
@@ -890,7 +890,7 @@ fn gate_append_with_absent_lock_is_idempotent() -> TestResult {
     Ok(())
 }
 
-/// REQ-004 done-when: a `holistic-fix` with no preceding `drift-review` in
+/// A `holistic-fix` with no preceding `drift-review` in
 /// the open section exits non-zero with VET.md still absent.
 #[test]
 fn holistic_fix_with_no_drift_review_exits_nonzero() -> TestResult {

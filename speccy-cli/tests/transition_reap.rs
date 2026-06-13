@@ -6,17 +6,17 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for the SPEC-0058 task-lock reap on the `--to completed`
-//! transition (REQ-001 / REQ-003).
+//! Integration tests for the task-lock reap on the `--to completed`
+//! transition.
 //!
 //! Drives the built `speccy` binary against scratch workspaces. The
-//! load-bearing scenarios are CHK-001 (an `in-review` -> `completed`
+//! load-bearing scenarios: an `in-review` -> `completed`
 //! transition unlinks a free `<task-id>.md.lock` while leaving the journal
-//! `.md` byte-identical), CHK-002 (the same transition with no sidecar exits
-//! zero and leaves the journal unchanged), CHK-005 (a sidecar held by the test
-//! process survives the reap and the transition still exits zero), and the
-//! REQ-001 done-when negative case (a non-`completed` edge leaves an existing
-//! sidecar in place).
+//! `.md` byte-identical; the same transition with no sidecar exits
+//! zero and leaves the journal unchanged; a sidecar held by the test
+//! process survives the reap and the transition still exits zero; and the
+//! negative case where a non-`completed` edge leaves an existing
+//! sidecar in place.
 
 mod common;
 
@@ -79,7 +79,7 @@ fn transition_to(ws: &Workspace, to: &str) -> Command {
     cmd
 }
 
-/// CHK-001: a task whose journal `.md` and `<task-id>.md.lock` both exist
+/// A task whose journal `.md` and `<task-id>.md.lock` both exist
 /// transitions `in-review` -> `completed`; afterward the sidecar is gone and
 /// the journal `.md` is byte-identical to its pre-transition bytes.
 #[test]
@@ -103,7 +103,7 @@ fn completed_transition_reaps_free_sidecar_and_leaves_journal_intact() -> TestRe
     Ok(())
 }
 
-/// CHK-002: a task with a journal but no lock sidecar transitions to
+/// A task with a journal but no lock sidecar transitions to
 /// `completed`; the command exits zero and the journal is unchanged (the reap
 /// is an idempotent no-op against an absent sidecar).
 #[test]
@@ -131,7 +131,7 @@ fn completed_transition_with_no_sidecar_exits_zero_and_leaves_journal_intact() -
     Ok(())
 }
 
-/// CHK-005: with the `<task-id>.md.lock` held by an exclusive advisory lock
+/// With the `<task-id>.md.lock` held by an exclusive advisory lock
 /// from the test process, a `--to completed` transition exits zero and the
 /// sidecar still exists afterward (the `try_lock` guard skipped the held
 /// lock).
@@ -163,7 +163,7 @@ fn completed_transition_skips_held_sidecar_and_still_exits_zero() -> TestResult 
     Ok(())
 }
 
-/// REQ-001 done-when / behavior: a non-`completed` edge (here
+/// A non-`completed` edge (here
 /// `pending` -> `in-progress`) leaves an existing lock sidecar in place — only
 /// the terminal `--to completed` boundary reaps.
 #[test]

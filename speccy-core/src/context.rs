@@ -1,12 +1,10 @@
 //! Shared task-context resolution walk.
 //!
 //! Hosts the single `covers → requirements → scenarios` resolution used
-//! by both `speccy check` and `speccy context`. Extracting it here (per
-//! SPEC-0056 REQ-003 / DEC-002) keeps the two commands from drifting:
-//! they resolve a task's covering requirements through one function
-//! rather than each maintaining its own copy of the walk.
-//!
-//! See `.speccy/specs/0056-task-context-bundle/SPEC.md`.
+//! by both `speccy check` and `speccy context`. Extracting it here keeps
+//! the two commands from drifting: they resolve a task's covering
+//! requirements through one function rather than each maintaining its
+//! own copy of the walk.
 
 use crate::parse::Requirement;
 use crate::parse::SpecDoc;

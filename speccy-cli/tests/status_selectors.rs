@@ -7,8 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Tests for the `speccy status` positional `SPEC-NNNN` selector,
-//! `--all` flag, hidden-count footer, and per-spec JSON. Covers
-//! SPEC-0024 REQ-004 / CHK-004.
+//! `--all` flag, hidden-count footer, and per-spec JSON.
 
 mod common;
 

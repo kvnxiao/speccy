@@ -11,8 +11,6 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Integration tests for `speccy_core::task_lookup`.
-//!
-//! Covers SPEC-0008 REQ-001..REQ-003 and CHK-001..CHK-003.
 
 mod lint_common;
 
@@ -102,7 +100,7 @@ fn make_workspace(fixtures: &[&Fixture]) -> Workspace {
     }
 }
 
-// -- REQ-001 -- CHK-001: ref_parsing -----------------------------------------
+// -- ref_parsing -------------------------------------------------------------
 
 #[test]
 fn ref_parsing_accepts_unqualified_three_digits() {
@@ -157,7 +155,7 @@ fn ref_parsing_rejects_invalid_formats() {
     }
 }
 
-// -- REQ-002 -- CHK-002: workspace_lookup ------------------------------------
+// -- workspace_lookup --------------------------------------------------------
 
 #[test]
 fn workspace_lookup_finds_unique_unqualified_match() -> TestResult {
@@ -282,7 +280,7 @@ fn workspace_lookup_skips_specs_with_failed_tasks_md_parse() -> TestResult {
     Ok(())
 }
 
-// -- REQ-003 -- CHK-003: ambiguity -------------------------------------------
+// -- ambiguity ---------------------------------------------------------------
 
 #[test]
 fn ambiguity_two_specs_returns_candidates_in_ascending_order() -> TestResult {

@@ -2,7 +2,7 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation"
 )]
-//! SPEC-0045 T-005 behavioural tests for `speccy_core::consistency::detect`.
+//! Behavioural tests for `speccy_core::consistency::detect`.
 //!
 //! Each test builds a tempdir spec fixture (SPEC.md + TASKS.md +
 //! optionally a `journal/T-NNN.md` file), parses it through the shipped
@@ -198,9 +198,9 @@ fn detect_state_in_progress_orphaned_is_blocking_when_dirty() -> TestResult {
 
 #[test]
 fn detect_state_in_progress_clean_tree_is_blocking_with_new_kind() -> TestResult {
-    // SPEC-0045 REQ-006 fifth drift kind: in-progress + clean tree
+    // Fifth drift kind: in-progress + clean tree
     // + no matching commit. The reconcile pass owns this case
-    // autonomously per DEC-004; the orchestrator startup check
+    // autonomously; the orchestrator startup check
     // no longer surfaces a user-facing fork for it.
     let (_tmp, spec_dir) = make_spec_dir(&one_task("in-progress"), &[])?;
     let spec = parse_spec_dir(&spec_dir);
@@ -235,7 +235,7 @@ fn detect_journal_xml_malformed_is_blocking_with_forward_slash_path() -> TestRes
     // specifically. Use a clean tree and a fake commit to isolate the
     // journal-malformed case. Frontmatter is required: the recovery
     // helper reuses `scan_tags` behind `split_required`, so a journal
-    // missing frontmatter recovers to offset 0 (SPEC-0062 CHK-003); the
+    // missing frontmatter recovers to offset 0; the
     // non-zero recovery offset asserted here depends on the frontmatter
     // being present.
     let malformed = "---\nspec: SPEC-0099\ntask: T-001\ngenerated_at: 2026-05-21T18:00:00Z\n---\n\n<implementer date=\"2026-05-21T18:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<implementer date=\"2026-05-21T19:00:00Z\" model=\"m\" round=\"2\">";
@@ -279,7 +279,7 @@ fn detect_journal_xml_malformed_is_blocking_with_forward_slash_path() -> TestRes
 
 #[test]
 fn detect_journal_xml_malformed_recovery_offset_ignores_fenced_close() -> TestResult {
-    // SPEC-0062 REQ-002 / CHK-004 regression. A journal with valid
+    // Regression. A journal with valid
     // frontmatter and one well-formed `<implementer>` block whose
     // structural close ends at byte X, then a second `<implementer>`
     // open whose only following `</implementer>` is line-isolated
@@ -289,13 +289,12 @@ fn detect_journal_xml_malformed_recovery_offset_ignores_fenced_close() -> TestRe
     // excludes the fenced occurrence), so the malformed branch runs.
     //
     // The recovery offset must be X (the real structural close), not Y
-    // (the fenced occurrence). Because T-001 moved the read path onto
+    // (the fenced occurrence). Because the read path runs on
     // the fence-aware `journal_xml::last_well_formed_offset`, the fenced
     // close is excluded for free.
     //
-    // Recorded pre-fix measurement (CHK-004 "recorded pre-fix run"):
-    // the pre-SPEC hand-rolled `find('<')` scan (recovered from the
-    // merged SPEC-0061 revision and run once against this exact fixture)
+    // Recorded pre-fix measurement: the earlier hand-rolled `find('<')`
+    // scan (run once against this exact fixture)
     // counted the fenced close and yielded Y = 235 — the fence-blindness
     // bug this test guards. The post-fix value asserted below is X = 153.
     // The blank line before the fence is load-bearing: it makes the

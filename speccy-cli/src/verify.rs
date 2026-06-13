@@ -1,13 +1,11 @@
 //! `speccy verify` command logic.
 //!
-//! Shape-only validator. SPEC-0018 REQ-003: walks parsed specs and
+//! Shape-only validator: walks parsed specs and
 //! surfaces lint diagnostics (parse errors, requirement-to-scenario
 //! cross-references, stale tasks, open questions); never executes
 //! scenarios or spawns child processes. Check execution is deliberately
 //! gone — scenarios are English claims for reviewers and humans, not
 //! commands speccy runs.
-//!
-//! See `.speccy/specs/0018-remove-check-execution/SPEC.md` REQ-003.
 
 use crate::git::repo_sha;
 use crate::verify_output::write_json;
@@ -58,7 +56,7 @@ pub struct VerifyArgs {
 /// renderers in [`crate::verify_output`].
 ///
 /// Every count covers specs that are not `dropped` or `superseded` (those
-/// remain non-gating, matching the pre-SPEC-0018 distinction). Workspace-
+/// remain non-gating). Workspace-
 /// level diagnostics that are not tied to a spec keep their full severity.
 #[derive(Debug)]
 pub struct VerifyReport {
@@ -137,7 +135,7 @@ pub fn run(args: VerifyArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<i32,
 /// level diagnostics (no `spec_id`) keep their original severity, and
 /// diagnostics on `implemented` specs keep theirs too — those gate the
 /// exit code. `in-progress` specs are work-in-flight; `dropped` and
-/// `superseded` specs replicate the pre-SPEC-0018 non-gating contract
+/// `superseded` specs are non-gating
 /// (their checks never ran, so their shape errors do not gate either).
 fn partition_lint(
     diagnostics: Vec<Diagnostic>,
@@ -183,7 +181,7 @@ fn build_status_map(ws: &Workspace) -> HashMap<String, SpecStatus> {
 /// tree parsed and which is not defunct, returning `(requirements,
 /// scenarios)` where `scenarios` sums `Requirement.scenarios.len()`.
 /// Dropped and superseded specs contribute zero, matching the
-/// pre-SPEC-0018 "their checks never ran" distinction.
+/// "their checks never ran" distinction.
 fn shape_totals(ws: &Workspace) -> (usize, usize) {
     let mut requirements = 0usize;
     let mut scenarios = 0usize;

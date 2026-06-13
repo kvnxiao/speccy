@@ -7,12 +7,8 @@
 //! workspace, missing SPEC.md or TASKS.md, parse errors, ID
 //! disagreement) the command exits non-zero and TASKS.md is untouched.
 //!
-//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-002.
-//! DEC-006 holds the precondition surface to exactly what
-//! `tasks --commit` validated pre-SPEC; no new checks are added here.
-//!
-//! See `.speccy/specs/0006-tasks-command/SPEC.md` for the original
-//! `--commit` contract this command inherits.
+//! The precondition surface is held to exactly what `tasks --commit`
+//! validated; no new checks are added here.
 
 use crate::check_selector::bare_spec_regex;
 use camino::Utf8Path;

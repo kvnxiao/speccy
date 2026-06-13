@@ -7,7 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! End-to-end tests for the `speccy status` binary entry point.
-//! Exercises argument parsing and exit codes. Covers SPEC-0004 T-011.
+//! Exercises argument parsing and exit codes.
 
 mod common;
 

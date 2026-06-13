@@ -6,16 +6,16 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! SPEC-0045 T-006: end-to-end fixture tests for the `consistency` block
+//! End-to-end fixture tests for the `consistency` block
 //! in `speccy next --json`.
 //!
 //! Each test builds an isolated tempdir workspace containing a real
 //! `.git/` repo plus a minimal `.speccy/specs/NNNN-slug/` tree, then
 //! drives the production `speccy_cli::next::run` entry point and parses
 //! the resulting JSON envelope. The fixtures exercise the four drift
-//! kinds defined by REQ-006 plus the all-healthy path, and a final
-//! source-grep test enforces CHK-011 (no mutating git commands in
-//! `speccy-cli/src/` or `speccy-core/src/`).
+//! kinds plus the all-healthy path, and a final
+//! source-grep test enforces the no-mutating-git-command rule in
+//! `speccy-cli/src/` or `speccy-core/src/`.
 
 mod common;
 
@@ -199,7 +199,7 @@ fn drifts(envelope: &Value) -> &Vec<Value> {
         .expect("consistency.drifts must be a JSON array")
 }
 
-// --- CHK-012: state_completed_no_commit + dirty tree --------------------
+// --- state_completed_no_commit + dirty tree --------------------
 
 #[test]
 fn state_completed_no_commit_with_dirty_tree_is_blocking() -> TestResult {
@@ -247,7 +247,7 @@ fn state_completed_no_commit_with_dirty_tree_is_blocking() -> TestResult {
     Ok(())
 }
 
-// --- CHK-013: journal_xml_malformed -------------------------------------
+// --- journal_xml_malformed -------------------------------------
 
 #[test]
 fn journal_xml_malformed_reports_kind_path_and_offset() -> TestResult {
@@ -256,7 +256,7 @@ fn journal_xml_malformed_reports_kind_path_and_offset() -> TestResult {
     // (unbalanced element) while the tolerant `scan_tags` recovery still
     // pairs the first block. Frontmatter is required: the recovery helper
     // reuses `scan_tags` behind `split_required`, so a frontmatter-less
-    // journal recovers to offset 0 (SPEC-0062 CHK-003). The expected
+    // journal recovers to offset 0. The expected
     // offset is computed relative to this same `body`, so the frontmatter
     // prefix shifts the actual and expected close offsets together.
     let body = "---\nspec: SPEC-0099\ntask: T-001\ngenerated_at: 2026-05-25T00:00:00Z\n---\n\n<implementer date=\"2026-05-25T00:00:00Z\" model=\"m\" round=\"1\">\nbody\n</implementer>\n<implementer date=\"2026-05-25T01:00:00Z\" model=\"m\" round=\"2\">";
@@ -302,7 +302,7 @@ fn journal_xml_malformed_reports_kind_path_and_offset() -> TestResult {
     Ok(())
 }
 
-// --- CHK-010: commit_without_state --------------------------------------
+// --- commit_without_state --------------------------------------
 
 #[test]
 fn commit_without_state_reports_40_hex_sha() -> TestResult {
@@ -390,15 +390,15 @@ fn ok_status_when_completed_task_has_matching_commit() -> TestResult {
     Ok(())
 }
 
-// --- CHK-011: no mutating git commands anywhere in src/ -----------------
+// --- no mutating git commands anywhere in src/ -----------------
 
 #[test]
 fn no_mutating_git_commands_in_source() -> TestResult {
     // Walk speccy-cli/src and speccy-core/src, strip line comments and
     // string-literal-looking contexts conservatively, and assert none of
-    // the five mutating git command invocations appear. CHK-011 scopes
-    // the check to "command invocations, not in comments or doc
-    // strings", which we approximate by ignoring any line whose first
+    // the five mutating git command invocations appear. The check is
+    // scoped to command invocations, not comments or doc
+    // strings, which we approximate by ignoring any line whose first
     // non-whitespace token is `//`, `//!`, `///`, `*`, or `/*`.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = Utf8PathBuf::from(manifest_dir)

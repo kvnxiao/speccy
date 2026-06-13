@@ -10,8 +10,9 @@
 //! commands (`status` default mode, `next`, `check`, `verify`, `lock`)
 //! never reach into `.speccy/archive/`.
 //!
-//! Covers SPEC-0042 T-007 / REQ-006 / CHK-014, CHK-015, CHK-016, plus
-//! the supplementary `speccy lock` invisibility scenario.
+//! Covers the archived-spec invisibility scenarios for `status --json`,
+//! `next`, `check`, and `verify`, plus the supplementary `speccy lock`
+//! invisibility scenario.
 
 mod common;
 
@@ -72,7 +73,7 @@ fn workspace_with_one_archived_one_active() -> TestResult<Workspace> {
 
 #[test]
 fn status_json_default_omits_archived_spec() -> TestResult {
-    // CHK-014: status --json (no flags) → archived spec absent.
+    // status --json (no flags) → archived spec absent.
     let ws = workspace_with_one_archived_one_active()?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -109,9 +110,8 @@ fn status_json_default_omits_archived_spec() -> TestResult {
 
 #[test]
 fn next_json_does_not_surface_archived_spec() -> TestResult {
-    // REQ-006 generalization: `speccy next` discovers via the same
-    // active-only scan as `status`; an archived spec must not appear
-    // as a next action.
+    // `speccy next` discovers via the same active-only scan as
+    // `status`; an archived spec must not appear as a next action.
     let ws = workspace_with_one_archived_one_active()?;
 
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -130,7 +130,7 @@ fn next_json_does_not_surface_archived_spec() -> TestResult {
 
 #[test]
 fn check_archived_spec_exits_nonzero_with_not_found_message() -> TestResult {
-    // CHK-015: `speccy check SPEC-0001` (archived) exits non-zero;
+    // `speccy check SPEC-0001` (archived) exits non-zero;
     // stderr names SPEC-0001 and indicates the spec is not present.
     let ws = workspace_with_one_archived_one_active()?;
 
@@ -147,8 +147,7 @@ fn check_archived_spec_exits_nonzero_with_not_found_message() -> TestResult {
     );
     // `speccy check` renders selector errors as
     // `no spec `SPEC-0001` found in workspace`, which matches the
-    // CHK-015 requirement that the message indicate the spec is
-    // not found.
+    // requirement that the message indicate the spec is not found.
     assert!(
         stderr.contains("not found") || stderr.contains("no spec"),
         "stderr must indicate the spec is not found: {stderr}"
@@ -158,7 +157,7 @@ fn check_archived_spec_exits_nonzero_with_not_found_message() -> TestResult {
 
 #[test]
 fn verify_after_archive_exits_zero_and_omits_archived_spec() -> TestResult {
-    // CHK-016: pre-archive `verify` passes; after archiving SPEC-0001
+    // Pre-archive `verify` passes; after archiving SPEC-0001
     // (half of the implemented specs), `verify` still exits 0 and the
     // JSON output reflects only the still-active SPEC-0002.
     let ws = Workspace::new()?;

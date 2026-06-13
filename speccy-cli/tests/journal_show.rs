@@ -6,12 +6,12 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy journal show` (SPEC-0055 REQ-006).
+//! Integration tests for `speccy journal show`.
 //!
 //! Drives the built `speccy` binary against scratch workspaces. The
-//! load-bearing scenarios are CHK-009 (`--round latest --verdict blocking`
+//! load-bearing scenarios: `--round latest --verdict blocking`
 //! on a two-round journal with five round-2 reviews returns exactly the one
-//! blocking block with `schema_version` 1), the `--block review --round N`
+//! blocking block with `schema_version` 1; the `--block review --round N`
 //! completeness call site (lists the personas that reviewed round N), the
 //! VET.md spec-selector path (invocation sections and blocks appear in the
 //! JSON), and the missing-file non-zero exit.
@@ -90,7 +90,7 @@ fn write_two_round_journal(spec_dir: &Utf8Path) -> TestResult<Utf8PathBuf> {
     Ok(path)
 }
 
-/// CHK-009: `--round latest --verdict blocking` on the two-round fixture
+/// `--round latest --verdict blocking` on the two-round fixture
 /// returns exactly the one blocking round-2 block, with the persona/verdict
 /// matching the fixture and `schema_version` 1.
 #[test]
@@ -200,7 +200,7 @@ fn block_review_round_n_lists_round_personas() -> TestResult {
 }
 
 /// A bare spec selector resolves VET.md; its invocation sections and blocks
-/// appear in the JSON envelope (REQ-006 behavior / scenario 3).
+/// appear in the JSON envelope.
 #[test]
 fn spec_selector_shows_vet_invocations_and_blocks() -> TestResult {
     let (ws, spec_dir) = workspace_with_task("completed")?;

@@ -2,9 +2,9 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation"
 )]
-//! SPEC-0037 T-001 integration tests for the JNL-* lint family.
+//! Integration tests for the JNL-* lint family.
 //!
-//! Scenario coverage is drawn directly from T-001's `<task-scenarios>`
+//! Scenario coverage is drawn directly from the task's `<task-scenarios>`
 //! block. Fixtures live under tempdirs — never the real `.speccy/specs/`
 //! tree.
 

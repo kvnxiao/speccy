@@ -260,6 +260,20 @@ Before any commit lands, all four must pass:
   `DEC-001`, slug `0042-widget-render-timeout`) is load-bearing rather than
   placeholder — see "Authoring resource prose" item 7. Speccy's own artifacts
   under `.speccy/specs/` are local dogfood evidence and stay Speccy-specific.
+- Never cite, as the reason a line of production code, test, or comment
+  exists, a Speccy id (SPEC/REQ/CHK/DEC/task — `// per REQ-NNN`, `//! Tests
+  for SPEC-NNNN T-NNN`) or a governance/design doc (`(Core principle 2)`, `per
+  AGENTS.md`, `see docs/ARCHITECTURE.md`, a rule-file pointer). Speccy is a
+  means to produce the code, not a part of it, and the code should not be
+  coupled to the docs that govern it — once either is removed the citation
+  references nothing, so it is drift the moment it lands. Requirement→evidence
+  traceability lives in the journal `Evidence:` field and CHK roll-call
+  (`.speccy/specs/NNNN-slug/journal/T-NNN.md`), not in the source tree. Keep
+  the reasoning a comment carries; drop the bare id or doc pointer. Naming an
+  artifact the code actually operates on (`SPEC.md`, `TASKS.md`, a `.speccy/…`
+  path) is data, not meta-annotation. (This governs production code and tests;
+  the sibling "No artifact-ID provenance outside references" rule under
+  "Authoring resource prose" governs resource bodies.)
 - Hit friction from a stale or wrong instruction in a shipped skill (wrong
   command, missing env var, undocumented step)? Fix the source module under
   `resources/` before finishing the task, run `just reeject`, and call out the

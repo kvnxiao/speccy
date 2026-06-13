@@ -10,8 +10,7 @@
 //!   are fully completed and have REPORT.md). Used by `speccy next` (workspace
 //!   form).
 //!
-//! Priority rule (see SPEC-0033 REQ-004, SPEC-0041 REQ-002, and
-//! SPEC-0043 REQ-002):
+//! Priority rule:
 //! > 1. TASKS.md is absent → kind = `"decompose"`
 //! > 2. Any task is `state="in-review"` → kind = `"review"` (first one)
 //! > 3. Any task is `state="pending"` → kind = `"work"` (first one)
@@ -111,8 +110,8 @@ pub fn compute_for_spec(spec: &ParsedSpec) -> Option<NextAction> {
     }
 
     // All tasks are completed (or empty). REPORT.md presence is the
-    // durable shipped marker and beats vet-gate state (SPEC-0043
-    // REQ-002): once REPORT.md exists, the spec is terminal regardless
+    // durable shipped marker and beats vet-gate state: once REPORT.md
+    // exists, the spec is terminal regardless
     // of whether a fresh `journal/VET.md` gate is present.
     if tasks.tasks.iter().all(|t| t.state == TaskState::Completed) {
         if report_md_exists(spec) {
@@ -169,7 +168,7 @@ fn report_md_exists(spec: &ParsedSpec) -> bool {
 /// Returns false on any other shape (file absent, parse failure, empty
 /// document, a terminal block that is not a `Gate`, a failed verdict, a
 /// stale hash, or a read error). Recognition flows entirely through
-/// [`parse_vet_in_flight`] (SPEC-0061 REQ-001): a `<gate>` quoted inside
+/// [`parse_vet_in_flight`]: a `<gate>` quoted inside
 /// a block body is captured in that block's body text and never surfaces
 /// as the terminal gate, so it cannot satisfy freshness. Treating parse
 /// failures as "not fresh" is deliberate: re-vetting is safer than
@@ -214,7 +213,7 @@ fn first_task_with_state(
 /// The hardcoded review fan-out.
 ///
 /// Sourced from [`crate::personas::ALL`]; the five-persona prefix is
-/// the SPEC-0007 DEC-002 default. Exposed as a function (not a `const`)
+/// the default. Exposed as a function (not a `const`)
 /// so the slice keeps a `'static` lifetime borrowed from `ALL` without
 /// duplicating the literal.
 #[must_use = "the returned slice is the fan-out for review results"]

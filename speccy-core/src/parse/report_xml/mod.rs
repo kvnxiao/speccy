@@ -1,15 +1,11 @@
-//! Raw-XML-element-structured REPORT.md parser (SPEC-0022
-//! REQ-002 / REQ-003 carrier).
+//! Raw-XML-element-structured REPORT.md parser.
 //!
 //! Reads a REPORT.md whose body is ordinary Markdown plus line-isolated raw
 //! XML open/close tag pairs drawn from a small closed whitelist
 //! (`report`, `coverage`) and returns a typed [`ReportDoc`]. Reuses the
-//! shared scanner ([`crate::parse::xml_scanner`]) introduced by T-001 so
+//! shared scanner ([`crate::parse::xml_scanner`]) so
 //! fenced-code-block awareness and tag-shape diagnostics are identical to
 //! SPEC.md and TASKS.md parsing.
-//!
-//! See `.speccy/specs/0022-xml-canonical-tasks-report/SPEC.md` REQ-002
-//! and REQ-003 for the contract this module satisfies.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
@@ -51,7 +47,7 @@ pub struct ReportDoc {
     /// Raw source bytes, retained so [`ElementSpan`] indices remain valid.
     pub raw: String,
     /// `spec="..."` attribute value on the root `<report>` element
-    /// (e.g. `"SPEC-0022"`).
+    /// (e.g. `"SPEC-NNNN"`).
     pub spec_id: String,
     /// Span of the root `<report>` open tag.
     pub report_span: ElementSpan,
@@ -324,7 +320,7 @@ fn find_attr(attrs: &[(String, String)], key: &str) -> Option<String> {
 
 /// Parse a `scenarios="..."` value into a list of `CHK-NNN` ids.
 ///
-/// Grammar (SPEC-0022 REQ-002): zero or more `CHK-\d{3,}` ids separated
+/// Grammar: zero or more `CHK-\d{3,}` ids separated
 /// by single ASCII spaces. The attribute being entirely empty is OK; this
 /// function returns an empty vec in that case (the caller enforces the
 /// per-result minimum). Leading or trailing whitespace, double spaces,

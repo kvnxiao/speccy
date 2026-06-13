@@ -1,4 +1,4 @@
-//! SPEC-0016 T-012 / REQ-005 / CHK-008-companion: CI workflow content guard.
+//! CI workflow content guard.
 //!
 //! The CI workflow at `.github/workflows/ci.yml` runs `speccy init --force`
 //! twice (once per host), then runs `git diff --exit-code` against the four
@@ -8,7 +8,7 @@
 //!
 //! Runtime byte-equivalence between the renderer and the committed
 //! dogfood tree is exercised by
-//! `tests/init.rs::dogfood_outputs_match_committed_tree` (CHK-008). These tests
+//! `tests/init.rs::dogfood_outputs_match_committed_tree`. These tests
 //! guard the workflow content itself so a contributor cannot regress the step
 //! name, the order of the init commands, the diff target list, or the failure
 //! message in isolation from the runtime check.
@@ -52,7 +52,7 @@ fn materialization_step_does_not_reference_stale_claude_commands_path() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0018 T-006 / REQ-003 / REQ-005: project test commands run
+// Project test commands run
 // directly in CI; `speccy verify` is a shape gate that runs alongside
 // them, not a wrapper around them. The CI workflow must invoke
 // `cargo test`, `cargo clippy`, `cargo +nightly fmt`, and
@@ -84,7 +84,7 @@ fn project_test_commands_run_directly_before_speccy_verify() {
 
     // Each project test command must precede `speccy verify` so CI
     // does not depend on `speccy verify` to execute project tests.
-    // SPEC-0018 made `speccy verify` a shape-only validator; project
+    // `speccy verify` is a shape-only validator; project
     // test failures must surface as their own failed CI step.
     for (label, idx) in [
         (CARGO_TEST_STEP, test_idx),
@@ -103,7 +103,7 @@ fn project_test_commands_run_directly_before_speccy_verify() {
 
 #[test]
 fn speccy_verify_step_does_not_run_project_tests() {
-    // SPEC-0018 REQ-003: `speccy verify` is shape-only. It must not
+    // `speccy verify` is shape-only. It must not
     // shell out to `cargo test` / `cargo clippy` / etc. and CI must
     // not assume it does. The verify step in ci.yml is a single
     // `./target/debug/speccy verify` invocation with no other commands

@@ -6,11 +6,11 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! End-to-end tests for `speccy lock SPEC-NNNN` (SPEC-0033 REQ-002).
+//! End-to-end tests for `speccy lock SPEC-NNNN`.
 //!
-//! Exercises CHK-003 (happy-path hash + timestamp rewrite) and CHK-004
-//! (SPEC.md parse-failure precondition) plus the SPEC-not-found and
-//! `--help` listing scenarios from TASKS T-002.
+//! Exercises the happy-path hash + timestamp rewrite and the SPEC.md
+//! parse-failure precondition, plus the SPEC-not-found and
+//! `--help` listing scenarios.
 
 mod common;
 

@@ -1,13 +1,13 @@
 //! Parser for the pre-ship vet journal (`journal/VET.md`).
 //!
-//! SPEC-0055 REQ-004 freezes the VET.md grammar that until now lived
+//! This module freezes the VET.md grammar that until now lived
 //! only in skill prose and the tolerant `<gate>` scanner in
 //! [`crate::next`]. The file shape is YAML frontmatter (`spec`,
 //! `generated_at`) followed by one or more `## Invocation N — <ISO8601>`
 //! sections, each holding a chronological sequence of vet blocks that
 //! terminates in exactly one `<gate>`.
 //!
-//! Block attribute schemas (SPEC-0055 REQ-004):
+//! Block attribute schemas:
 //! - `<drift-review>`: `verdict` (`pass|blocking`), `round`, `date`, `model`
 //!   (all required).
 //! - `<holistic-fix>`: `verdict` (`addressed|blocking|stuck`), `round`, `date`,
@@ -23,10 +23,10 @@
 //! non-empty string (the slash-suffix effort convention is not
 //! parser-validated, matching [`crate::parse::journal_xml`]).
 //!
-//! This module is the source of truth for the grammar (DEC-005), and the
+//! This module is the source of truth for the grammar, and the
 //! sole recognizer of it: the gate-freshness check in [`crate::next`]
 //! resolves the terminal gate through [`parse_in_flight`]'s typed
-//! [`VetDoc`], not an independent scan (SPEC-0061 REQ-001).
+//! [`VetDoc`], not an independent scan.
 
 pub mod serialize;
 
@@ -78,7 +78,7 @@ pub const VET_ELEMENT_NAMES: &[&str] = &[
 /// Parsed pre-ship vet journal file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VetDoc {
-    /// `spec:` field from the frontmatter, e.g. `SPEC-0042`.
+    /// `spec:` field from the frontmatter, e.g. `SPEC-NNNN`.
     pub spec: String,
     /// `generated_at:` field from the frontmatter.
     pub generated_at: String,
@@ -243,7 +243,7 @@ struct HeadingMatch {
 /// a terminal `<gate>`, or may be left open.
 ///
 /// The two parse entry points ([`parse`] and [`parse_in_flight`]) differ
-/// only by this flag (DEC-008): strict parsing rejects an un-gated last
+/// only by this flag: strict parsing rejects an un-gated last
 /// section (the complete-file grammar `speccy verify` relies on), while
 /// in-flight parsing tolerates it (the shape that exists mid-vet-run, after
 /// a `drift-review` and before its `gate`, which `journal append`'s
@@ -277,13 +277,13 @@ enum LastSection {
 /// A section's gate-structure violation (no terminal `gate`, a
 /// non-terminal `gate`, or a second `gate`) returns the dedicated
 /// [`ParseError::VetGateStructure`] so callers can distinguish it from
-/// other grammar failures (SPEC-0055 REQ-007 routes it to `VET-002`).
+/// other grammar failures (routes it to `VET-002`).
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<VetDoc> {
     parse_with_mode(source, path, LastSection::MustBeGated)
 }
 
 /// Parse an *in-flight* VET.md source into a [`VetDoc`], tolerating an
-/// open (un-gated) last invocation section (DEC-008).
+/// open (un-gated) last invocation section.
 ///
 /// Identical to [`parse`] in every respect except that the last section is
 /// allowed to lack a terminal `<gate>` — the shape a VET.md has mid-vet-run
@@ -376,8 +376,8 @@ fn parse_with_mode(
 /// The shared scanner ([`scan_tags`]) deliberately flows non-whitelisted
 /// tags through as Markdown body (so foreign HTML like `<details>`
 /// survives). VET.md is a closed grammar, though: a speccy-shaped tag
-/// like `<drift-revue>` is a typo'd block, not prose, and the SPEC-0055
-/// REQ-004 grammar must reject it loudly rather than silently drop it.
+/// like `<drift-revue>` is a typo'd block, not prose, and the VET.md
+/// grammar must reject it loudly rather than silently drop it.
 /// HTML5 element names stay tolerated to match the workspace-wide
 /// foreign-HTML contract.
 fn reject_unknown_block_tags(
@@ -582,7 +582,7 @@ fn partition_into_sections(
 ///
 /// `allow_open` exempts a section with *no* `<gate>` from the
 /// "no terminal gate" error — set only for the last section in in-flight
-/// mode (DEC-008). A section that *does* carry a gate is validated in full
+/// mode. A section that *does* carry a gate is validated in full
 /// regardless (the gate must be terminal and unique), so the relaxation
 /// never weakens the gate rules for a closed section.
 fn validate_section(inv: &Invocation, path: &Utf8Path, allow_open: bool) -> ParseResult<()> {
@@ -1157,7 +1157,7 @@ mod tests {
     #[test]
     fn in_flight_accepts_open_trailing_section() {
         // The mid-vet-run shape: one section with a drift-review and no gate
-        // yet. Strict parse rejects it; in-flight parse accepts it (DEC-008),
+        // yet. Strict parse rejects it; in-flight parse accepts it,
         // so `journal append` can derive state from it.
         let src = make(indoc! {r#"
             ## Invocation 1 — 2026-05-21T18:00:00Z
@@ -1226,7 +1226,7 @@ mod tests {
         // A body line that *is* a vet open tag is read as a nested block by the
         // shared scanner (vet blocks must not nest), so the file is rejected by
         // both parse and parse_in_flight. This is the body-inertness invariant
-        // the append path's write-time round-trip relies on (DEC-008): a body
+        // the append path's write-time round-trip relies on: a body
         // smuggling a structural line cannot produce a parseable file, so no
         // separate body-markup guard is needed.
         let src = make(indoc! {r#"

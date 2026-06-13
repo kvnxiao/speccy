@@ -159,9 +159,9 @@ pub fn task_xml(id: &str, state: &str) -> String {
 
 /// Count non-blank lines in `s`, excluding any line that falls within a
 /// `reconcile-policy` shared-partial marker block or a
-/// `retry-shape` shared-rule marker block. SPEC-0045/REQ-008 inlines
-/// the reconcile partial verbatim into phase-worker SKILL.md stubs;
-/// SPEC-0047/REQ-002 inlines the retry-shape rule into the
+/// `retry-shape` shared-rule marker block. The reconcile partial is
+/// inlined verbatim into phase-worker SKILL.md stubs;
+/// the retry-shape rule is inlined into the
 /// `/speccy-work` and `/speccy-orchestrate` skill bodies. Both
 /// marker-bounded regions are explicit, auditable exemptions from
 /// the "thin stub" non-empty-line cap. For each marker type, uses
@@ -207,7 +207,7 @@ pub fn non_blank_line_count_outside_shared_markers(s: &str) -> usize {
 /// Render a single-invocation VET.md for `spec_id` whose terminal `<gate>`
 /// carries `verdict` and `tasks_hash`, built entirely from the exported
 /// production renderers so the fixture matches the real grammar by
-/// construction (SPEC-0061 REQ-004 / DEC-004). `extra_body_line`, when
+/// construction. `extra_body_line`, when
 /// `Some`, is appended to the gate body — used by the spoof fixture that
 /// embeds a line-isolated fake `<gate>` inside a block body. `leading`
 /// blocks (already rendered via [`render_vet_block`]) are emitted in the
@@ -320,7 +320,7 @@ pub fn write_vet_md(
 }
 
 /// Write a fresh, passing `journal/VET.md` whose `tasks_hash` matches
-/// the supplied TASKS.md bytes. Drives the SPEC-0041 fresh-pass gate
+/// the supplied TASKS.md bytes. Drives the fresh-pass gate
 /// branch in `speccy next`. Delegates to [`write_vet_md`].
 pub fn write_fresh_pass_vet_md(spec_dir: &Utf8Path, spec_id: &str, tasks_md: &str) -> TestResult {
     let hash = sha256_hex(tasks_md.as_bytes());

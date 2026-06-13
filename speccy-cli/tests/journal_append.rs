@@ -6,17 +6,16 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy journal append` (SPEC-0055 REQ-003 /
-//! REQ-005).
+//! Integration tests for `speccy journal append`.
 //!
 //! Drives the built `speccy` binary against scratch workspaces. The
-//! load-bearing scenarios are CHK-004 (a fresh `implementer` append creates
-//! the journal with CLI-stamped frontmatter and `round="1"`), CHK-005 (a
+//! load-bearing scenarios: a fresh `implementer` append creates
+//! the journal with CLI-stamped frontmatter and `round="1"`; a
 //! `review` with an unknown persona exits non-zero and leaves the journal
-//! byte-identical), CHK-008 (eight concurrent `review` appends produce eight
-//! well-formed blocks the parser accepts), and the REQ-005 done-when timeout
-//! (a held lock makes a waiting append exit non-zero after roughly the
-//! interval with the journal byte-identical).
+//! byte-identical; eight concurrent `review` appends produce eight
+//! well-formed blocks the parser accepts; and the timeout case
+//! where a held lock makes a waiting append exit non-zero after roughly the
+//! interval with the journal byte-identical.
 
 mod common;
 
@@ -52,7 +51,7 @@ fn journal_path(spec_dir: &Utf8Path) -> Utf8PathBuf {
     spec_dir.join("journal").join("T-001.md")
 }
 
-/// CHK-004: a fresh `implementer` append creates the journal with
+/// A fresh `implementer` append creates the journal with
 /// CLI-stamped frontmatter and a single `round="1"` block whose `date` the
 /// caller never supplied.
 #[test]
@@ -97,7 +96,7 @@ fn fresh_implementer_creates_journal_with_frontmatter_and_round_one() -> TestRes
     Ok(())
 }
 
-/// CHK-005: a `review` append with an unknown persona exits non-zero and
+/// A `review` append with an unknown persona exits non-zero and
 /// leaves the journal byte-identical.
 #[test]
 fn unknown_persona_review_exits_nonzero_and_leaves_bytes_unchanged() -> TestResult {
@@ -147,7 +146,7 @@ fn unknown_persona_review_exits_nonzero_and_leaves_bytes_unchanged() -> TestResu
     Ok(())
 }
 
-/// REQ-003 done-when: a `review` append to a journal with no `implementer`
+/// A `review` append to a journal with no `implementer`
 /// block exits non-zero, leaving the file still absent.
 #[test]
 fn review_with_no_round_exits_nonzero_and_journal_stays_absent() -> TestResult {
@@ -180,7 +179,7 @@ fn review_with_no_round_exits_nonzero_and_journal_stays_absent() -> TestResult {
     Ok(())
 }
 
-/// REQ-003 done-when: an empty stdin body exits non-zero with the journal
+/// An empty stdin body exits non-zero with the journal
 /// still absent.
 #[test]
 fn empty_body_exits_nonzero() -> TestResult {
@@ -209,7 +208,7 @@ fn empty_body_exits_nonzero() -> TestResult {
     Ok(())
 }
 
-/// SPEC-0061 CHK-004 (REQ-002): an `implementer` append whose body carries a
+/// An `implementer` append whose body carries a
 /// line-isolated `</implementer>` is refused at write time by the per-task
 /// journal round-trip — the scanner reads the in-body close tag as a
 /// structural close (close without matching open), so the would-be-new file
@@ -263,7 +262,7 @@ fn line_isolated_close_tag_in_body_is_rejected_at_write_time() -> TestResult {
     Ok(())
 }
 
-/// SPEC-0061 CHK-005 (REQ-002): an `implementer` append against a fresh
+/// An `implementer` append against a fresh
 /// journal whose body mentions `<review>` inline within a prose sentence is
 /// accepted — the scanner does not read a mid-sentence tag as structural — so
 /// the command exits 0 and the produced journal re-parses under
@@ -296,7 +295,7 @@ fn inline_element_mention_in_prose_is_accepted_and_reparses() -> TestResult {
     Ok(())
 }
 
-/// CHK-008: eight concurrent processes each append one distinct `review`
+/// Eight concurrent processes each append one distinct `review`
 /// block to the same journal; the result holds eight well-formed review
 /// blocks (plus the seed implementer) with no interleaving, and the parser
 /// accepts the file.
@@ -386,7 +385,7 @@ fn eight_concurrent_review_appends_serialize_cleanly() -> TestResult {
     Ok(())
 }
 
-/// REQ-005 done-when: two concurrent round-opening (`implementer`) appends
+/// Two concurrent round-opening (`implementer`) appends
 /// derive distinct, correctly ordered round numbers because the
 /// derive-validate-append sequence runs under the lock.
 #[test]
@@ -445,7 +444,7 @@ fn two_concurrent_round_opening_appends_get_distinct_rounds() -> TestResult {
     Ok(())
 }
 
-/// REQ-005 done-when: a held lock causes a waiting append to exit non-zero
+/// A held lock causes a waiting append to exit non-zero
 /// after roughly the timeout interval, naming the journal path, with the
 /// journal byte-identical.
 ///

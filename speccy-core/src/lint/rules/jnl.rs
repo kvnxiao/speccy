@@ -1,6 +1,6 @@
 //! JNL-* rules: per-task journal file validation gated by task state.
 //!
-//! SPEC-0037 REQ-002. The three rules are:
+//! The three rules are:
 //!
 //! - `JNL-001` (error): fires on any task at `state="pending"` whose
 //!   `journal/T-NNN.md` exists.
@@ -37,7 +37,7 @@ pub fn lint(spec: &ParsedSpec, out: &mut Vec<Diagnostic>) {
             TaskState::Pending => check_pending(spec, task, &journal_path, out),
             TaskState::Completed => check_completed(spec, task, &journal_path, out),
             TaskState::InProgress | TaskState::InReview => {
-                // SPEC-0037 REQ-002: in-progress/in-review tasks skip
+                // In-progress/in-review tasks skip
                 // all JNL-* lints entirely.
             }
         }

@@ -10,11 +10,10 @@
     clippy::panic,
     reason = "test helpers panic on malformed fixture JSON; tests are infallible setup-side"
 )]
-//! End-to-end tests for `speccy status --include-archive` (SPEC-0042
-//! T-006 / REQ-007). Post-1.0 the flag is also accepted on `next`,
-//! `check`, and `verify` (read commands), so the negative invariant
-//! is narrower than at SPEC-0042 landing time: only write-side
-//! commands (`lock`) still reject the flag.
+//! End-to-end tests for `speccy status --include-archive`. The flag is
+//! also accepted on `next`, `check`, and `verify` (read commands), so
+//! the negative invariant is narrow: only write-side commands (`lock`)
+//! still reject the flag.
 
 mod common;
 

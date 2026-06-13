@@ -2,11 +2,11 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for REQ-008 (SPEC-0033 T-007): skill and phase body files must
+//! Tests for skill and phase body files: they must
 //! discover speccy resources via CLI JSON envelopes only, not via
 //! direct filesystem patterns.
 //!
-//! SPEC-0033 T-007 checks (each negative sweep runs over every `.md`
+//! Checks (each negative sweep runs over every `.md`
 //! file shipped under `resources/modules/`, enumerated from the
 //! embedded bundle so new modules are covered automatically):
 //!
@@ -102,10 +102,10 @@ fn collect_md_bodies(dir: &Dir<'static>, out: &mut Vec<(String, &'static str)>) 
 }
 
 // ---------------------------------------------------------------------------
-// CHK-014: no direct speccy-resource discovery patterns
+// no direct speccy-resource discovery patterns
 // ---------------------------------------------------------------------------
 
-/// CHK-014: no `.speccy/specs/*` glob expressions, no bare `SPEC.md` /
+/// No `.speccy/specs/*` glob expressions, no bare `SPEC.md` /
 /// `TASKS.md` / `MISSION.md` / `REPORT.md` filesystem paths (not bound
 /// to a `{{ ... }}` template placeholder), and no directory-enumeration
 /// instructions targeting `.speccy/specs/` appear in any module body
@@ -193,10 +193,10 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-015: speccy-plan uses vacancy not status for new SPEC ID
+// speccy-plan uses vacancy not status for new SPEC ID
 // ---------------------------------------------------------------------------
 
-/// CHK-015: `resources/modules/skills/speccy-plan.md` invokes
+/// `resources/modules/skills/speccy-plan.md` invokes
 /// `speccy vacancy --json` to allocate a new SPEC ID, not
 /// `speccy status --json`.
 #[test]
@@ -288,7 +288,7 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
 // ---------------------------------------------------------------------------
 
 /// The removed `--kind` flag to `speccy next` must not appear in any
-/// module body file (replaced by derived action-kind logic in T-004).
+/// module body file (replaced by derived action-kind logic).
 #[test]
 fn no_kind_filter_flag_in_skill_or_phase_bodies() {
     for (path, body) in &all_module_bodies() {
@@ -304,8 +304,8 @@ fn no_kind_filter_flag_in_skill_or_phase_bodies() {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-022..CHK-026: no-orphan / cross-host / source-to-host parity for the
-// shipped reference files (SPEC-0038 REQ-007).
+// no-orphan / cross-host / source-to-host parity for the
+// shipped reference files.
 // ---------------------------------------------------------------------------
 
 /// Workspace root, derived from `CARGO_MANIFEST_DIR` (the `speccy-cli`
@@ -545,7 +545,7 @@ fn first_diff(a: &[u8], b: &[u8]) -> Option<usize> {
     if a.len() == b.len() { None } else { Some(min) }
 }
 
-/// SPEC-0038 REQ-007: every shipped reference file is reached by at
+/// Every shipped reference file is reached by at
 /// least one path-substring pointer from a consuming body inside the
 /// same host pack; the file's bytes match across hosts and match the
 /// canonical source under `resources/modules/references/`.

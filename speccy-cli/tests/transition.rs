@@ -6,11 +6,10 @@
     clippy::panic_in_result_fn,
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
-//! Integration tests for `speccy task transition` (SPEC-0055 REQ-001 /
-//! REQ-002).
+//! Integration tests for `speccy task transition`.
 //!
 //! Drives the built `speccy` binary against scratch workspaces. The
-//! load-bearing scenario is CHK-002: a selector that resolves to no task
+//! load-bearing scenario: a selector that resolves to no task
 //! exits non-zero and leaves TASKS.md byte-identical. The happy-path,
 //! illegal-edge, same-state no-op, and unknown-`--to` cases round out the
 //! command surface.
@@ -68,7 +67,7 @@ fn legal_edge_rewrites_only_the_state_value() -> TestResult {
     Ok(())
 }
 
-/// CHK-002: a selector resolving to no task exits non-zero and leaves
+/// A selector resolving to no task exits non-zero and leaves
 /// TASKS.md byte-identical.
 #[test]
 fn not_found_selector_exits_nonzero_and_leaves_bytes_unchanged() -> TestResult {

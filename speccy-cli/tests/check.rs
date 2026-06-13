@@ -350,7 +350,7 @@ fn multiline_scenario_header_then_indented_continuations() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// Selector shapes (SPEC-0017): preserved set of accepted forms
+// Selector shapes: preserved set of accepted forms
 // ---------------------------------------------------------------------------
 
 #[test]

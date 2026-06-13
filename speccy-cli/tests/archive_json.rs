@@ -11,8 +11,6 @@
     reason = "test helpers panic on malformed fixture JSON; tests are infallible setup-side"
 )]
 //! End-to-end tests for `speccy archive --json` receipt output shape.
-//!
-//! Covers SPEC-0042 T-003 / REQ-009 / CHK-023, CHK-024.
 
 mod common;
 

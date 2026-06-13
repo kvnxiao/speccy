@@ -5,14 +5,11 @@
 //! so embedded `### REQ-NNN:` examples never poison the result), the
 //! `## Changelog` table (if present), and a sha256 over the SPEC.md's
 //! canonical content (frontmatter minus `status`, plus body) for
-//! staleness detection. See `.speccy/specs/0001-artifact-parsers/SPEC.md`
-//! REQ-003 and `.speccy/specs/0024-meaningful-hash-semantics/SPEC.md`
-//! REQ-001.
+//! staleness detection.
 //!
-//! The line-based heading scan was introduced as part of SPEC-0020
-//! T-005: after the carrier switched to raw XML element tags
-//! (`<requirement>` etc.), comrak parses the body of each element as
-//! an opaque raw-HTML block, so headings nested inside the element
+//! The line-based heading scan exists because the carrier uses raw XML
+//! element tags: with `<requirement>` etc., comrak parses the body of each
+//! element as an opaque raw-HTML block, so headings nested inside the element
 //! never surface via `AstNode::descendants`. Line-based scanning over
 //! the raw bytes — with code-fence awareness — keeps SPC-002/SPC-003
 //! cross-reference working without coupling `spec_md` to `spec_xml`.
@@ -53,11 +50,9 @@ pub struct SpecMd {
     /// whitespace, comments inside the fence); changes on any body byte
     /// edit or any non-excluded frontmatter field change.
     ///
-    /// The `archived_at` / `archived_reason` exclusion is per SPEC-0042
-    /// DEC-001: archival mutates SPEC.md frontmatter to record when and
-    /// why, but must not perturb the spec's identity hash. See
-    /// SPEC-0024 REQ-001 for the general hash semantics and SPEC-0042
-    /// REQ-004 for the archive-field exclusion rationale.
+    /// The `archived_at` / `archived_reason` exclusion is deliberate:
+    /// archival mutates SPEC.md frontmatter to record when and why, but
+    /// must not perturb the spec's identity hash.
     pub sha256: [u8; 32],
 }
 
@@ -78,11 +73,11 @@ pub struct SpecFrontmatter {
     /// omitted in the source.
     pub supersedes: Vec<String>,
     /// UTC date the spec was archived (`archived_at: YYYY-MM-DD`), or
-    /// `None` when the spec has not been archived. See SPEC-0042 REQ-003.
+    /// `None` when the spec has not been archived.
     pub archived_at: Option<Date>,
     /// Free-form reason recorded at archive time
     /// (`archived_reason: "..."`), or `None` when `--reason` was not
-    /// passed (or the spec was never archived). See SPEC-0042 REQ-003.
+    /// passed (or the spec was never archived).
     pub archived_reason: Option<String>,
 }
 
@@ -153,7 +148,7 @@ const ALLOWED_STATUSES: &[&str] = &["in-progress", "implemented", "dropped", "su
 
 /// Frontmatter fields excluded from the SPEC.md content hash.
 ///
-/// Per SPEC-0024 DEC-002, the default is include-all-fields: adding a
+/// The default is include-all-fields: adding a
 /// new entry here is the only way to make a frontmatter field
 /// hash-neutral, and doing so requires a SPEC amendment.
 const HASH_EXCLUDED_FRONTMATTER_FIELDS: &[&str] = &["archived_at", "archived_reason", "status"];
@@ -278,8 +273,7 @@ fn parse_status(value: &str, path: &Utf8Path) -> ParseResult<SpecStatus> {
 ///
 /// Hand-rolled for the bounded six-field schema rather than going
 /// through a generic YAML emitter — keeps determinism a property of
-/// this file rather than a dependency's patch-version behaviour. See
-/// SPEC-0024 DEC-001.
+/// this file rather than a dependency's patch-version behaviour.
 fn canonical_frontmatter_for_hash(fm: &SpecFrontmatter) -> Vec<u8> {
     let mut out = String::new();
     let push_kv = |out: &mut String, key: &str, emit: &dyn Fn(&mut String)| {
@@ -383,10 +377,9 @@ fn collect_code_fence_line_ranges<'a>(root: &'a AstNode<'a>) -> Vec<(usize, usiz
 /// Scan `raw` line-by-line for `### REQ-NNN: title` headings (any
 /// heading level 1..6). Skip lines that fall inside any fenced code
 /// block listed in `code_fence_lines`. This decouples REQ-heading
-/// discovery from comrak's HTML-block opacity, which was introduced
-/// when SPEC-0020 swapped the SPEC.md carrier from HTML-comment
-/// markers (transparent to comrak) to raw XML element tags (treated
-/// as opaque raw-HTML blocks).
+/// discovery from comrak's HTML-block opacity, which arises because the
+/// SPEC.md carrier uses raw XML element tags (treated as opaque raw-HTML
+/// blocks) rather than HTML-comment markers (transparent to comrak).
 fn collect_req_headings_line_based(
     raw: &str,
     code_fence_lines: &[(usize, usize)],

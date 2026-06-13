@@ -2,7 +2,7 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for SPEC-0059 T-001, T-002, T-003, T-004, T-005, T-006, and T-007: the
+//! Tests for the
 //! shared authoring reference modules at
 //! `resources/modules/references/commit-recipe.md` and
 //! `resources/modules/references/branch-guard.md`, the
@@ -19,132 +19,121 @@
 //! one exists, and any journal blocker files appended this run) behind the
 //! branch-guard prelude.
 //!
-//! T-001 — `commit-recipe.md` — checks the three properties the task's
-//! scenarios assert over the embedded `RESOURCES` bundle:
+//! `commit-recipe.md` — checks three properties over the embedded
+//! `RESOURCES` bundle:
 //!
 //! - [`commit_recipe_states_idempotency_check_exactly_once`]: the module
 //!   carries exactly one `git diff --cached --quiet` idempotency check (the
-//!   unified stage-then-skip-if-empty form), satisfying CHK-008's "recipe
-//!   stated once" property.
+//!   unified stage-then-skip-if-empty form), the "recipe stated once" property.
 //! - [`commit_recipe_delegates_trailer_via_include`]: the module pulls in
 //!   `identity-sourcing.md` via `{% include %}` and does not restate the
-//!   trailer-resolution rule inline (CHK-008 delegation property).
+//!   trailer-resolution rule inline.
 //! - [`commit_recipe_specifies_no_git_short_circuit`]: the module specifies a
 //!   no-git-repository short-circuit that skips the commit step without
-//!   erroring (CHK-013 commit-recipe side).
+//!   erroring.
 //!
-//! T-002 — `branch-guard.md` — checks the three properties the task's
-//! scenarios assert over the same bundle:
+//! `branch-guard.md` — checks three properties over the same bundle:
 //!
 //! - [`branch_guard_names_three_detection_tiers_in_order`]: the default-branch
 //!   detection prose names `origin/HEAD`, then `init.defaultBranch`, then a
 //!   `{main, master}` name match, in that order, each gated on the prior tier
-//!   not resolving (CHK-003).
+//!   not resolving.
 //! - [`branch_guard_states_creation_condition_and_notice`]: the branch is
 //!   derived as `spec-` + spec-dir basename, created only on the
 //!   default-or-detached condition, the current branch is reused otherwise, and
-//!   the creation notice is emitted only on the create path (CHK-002, CHK-001
-//!   derivation property).
+//!   the creation notice is emitted only on the create path.
 //! - [`branch_guard_specifies_no_git_short_circuit`]: the module specifies a
 //!   no-git-repository short-circuit that skips the branch-guard without
-//!   erroring (CHK-013 branch-guard side).
+//!   erroring.
 //!
-//! T-003 — `review-fanout.md` refactor — checks the behaviour-preserving
-//! rewrite of the atomic-commit-on-review-pass section onto the shared recipe
-//! (REQ-007, CHK-009 review side, CHK-010, REQ-008 review side):
+//! `review-fanout.md` refactor — checks the behaviour-preserving
+//! rewrite of the atomic-commit-on-review-pass section onto the shared recipe:
 //!
 //! - [`review_fanout_includes_shared_commit_recipe`]: the partial pulls the
-//!   shared recipe via `{% include "modules/references/commit-recipe.md" %}`
-//!   (CHK-009 review side).
+//!   shared recipe via `{% include "modules/references/commit-recipe.md" %}`.
 //! - [`review_fanout_retains_add_dash_a_and_title_prefix`]: the refactored
 //!   commit step retains `git add -A` staging and the `[SPEC-NNNN/T-NNN]:`
-//!   title prefix (CHK-010).
+//!   title prefix.
 //! - [`review_fanout_drops_inline_status_porcelain_precheck`]: the inline `git
 //!   status --porcelain` pre-check is gone, delegated to the recipe's unified
-//!   `git diff --cached --quiet` idempotency check (CHK-009 review side,
-//!   DEC-004).
+//!   `git diff --cached --quiet` idempotency check.
 //! - [`review_fanout_retains_unguarded_branch_statement_no_branch_guard`][]:
 //!   the "commits land on whatever HEAD is" statement is retained and no
-//!   `branch-guard.md` include appears (REQ-008 review side).
+//!   `branch-guard.md` include appears.
 //! - [`rendered_review_skill_fully_expands_commit_recipe`]: the ejected
 //!   `.claude/skills/speccy-review/SKILL.md` has the recipe fully expanded with
 //!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 //!
-//! T-004 — `speccy-decompose.md` refactor — checks the rewrite of the step-4
-//! bootstrap commit onto the shared recipe behind the branch-guard (REQ-004,
-//! REQ-007 decompose side, CHK-005, CHK-009 decompose side):
+//! `speccy-decompose.md` refactor — checks the rewrite of the step-4
+//! bootstrap commit onto the shared recipe behind the branch-guard:
 //!
 //! - [`decompose_includes_shared_commit_recipe_and_branch_guard`]: the phase
 //!   pulls both the shared commit recipe and the branch-guard prelude via `{%
-//!   include %}` (CHK-005 recipe property, REQ-007 decompose side).
+//!   include %}`.
 //! - [`decompose_stages_tasks_md_alone_with_decompose_title`]: the commit step
 //!   titles the commit `[SPEC-NNNN]: decompose tasks`, stages
 //!   `<spec-dir>/TASKS.md` narrowly with no SPEC.md in the staging set, and
-//!   runs after `speccy lock` (CHK-005).
+//!   runs after `speccy lock`.
 //! - [`decompose_drops_combined_bootstrap_title`]: the prior combined `create
-//!   spec and decompose tasks` title string is gone from the source (CHK-005
-//!   absent-string property, DEC-005).
+//!   spec and decompose tasks` title string is gone from the source.
 //! - [`decompose_drops_inline_diff_cached_recipe`]: the phase no longer
 //!   restates the `git diff --cached --quiet` recipe inline; it is delegated to
-//!   the included recipe (CHK-009 decompose side).
+//!   the included recipe.
 //! - [`rendered_decompose_agent_fully_expands_includes`]: the ejected
 //!   `.claude/agents/speccy-decompose.md` has both includes fully expanded with
 //!   no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 //!
-//! T-005 — `speccy-plan.md` commit step — checks the new commit step that
-//! commits `SPEC.md` alone behind the branch-guard prelude (REQ-003, CHK-004):
+//! `speccy-plan.md` commit step — checks the new commit step that
+//! commits `SPEC.md` alone behind the branch-guard prelude:
 //!
 //! - [`plan_includes_shared_commit_recipe_and_branch_guard`]: the plan skill
 //!   pulls both the shared commit recipe and the branch-guard prelude via `{%
-//!   include %}` (CHK-004 recipe property, REQ-003).
+//!   include %}`.
 //! - [`plan_stages_spec_md_alone_with_create_spec_title_after_self_review`][]:
 //!   the commit step titles the commit `[SPEC-NNNN]: create spec`, stages
 //!   `<spec-dir>/SPEC.md` narrowly (no `git add -A`/`git add .`, no TASKS.md in
-//!   the staging set), and runs after the step-3 self-review pass (CHK-004).
+//!   the staging set), and runs after the step-3 self-review pass.
 //! - [`plan_retains_vacancy_id_allocation`]: the ID-allocation step still
-//!   invokes `speccy vacancy --json` (the prior CHK-015 invariant is
+//!   invokes `speccy vacancy --json` (the prior vacancy-allocation invariant is
 //!   preserved).
 //! - [`rendered_plan_skill_fully_expands_includes`]: the ejected
 //!   `.claude/skills/speccy-plan/SKILL.md` has both includes fully expanded
 //!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 //!
-//! T-006 — `speccy-amend.md` commit step — checks the new commit step that
-//! commits the amend's reconcile delta behind the branch-guard prelude
-//! (REQ-005, CHK-006, CHK-007):
+//! `speccy-amend.md` commit step — checks the new commit step that
+//! commits the amend's reconcile delta behind the branch-guard prelude:
 //!
 //! - [`amend_includes_shared_commit_recipe_and_branch_guard`]: the amend skill
 //!   pulls both the shared commit recipe and the branch-guard prelude via `{%
-//!   include %}` (CHK-006 recipe property, REQ-005).
+//!   include %}`.
 //! - [`amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear`][]:
 //!   the commit step titles the commit `[SPEC-NNNN]: amend — <why>`, sources
 //!   `<why>` from the newest `## Changelog` row, and runs after the
-//!   `TSK-003`-clear check (CHK-006).
+//!   `TSK-003`-clear check.
 //! - [`amend_stages_spec_md_and_tolerates_absent_tasks_md`]: the staging set
 //!   covers `SPEC.md`, the reconciled `TASKS.md` when present, and appended
 //!   journal blocker files, uses narrow `git add <paths>` (no `git add -A`/`git
 //!   add .`), and tolerates an absent `TASKS.md` rather than requiring the
-//!   tasks file to exist (CHK-006 staging property, CHK-007).
+//!   tasks file to exist.
 //! - [`rendered_amend_skill_fully_expands_includes`]: the ejected
 //!   `.claude/skills/speccy-amend/SKILL.md` has both includes fully expanded
 //!   with no residual `{{`/`{%`/`{#` markup and carries the recipe's `git diff
 //!   --cached --quiet` text.
 //!
-//! T-007 — whole-set scoping and narrow-staging invariants — checks the
-//! cross-set properties that only hold once T-003..T-006 have all landed
-//! (REQ-008, REQ-009, CHK-011, CHK-012, CHK-001):
+//! whole-set scoping and narrow-staging invariants — checks the
+//! cross-set properties that only hold once the three authoring sources
+//! have all landed:
 //!
 //! - [`branch_guard_included_by_exactly_the_three_authoring_sources`][]: the
 //!   `branch-guard.md` include appears in exactly the plan, decompose, and
 //!   amend sources and is absent from work, ship, and `review-fanout.md`, which
-//!   retains its unguarded "lands on whatever HEAD is" statement (REQ-008,
-//!   CHK-011, CHK-001).
+//!   retains its unguarded "lands on whatever HEAD is" statement.
 //! - [`authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate`]: each of
 //!   the three authoring bodies carries its own narrow `git add <path>` staging
-//!   command and none contains a `git stash` clean-tree refusal gate (REQ-009,
-//!   CHK-012).
+//!   command and none contains a `git stash` clean-tree refusal gate.
 //! - [`rendered_authoring_skills_fully_expand_with_guard_and_recipe`][]: the
 //!   three rendered authoring skills carry no residual `{{`/`{%`/`{#` markup
 //!   and the branch-guard (`git switch -c`) and commit-recipe (`git diff
@@ -174,7 +163,7 @@ fn panic_with_message(msg: &str) -> ! {
 }
 
 /// The recipe states the idempotency check exactly once, in the unified
-/// `git diff --cached --quiet` form (CHK-008 "recipe stated once", DEC-004).
+/// `git diff --cached --quiet` form.
 #[test]
 fn commit_recipe_states_idempotency_check_exactly_once() {
     let body = module_body("modules/references/commit-recipe.md");
@@ -189,7 +178,7 @@ fn commit_recipe_states_idempotency_check_exactly_once() {
 
 /// The recipe delegates the `Co-Authored-By` trailer to the identity-sourcing
 /// rule via `{% include %}` and does not restate the trailer-resolution prose
-/// inline (CHK-008 delegation property).
+/// inline.
 #[test]
 fn commit_recipe_delegates_trailer_via_include() {
     let body = module_body("modules/references/commit-recipe.md");
@@ -212,7 +201,7 @@ fn commit_recipe_delegates_trailer_via_include() {
 }
 
 /// The recipe specifies a no-git-repository short-circuit that skips the
-/// commit step without erroring (CHK-013, REQ-010).
+/// commit step without erroring.
 #[test]
 fn commit_recipe_specifies_no_git_short_circuit() {
     let body = module_body("modules/references/commit-recipe.md");
@@ -233,7 +222,7 @@ fn commit_recipe_specifies_no_git_short_circuit() {
 
 /// The default-branch detection prose names the three tiers — `origin/HEAD`,
 /// then `init.defaultBranch`, then a `{main, master}` name match — in that
-/// order, each gated on the prior tier not resolving (CHK-003).
+/// order, each gated on the prior tier not resolving.
 #[test]
 fn branch_guard_names_three_detection_tiers_in_order() {
     let body = module_body("modules/references/branch-guard.md");
@@ -273,13 +262,13 @@ fn branch_guard_names_three_detection_tiers_in_order() {
 
 /// The branch is derived as `spec-` + spec-dir basename, created only on the
 /// default-or-detached condition, the current branch reused otherwise, and the
-/// creation notice emitted only on the create path (CHK-002, CHK-001).
+/// creation notice emitted only on the create path.
 #[test]
 fn branch_guard_states_creation_condition_and_notice() {
     let body = module_body("modules/references/branch-guard.md");
     let lower = body.to_lowercase();
 
-    // Derivation property (CHK-001): `spec-` prefix + spec-dir basename, and
+    // Derivation property: `spec-` prefix + spec-dir basename, and
     // the `git switch -c` that creates+switches.
     assert!(
         body.contains("spec-") && lower.contains("basename"),
@@ -292,7 +281,7 @@ fn branch_guard_states_creation_condition_and_notice() {
          (CHK-002 create path)",
     );
 
-    // Creation condition (CHK-002): create only on default-branch-or-detached.
+    // Creation condition: create only on default-branch-or-detached.
     assert!(
         lower.contains("detached"),
         "branch-guard.md must create the branch on the default-branch-or-detached-HEAD \
@@ -304,7 +293,7 @@ fn branch_guard_states_creation_condition_and_notice() {
          (CHK-002 reuse path)",
     );
 
-    // Notice (CHK-002): emitted only on the create path.
+    // Notice: emitted only on the create path.
     assert!(
         lower.contains("notice"),
         "branch-guard.md must describe the one-line creation notice (CHK-002)",
@@ -317,7 +306,7 @@ fn branch_guard_states_creation_condition_and_notice() {
 }
 
 /// The module specifies a no-git-repository short-circuit that skips the
-/// branch-guard without erroring (CHK-013, REQ-010, branch-guard side).
+/// branch-guard without erroring.
 #[test]
 fn branch_guard_specifies_no_git_short_circuit() {
     let body = module_body("modules/references/branch-guard.md");
@@ -337,7 +326,7 @@ fn branch_guard_specifies_no_git_short_circuit() {
 }
 
 /// The refactored review-pass commit step pulls the shared recipe via
-/// `{% include %}` rather than restating it inline (CHK-009 review side).
+/// `{% include %}` rather than restating it inline.
 #[test]
 fn review_fanout_includes_shared_commit_recipe() {
     let body = module_body("modules/skills/partials/review-fanout.md");
@@ -351,7 +340,7 @@ fn review_fanout_includes_shared_commit_recipe() {
 }
 
 /// The refactored commit step retains `git add -A` staging and the
-/// `[SPEC-NNNN/T-NNN]:` title prefix the consistency check greps (CHK-010).
+/// `[SPEC-NNNN/T-NNN]:` title prefix the consistency check greps.
 #[test]
 fn review_fanout_retains_add_dash_a_and_title_prefix() {
     let body = module_body("modules/skills/partials/review-fanout.md");
@@ -369,8 +358,7 @@ fn review_fanout_retains_add_dash_a_and_title_prefix() {
 }
 
 /// The inline `git status --porcelain` pre-check is removed — the unified
-/// `git diff --cached --quiet` idempotency check now lives in the recipe
-/// (CHK-009 review side, DEC-004).
+/// `git diff --cached --quiet` idempotency check now lives in the recipe.
 #[test]
 fn review_fanout_drops_inline_status_porcelain_precheck() {
     let body = module_body("modules/skills/partials/review-fanout.md");
@@ -389,7 +377,7 @@ fn review_fanout_drops_inline_status_porcelain_precheck() {
 }
 
 /// The unguarded branch statement is retained and no branch-guard include is
-/// added — the review-pass commit stays unguarded (REQ-008 review side).
+/// added — the review-pass commit stays unguarded.
 #[test]
 fn review_fanout_retains_unguarded_branch_statement_no_branch_guard() {
     let body = module_body("modules/skills/partials/review-fanout.md");
@@ -441,8 +429,7 @@ fn rendered_review_skill_fully_expands_commit_recipe() {
 }
 
 /// The refactored step-4 commit pulls both the shared commit recipe and the
-/// branch-guard prelude via `{% include %}` (CHK-005 recipe property, REQ-007
-/// decompose side).
+/// branch-guard prelude via `{% include %}`.
 #[test]
 fn decompose_includes_shared_commit_recipe_and_branch_guard() {
     let body = module_body("modules/phases/speccy-decompose.md");
@@ -464,7 +451,7 @@ fn decompose_includes_shared_commit_recipe_and_branch_guard() {
 
 /// The commit step titles the commit `[SPEC-NNNN]: decompose tasks`, stages
 /// `<spec-dir>/TASKS.md` narrowly (no `git add -A`/`git add .`, no SPEC.md in
-/// the staging set), and runs after `speccy lock` (CHK-005).
+/// the staging set), and runs after `speccy lock`.
 #[test]
 fn decompose_stages_tasks_md_alone_with_decompose_title() {
     let body = module_body("modules/phases/speccy-decompose.md");
@@ -482,7 +469,7 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
     );
 
     // SPEC.md must no longer be in the staging set: it is committed by
-    // speccy-plan, not here (DEC-005). The prior combined staging command
+    // speccy-plan, not here. The prior combined staging command
     // `git add <spec-dir>/SPEC.md <spec-dir>/TASKS.md` must be gone. Anchor on
     // the SPEC.md staging path rather than a bare `git add .` substring, which
     // would false-match the prose that *forbids* the whole-tree forms.
@@ -507,7 +494,7 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
 }
 
 /// The prior combined bootstrap title `create spec and decompose tasks` is
-/// gone from the source (CHK-005 absent-string property, DEC-005).
+/// gone from the source.
 #[test]
 fn decompose_drops_combined_bootstrap_title() {
     let body = module_body("modules/phases/speccy-decompose.md");
@@ -521,7 +508,7 @@ fn decompose_drops_combined_bootstrap_title() {
 }
 
 /// The phase no longer restates the `git diff --cached --quiet` recipe inline;
-/// it is delegated to the included recipe (CHK-009 decompose side).
+/// it is delegated to the included recipe.
 #[test]
 fn decompose_drops_inline_diff_cached_recipe() {
     let body = module_body("modules/phases/speccy-decompose.md");
@@ -568,7 +555,7 @@ fn rendered_decompose_agent_fully_expands_includes() {
 }
 
 /// The new commit step pulls both the shared commit recipe and the branch-guard
-/// prelude via `{% include %}` (CHK-004 recipe property, REQ-003).
+/// prelude via `{% include %}`.
 #[test]
 fn plan_includes_shared_commit_recipe_and_branch_guard() {
     let body = module_body("modules/skills/speccy-plan.md");
@@ -590,7 +577,7 @@ fn plan_includes_shared_commit_recipe_and_branch_guard() {
 
 /// The commit step titles the commit `[SPEC-NNNN]: create spec`, stages
 /// `<spec-dir>/SPEC.md` narrowly (no `git add -A`/`git add .`, no TASKS.md in
-/// the staging set), and runs after the step-3 self-review pass (CHK-004).
+/// the staging set), and runs after the step-3 self-review pass.
 #[test]
 fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
     let body = module_body("modules/skills/speccy-plan.md");
@@ -612,7 +599,7 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
     // negative assertion on a staging *command* — `git add -A`/`git add .` as
     // an executable line would only appear if the step used the broad form.
     // We assert TASKS.md is never staged here: it is committed by
-    // speccy-decompose, not the plan commit (DEC-005).
+    // speccy-decompose, not the plan commit.
     assert!(
         !body.contains("git add <spec-dir>/TASKS.md"),
         "speccy-plan.md must not stage TASKS.md — it is committed by speccy-decompose, \
@@ -634,7 +621,8 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
 }
 
 /// The ID-allocation step still invokes `speccy vacancy --json` (the prior
-/// CHK-015 invariant is preserved — the commit step must not displace it).
+/// vacancy-allocation invariant is preserved — the commit step must not
+/// displace it).
 #[test]
 fn plan_retains_vacancy_id_allocation() {
     let body = module_body("modules/skills/speccy-plan.md");
@@ -687,7 +675,7 @@ fn rendered_plan_skill_fully_expands_includes() {
 }
 
 /// The new commit step pulls both the shared commit recipe and the branch-guard
-/// prelude via `{% include %}` (CHK-006 recipe property, REQ-005).
+/// prelude via `{% include %}`.
 #[test]
 fn amend_includes_shared_commit_recipe_and_branch_guard() {
     let body = module_body("modules/skills/speccy-amend.md");
@@ -709,7 +697,7 @@ fn amend_includes_shared_commit_recipe_and_branch_guard() {
 
 /// The commit step titles the commit `[SPEC-NNNN]: amend — <why>`, sources
 /// `<why>` from the newest `## Changelog` row, and runs after the spec hash is
-/// re-locked (CHK-006).
+/// re-locked.
 #[test]
 fn amend_titles_commit_and_sources_why_from_changelog() {
     let body = module_body("modules/skills/speccy-amend.md");
@@ -745,7 +733,7 @@ fn amend_titles_commit_and_sources_why_from_changelog() {
 /// The staging set covers `SPEC.md`, the reconciled `TASKS.md` when present,
 /// and appended journal blocker files; it uses narrow `git add <paths>` (no
 /// `git add -A`/`git add .`) and tolerates an absent `TASKS.md` rather than
-/// requiring the tasks file to exist (CHK-006 staging property, CHK-007).
+/// requiring the tasks file to exist.
 #[test]
 fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
     let body = module_body("modules/skills/speccy-amend.md");
@@ -779,7 +767,7 @@ fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
         "speccy-amend.md must use narrow `git add <paths>` staging (CHK-006)",
     );
 
-    // CHK-007: the staging set tolerates an absent TASKS.md — the prose must
+    // The staging set tolerates an absent TASKS.md — the prose must
     // state the missing tasks file does not fail the commit. Anchor on the
     // distinctive phrasing the step uses.
     let lower = body.to_lowercase();
@@ -834,11 +822,11 @@ fn rendered_amend_skill_fully_expands_includes() {
 }
 
 // ---------------------------------------------------------------------------
-// T-007 — whole-set scoping and narrow-staging invariants
+// whole-set scoping and narrow-staging invariants
 // ---------------------------------------------------------------------------
 //
 // These assertions can only be checked once all four callsites
-// (T-003..T-006) have landed. They gate genuine regressions over a stable
+// have landed. They gate genuine regressions over a stable
 // structural surface — the branch-guard include graph and the per-callsite
 // staging tokens — in the spirit of the existing `persona_snippets.rs` and
 // `skill_body_discovery.rs` suites; they do not substring-match curated prose
@@ -849,12 +837,10 @@ fn rendered_amend_skill_fully_expands_includes() {
 //   `phases/speccy-decompose.md`, and `skills/speccy-amend.md`, and is absent
 //   from `phases/speccy-work.md`, `phases/speccy-ship.md`, and
 //   `skills/partials/review-fanout.md`; the review-pass commit retains its
-//   unguarded "lands on whatever HEAD is" statement (REQ-008, CHK-011,
-//   CHK-001).
+//   unguarded "lands on whatever HEAD is" statement.
 // - [`authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate`]: each of
 //   the three authoring bodies carries its own narrow `git add <path>` staging
-//   command and none contains a `git stash` clean-tree refusal gate (REQ-009,
-//   CHK-012).
+//   command and none contains a `git stash` clean-tree refusal gate.
 // - [`rendered_authoring_skills_fully_expand_with_guard_and_recipe`]: the three
 //   rendered authoring skills carry no residual `{{`/`{%`/`{#` markup and the
 //   branch-guard and commit-recipe text survive expansion (whole-set render
@@ -862,8 +848,7 @@ fn rendered_amend_skill_fully_expands_includes() {
 
 /// The branch-guard include is scoped to exactly the three authoring sources
 /// (plan, decompose, amend) and is absent from work, ship, and the review-pass
-/// partial; the review-pass commit retains its unguarded statement (REQ-008,
-/// CHK-011, CHK-001).
+/// partial; the review-pass commit retains its unguarded statement.
 #[test]
 fn branch_guard_included_by_exactly_the_three_authoring_sources() {
     let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
@@ -896,7 +881,7 @@ fn branch_guard_included_by_exactly_the_three_authoring_sources() {
     }
 
     // The review-pass commit retains its unguarded "lands on whatever HEAD is"
-    // statement (CHK-001 review side).
+    // statement.
     assert!(
         module_body("modules/skills/partials/review-fanout.md")
             .contains("Commits land on whatever HEAD is"),
@@ -908,7 +893,7 @@ fn branch_guard_included_by_exactly_the_three_authoring_sources() {
 /// Each authoring body stages a narrow spec-artifact path list (its own
 /// `git add <path>` staging command) and none contains a clean-tree refusal
 /// gate (asserted against the stable `git stash` token rather than a free-text
-/// sentence) (REQ-009, CHK-012).
+/// sentence).
 #[test]
 fn authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate() {
     // Narrow-staging command per callsite. Anchoring on the positive narrow

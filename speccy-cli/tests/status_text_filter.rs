@@ -7,7 +7,6 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Tests for the default text view's "in-progress + broken" filter.
-//! Covers SPEC-0004 CHK-007.
 
 mod common;
 

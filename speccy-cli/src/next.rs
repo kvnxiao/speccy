@@ -6,8 +6,6 @@
 //!   every active spec with its derived [`NextAction`].
 //! - **Per-spec form** (`speccy next SPEC-NNNN`): looks up the spec and calls
 //!   [`compute_for_spec`] to return one entry or a null-action reason.
-//!
-//! See `.speccy/specs/0033-eject-prompt-bodies/SPEC.md` REQ-004.
 
 use crate::next_output::SpecPaths;
 use crate::next_output::TerminalReason;
@@ -33,7 +31,7 @@ use std::io::Write;
 use thiserror::Error;
 
 /// CLI exit code emitted when the per-spec form resolves to a terminal
-/// state (SPEC-0043 REQ-003 / DEC-002). Matches the `speccy archive`
+/// state. Matches the `speccy archive`
 /// convention in the same binary.
 pub const TERMINAL_EXIT_CODE: i32 = 2;
 
@@ -78,7 +76,7 @@ pub struct NextArgs {
 /// Run `speccy next` from `cwd`, writing the rendered result to `out`
 /// and any terminal-state stderr message to `err`. Returns the
 /// dispatcher exit code (`0` for non-terminal, [`TERMINAL_EXIT_CODE`]
-/// for terminal per-spec resolutions per SPEC-0043 REQ-003).
+/// for terminal per-spec resolutions).
 ///
 /// # Errors
 ///
@@ -190,7 +188,7 @@ fn run_per_spec(
     // Short-circuit: SPEC frontmatter status overrides task-state
     // derivation. Dropped and superseded specs are terminal even
     // when `compute_for_spec` would otherwise return a non-None
-    // action (SPEC-0043 REQ-003).
+    // action.
     let frontmatter_terminal = match spec.status_or_in_progress() {
         SpecStatus::Dropped => Some(TerminalReason::Dropped),
         SpecStatus::Superseded => Some(TerminalReason::Superseded),
@@ -199,7 +197,7 @@ fn run_per_spec(
 
     let action = compute_for_spec(spec);
     // Frontmatter wins; otherwise `compute_for_spec` returning None
-    // means REPORT.md is present (per SPEC-0043 REQ-002 after T-001).
+    // means REPORT.md is present.
     let terminal_reason =
         frontmatter_terminal.or_else(|| action.is_none().then_some(TerminalReason::Completed));
 

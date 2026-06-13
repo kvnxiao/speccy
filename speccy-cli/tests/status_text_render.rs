@@ -7,7 +7,7 @@
     reason = "tests use assert! macros and return Result for ? propagation in setup"
 )]
 //! Tests for the text renderer: empty workspace and a single-spec
-//! workspace. Covers SPEC-0004 CHK-008.
+//! workspace.
 
 mod common;
 

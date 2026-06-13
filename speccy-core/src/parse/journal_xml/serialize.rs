@@ -3,10 +3,9 @@
 //! The sibling [`super`] module *parses* a journal file; this module is its
 //! inverse — it renders one validated `<implementer>` / `<review>` /
 //! `<blockers>` block and (on a fresh file) the YAML frontmatter, so the
-//! `speccy journal append` command (SPEC-0055 REQ-003) can grow a journal
-//! one block at a time.
+//! `speccy journal append` command can grow a journal one block at a time.
 //!
-//! Division of authority (SPEC-0055 DEC-001): the **caller** supplies only
+//! Division of authority: the **caller** supplies only
 //! identity and judgment (`model`, `persona`, `verdict`, body); the CLI is
 //! the sole authority for `date` and `round`, which this module accepts as
 //! pre-computed inputs rather than deriving from the wall clock itself
@@ -18,7 +17,7 @@
 //! required attributes per block type, `persona` against the registry,
 //! `verdict` against `{pass, blocking}`, and a non-empty body. The caller
 //! re-parses the assembled would-be-new file through [`super::parse`] before
-//! writing (DEC-001), so a body whose own line is journal markup is rejected
+//! writing, so a body whose own line is journal markup is rejected
 //! there rather than by a pre-scan here. Every block this module renders,
 //! appended to a file that already parses, leaves a file that [`super::parse`]
 //! accepts.
@@ -138,7 +137,7 @@ pub struct NoRoundError;
 /// A round-opening block (`implementer`) takes `max existing round + 1`, or
 /// `1` on a fresh file. An attaching block (`review` / `blockers`) takes the
 /// current (highest) round and is rejected with [`NoRoundError`] when no
-/// block exists yet — REQ-003 forbids a `review`/`blockers` before any
+/// block exists yet — a `review`/`blockers` is forbidden before any
 /// `implementer` opened a round.
 ///
 /// # Errors
@@ -181,12 +180,12 @@ pub fn validate_and_render_block(inputs: &BlockInputs<'_>) -> Result<String, Ser
 
     // An empty body is invalid for every block type. A body whose own line is
     // journal markup is caught by the caller's write-time round-trip through
-    // `super::parse` (DEC-001), not pre-scanned here.
+    // `super::parse`, not pre-scanned here.
     if inputs.body.trim().is_empty() {
         return Err(SerializeError::EmptyBody);
     }
 
-    // Per-block-type required attributes (SPEC-0037 schema).
+    // Per-block-type required attributes.
     let model = match inputs.kind {
         TaskBlockKind::Implementer | TaskBlockKind::Review => {
             let m = inputs.model.ok_or(SerializeError::MissingAttribute {

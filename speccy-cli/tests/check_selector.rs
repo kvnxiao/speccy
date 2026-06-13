@@ -4,8 +4,7 @@
 )]
 //! Integration tests for the `speccy check` selector parser.
 //!
-//! Covers SPEC-0017 CHK-001 (REQ-001: Selector parsing). Test names start
-//! with `parser_` so the invocation
+//! Test names start with `parser_` so the invocation
 //! `cargo test -p speccy-cli --test check_selector -- parser` runs
 //! exactly these tests.
 

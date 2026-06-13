@@ -2,11 +2,11 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! End-to-end tests for `speccy vacancy [--json]` (SPEC-0033 REQ-003).
+//! End-to-end tests for `speccy vacancy [--json]`.
 //!
-//! Exercises CHK-005 (json output with mission folder), CHK-006
-//! (no workspace exits 1) and additional scenarios from T-003
-//! task-scenarios: empty specs dir (text form) and `--help` listing.
+//! Exercises json output with a mission folder, the no-workspace
+//! exit-1 path, an empty specs dir (text form), and the `--help`
+//! listing.
 
 mod common;
 
@@ -30,7 +30,7 @@ fn mkdir_archive(root: &camino::Utf8Path, dir_name: &str) -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-005: json output with flat + mission-folder specs
+// json output with flat + mission-folder specs
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -53,7 +53,7 @@ fn vacancy_json_with_flat_and_mission_specs() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// T-003 scenario 2: empty specs dir → text output is SPEC-0001
+// empty specs dir → text output is SPEC-0001
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -70,7 +70,7 @@ fn vacancy_empty_specs_dir_returns_spec_0001() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// CHK-006: no .speccy/ directory → exits 1, stderr contains expected message
+// no .speccy/ directory → exits 1, stderr contains expected message
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -89,7 +89,7 @@ fn vacancy_outside_workspace_exits_one_with_not_found_message() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// T-003 scenario 4: `speccy --help` lists `vacancy` alongside `lock`
+// `speccy --help` lists `vacancy` alongside `lock`
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -139,7 +139,7 @@ fn vacancy_json_simple_workspace() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0042 CHK-012: vacancy unions `.speccy/specs/` and `.speccy/archive/`
+// vacancy unions `.speccy/specs/` and `.speccy/archive/`
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -159,7 +159,7 @@ fn vacancy_json_archive_blocks_id_reuse() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0042 CHK-013: archiving an active spec must not change next_spec_id
+// archiving an active spec must not change next_spec_id
 // (the archived spec still occupies its slot)
 // ---------------------------------------------------------------------------
 
@@ -195,7 +195,7 @@ fn vacancy_next_id_unchanged_when_spec_moves_from_specs_to_archive() -> TestResu
 }
 
 // ---------------------------------------------------------------------------
-// SPEC-0042 REQ-005: absent `.speccy/archive/` is treated as empty
+// absent `.speccy/archive/` is treated as empty
 // ---------------------------------------------------------------------------
 
 #[test]

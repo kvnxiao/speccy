@@ -2,8 +2,7 @@
 //!
 //! Splits a markdown source into `(yaml_frontmatter, body)` pairs. The
 //! implementation is intentionally narrow — four string slicing steps — so
-//! frontmatter parsing is not coupled to any particular YAML crate. See
-//! `.speccy/specs/0001-artifact-parsers/SPEC.md` REQ-002.
+//! frontmatter parsing is not coupled to any particular YAML crate.
 //!
 //! [`split_required`] and [`extract_level1_heading`] carry the prologue
 //! steps every frontmatter-bearing Speccy artifact parser shares

@@ -3,10 +3,10 @@
 //! The sibling [`super`] module *parses* a VET.md file; this module is its
 //! inverse — it renders one validated vet block (and, on a fresh file, the
 //! YAML frontmatter and section heading) and computes where the next block
-//! lands, so the `speccy journal append <SPEC-NNNN>` command (SPEC-0055
-//! REQ-004) can grow the vet journal one block at a time.
+//! lands, so the `speccy journal append <SPEC-NNNN>` command can grow the
+//! vet journal one block at a time.
 //!
-//! Division of authority mirrors the per-task journal (DEC-001): the
+//! Division of authority mirrors the per-task journal: the
 //! **caller** supplies only identity and judgment (`verdict`, `model`,
 //! body); the CLI is the sole authority for every environment-derivable
 //! value — `date` on every block, `round` (a `drift-review` opens a round,
@@ -17,7 +17,7 @@
 //! filesystem itself, keeping the renderer deterministic and unit-testable.
 //!
 //! [`plan_append`] computes the round and the new-section decision from the
-//! *typed* parse of the existing file, not a separate text scan (DEC-008).
+//! *typed* parse of the existing file, not a separate text scan.
 //! Mid-vet-run the file's last section is still open (no terminal `<gate>`
 //! yet), a shape the strict [`super::parse`] rejects but
 //! [`super::parse_in_flight`] accepts; the caller parses the existing file
@@ -135,8 +135,8 @@ pub struct AppendPlan {
 pub enum AppendPlanError {
     /// A non-opening block (`holistic-fix` / `simplifier-*` / `gate`) was
     /// requested against an open invocation section that has no
-    /// `drift-review` opening a round. REQ-004 forbids attaching before a
-    /// `drift-review` opens the section's first round.
+    /// `drift-review` opening a round. Attaching before a `drift-review`
+    /// opens the section's first round is forbidden.
     #[error(
         "`{block}` requires a `drift-review` to open the current invocation \
          section first; the open section has no round to attach to"
@@ -177,7 +177,7 @@ pub struct VetBlockInputs<'a> {
 /// These are the block-local checks the renderer owns. Structural validity
 /// of the produced file — including body inertness — is the parser's job:
 /// the append path re-parses the would-be-new file through
-/// [`super::parse_in_flight`] before writing (DEC-008).
+/// [`super::parse_in_flight`] before writing.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum VetSerializeError {
@@ -232,13 +232,12 @@ pub fn render_section_heading(number: u32, date: &str) -> String {
 /// The caller parses the existing file with [`super::parse_in_flight`] (which
 /// tolerates the open trailing section that exists mid-vet-run) and passes
 /// the resulting [`VetDoc`] here, so this planner reuses the parser's own
-/// section/block/round structure rather than re-scanning the raw text
-/// (DEC-008).
+/// section/block/round structure rather than re-scanning the raw text.
 ///
-/// Invocation sectioning (REQ-004): a new `## Invocation N` section opens
+/// Invocation sectioning: a new `## Invocation N` section opens
 /// when the file is absent or the last section is gate-terminated — for any
 /// block type — so a block appended after a section's gate never lands in
-/// the closed section (CHK-007). Round derivation: a `drift-review` opens a
+/// the closed section. Round derivation: a `drift-review` opens a
 /// round (max round in the open section + 1, or 1 in a freshly opened
 /// section); a `holistic-fix` attaches to the open section's current
 /// (highest) round; the round-less blocks (`simplifier-scan`,
@@ -333,7 +332,7 @@ pub fn plan_append(
 /// presence, non-empty body). The structural validity of the resulting
 /// file — that the body introduces no nested block or phantom section — is
 /// enforced by the append path re-parsing the would-be-new file through
-/// [`super::parse_in_flight`] before writing (DEC-008), so a body that would
+/// [`super::parse_in_flight`] before writing, so a body that would
 /// produce an unparseable file is refused at write time even though it
 /// renders cleanly here.
 ///
@@ -527,7 +526,7 @@ mod tests {
 
     #[test]
     fn simplifier_scan_after_gate_opens_invocation_two() {
-        // CHK-007: a simplifier-scan after a gate-terminated section opens a
+        // A simplifier-scan after a gate-terminated section opens a
         // freshly numbered `## Invocation 2`, since it carries no round.
         let fm = render_fresh_vet_frontmatter("SPEC-0042", "2026-05-21T18:00:00Z");
         let heading = render_section_heading(1, "2026-05-21T18:00:00Z");
@@ -624,7 +623,7 @@ mod tests {
         // tag mention is inert prose and parses; a body whose own line is a
         // vet tag is rejected (it would nest a block). This pins the
         // block-local renderer against the parser that is the write-time
-        // authority (DEC-008), without this module re-deciding what a tag is.
+        // authority, without this module re-deciding what a tag is.
         let fm = render_fresh_vet_frontmatter("SPEC-0042", "2026-05-21T18:00:00Z");
         let heading = render_section_heading(1, "2026-05-21T18:00:00Z");
 

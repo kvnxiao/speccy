@@ -6,7 +6,7 @@
 //! [`RawTag`]s for every recognised element open or close tag whose name
 //! is in the caller-supplied whitelist. Tag-shaped lines whose names are
 //! **not** in the whitelist are silently treated as Markdown body content
-//! (matching the SPEC-0020 contract: foreign HTML like `<details>` flows
+//! (matching the foreign-HTML contract: foreign HTML like `<details>` flows
 //! through verbatim).
 //!
 //! Higher-level concerns — block assembly, attribute validation, typed
@@ -18,9 +18,6 @@
 //!    carry structure).
 //! 3. How to surface a structured diagnostic for malformed-but-
 //!    structure-shaped tag lines.
-//!
-//! See SPEC-0022 REQ-003 and SPEC-0020 DEC-002 / DEC-003 for the
-//! contract this module satisfies.
 
 mod html5_names;
 
@@ -171,9 +168,9 @@ fn attribute_regex() -> &'static Regex {
 
 /// Build an [`ParseError::UnknownMarkerAttribute`] diagnostic carrying
 /// the element name, attribute name, byte offset of the open tag, and
-/// the comma-separated set of valid attribute names. SPEC-0022 REQ-003
-/// requires every reusing parser to surface the valid set, so this
-/// helper centralises the formatting.
+/// the comma-separated set of valid attribute names. Every reusing
+/// parser surfaces the valid set, so this helper centralises the
+/// formatting.
 #[must_use = "the constructed ParseError must be returned to the caller"]
 pub fn unknown_attribute_error(
     path: &Utf8Path,
@@ -244,7 +241,7 @@ pub fn scan_tags(
 /// `open`/`close` tag-shape regexes, but emits a [`ForeignTag`] for every
 /// matched tag whose name is not whitelisted instead of the whitelisted
 /// structural tags. Whitelisted names and lines fully inside a fenced range
-/// are skipped — the fence skip is the REQ-003 exemption, living here in
+/// are skipped — the fence skip is the code-fence exemption, living here in
 /// the helper rather than in the lint. Self-closing `<foo/>` does not match
 /// the strict open regex and is therefore never returned.
 ///
@@ -751,15 +748,14 @@ mod tests {
         );
     }
 
-    /// SPEC-0022 REQ-003: the combined whitelist used by SPEC, TASKS,
-    /// and REPORT callers must remain disjoint from the HTML5 element
-    /// set. This pins the names introduced by SPEC-0022
-    /// (`tasks`, `task`, `task-scenarios`, `report`, `coverage`) so
-    /// future edits cannot quietly collide.
+    /// The combined whitelist used by SPEC, TASKS, and REPORT callers
+    /// must remain disjoint from the HTML5 element set. This pins the
+    /// names (`tasks`, `task`, `task-scenarios`, `report`, `coverage`)
+    /// so future edits cannot quietly collide.
     #[test]
     fn combined_whitelist_is_disjoint_from_html5_element_set() {
         let combined: &[&str] = &[
-            // SPEC.md (SPEC-0020 + SPEC-0021):
+            // SPEC.md:
             "requirement",
             "scenario",
             "decision",
@@ -771,11 +767,11 @@ mod tests {
             "non-goals",
             "user-stories",
             "assumptions",
-            // TASKS.md (SPEC-0022 REQ-001):
+            // TASKS.md:
             "tasks",
             "task",
             "task-scenarios",
-            // REPORT.md (SPEC-0022 REQ-002):
+            // REPORT.md:
             "report",
             "coverage",
         ];

@@ -240,7 +240,7 @@ fn tsk_005_id_triple(
 }
 
 /// TSK-006: error on any `<implementer>`, `<review>`, or `<blockers>`
-/// element parsed inside a TASKS.md `<task>` body. SPEC-0037 REQ-006.
+/// element parsed inside a TASKS.md `<task>` body.
 /// The rule is not lifecycle-gated — it fires at any task state. The
 /// canonical destination for these activity-prose elements is
 /// `journal/T-NNN.md`.

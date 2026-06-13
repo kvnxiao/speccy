@@ -12,10 +12,6 @@
 //! content between recognised tags is preserved byte-verbatim; it is not
 //! XML payload and `<`, `>`, `&` inside it remain ordinary Markdown
 //! characters.
-//!
-//! See `.speccy/specs/0020-raw-xml-spec-carrier/SPEC.md` REQ-001/REQ-002/
-//! REQ-003 for the contract this module satisfies, and DEC-002/DEC-003
-//! for the disjointness invariant and the line-aware scanner decision.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
@@ -37,9 +33,9 @@ use std::sync::OnceLock;
 /// Parsed raw-XML-structured SPEC.md.
 ///
 /// `frontmatter_raw` carries the YAML frontmatter payload verbatim. The
-/// frontmatter is **not** re-validated here; downstream code (workspace
-/// loader, T-005) reuses the existing `SpecFrontmatter` deserialisation.
-/// T-001 only validates the element tree.
+/// frontmatter is **not** re-validated here; downstream code (the
+/// workspace loader) reuses the existing `SpecFrontmatter` deserialisation.
+/// This parser only validates the element tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpecDoc {
     /// YAML frontmatter payload between the opening and closing `---`
@@ -62,7 +58,7 @@ pub struct SpecDoc {
     /// Span of the `<user-stories>` open tag.
     pub user_stories_span: ElementSpan,
     /// Body of the optional `<assumptions>` top-level element, verbatim,
-    /// when present. SPEC-0021 DEC-005 makes the element optional;
+    /// when present. The element is optional;
     /// specs without load-bearing assumptions omit it entirely.
     pub assumptions: Option<String>,
     /// Span of the `<assumptions>` open tag, when present.
@@ -247,7 +243,7 @@ fn dec_id_regex() -> &'static Regex {
 /// Returns [`ParseError`] for missing frontmatter or level-1 heading,
 /// element-shape problems, unknown element names or attributes,
 /// id-pattern violations, duplicate ids, orphan scenarios, empty
-/// required bodies, invalid attribute values, or surviving SPEC-0019
+/// required bodies, invalid attribute values, or surviving
 /// HTML-comment markers outside fenced code blocks.
 pub fn parse(source: &str, path: &Utf8Path) -> ParseResult<SpecDoc> {
     let (frontmatter_raw, body, body_offset) = split_required(source, path, "SPEC.md")?;
@@ -991,14 +987,14 @@ mod tests {
         "---\nid: SPEC-0001\nslug: x\ntitle: y\nstatus: in-progress\ncreated: 2026-05-11\n---\n\n# Title\n"
     }
 
-    /// SPEC-0021 makes `<goals>`, `<non-goals>`, and `<user-stories>` required
+    /// `<goals>`, `<non-goals>`, and `<user-stories>` are required
     /// top-level sections; every test fixture that exercises a `<requirement>`
     /// must include them so the parser sees a structurally valid spec.
     fn top_sections() -> &'static str {
         "\n<goals>\nGoals body.\n</goals>\n\n<non-goals>\nNon-goals body.\n</non-goals>\n\n<user-stories>\n- A story.\n</user-stories>\n\n"
     }
 
-    /// SPEC-0021 makes `<done-when>` and `<behavior>` required sub-elements
+    /// `<done-when>` and `<behavior>` are required sub-elements
     /// inside `<requirement>`, before any `<scenario>`. Tests insert this
     /// canned block between their requirement prose and the nested scenarios
     /// so the structural validator sees a complete requirement.
@@ -1527,9 +1523,9 @@ mod tests {
     fn requirement_body_without_prose_but_with_scenarios_parses() {
         // The parser stores `Requirement.body` as the verbatim slice
         // between open and close tags (including nested scenario tag
-        // text), matching the SPEC-0019 contract. A valid scenario
+        // text), matching the verbatim-body contract. A valid scenario
         // therefore satisfies the "non-whitespace body" rule even when
-        // the requirement carries no free prose. The renderer (T-002)
+        // the requirement carries no free prose. The renderer
         // is responsible for stripping nested scenario tag lines when
         // re-emitting the requirement prose.
         let src = make(indoc! {r#"
@@ -1900,8 +1896,8 @@ mod tests {
     #[test]
     fn canonical_fixture_parses_cleanly() {
         // Sanity check that the checked-in canonical fixture (used by
-        // T-002's roundtrip test) is valid against the T-001 parser.
-        // If T-002 needs to evolve the fixture shape, this test is the
+        // the roundtrip test) is valid against this parser.
+        // If that fixture needs to evolve its shape, this test is the
         // first line of defence against accidental regressions.
         let src = include_str!("../../../tests/fixtures/spec_xml/canonical.md");
         let doc = parse(src, Utf8Path::new("tests/fixtures/spec_xml/canonical.md"))

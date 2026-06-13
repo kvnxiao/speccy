@@ -1,14 +1,11 @@
 //! `speccy check` command logic.
 //!
 //! Discovers the project root, scans `.speccy/specs/`, resolves the
-//! SPEC-0017 selector against the scenarios reached via
+//! selector against the scenarios reached via
 //! `SpecDoc.requirements[*].scenarios` (the `speccy:scenario` markers
 //! nested under each `speccy:requirement` marker in SPEC.md), and
 //! renders the English validation scenario for each selected check.
-//! Renders only — no child processes spawn (SPEC-0018 REQ-002).
-//!
-//! See `.speccy/specs/0018-remove-check-execution/SPEC.md` and
-//! `.speccy/specs/0019-xml-canonical-spec-md/SPEC.md`.
+//! Renders only — no child processes spawn.
 
 use crate::check_selector::CheckSelector;
 use crate::check_selector::SelectorError;
@@ -90,7 +87,7 @@ struct CollectedCheck {
 
 /// Run `speccy check` from `cwd`. Returns the intended process exit code.
 ///
-/// Per SPEC-0018 REQ-002, exit code is non-zero only for selector,
+/// Exit code is non-zero only for selector,
 /// lookup, parse, or workspace errors. Scenario contents never gate the
 /// exit code.
 ///
@@ -296,7 +293,7 @@ fn run_task(
     let label = spec.display_label();
 
     // Resolve the covering requirements through the shared core walk so
-    // `check` and `context` cannot diverge (SPEC-0056 REQ-003). The walk
+    // `check` and `context` cannot diverge. The walk
     // returns the covering requirements deduplicated in covers-list
     // order; flattening each requirement's scenarios reproduces the prior
     // inlined scenario accumulation. Scenarios are owned by exactly one

@@ -1,6 +1,6 @@
 //! Stability registry: every lint code the engine can emit, with its
 //! severity. A snapshot test pins this list so that removing or renaming
-//! a code breaks the build (SPEC-0003 REQ-007).
+//! a code breaks the build.
 
 use crate::lint::types::Level;
 

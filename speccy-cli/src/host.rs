@@ -5,7 +5,7 @@
 //! a stderr-bound warning) or an [`InitError`] that the CLI maps to an
 //! exit code.
 //!
-//! Precedence (SPEC-0002 REQ-003 + DEC-004):
+//! Precedence:
 //! 1. Explicit `--host <name>` always wins.
 //! 2. Probe in declared order: `.claude/`, `.codex/`, `.cursor/`.
 //! 3. `.cursor/` (without `--host`) refuses with [`InitError::CursorDetected`].
@@ -19,10 +19,10 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostChoice {
     /// Claude Code skill pack; destination `.claude/skills/<name>/SKILL.md`
-    /// per SPEC-0015 (was `.claude/commands/` pre-v1).
+    /// (was `.claude/commands/` pre-v1).
     ClaudeCode,
-    /// Codex skill pack; destination `.agents/skills/<name>/SKILL.md` per
-    /// SPEC-0015 (the path `OpenAI`'s Codex docs list as the project-local
+    /// Codex skill pack; destination `.agents/skills/<name>/SKILL.md`
+    /// (the path `OpenAI`'s Codex docs list as the project-local
     /// scan location; was `.codex/skills/` pre-v1).
     Codex,
 }
@@ -40,12 +40,12 @@ impl HostChoice {
     /// Project-relative install roots this host writes to.
     ///
     /// Claude Code writes only to `.claude/`. Codex writes to two
-    /// siblings: `.agents/` for skills (per SPEC-0015 and `OpenAI`'s
+    /// siblings: `.agents/` for skills (per `OpenAI`'s
     /// project-local skill scan path) and `.codex/` for subagents
     /// (per `OpenAI`'s Codex subagents docs, which list
     /// `.codex/agents/` as the project-local subagent scan path).
     ///
-    /// The SPEC-0016 renderer iterates these to walk the matching
+    /// The renderer iterates these to walk the matching
     /// `resources/agents/<root>/` subtrees in the embedded bundle.
     #[must_use = "the install roots drive which resources/agents/ subtrees are rendered"]
     pub const fn install_roots(self) -> &'static [&'static str] {
@@ -73,11 +73,11 @@ impl HostChoice {
     ///   skill body to tell users where the pack lands.
     /// - `speccy_references_path`: project-relative host-shared references
     ///   directory (`".claude/speccy-references"` or
-    ///   `".agents/speccy-references"`), used by consuming bodies (per
-    ///   SPEC-0038 REQ-004) to emit host-rooted pointers to cross-skill
-    ///   reference files like `evidence.md` and `journal-blockers.md`. Codex
-    ///   sub-agents under `.codex/agents/` still resolve the pointer to
-    ///   `.agents/...` (the skill-pack root), not `.codex/...`.
+    ///   `".agents/speccy-references"`), used by consuming bodies to emit
+    ///   host-rooted pointers to cross-skill reference files like `evidence.md`
+    ///   and `journal-blockers.md`. Codex sub-agents under `.codex/agents/`
+    ///   still resolve the pointer to `.agents/...` (the skill-pack root), not
+    ///   `.codex/...`.
     #[must_use = "the template context drives every substitution in resources/agents/<host>/*.tmpl"]
     pub fn template_context(self) -> minijinja::Value {
         minijinja::Value::from_serialize(self.template_context_raw())

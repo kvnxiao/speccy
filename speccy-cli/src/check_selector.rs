@@ -1,7 +1,7 @@
 //! Polymorphic positional selector parser for `speccy check`.
 //!
 //! `speccy check` accepts a single optional positional argument with five
-//! possible shapes (see `.speccy/specs/0017-check-selector/SPEC.md`):
+//! possible shapes:
 //!
 //! | Argument               | Selector variant                      |
 //! |------------------------|---------------------------------------|
@@ -14,12 +14,12 @@
 //!
 //! Task forms reuse [`speccy_core::task_lookup::parse_ref`] verbatim so
 //! ambiguity and not-found semantics stay aligned with `speccy implement`
-//! and `speccy review` (SPEC-0017 DEC-002).
+//! and `speccy review`.
 //!
 //! Dispatch order tests the most specific shapes first (qualified-task,
 //! qualified-check, bare spec, unqualified task, unqualified check). The
 //! five accepted shapes are mutually disjoint, so order is a safety net,
-//! not a semantic dependency (see SPEC's Assumptions section).
+//! not a semantic dependency.
 
 use regex::Regex;
 use speccy_core::task_lookup::LookupError;
@@ -46,8 +46,7 @@ pub enum CheckSelector {
         /// `CHK-NNN` identifier (3+ digits).
         check_id: String,
     },
-    /// `CHK-NNN`: every spec's `CHK-NNN` (SPEC-0010 DEC-003 cross-spec
-    /// match preserved).
+    /// `CHK-NNN`: every spec's `CHK-NNN`, matched across all specs.
     UnqualifiedCheck {
         /// `CHK-NNN` identifier (3+ digits).
         check_id: String,
@@ -193,7 +192,7 @@ fn qualified_check_regex() -> &'static Regex {
 
 /// Shared `SPEC-NNNN` (4+ digits) shape check. Also used by the
 /// `lock` and `archive` commands to validate their spec-id arguments
-/// and by `journal append` / `journal show` as the DEC-004 routing
+/// and by `journal append` / `journal show` as the routing
 /// discriminant, so the accepted shape cannot drift per command.
 #[expect(
     clippy::unwrap_used,

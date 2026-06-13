@@ -16,7 +16,7 @@
 //! diagnostics at TRACE, this test distinguishes a stderr-wired subscriber
 //! from a stdout-wired one: a stdout-wired subscriber would interleave the
 //! formatter line ahead of the JSON envelope and break the
-//! `serde_json::from_str(&stdout)` parse. Covers SPEC-0058 CHK-008.
+//! `serde_json::from_str(&stdout)` parse.
 
 mod common;
 

@@ -2,10 +2,10 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Tests for REQ-007: reviewer persona shared blocks factored into
+//! Tests for reviewer persona shared blocks factored into
 //! co-located snippet files under `resources/modules/personas/`.
 //!
-//! SPEC-0033 T-006 checks:
+//! Checks:
 //!
 //! - [`snippet_files_exist`]: snippet files are present alongside persona
 //!   bodies.

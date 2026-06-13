@@ -8,8 +8,6 @@
 //! Per-spec parse failures are non-fatal: each [`ParsedSpec`] carries
 //! `Result` fields so a single malformed spec doesn't blind callers to
 //! the rest of the workspace.
-//!
-//! See `.speccy/specs/0004-status-command/SPEC.md` REQ-001..REQ-004.
 
 use crate::error::ParseError;
 use crate::error::ParseResult;
@@ -31,7 +29,7 @@ use regex::Regex;
 use std::sync::OnceLock;
 use thiserror::Error;
 
-/// Sentinel string used in TASKS.md frontmatter before SPEC-0006's
+/// Sentinel string used in TASKS.md frontmatter before
 /// `speccy tasks --commit` records a real SPEC.md hash.
 pub const BOOTSTRAP_PENDING: &str = "bootstrap-pending";
 
@@ -183,7 +181,7 @@ pub fn find_root(start: &Utf8Path) -> Result<Utf8PathBuf, WorkspaceError> {
 /// This is the shared active-spec discovery helper for every hot-path
 /// command (`status` default mode, `next`, `check`, `verify`, `lock`).
 /// It deliberately excludes `.speccy/archive/`: archived specs are
-/// invisible to hot-path commands by SPEC-0042 REQ-006. Opt-ins:
+/// invisible to hot-path commands. Opt-ins:
 ///
 /// - [`scan_archive_specs`] returns archive specs as a separate slice (used by
 ///   `status --include-archive`).
@@ -206,7 +204,7 @@ pub fn scan(project_root: &Utf8Path) -> Workspace {
 /// supersession index is rebuilt across the merged set, so a
 /// `superseded_by` row that points into the archive still resolves.
 ///
-/// The `.speccy/archive/` layout is flat (SPEC-0042 contract), so
+/// The `.speccy/archive/` layout is flat, so
 /// mission folders are not walked there.
 #[must_use = "the returned workspace owns parsed artifacts the caller needs"]
 pub fn scan_with_archive(project_root: &Utf8Path, include_archive: bool) -> Workspace {
@@ -457,9 +455,7 @@ fn resolve_mission_md_path(dir: &Utf8Path) -> Option<Utf8PathBuf> {
 /// unreadable. Per-spec parse failures are recorded inside the
 /// returned [`ParsedSpec`]s (same shape as [`scan`] for active specs).
 /// Unlike [`scan`], this helper does not walk mission folders: the
-/// archive directory layout is flat by SPEC-0042 contract.
-///
-/// See `.speccy/specs/0042-archive-completed-specs/SPEC.md` REQ-007.
+/// archive directory layout is flat.
 #[must_use = "the returned archive specs are the entire purpose of this call"]
 pub fn scan_archive_specs(project_root: &Utf8Path) -> Vec<ParsedSpec> {
     let archive_dir = project_root.join(".speccy").join("archive");
@@ -588,7 +584,7 @@ pub struct XmlValidationInput<'a> {
     /// `tasks` is `Some`.
     pub tasks_path: Option<&'a Utf8Path>,
     /// Parsed REPORT.md element tree, when present. When `None`, the
-    /// missing-coverage check is skipped (REQ-002 skip rule).
+    /// missing-coverage check is skipped (skip rule).
     pub report: Option<&'a ReportDoc>,
     /// Path to REPORT.md, used in diagnostics. Required when
     /// `report` is `Some`.

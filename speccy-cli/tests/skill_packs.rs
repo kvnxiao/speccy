@@ -45,7 +45,7 @@ fn read_wrapper_template(install_root: &str, verb: &str) -> String {
 
 /// Look up a rendered SKILL.md body by verb in a `render_host_pack`
 /// output vector. Helper centralises the path-prefix matching so the
-/// SPEC-0013 content-shape tests read as the assertion only.
+/// content-shape tests read as the assertion only.
 fn find_rendered_skill<'a>(
     rendered: &'a [speccy_cli::render::RenderedFile],
     install_root: &str,
@@ -118,26 +118,24 @@ const SKILL_NAMES: &[&str] = &[
 
 /// Per-host install root for the SKILL.md wrappers under
 /// `resources/agents/<root>/skills/<verb>/SKILL.md.tmpl`. Mirrors the
-/// install destination established by SPEC-0015 (Claude Code →
+/// install destination (Claude Code →
 /// `.claude/`, Codex → `.agents/`); `.codex/` is the subagent root and
 /// has no skills bundle.
 const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex", ".agents")];
 
 /// The three pinned phase-worker skill verbs whose SKILL.md.tmpl bodies
-/// became thin stubs (T-009 / REQ-010). These stubs do not contain a
+/// became thin stubs. These stubs do not contain a
 /// single `{% include %}` directive, do not contain `## When to use`,
 /// and do not carry a full `speccy …` command in a code fence — they
 /// are pointer-only bodies. The fourth phase (`speccy-init`) keeps its
-/// full body sourced from `modules/phases/speccy-init.md` (T-009 scope
-/// explicitly excludes it from the stub transformation).
-// SPEC-0049 / REQ-003 / DEC-001: `speccy-work` migrated from
+/// full body sourced from `modules/phases/speccy-init.md` (it is
+/// excluded from the stub transformation).
+// `speccy-work` migrated from
 // stub-delegate to pure-include shape, so it is no longer a "stub"
 // wrapper; only `speccy-decompose` and `speccy-ship` remain in
 // stub-delegate form.
 const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-ship"];
 
-// --------------------------------------------------------------------
-// CHK-002
 // --------------------------------------------------------------------
 
 #[test]
@@ -153,7 +151,7 @@ fn persona_names_match_registry() {
 }
 
 // --------------------------------------------------------------------
-// CHK-007: persona content shape (reviewer personas only)
+// persona content shape (reviewer personas only)
 // --------------------------------------------------------------------
 
 #[test]
@@ -183,7 +181,7 @@ fn persona_content_shape() {
 }
 
 // --------------------------------------------------------------------
-// CHK-008: recipe content shape
+// recipe content shape
 // --------------------------------------------------------------------
 
 fn first_non_frontmatter_paragraph(body: &str) -> Option<&str> {
@@ -217,7 +215,7 @@ fn recipe_content_shape() {
         for verb in SKILL_NAMES {
             let body = find_rendered_skill(&rendered, install_root, verb);
 
-            // Skip full content-shape checks for T-009 stub skills.
+            // Skip full content-shape checks for stub skills.
             if PINNED_STUB_PHASES.contains(verb) {
                 // Stubs must be non-empty and must name the `/agent`
                 // invocation pointer — the only content-shape guarantee
@@ -238,7 +236,7 @@ fn recipe_content_shape() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0015 CHK-006: descriptions tuned for natural-language activation
+// descriptions tuned for natural-language activation
 // --------------------------------------------------------------------
 
 #[test]
@@ -246,7 +244,7 @@ fn shipped_descriptions_natural_language_triggers() {
     // Codex hard-rejects descriptions over 1024 Unicode chars at skill load
     // (codex-rs/core-skills/src/loader.rs::MAX_DESCRIPTION_LEN; see
     // openai/codex#13941). This is the binding constraint; Claude Code's
-    // documented 1536-char cap is softer (truncation). SPEC-0026 DEC-001.
+    // documented 1536-char cap is softer (truncation).
     const MAX_DESCRIPTION_CHARS: usize = 1024;
     for (_host, install_root) in HOST_SKILL_ROOTS {
         for skill in SKILL_NAMES {
@@ -496,14 +494,14 @@ fn claude_code_wrapper_shape_and_body() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-006: Codex SKILL.md wrappers under
+// Codex SKILL.md wrappers under
 // `resources/agents/.agents/skills/speccy-<verb>/SKILL.md.tmpl`.
 //
-// Structurally identical to the T-005 Claude Code wrappers: a YAML
+// Structurally identical to the Claude Code wrappers: a YAML
 // frontmatter block (`name`, `description`) followed by exactly one
 // `{% raw %}{% include "modules/skills/speccy-<verb>.md" %}{% endraw %}`
 // directive. The `.agents/skills/` path mirrors the Codex install
-// destination established by SPEC-0015 (OpenAI's documented
+// destination (OpenAI's documented
 // project-local scan path), not `.codex/skills/`.
 // --------------------------------------------------------------------
 
@@ -596,7 +594,7 @@ fn t006_codex_wrapper_shape_and_body() {
         // of a single `{% include %}` directive. `speccy-init` keeps
         // its full body but includes from `modules/phases/` rather
         // than `modules/skills/`.
-        // SPEC-0039 (REQ-003 / DEC-001 mechanism B): the Codex
+        // The Codex
         // `speccy-orchestrate` wrapper carries the host-neutral body
         // include plus a Codex-only permission-grant module include.
         // All other skills follow the single-include shape.
@@ -625,9 +623,9 @@ fn t006_codex_wrapper_shape_and_body() {
                 path.display(),
             );
         } else if *verb == "speccy-orchestrate" {
-            // SPEC-0039 REQ-003: the Codex orchestrate wrapper includes
+            // The Codex orchestrate wrapper includes
             // the host-neutral body AND the Codex-only permission-grant
-            // module via DEC-001 mechanism B (additive selective-include).
+            // module (additive selective-include).
             assert!(
                 body.contains("{% include \"modules/skills/speccy-orchestrate.md\" %}"),
                 "wrapper `{}` body must include the host-neutral orchestrate body",
@@ -651,7 +649,7 @@ fn t006_codex_wrapper_shape_and_body() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-009: Claude Code reviewer subagent wrappers under
+// Claude Code reviewer subagent wrappers under
 // `resources/agents/.claude/agents/reviewer-<persona>.md.tmpl`.
 //
 // Six wrappers, one per shipped reviewer persona. Each wrapper is a
@@ -659,15 +657,14 @@ fn t006_codex_wrapper_shape_and_body() {
 // `description: <one-line>`) followed by exactly one
 // `{% include "modules/personas/reviewer-<persona>.md" %}` directive
 // (no `{% raw %}` wrapping; persona bodies currently contain no
-// `{{` / `{%` literals, and SPEC-0016 DEC-004's TOML-safety invariant
-// test lands in T-010). The wrapper byte-shape mirrors the T-005
+// `{{` / `{%` literals). The wrapper byte-shape mirrors the
 // SKILL.md wrappers: ends at `%}` with no trailing newline so the
 // rendered output keeps the persona body's leading/trailing newlines
 // as the only blank lines straddling the include site.
 // --------------------------------------------------------------------
 
 /// Seven reviewer-persona names shipped by `speccy-core::personas::ALL`.
-/// Duplicated locally as a `const &[&str]` so the T-009 tests stay
+/// Duplicated locally as a `const &[&str]` so the tests stay
 /// hermetic w.r.t. `personas::ALL`'s declared order.
 const REVIEWER_PERSONAS: &[&str] = &[
     "business",
@@ -762,7 +759,7 @@ fn t009_claude_code_reviewer_wrapper_shape_and_body() {
             "wrapper `{}` `description` must be a single line",
             path.display(),
         );
-        // SPEC-0015 description-length invariant: descriptions land in
+        // Description-length invariant: descriptions land in
         // Claude Code's subagent registry; the SKILL.md descriptions
         // already honour the ~500-char cap and the subagent descriptions
         // should too.
@@ -794,7 +791,7 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
     // body's `## Focus` section (proof the `{% include %}` expanded).
     let rendered = render_host_pack(HostChoice::ClaudeCode)
         .expect("render_host_pack(claude-code) should succeed");
-    // SPEC-0032 T-001 added phase-worker subagent files at
+    // Phase-worker subagent files live at
     // `.claude/agents/speccy-<phase>.md` alongside the existing
     // reviewer subagent files. Filter on the `reviewer-` prefix so
     // the reviewer-shape assertions below stay scoped to reviewers.
@@ -848,7 +845,7 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
         );
     }
 
-    // SPEC-0016 REQ-003 / TASKS.md T-009 obligation: each rendered
+    // Each rendered
     // reviewer subagent body must carry the persona module body with
     // its `{% include %}` expanded — the structural `## Focus` section
     // heading from the persona body proves the expansion happened.
@@ -863,7 +860,7 @@ fn t009_claude_code_reviewer_wrappers_render_to_subagent_files() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0053 T-001 (CHK-001, CHK-002): the `reviewer-correctness`
+// The `reviewer-correctness`
 // persona renders for both hosts with all `{% include %}` directives
 // expanded, and the rendered body carries a non-empty
 // `## Out of scope` deferral section.
@@ -886,7 +883,7 @@ fn rendered_agent_body(host: HostChoice, dir: &str, name: &str, suffix: &str) ->
 
 #[test]
 fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
-    // CHK-001: both hosts render the persona with every `{% ... %}`
+    // Both hosts render the persona with every `{% ... %}`
     // include directive expanded and no `<...>` placeholder left.
     for (host, dir, suffix) in [
         (HostChoice::ClaudeCode, ".claude", "md"),
@@ -902,7 +899,7 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
 
 #[test]
 fn reviewer_correctness_body_has_out_of_scope_section() {
-    // CHK-002: the rendered body carries a non-empty
+    // The rendered body carries a non-empty
     // `## Out of scope` deferral section, gating a silent drop of the
     // scope boundary on a future edit. The section's wording is prose
     // and deliberately not pinned here.
@@ -934,7 +931,7 @@ fn reviewer_correctness_body_has_out_of_scope_section() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0053 T-002 (CHK-003): the `plan-explorer` persona renders for
+// The `plan-explorer` persona renders for
 // both hosts with all `{% include %}` directives expanded, and the
 // rendered body carries the advisory, non-verdict contract — it must
 // not contain the `<review` verdict-contract marker.
@@ -942,7 +939,7 @@ fn reviewer_correctness_body_has_out_of_scope_section() {
 
 #[test]
 fn plan_explorer_renders_with_includes_expanded_both_hosts() {
-    // CHK-003: both hosts render the persona with every `{% ... %}`
+    // Both hosts render the persona with every `{% ... %}`
     // include directive expanded.
     for (host, dir, suffix) in [
         (HostChoice::ClaudeCode, ".claude", "md"),
@@ -958,7 +955,7 @@ fn plan_explorer_renders_with_includes_expanded_both_hosts() {
 
 #[test]
 fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
-    // CHK-003: plan-explorer is advisory, not a reviewer. Its rendered
+    // plan-explorer is advisory, not a reviewer. Its rendered
     // body must not carry the `<review` verdict-contract marker — that
     // would mean a verdict-contract snippet leaked in, contradicting
     // the report-only contract. The check is host-independent: the
@@ -977,7 +974,7 @@ fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0053 T-003 (CHK-004): the `plan-architect` persona renders for
+// The `plan-architect` persona renders for
 // both hosts with all `{% include %}` directives expanded, carries the
 // advisory non-verdict contract (no `<review` marker), and specifies
 // that build-sequence items are agent-sized.
@@ -985,7 +982,7 @@ fn plan_explorer_body_has_no_review_verdict_marker_both_hosts() {
 
 #[test]
 fn plan_architect_renders_with_includes_expanded_both_hosts() {
-    // CHK-004: both hosts render the persona with every `{% ... %}`
+    // Both hosts render the persona with every `{% ... %}`
     // include directive expanded.
     for (host, dir, suffix) in [
         (HostChoice::ClaudeCode, ".claude", "md"),
@@ -1001,7 +998,7 @@ fn plan_architect_renders_with_includes_expanded_both_hosts() {
 
 #[test]
 fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
-    // CHK-004: plan-architect is advisory, not a reviewer. Its rendered
+    // plan-architect is advisory, not a reviewer. Its rendered
     // body must not carry the `<review` verdict-contract marker — that
     // would mean a verdict-contract snippet leaked in, contradicting the
     // blueprint-only contract.
@@ -1018,7 +1015,7 @@ fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0016 T-010: Codex reviewer subagent wrappers under
+// Codex reviewer subagent wrappers under
 // `resources/agents/.codex/agents/reviewer-<persona>.toml.tmpl`.
 //
 // Six wrappers, one per shipped reviewer persona. Each wrapper is a
@@ -1026,10 +1023,10 @@ fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
 // `description` (string), and `developer_instructions` (string, TOML
 // triple-quoted) wrapping a single
 // `{% include "modules/personas/reviewer-<persona>.md" %}` directive
-// (no `{% raw %}` wrapping, mirroring T-009; persona bodies currently
+// (no `{% raw %}` wrapping; persona bodies currently
 // contain no `{{` / `{%` literals). The wrapper byte-shape mirrors the
-// T-005 / T-006 / T-009 wrappers: ends at `"""` (the close of the
-// triple-quoted block) with no trailing newline. SPEC-0016 DEC-004
+// other wrappers: ends at `"""` (the close of the
+// triple-quoted block) with no trailing newline. The TOML-safety
 // invariant: persona bodies must not contain the literal substring
 // `"""` because it would terminate the TOML triple-quoted string
 // prematurely; the `t010_persona_bodies_have_no_toml_triple_quote`
@@ -1112,7 +1109,7 @@ fn t010_codex_reviewer_wrapper_shape_and_body() {
         // The triple-quoted body must wrap the include directive for
         // the matching persona, with the closing `\"\"\"` as the final
         // bytes of the file (no trailing newline) to mirror the
-        // T-005/T-006/T-009 wrapper trailing-byte shape.
+        // Wrapper trailing-byte shape.
         let expected_include =
             format!("{{% include \"modules/personas/reviewer-{persona}.md\" %}}");
         assert!(
@@ -1142,7 +1139,7 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
     // `developer_instructions` body carries the persona module body's
     // `## Focus` section (proof the `{% include %}` expanded).
     //
-    // SPEC-0032 T-004 added phase-worker subagent files at
+    // Phase-worker subagent files live at
     // `.codex/agents/speccy-<phase>.toml` alongside the existing
     // reviewer subagent files. Filter on the `reviewer-` prefix so
     // the reviewer-shape assertions below stay scoped to reviewers.
@@ -1224,7 +1221,7 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
             "rendered subagent `{path}` `developer_instructions` must be non-empty",
         );
 
-        // SPEC-0016 REQ-003: `developer_instructions` must carry the
+        // `developer_instructions` must carry the
         // persona module body with its `{% include %}` expanded — the
         // structural `## Focus` section heading from the persona body
         // proves the expansion happened.
@@ -1235,13 +1232,12 @@ fn t010_codex_reviewer_wrappers_render_to_subagent_files() {
     }
 }
 
-/// SPEC-0016 DEC-004 invariant: persona body files must not contain
+/// Persona body files must not contain
 /// the literal substring `"""` because the Codex reviewer wrapper
 /// embeds the persona body inside a TOML triple-quoted string
 /// (`developer_instructions = """..."""`); a `"""` in the persona body
 /// would terminate the string prematurely and break the rendered TOML.
-/// This guard lives long-term (not transient like T-003's
-/// byte-equivalence oracle): the invariant must hold for every future
+/// This guard lives long-term: the invariant must hold for every future
 /// persona edit.
 #[test]
 fn t010_persona_bodies_have_no_toml_triple_quote() {
@@ -1286,7 +1282,7 @@ fn t010_persona_bodies_have_no_toml_triple_quote() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0025 REQ-002 content-shape (structural surfaces only): the
+// Content-shape (structural surfaces only): the
 // speccy-brainstorm skill body must route output into the four SPEC.md
 // destination sections, point at both terminal actions
 // (`speccy-plan` for new specs, `speccy-amend` for amendments) via the
@@ -1327,7 +1323,7 @@ fn brainstorm_module_body_names_four_routing_destinations() {
 
 #[test]
 fn brainstorm_module_body_uses_cmd_prefix_consistently() {
-    // SPEC-0025 T-001 retry: the source module body must use
+    // The source module body must use
     // `{{ cmd_prefix }}speccy-plan` everywhere — bare `/speccy-plan`
     // bleeds through to the Codex mirror as a literal slash under a
     // no-prefix host. Allow `/speccy-plan` only inside the example
@@ -1367,13 +1363,13 @@ fn brainstorm_rendered_outputs_use_host_specific_prefix() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0031 REQ-005 / CHK-005: reviewer-tests persona and prompt load
+// reviewer-tests persona and prompt load
 // the evidence file and stay framework-agnostic; the other six
 // built-in reviewer personas carry no evidence-related instruction.
 // --------------------------------------------------------------------
 
-/// Reviewer personas other than `tests`. The SPEC-0031 REQ-005
-/// asymmetry: only the `tests` persona / prompt names evidence
+/// Reviewer personas other than `tests`. The asymmetry: only the
+/// `tests` persona / prompt names evidence
 /// loading; the other six anchor on diff + SPEC + `<task-scenarios>`
 /// alone.
 const NON_TESTS_REVIEWER_PERSONAS: [&str; 6] = [
@@ -1386,8 +1382,7 @@ const NON_TESTS_REVIEWER_PERSONAS: [&str; 6] = [
 ];
 
 /// Framework-specific anchor strings the reviewer-tests persona must
-/// not name inside normative guidance. SPEC-0031 REQ-005's
-/// framework-agnostic clause and CHK-005's literal grep.
+/// not name inside normative guidance.
 const FRAMEWORK_ANCHORS: [&str; 9] = [
     "test result: FAILED",
     " \u{2717} ",
@@ -1444,14 +1439,14 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0053 CHK-006: packaging conventions for the three feature-dev
+// packaging conventions for the three feature-dev
 // ports (reviewer-correctness, plan-explorer, plan-architect). Each
 // Claude wrapper declares `model: opus[1m]`, each Codex wrapper
 // declares `model = "gpt-5.5"`, and none declares `sonnet`.
 // --------------------------------------------------------------------
 
-/// The three personas ported from `feature-dev` in SPEC-0053
-/// T-001 / T-002 / T-003. Their packaging invariants are asserted as
+/// The three personas ported from `feature-dev`. Their packaging
+/// invariants are asserted as
 /// an aggregate here rather than per-authoring-task.
 const FEATURE_DEV_PERSONAS: &[&str] = &["reviewer-correctness", "plan-explorer", "plan-architect"];
 
@@ -1533,17 +1528,17 @@ fn feature_dev_personas_declare_speccy_model_conventions() {
 }
 
 // --------------------------------------------------------------------
-// SPEC-0053 CHK-010 / CHK-011: read-only agents declare an explicit
+// read-only agents declare an explicit
 // read-only `tools:` grant in their Claude wrapper frontmatter, and
 // the writer agents are NOT narrowed by this change.
 //
-// REQ-008: the ten read-only agents grant `Read`/`Grep`/`Glob`/`LS`/
+// The ten read-only agents grant `Read`/`Grep`/`Glob`/`LS`/
 // `Bash`/`WebFetch` and exclude `Edit`/`Write`/`NotebookEdit`; the five
 // writer agents retain full (unrestricted, no `tools:` field) access.
 // --------------------------------------------------------------------
 
 /// The ten read-only agents that must carry an explicit read-only
-/// `tools:` grant after SPEC-0053 T-006.
+/// `tools:` grant.
 const READ_ONLY_AGENTS: &[&str] = &[
     "plan-explorer",
     "plan-architect",
@@ -1575,7 +1570,7 @@ struct AgentToolsFrontmatter {
 
 #[test]
 fn read_only_agents_declare_read_only_tool_grant() {
-    // CHK-010: each read-only Claude wrapper declares a `tools:` field
+    // Each read-only Claude wrapper declares a `tools:` field
     // that includes `Read` and excludes `Edit`/`Write`/`NotebookEdit`.
     let claude = render_host_pack(HostChoice::ClaudeCode)
         .unwrap_or_else(|err| panic_with_test_message(&format!("render claude pack: {err}")));
@@ -1613,7 +1608,7 @@ fn read_only_agents_declare_read_only_tool_grant() {
 
 #[test]
 fn writer_agents_are_not_narrowed_to_read_only() {
-    // CHK-011: the writer wrappers retain full tool access — they must
+    // The writer wrappers retain full tool access — they must
     // not have been narrowed to the read-only set. A writer that grows
     // a `tools:` field excluding `Edit`/`Write` would be an over-broad
     // application of the read-only grant; gate that regression.
