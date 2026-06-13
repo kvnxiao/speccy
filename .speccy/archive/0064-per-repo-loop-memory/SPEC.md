@@ -5,6 +5,8 @@ title: Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implemente
 status: implemented
 created: 2026-06-13
 supersedes: []
+archived_at: 2026-06-13
+archived_reason: "shipped"
 ---
 
 # SPEC-0064: Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implementer reads before acting, grown by a ship-time retro from the loop's own conventions and mistakes

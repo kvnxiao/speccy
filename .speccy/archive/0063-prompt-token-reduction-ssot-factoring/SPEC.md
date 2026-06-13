@@ -5,6 +5,8 @@ title: Prompt token reduction + SSOT factoring for `resources/` modules — comp
 status: implemented
 created: 2026-06-12
 supersedes: []
+archived_at: 2026-06-13
+archived_reason: "shipped"
 ---
 
 # SPEC-0063: Prompt token reduction + SSOT factoring for `resources/` modules — compress SDLC-loop prose, defer two procedures to existing CLI guarantees, then factor duplicated passages into shared modules
