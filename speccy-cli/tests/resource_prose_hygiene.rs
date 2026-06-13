@@ -2,15 +2,25 @@
     clippy::expect_used,
     reason = "test code may .expect() with descriptive messages"
 )]
-//! Resource-prose hygiene lint: no internal artifact-ID provenance in the
-//! agent-facing module bodies under `resources/modules/`.
+//! Resource-prose hygiene lint: bounds internal artifact-ID provenance in
+//! the agent-facing module bodies under `resources/modules/`.
 //!
-//! Every `*.md` body that `speccy init` ejects into a user's repo must use
-//! only the generic placeholder ids (`SPEC-NNNN`, `REQ-NNN`, `DEC-NNN`,
-//! `T-NNN`, `CHK-NNN`) or the single whitelisted concrete example `SPEC-0042`.
-//! A real Speccy spec / requirement / decision / task / lint id cited as
-//! provenance is pure noise in another repo — and an invitation to
-//! hallucinate. See AGENTS.md → "Authoring resource prose".
+//! Non-reference bodies — skills, phases, personas, partials, and shared
+//! rule files — must use only the generic placeholder ids (`SPEC-NNNN`,
+//! `REQ-NNN`, `DEC-NNN`, `T-NNN`, `CHK-NNN`). A real Speccy
+//! requirement / decision / task id cited as provenance is pure noise in
+//! another repo, and an invitation to hallucinate.
+//!
+//! Worked-instance references under `resources/modules/references/` are
+//! the carve-out. They carry one concrete, load-bearing example — the
+//! `SPEC-0042` widget-render-timeout walkthrough — so concrete
+//! `REQ` / `DEC` / `CHK` / `T` ids and the whitelisted `SPEC-0042` are
+//! allowed there: `<task id="T-001" covers="REQ-001 REQ-002">` reads as a
+//! worked example, where `T-NNN covers="REQ-NNN REQ-NNN"` reads as a
+//! blank. Two bans still apply in references: any SPEC id other than the
+//! exact `SPEC-0042`, and CLI lint codes (`TSK-` / `JNL-`) cited by number
+//! rather than described by behavior. See AGENTS.md → "Authoring resource
+//! prose".
 //!
 //! Source-only scan: the dogfood byte-identity test
 //! (`tests/init.rs::dogfood_outputs_match_committed_tree`) already proves
@@ -35,27 +45,37 @@ fn workspace_root() -> PathBuf {
 }
 
 /// `SPEC-NNNN`-shaped ids carrying a real digit run; every match except the
-/// whitelisted `SPEC-0042` is a violation. The generic letter-form `SPEC-NNNN`
-/// has no digit run after the dash, so it never matches.
+/// whitelisted `SPEC-0042` is a violation, references included. The generic
+/// letter-form `SPEC-NNNN` has no digit run after the dash, so it never
+/// matches.
 fn spec_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"\bSPEC-\d{4,}\b").expect("valid SPEC id regex"))
 }
 
-/// Lint-family ids (`REQ` / `DEC` / `CHK` / `TSK` / `JNL`) carrying a real
-/// digit run; any match is a violation (no exemptions). The `TSK` / `JNL` arms
-/// also catch CLI lint codes cited by number rather than described by behavior.
-/// The `\b` boundary keeps `TSK-003` out of [`task_regex`].
-fn family_regex() -> &'static Regex {
+/// Artifact-family ids (`REQ` / `DEC` / `CHK`) carrying a real digit run.
+/// Banned outside references; **allowed** inside the worked-instance
+/// references directory, where the concrete example is load-bearing. The
+/// `\b` boundary keeps `CHK-001` out of [`task_regex`].
+fn artifact_family_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
-    CELL.get_or_init(|| {
-        Regex::new(r"\b(?:REQ|DEC|CHK|TSK|JNL)-\d{3,}\b").expect("valid family id regex")
-    })
+    CELL.get_or_init(|| Regex::new(r"\b(?:REQ|DEC|CHK)-\d{3,}\b").expect("valid artifact id regex"))
 }
 
-/// `T-NNN` task ids carrying a real digit run; any match is a violation. The
-/// leading `\b` keeps `TSK-003` (matched by [`family_regex`]) and ISO
-/// timestamps like `...T19:45:00Z` out of this regex.
+/// CLI lint-code ids (`TSK` / `JNL`) carrying a real digit run; any match is
+/// a violation **everywhere**, references included — lint codes are named by
+/// the behavior they enforce, never cited by number. Split out from the
+/// artifact families because the carve-out exempts the latter in references
+/// but never these.
+fn lint_code_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"\b(?:TSK|JNL)-\d{3,}\b").expect("valid lint-code id regex"))
+}
+
+/// `T-NNN` task ids carrying a real digit run. Banned outside references;
+/// **allowed** inside the worked-instance references directory. The leading
+/// `\b` keeps `TSK-003` (matched by [`lint_code_regex`]) and ISO timestamps
+/// like `...T19:45:00Z` out of this regex.
 fn task_regex() -> &'static Regex {
     static CELL: OnceLock<Regex> = OnceLock::new();
     CELL.get_or_init(|| Regex::new(r"\bT-\d{3,}\b").expect("valid task id regex"))
@@ -92,6 +112,64 @@ struct Violation {
     fix: &'static str,
 }
 
+/// Workspace-relative path prefix marking the worked-instance references
+/// directory — the one carve-out where concrete artifact ids are allowed.
+const REFERENCES_PREFIX: &str = "resources/modules/references/";
+
+/// Scan one module body for banned ids. `rel_path` is the
+/// workspace-relative, forward-slashed path (used both to report violations
+/// and to decide whether the references carve-out applies).
+///
+/// Bans applied everywhere: non-`SPEC-0042` SPEC ids, and `TSK-` / `JNL-`
+/// lint codes. Bans applied only outside references: concrete `REQ` / `DEC`
+/// / `CHK` artifact ids and `T-NNN` task ids.
+fn violations_in(rel_path: &str, body: &str) -> Vec<Violation> {
+    let is_references = rel_path.starts_with(REFERENCES_PREFIX);
+    let mut out = Vec::new();
+    for (idx, line) in body.lines().enumerate() {
+        let line_no = idx + 1;
+        for m in spec_regex().find_iter(line) {
+            if m.as_str() == "SPEC-0042" {
+                continue;
+            }
+            out.push(Violation {
+                rel_path: rel_path.to_owned(),
+                line_no,
+                token: m.as_str().to_owned(),
+                fix: "use the generic `SPEC-NNNN`, or the whitelisted example `SPEC-0042`",
+            });
+        }
+        for m in lint_code_regex().find_iter(line) {
+            out.push(Violation {
+                rel_path: rel_path.to_owned(),
+                line_no,
+                token: m.as_str().to_owned(),
+                fix: "cite CLI lint codes (TSK-/JNL-) by behavior, not by number (references included)",
+            });
+        }
+        if is_references {
+            continue;
+        }
+        for m in artifact_family_regex().find_iter(line) {
+            out.push(Violation {
+                rel_path: rel_path.to_owned(),
+                line_no,
+                token: m.as_str().to_owned(),
+                fix: "use the generic `<PREFIX>-NNN` form; concrete REQ/DEC/CHK ids belong only in resources/modules/references/",
+            });
+        }
+        for m in task_regex().find_iter(line) {
+            out.push(Violation {
+                rel_path: rel_path.to_owned(),
+                line_no,
+                token: m.as_str().to_owned(),
+                fix: "use the generic `T-NNN` form; concrete task ids belong only in resources/modules/references/",
+            });
+        }
+    }
+    out
+}
+
 #[test]
 fn module_prose_has_no_internal_artifact_id_provenance() {
     let root = workspace_root();
@@ -114,36 +192,7 @@ fn module_prose_has_no_internal_artifact_id_provenance() {
             .to_string_lossy()
             .replace('\\', "/");
         let body = fs_err::read_to_string(path).expect("module body must be UTF-8 readable");
-        for (idx, line) in body.lines().enumerate() {
-            let line_no = idx + 1;
-            for m in spec_regex().find_iter(line) {
-                if m.as_str() == "SPEC-0042" {
-                    continue;
-                }
-                violations.push(Violation {
-                    rel_path: rel_path.clone(),
-                    line_no,
-                    token: m.as_str().to_owned(),
-                    fix: "use the generic `SPEC-NNNN`, or the whitelisted example `SPEC-0042`",
-                });
-            }
-            for m in family_regex().find_iter(line) {
-                violations.push(Violation {
-                    rel_path: rel_path.clone(),
-                    line_no,
-                    token: m.as_str().to_owned(),
-                    fix: "use the generic `<PREFIX>-NNN` form; cite lint codes (TSK-/JNL-) by behavior, not by number",
-                });
-            }
-            for m in task_regex().find_iter(line) {
-                violations.push(Violation {
-                    rel_path: rel_path.clone(),
-                    line_no,
-                    token: m.as_str().to_owned(),
-                    fix: "use the generic `T-NNN` form",
-                });
-            }
-        }
+        violations.extend(violations_in(&rel_path, &body));
     }
 
     assert!(
@@ -181,20 +230,45 @@ fn id_regexes_match_concrete_ids_and_skip_generic_placeholders() {
     );
 
     assert!(
-        family_regex().is_match("REQ-001"),
-        "concrete REQ id matches"
+        artifact_family_regex().is_match("REQ-001"),
+        "concrete REQ id matches",
     );
     assert!(
-        family_regex().is_match("TSK-003"),
-        "numbered lint code matches the family regex",
+        artifact_family_regex().is_match("DEC-001"),
+        "concrete DEC id matches",
     );
     assert!(
-        !family_regex().is_match("REQ-NNN"),
+        artifact_family_regex().is_match("CHK-001"),
+        "concrete CHK id matches",
+    );
+    assert!(
+        !artifact_family_regex().is_match("REQ-NNN"),
         "generic REQ placeholder has no digit run",
     );
     assert!(
-        !family_regex().is_match("the SPC-* lint family"),
-        "SPC is not in the banned family set",
+        !artifact_family_regex().is_match("TSK-003"),
+        "TSK is a CLI lint code, not an artifact family",
+    );
+    assert!(
+        !artifact_family_regex().is_match("the SPC-* lint family"),
+        "SPC is not in the artifact family set",
+    );
+
+    assert!(
+        lint_code_regex().is_match("TSK-003"),
+        "numbered TSK lint code matches the lint-code regex",
+    );
+    assert!(
+        lint_code_regex().is_match("JNL-001"),
+        "numbered JNL lint code matches the lint-code regex",
+    );
+    assert!(
+        !lint_code_regex().is_match("TSK-NNN"),
+        "generic lint-code placeholder has no digit run",
+    );
+    assert!(
+        !lint_code_regex().is_match("REQ-001"),
+        "REQ is an artifact family, not a lint code",
     );
 
     assert!(task_regex().is_match("T-001"), "concrete task id matches");
@@ -204,10 +278,63 @@ fn id_regexes_match_concrete_ids_and_skip_generic_placeholders() {
     );
     assert!(
         !task_regex().is_match("TSK-003"),
-        "the word boundary keeps TSK-003 out of the task regex (it is a family id)",
+        "the word boundary keeps TSK-003 out of the task regex (it is a lint code)",
     );
     assert!(
         !task_regex().is_match("2026-05-21T19:45:00Z"),
         "an ISO timestamp carries no `T-<digits>` token",
+    );
+}
+
+/// Guards the references carve-out branch in [`violations_in`]: worked-instance
+/// artifact ids are allowed only under `resources/modules/references/`, while
+/// the two unconditional bans (non-`SPEC-0042` SPEC ids and numbered lint
+/// codes) still apply there. Synthetic `(rel_path, body)` pairs exercise the
+/// directory branch directly — deleting the branch (banning everywhere) or
+/// over-relaxing it (skipping lint codes in references) fails this test.
+#[test]
+fn references_carve_out_allows_worked_instance_ids() {
+    let refs = "resources/modules/references/spec.md";
+
+    // The worked-instance id set is allowed in references.
+    assert!(
+        violations_in(
+            refs,
+            "<task id=\"T-001\" covers=\"REQ-001 REQ-002\"> CHK-001 DEC-001 SPEC-0042"
+        )
+        .is_empty(),
+        "worked-instance ids (REQ/DEC/CHK/T + SPEC-0042) must be allowed in references/",
+    );
+
+    // A non-whitelisted SPEC id is still banned, references included.
+    assert!(
+        !violations_in(refs, "tracking SPEC-0061 here").is_empty(),
+        "a SPEC id other than the whitelisted SPEC-0042 is still banned in references/",
+    );
+
+    // CLI lint codes cited by number are banned, references included.
+    assert!(
+        !violations_in(refs, "the TSK-003 lint fires").is_empty(),
+        "lint code TSK-003 is banned even in references/",
+    );
+    assert!(
+        !violations_in(refs, "the JNL-001 lint fires").is_empty(),
+        "lint code JNL-001 is banned even in references/",
+    );
+
+    // Outside references, concrete artifact and task ids are banned as before.
+    let non_refs = "resources/modules/skills/speccy-work.md";
+    assert!(
+        !violations_in(non_refs, "this work covers REQ-001").is_empty(),
+        "concrete REQ id is banned outside references/",
+    );
+    assert!(
+        !violations_in(non_refs, "implement T-001 next").is_empty(),
+        "concrete task id is banned outside references/",
+    );
+    // ...but the whitelisted SPEC-0042 example is allowed anywhere.
+    assert!(
+        violations_in(non_refs, "see the SPEC-0042 example").is_empty(),
+        "the whitelisted SPEC-0042 example is allowed outside references/ too",
     );
 }
