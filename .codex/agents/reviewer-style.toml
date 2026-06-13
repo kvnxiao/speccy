@@ -101,6 +101,15 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
   add or touch must describe what the code actually does. Stale or
   aspirational prose that no longer matches the behaviour is drift.
 
+- **No Speccy-id provenance in code.** Production code, tests, and
+  comments must not cite a Speccy id (SPEC/REQ/CHK/DEC/task) as the reason
+  a line exists — `// per REQ-NNN`, `//! Tests for SPEC-NNNN T-NNN`,
+  `// As per DEC-NNN`. Speccy is a means to produce the code, not a part
+  of it; once Speccy is removed the citation references nothing, so it is
+  drift the moment it lands. Requirement→evidence traceability already
+  lives in the journal `Evidence:` field and CHK roll-call, not in the
+  source tree. Keep the reasoning a comment carries; drop only the bare id.
+
 - **No false complexity.** Do not add abstraction, indirection, or
   configurability the change does not require. In particular, do not
   split a function into pieces that push the file past its own
