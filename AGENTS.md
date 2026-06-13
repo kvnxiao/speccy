@@ -158,8 +158,16 @@ terseness is correctness. Every body — and every `.tmpl` wrapper — follows o
 shape:
 
 1. **Discovery layer (wrapper frontmatter).** `name` is kebab-case and matches
-   the folder; `description` is verb-first and carries both a "Use when …" and
-   a "Do NOT trigger …" clause. This routing metadata is load-bearing — keep it
+   the folder. `description` is verb-first, ≤ 1024 characters, and carries no
+   angle brackets (`<` / `>`): the frontmatter lands verbatim in the system
+   prompt, so a stray tag reads as injected markup and breaks claude.ai skill
+   upload — name a returned block by bare identifier (`a drift-review block`),
+   never `<…>`. A user-routed **skill** wrapper (`skills/**`) is model-routed
+   off user prose, so it carries both a "Use when …" and a "Do NOT trigger …"
+   clause — both sides of the boundary matter. A **subagent** wrapper
+   (`agents/**`) is spawned programmatically by its caller, never by user
+   prose; it needs only the "Use when …" clause, and a "Do NOT trigger …"
+   clause would be noise. This routing metadata is load-bearing — keep it
    sharp.
 2. **No redundant preamble.** The body opens straight into logic; it does not
    restate the frontmatter description.
@@ -200,7 +208,10 @@ code (`TSK-003`, `JNL-001`) — references included.
 
 **Enforced by** `speccy-cli/tests/resource_prose_hygiene.rs`: the ID-ban lint
 over `resources/modules/**`, which carves out the `modules/references/`
-directory for the worked-instance ids per item 7.
+directory for the worked-instance ids per item 7; plus the
+wrapper-description lint over `resources/agents/**` enforcing item 1 — every
+`description` is angle-bracket-free and ≤ 1024 chars, and each `skills/**`
+wrapper additionally carries a "Use when …" and a "Do NOT trigger …" clause.
 
 ## Authoritative references
 
