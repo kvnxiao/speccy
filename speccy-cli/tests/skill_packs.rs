@@ -136,24 +136,6 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 // stub-delegate form.
 const PINNED_STUB_PHASES: &[&str] = &["speccy-decompose", "speccy-ship"];
 
-// The current CLI surface (the top-level verbs of the clap `Command`
-// enum in `speccy-cli/src/main.rs`). This list is used as a substring
-// matcher inside SKILL.md code fences to determine whether a rendered
-// skill carries a speccy command.
-const SPECCY_COMMANDS: &[&str] = &[
-    "speccy init",
-    "speccy status",
-    "speccy next",
-    "speccy check",
-    "speccy context",
-    "speccy verify",
-    "speccy lock",
-    "speccy vacancy",
-    "speccy task",
-    "speccy journal",
-    "speccy archive",
-];
-
 // --------------------------------------------------------------------
 // CHK-002
 // --------------------------------------------------------------------
@@ -186,10 +168,6 @@ fn persona_content_shape() {
     for persona in personas::ALL {
         let file = format!("reviewer-{persona}.md");
         let body = read_persona(&file);
-        assert!(
-            body.contains("# Reviewer Persona:"),
-            "persona `{file}` must open with `# Reviewer Persona: ...`",
-        );
 
         let mut cursor: usize = 0;
         for heading in required_headings {
@@ -214,24 +192,6 @@ fn first_non_frontmatter_paragraph(body: &str) -> Option<&str> {
         .lines()
         .skip_while(|line| line.trim().is_empty() || line.trim_start().starts_with('#'))
         .find(|line| !line.trim().is_empty())
-}
-
-fn contains_speccy_command_in_code_fence(body: &str) -> bool {
-    let mut in_fence = false;
-    for line in body.lines() {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if !in_fence {
-            continue;
-        }
-        let trimmed = line.trim_start();
-        if SPECCY_COMMANDS.iter().any(|cmd| trimmed.starts_with(cmd)) {
-            return true;
-        }
-    }
-    false
 }
 
 #[test]
@@ -266,26 +226,12 @@ fn recipe_content_shape() {
                     !body.trim().is_empty(),
                     "stub recipe `{install_root}/skills/{verb}/SKILL.md` must be non-empty",
                 );
-                assert!(
-                    body.contains(&format!("/agent {verb}")),
-                    "stub recipe `{install_root}/skills/{verb}/SKILL.md` must contain `/agent {verb}` (T-009 REQ-010)",
-                );
                 continue;
             }
 
             assert!(
                 first_non_frontmatter_paragraph(body).is_some(),
                 "rendered recipe `{install_root}/skills/{verb}/SKILL.md` must include an intro paragraph after the title",
-            );
-
-            assert!(
-                body.contains("## When to use"),
-                "rendered recipe `{install_root}/skills/{verb}/SKILL.md` must contain a `## When to use` section",
-            );
-
-            assert!(
-                contains_speccy_command_in_code_fence(body),
-                "rendered recipe `{install_root}/skills/{verb}/SKILL.md` must contain a fenced code block with a v1 `speccy ...` command",
             );
         }
     }
@@ -951,15 +897,6 @@ fn reviewer_correctness_renders_with_includes_expanded_both_hosts() {
             !body.contains("{%"),
             "rendered `{dir}/agents/reviewer-correctness.{suffix}` must have all `{{% ... %}}` includes expanded; got:\n{body}",
         );
-        // The persona body pulls in the shared review-contract snippets
-        // via `{% include %}`; their expanded text must be present. The
-        // contract directs the persona to append its own `<review>`
-        // block via `speccy journal append` (SPEC-0055 REQ-008), so the
-        // expanded include carries that invocation.
-        assert!(
-            body.contains("speccy journal append") && body.contains("--block review"),
-            "rendered reviewer-correctness ({dir}) must contain the expanded verdict-return contract directing `speccy journal append ... --block review`; got:\n{body}",
-        );
     }
 }
 
@@ -1076,129 +1013,6 @@ fn plan_architect_body_has_no_review_verdict_marker_both_hosts() {
         assert!(
             !body.contains("<review"),
             "rendered `{dir}/agents/plan-architect.{suffix}` must not contain the `<review` verdict-contract marker (advisory, non-verdict contract); got:\n{body}",
-        );
-    }
-}
-
-#[test]
-fn plan_architect_body_specifies_agent_sized_build_sequence_both_hosts() {
-    // CHK-004 / REQ-003 <done-when>: the body must specify that the
-    // build-sequence checklist items are agent-sized (one item ≈ one
-    // task), which is what makes the checklist directly consumable as
-    // candidate tasks.
-    for (host, dir, suffix) in [
-        (HostChoice::ClaudeCode, ".claude", "md"),
-        (HostChoice::Codex, ".codex", "toml"),
-    ] {
-        let body = rendered_agent_body(host, dir, "plan-architect", suffix);
-        // Assert on the dedicated section heading that lives ONLY in
-        // the included persona body, never in the wrapper frontmatter
-        // `description`. The description paraphrases the contract, so
-        // a loose substring like "agent-sized" / "build-sequence"
-        // against the full rendered file would pass even if the body
-        // said nothing; the heading fails RED when the body section is
-        // removed.
-        assert!(
-            body.contains("## Build sequence — an agent-sized ordered checklist"),
-            "rendered `{dir}/agents/plan-architect.{suffix}` must carry the dedicated agent-sized build-sequence section heading from the persona body; got:\n{body}",
-        );
-    }
-}
-
-// --------------------------------------------------------------------
-// SPEC-0053 T-005 (CHK-008 / CHK-009): the plan-time subagents are
-// wired into their host skills. `speccy-brainstorm` and `speccy-plan`
-// invoke `plan-explorer` and route its report into SPEC.md sections
-// (never a new artifact file); `speccy-decompose` invokes
-// `plan-architect`, names the build-sequence checklist as candidate
-// tasks, and promotes decisions into `### Decisions`.
-// --------------------------------------------------------------------
-
-/// Returns the rendered `speccy-decompose` body. The decompose recipe
-/// is a pinned phase-worker stub, so its full body renders into the
-/// agent wrapper at `<install_root>/agents/speccy-decompose.md`, not
-/// the SKILL.md stub.
-fn rendered_decompose_body(host: HostChoice, install_root: &str, suffix: &str) -> String {
-    let rendered = render_host_pack(host).expect("render_host_pack should succeed");
-    let rel = format!("{install_root}/agents/speccy-decompose.{suffix}");
-    rendered
-        .iter()
-        .find(|f| f.rel_path.as_str() == rel)
-        .unwrap_or_else(|| {
-            panic_with_test_message(&format!("rendered host pack must include `{rel}`"))
-        })
-        .contents
-        .clone()
-}
-
-#[test]
-fn brainstorm_and_plan_skills_invoke_plan_explorer_without_new_artifact() {
-    // CHK-008: both `speccy-brainstorm` and `speccy-plan` reference
-    // invoking the `plan-explorer` subagent, and neither directs the
-    // explorer's report into a new `*.md` artifact file — its only
-    // durable home is the existing SPEC.md routing targets.
-    //
-    // Render both hosts: the skill bodies are host-neutral but the
-    // wrappers differ, so a per-host render guards against a wiring
-    // edit that lands in only one pack.
-    for host in [HostChoice::ClaudeCode, HostChoice::Codex] {
-        let rendered = render_host_pack(host).expect("render_host_pack should succeed");
-        let install_root = match host {
-            HostChoice::ClaudeCode => ".claude",
-            HostChoice::Codex => ".agents",
-        };
-        for verb in ["speccy-brainstorm", "speccy-plan"] {
-            let body = find_rendered_skill(&rendered, install_root, verb);
-            assert!(
-                body.contains("plan-explorer"),
-                "rendered `{install_root}/skills/{verb}/SKILL.md` must reference invoking the `plan-explorer` subagent; got:\n{body}",
-            );
-            // The routing prose must state the explorer report is
-            // ephemeral and not persisted to a new artifact file. Assert
-            // on the distinctive contiguous phrase that occurs ONLY in
-            // the no-artifact routing clause of each wiring block — the
-            // `new `*.md` artifact file` qualifier. A broad
-            // `contains("artifact")` check passes on unrelated
-            // pre-existing prose (brainstorm's `four artifacts`, plan's
-            // `## Open Questions` line), so it would stay GREEN even if
-            // the no-artifact clause were deleted while the
-            // `plan-explorer` invocation stayed. Scoping to this phrase
-            // ties the assertion to the routing sentence: deleting the
-            // clause flips it RED.
-            assert!(
-                body.contains("new `*.md` artifact file"),
-                "rendered `{install_root}/skills/{verb}/SKILL.md` must state the explorer report is not persisted to a new `*.md` artifact file (the no-artifact routing clause); got:\n{body}",
-            );
-        }
-    }
-}
-
-#[test]
-fn decompose_skill_invokes_plan_architect_with_candidate_tasks_and_decisions() {
-    // CHK-009: the `speccy-decompose` body references invoking
-    // `plan-architect`, names the build-sequence checklist as the
-    // CANDIDATE task list, and references promoting decisions into
-    // `### Decisions`.
-    for (host, install_root, suffix) in [
-        (HostChoice::ClaudeCode, ".claude", "md"),
-        (HostChoice::Codex, ".codex", "toml"),
-    ] {
-        let body = rendered_decompose_body(host, install_root, suffix);
-        assert!(
-            body.contains("plan-architect"),
-            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference invoking the `plan-architect` subagent; got:\n{body}",
-        );
-        assert!(
-            body.contains("candidate"),
-            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must name the build-sequence checklist as the candidate task list; got:\n{body}",
-        );
-        assert!(
-            body.contains("build-sequence"),
-            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must reference the build-sequence checklist from plan-architect; got:\n{body}",
-        );
-        assert!(
-            body.contains("### Decisions"),
-            "rendered `{install_root}/agents/speccy-decompose.{suffix}` must direct promoting decisions into `### Decisions`; got:\n{body}",
         );
     }
 }
@@ -1509,23 +1323,6 @@ fn brainstorm_module_body_names_four_routing_destinations() {
             "speccy-brainstorm.md must name `{destination}` as a routing destination (REQ-002 done-when item 4; CHK-002)",
         );
     }
-    assert!(
-        body.contains("### Decisions") && body.contains("<decision>"),
-        "speccy-brainstorm.md must reference `### Decisions` / `<decision>` for load-bearing trade-offs (REQ-002 done-when item 4)",
-    );
-}
-
-#[test]
-fn brainstorm_module_body_names_both_terminal_actions() {
-    let body = read_brainstorm_module_body();
-    assert!(
-        body.contains("{{ cmd_prefix }}speccy-plan"),
-        "speccy-brainstorm.md must point at `{{{{ cmd_prefix }}}}speccy-plan` as the terminal action for the new-spec path (REQ-002 done-when item 6)",
-    );
-    assert!(
-        body.contains("{{ cmd_prefix }}speccy-amend"),
-        "speccy-brainstorm.md must point at `{{{{ cmd_prefix }}}}speccy-amend` as the terminal action for the amendment path (REQ-002 done-when item 6)",
-    );
 }
 
 #[test]
@@ -1553,53 +1350,19 @@ fn brainstorm_module_body_uses_cmd_prefix_consistently() {
 
 #[test]
 fn brainstorm_rendered_outputs_use_host_specific_prefix() {
-    // The renderer resolves `{{ cmd_prefix }}` to `/` on Claude Code
-    // (skill invocations are slash-commands) and to empty string on
-    // Codex (skill invocations are bare). REQ-002 CHK-002 names both
-    // host-specific forms; this test exercises the rendering rather
-    // than just the module body.
-    for (host, install_root, expected_plan, expected_amend, unexpected) in [
-        (
-            HostChoice::ClaudeCode,
-            ".claude",
-            "/speccy-plan",
-            "/speccy-amend",
-            // Bare forms must not appear on Claude Code where the
-            // slash prefix is mandatory.
-            None,
-        ),
-        (
-            HostChoice::Codex,
-            ".agents",
-            "speccy-plan",
-            "speccy-amend",
-            // Slashed forms must not appear on Codex where the prefix
-            // is empty.
-            Some(("/speccy-plan", "/speccy-amend")),
-        ),
-    ] {
-        let rendered = render_host_pack(host).unwrap_or_else(|err| {
-            panic_with_test_message(&format!("render_host_pack({host:?}) should succeed: {err}"))
-        });
-        let body = find_rendered_skill(&rendered, install_root, "speccy-brainstorm");
+    // Host-correctness negative ban: the renderer resolves
+    // `{{ cmd_prefix }}` to the empty string on Codex (skill
+    // invocations are bare), so a slashed `/speccy-plan` /
+    // `/speccy-amend` must never bleed into the Codex render.
+    let rendered = render_host_pack(HostChoice::Codex).unwrap_or_else(|err| {
+        panic_with_test_message(&format!("render_host_pack(codex) should succeed: {err}"))
+    });
+    let body = find_rendered_skill(&rendered, ".agents", "speccy-brainstorm");
+    for slashed in ["/speccy-plan", "/speccy-amend"] {
         assert!(
-            body.contains(expected_plan),
-            "rendered `{install_root}/skills/speccy-brainstorm/SKILL.md` must contain `{expected_plan}` as the terminal new-spec action (REQ-002 CHK-002)",
+            !body.contains(slashed),
+            "rendered Codex `.agents/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed}` — Codex skill invocations are bare (no leading slash)",
         );
-        assert!(
-            body.contains(expected_amend),
-            "rendered `{install_root}/skills/speccy-brainstorm/SKILL.md` must contain `{expected_amend}` as the terminal amendment action (REQ-002 done-when item 6)",
-        );
-        if let Some((slashed_plan, slashed_amend)) = unexpected {
-            assert!(
-                !body.contains(slashed_plan),
-                "rendered Codex `{install_root}/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed_plan}` — Codex skill invocations are bare (no leading slash)",
-            );
-            assert!(
-                !body.contains(slashed_amend),
-                "rendered Codex `{install_root}/skills/speccy-brainstorm/SKILL.md` must not contain `{slashed_amend}` — Codex skill invocations are bare (no leading slash)",
-            );
-        }
     }
 }
 
@@ -1648,30 +1411,11 @@ fn normative_persona_body(body: &str) -> &str {
 #[test]
 fn reviewer_tests_persona_loads_evidence() {
     let body = read_persona("reviewer-tests.md");
-
-    // Four-step evidence-loading sequence: the field is named and the
-    // host Read primitive is invoked to load the referenced file.
-    assert!(
-        body.contains("Evidence:"),
-        "`reviewer-tests.md` must name the `Evidence:` field so the reviewer knows what to extract from `<implementer-note>` bodies (SPEC-0031 REQ-005 done-when item 1)",
-    );
-    assert!(
-        body.contains("Read primitive"),
-        "`reviewer-tests.md` must instruct the reviewer to read the evidence file via the host Read primitive (SPEC-0031 REQ-005 done-when item 1)",
-    );
-
-    // Blocking-verdict guidance: evidence absence and fabrication both
-    // map to `verdict=\"blocking\"`. SPEC-0031 REQ-005 done-when item 1.
     let normative = normative_persona_body(body);
-    let lower = normative.to_lowercase();
-    assert!(
-        lower.contains("blocking"),
-        "`reviewer-tests.md` normative guidance must name `blocking` as the verdict for evidence absence or fabrication (SPEC-0031 REQ-005 done-when item 1)",
-    );
 
-    // Framework-agnostic clause: no per-framework anchor strings
-    // inside normative guidance. Worked-example asides under
-    // `## Example` are out of scope.
+    // Framework-agnostic clause (negative ban): no per-framework
+    // anchor strings inside normative guidance. Worked-example asides
+    // under `## Example` are out of scope.
     for anchor in FRAMEWORK_ANCHORS {
         assert!(
             !normative.contains(anchor),

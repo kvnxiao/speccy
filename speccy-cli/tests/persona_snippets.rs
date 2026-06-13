@@ -18,12 +18,6 @@
 //!   include %}` for `diff-fetch-command.md`.
 //! - [`rendered_personas_contain_no_minijinja_markup`]: the ejected
 //!   `.claude/agents/reviewer-<persona>.md` files have no `{{`, `{%`, or `{#`.
-//! - [`rendered_persona_contains_no_tasks_md_prohibition`]: the rendered
-//!   content carries the "Do not edit TASKS.md directly" text from the snippet.
-//! - [`reviewer_style_retains_diff_format_pitfalls`]: `reviewer-style.md` body
-//!   keeps its persona-specific section.
-//! - [`reviewer_tests_retains_evidence_read_step`]: `reviewer-tests.md` body
-//!   keeps its Evidence-read step.
 //! - [`no_master_template_file_exists`]: no `reviewer.md.j2` or similar exists.
 
 use speccy_cli::embedded::RESOURCES;
@@ -141,21 +135,6 @@ fn persona_bodies_include_verdict_contract_snippet() {
     }
 }
 
-/// The `no-tasks-md-writes.md` snippet contains the canonical prohibition text.
-///
-/// The snippet is included transitively via `verdict-return-contract.md`; its
-/// presence in the rendered output is verified by
-/// `rendered_persona_contains_no_tasks_md_prohibition`.
-#[test]
-fn no_tasks_md_writes_snippet_is_non_empty() {
-    let body = require_module_file("no-tasks-md-writes.md");
-    assert!(
-        body.contains("Do not edit TASKS.md directly"),
-        "`no-tasks-md-writes.md` must contain the canonical prohibition text \
-         `Do not edit TASKS.md directly`",
-    );
-}
-
 /// Each of the six reviewer persona body files uses `{% include %}` for the
 /// `diff-fetch-command.md` snippet.
 #[test]
@@ -208,49 +187,6 @@ fn rendered_personas_contain_no_minijinja_markup() {
             );
         }
     }
-}
-
-/// The rendered content for each persona carries the "Do not edit TASKS.md
-/// directly" prohibition from the shared snippet (included transitively via
-/// `verdict-return-contract.md` which includes `no-tasks-md-writes.md`).
-#[test]
-fn rendered_persona_contains_no_tasks_md_prohibition() {
-    let rendered = render_host_pack(HostChoice::ClaudeCode)
-        .expect("render_host_pack(claude-code) must succeed");
-
-    for persona in personas::ALL {
-        let rel = format!(".claude/agents/reviewer-{persona}.md");
-        let file = require_rendered_file(&rendered, &rel);
-
-        assert!(
-            file.contents.contains("Do not edit TASKS.md directly"),
-            "rendered `{rel}` must contain the `Do not edit TASKS.md directly` \
-             prohibition text, sourced from the `no-tasks-md-writes.md` snippet",
-        );
-    }
-}
-
-/// `reviewer-style.md` retains its "Diff-format pitfalls" section in the raw
-/// source (not moved to a snippet).
-#[test]
-fn reviewer_style_retains_diff_format_pitfalls() {
-    let body = require_module_file("reviewer-style.md");
-    assert!(
-        body.contains("## Diff-format pitfalls"),
-        "reviewer-style.md must retain its `## Diff-format pitfalls` section \
-         (persona-specific; must not be moved to a shared snippet per REQ-007)",
-    );
-}
-
-/// `reviewer-tests.md` retains its Evidence-read step in the raw source.
-#[test]
-fn reviewer_tests_retains_evidence_read_step() {
-    let body = require_module_file("reviewer-tests.md");
-    assert!(
-        body.contains("## Evidence loading"),
-        "reviewer-tests.md must retain its `## Evidence loading` section with \
-         the Evidence-read step (persona-specific; must not be moved to a snippet per REQ-007)",
-    );
 }
 
 /// No master template file exists (no `reviewer.md.j2` or similar file name

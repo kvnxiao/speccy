@@ -150,6 +150,29 @@ Rules:
   is prose-enforced via each persona body. Don't add a `tools` field to Codex
   `.toml` wrappers expecting it to be honored.
 
+### Authoring resource prose
+
+Bodies under `resources/modules/**` are pseudocode-in-English, not essays. They
+reload into agent context on every prompt and eject into users' repos, so
+terseness is correctness.
+
+- **Pseudocode-in-English.** Number phases; sub-number logic blocks. Lead with
+  defensive early-exit conditions so the happy path reads flat. Order each step
+  precondition → action → exit transition.
+- **No internal artifact-ID provenance.** Never cite a real Speccy
+  SPEC/REQ/DEC/task/journal-lint as rationale — an agent in another repo has no
+  idea what `SPEC-0045 REQ-002` refers to, and the citation invites
+  hallucination. Use only the generic placeholders `SPEC-NNNN` / `REQ-NNN` /
+  `DEC-NNN` / `T-NNN` / `CHK-NNN`, or the single whitelisted concrete example
+  `SPEC-0042` (`0042-example-slug`), reused everywhere — the
+  fictional-placeholder rule under "Conventions for AI agents specifically",
+  applied with zero exemption.
+- **CLI lint codes describe behavior, not history.** Name what a lint does ("the
+  spec-hash-mismatch lint", "the misplaced-journal-element lint"), don't cite its
+  code (`TSK-003`, `JNL-001`) as provenance.
+- **Enforced by** `speccy-cli/tests/resource_prose_hygiene.rs` (the uniform
+  ID-ban lint over `resources/modules/**`).
+
 ## Authoritative references
 
 Load these when editing files in their scope:
