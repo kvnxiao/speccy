@@ -316,8 +316,9 @@ fallback string
 `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
 
 
-5. Suggest the next step: `speccy-work SPEC-NNNN` to start the
-   implementation loop.
+5. Suggest the next step: `speccy-orchestrate SPEC-NNNN`
+   to drive the implementation + review loop end-to-end, or
+   `speccy-work SPEC-NNNN` for one task at a time.
 
 This recipe does not loop.
 

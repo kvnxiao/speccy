@@ -148,5 +148,6 @@ reconciliation are not forgotten.
 This recipe is a single pass, not a loop -- but step 6 is the gate. If
 the lint still fires, repeat from step 1 (something was missed).
 
-Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-NNNN` to pick up any tasks
-that flipped back to `state="pending"`.
+Suggest the next step: `{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN` to
+drive the loop over any tasks that flipped back to `state="pending"`, or
+`{{ cmd_prefix }}speccy-work SPEC-NNNN` to pick them up one at a time.

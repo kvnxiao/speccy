@@ -111,7 +111,8 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 
 {% include "modules/references/commit-recipe.md" %}
 
-5. Suggest the next step: `{{ cmd_prefix }}speccy-work SPEC-NNNN` to start the
-   implementation loop.
+5. Suggest the next step: `{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN`
+   to drive the implementation + review loop end-to-end, or
+   `{{ cmd_prefix }}speccy-work SPEC-NNNN` for one task at a time.
 
 This recipe does not loop.

@@ -65,9 +65,10 @@ duplicating it.
 Do not pick up another `in-review` task. If the caller wants
 another task reviewed, the caller invokes this skill again.
 
-After exit, the next reasonable step depends on TASKS.md state:
-if any task is `state="pending"` (a retry), suggest
-`{{ cmd_prefix }}speccy-work SPEC-NNNN`. If any remain
-`state="in-review"`, suggest
-`{{ cmd_prefix }}speccy-review SPEC-NNNN` again. If all tasks are
-`state="completed"`, suggest `{{ cmd_prefix }}speccy-vet SPEC-NNNN`.
+After exit, the recommended path is
+`{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN`, which dispatches the
+right next step automatically. To drive it by hand, the step depends on
+TASKS.md state: `state="pending"` (a retry) →
+`{{ cmd_prefix }}speccy-work SPEC-NNNN`; any still `state="in-review"` →
+`{{ cmd_prefix }}speccy-review SPEC-NNNN` again; all `state="completed"`
+→ `{{ cmd_prefix }}speccy-vet SPEC-NNNN`.
