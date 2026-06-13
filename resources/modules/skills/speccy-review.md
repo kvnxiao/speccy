@@ -32,7 +32,7 @@ its `review` dispatch.
 
 ## When to use
 
-- With a selector (`{{ cmd_prefix }}speccy-review SPEC-NNNN/T-003`):
+- With a selector (`{{ cmd_prefix }}speccy-review SPEC-NNNN/T-NNN`):
   when the task to review is already known.
 - Without an argument: when picking up wherever `TASKS.md` left off.
   The session reviews one task and exits.
@@ -42,7 +42,7 @@ flipped there by `{{ cmd_prefix }}speccy-work`).
 
 ## Steps
 
-**Entry precondition (REQ-007, REQ-008):** before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
+**Entry precondition.** Before resolving the target task, query `speccy next --json` (per-spec form when a selector was passed, workspace form otherwise). If the returned envelope's `next_action.kind == "reconcile"`, dispatch the reconcile pass per the **Reconcile policy** below instead of running the normal review flow. Re-query after the pass; resume normal dispatch only when `consistency.status == "ok"`.
 
 {% include "modules/references/reconcile-summary.md" %}
 

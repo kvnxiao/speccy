@@ -167,8 +167,8 @@ The placeholders below are illustrative — substitute your own values.
    makes the SPEC implemented, so the status flip belongs in the
    same PR, not in a follow-up. The status flip is hash-neutral
    because `status` is excluded from `spec_hash_at_generation`, so
-   TASKS.md does not need a hash refresh and `TSK-003` cannot fire —
-   no post-flip re-check is needed.
+   TASKS.md does not need a hash refresh and the spec-hash-mismatch
+   lint cannot fire — no post-flip re-check is needed.
 5. Run the CI gate locally as a dry-run *after* the status flip so
    verify reads the post-ship tree:
 

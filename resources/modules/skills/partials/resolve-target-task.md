@@ -20,7 +20,7 @@
      that no {{ task_adjective }} tasks remain. Otherwise, construct
      the disambiguated `<spec>/<task>` form from the JSON's `spec_id`
      and `next_action.task_id` fields (the bare task ID is
-     ambiguous across specs — every spec has its own `T-001`).
+     ambiguous across specs — every spec has its own `T-NNN`).
 
      Exit-code-stop contract: once SPEC-NNNN is resolved, any
      subsequent per-spec query (`speccy next SPEC-NNNN --json`) that

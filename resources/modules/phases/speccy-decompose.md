@@ -9,8 +9,8 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 
 - Initial: after `{{ cmd_prefix }}speccy-plan` lands a fresh SPEC.
 - Amendment: after `{{ cmd_prefix }}speccy-amend SPEC-NNNN` edited an existing SPEC and
-  the tasks may now be stale (the CLI surfaces a `TSK-003` lint when
-  it detects hash drift).
+  the tasks may now be stale (the CLI surfaces a spec-hash-mismatch
+  lint when it detects hash drift).
 
 ## Steps
 
@@ -53,7 +53,7 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    - No `<tasks spec="...">` wrapper element. Tasks are a flat sequence
      of `<task>` elements at the top level of the document.
    - Multiple requirements in `covers=` are separated by single ASCII
-     spaces — `covers="REQ-001 REQ-002"` — never by commas.
+     spaces — `covers="REQ-NNN REQ-NNN"` — never by commas.
    - Seed `spec_hash_at_generation` and `generated_at` with the
      `bootstrap-pending` sentinel; step 3 fills them in. Do not invoke
      `speccy lock` before TASKS.md exists on disk — it errors when the
@@ -69,9 +69,9 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
    `speccy lock` requires TASKS.md to already exist.
 
 4. Branch-guard, then commit `TASKS.md` alone. This closes the
-   bootstrap-commit gap that would otherwise trip the SPEC-0045/REQ-002
-   strict clean-tree gate when `{{ cmd_prefix }}speccy-orchestrate
-   SPEC-NNNN` is invoked on a freshly decomposed SPEC. The commit runs
+   bootstrap-commit gap that would otherwise trip the strict clean-tree
+   gate when `{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN` is invoked
+   on a freshly decomposed SPEC. The commit runs
    after `speccy lock`. It commits only the spec's `TASKS.md` —
    `SPEC.md` is committed by `{{ cmd_prefix }}speccy-plan`, not here, so
    the new-spec path lands two separate commits (one per skill). The

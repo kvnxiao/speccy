@@ -23,7 +23,7 @@ The prompt for each spawn is:
 >
 > The working tree may be dirty: the implementer leaves changes
 > uncommitted on purpose, and the orchestrator (not the implementer)
-> owns the single atomic commit on review pass per REQ-003/REQ-004.
+> owns the single atomic commit on review pass.
 > On retry rounds the dirty tree is the prior pass's WIP that the
 > retry implementer amended in place per the retry-shape contract.
 > Do not flag uncommitted state, commit timing, or "changes not
@@ -108,7 +108,7 @@ speccy journal show SPEC-NNNN/T-NNN --json --verdict blocking --round latest
 ```
 
 The `<blockers>` **body is orchestrator-authored semantic judgment**
-(DEC-001 non-goal: the CLI never synthesizes blocker prose). Compose
+(non-goal: the CLI never synthesizes blocker prose). Compose
 the body from the blocking reviews you just read back, then append it
 with the body on stdin:
 
@@ -130,7 +130,7 @@ show`, `journal append`, `task transition` — for the review-induced
 journal and state writes; it never edits TASKS.md or the journal file
 with file-editing tools.
 
-### Atomic commit on review pass (REQ-003, REQ-004)
+### Atomic commit on review pass
 
 When every spawned reviewer returned `verdict="pass"` and the
 `speccy task transition … --to completed` flip has run (the reviewer
@@ -144,9 +144,8 @@ Supply the recipe's two behaviour-varying parameters as follows:
 
 - **Staging breadth: `git add -A`.** Stage everything in the working
   tree. Do not stage selectively — `git add -A` is sound under the
-  clean-tree precondition (REQ-002) that fires at the start of work
-  dispatch, which guarantees every dirty path at commit time is
-  task-scoped.
+  clean-tree precondition that fires at the start of work dispatch,
+  which guarantees every dirty path at commit time is task-scoped.
 - **Title and body.**
   - **Title:** `[SPEC-NNNN/T-NNN]: <task title>` — `<task title>` is
     read verbatim from the `<task>` element's `## ` heading in

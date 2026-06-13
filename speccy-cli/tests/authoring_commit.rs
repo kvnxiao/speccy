@@ -708,10 +708,10 @@ fn amend_includes_shared_commit_recipe_and_branch_guard() {
 }
 
 /// The commit step titles the commit `[SPEC-NNNN]: amend — <why>`, sources
-/// `<why>` from the newest `## Changelog` row, and runs after the
-/// `TSK-003`-clear check in step 6 (CHK-006).
+/// `<why>` from the newest `## Changelog` row, and runs after the spec hash is
+/// re-locked (CHK-006).
 #[test]
-fn amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear() {
+fn amend_titles_commit_and_sources_why_from_changelog() {
     let body = module_body("modules/skills/speccy-amend.md");
 
     assert!(
@@ -727,18 +727,18 @@ fn amend_titles_commit_and_sources_why_from_changelog_after_tsk003_clear() {
          `## Changelog` row (CHK-006), not a separate prompt",
     );
 
-    // The commit must run after the step-6 `TSK-003`-clear check: the
-    // `TSK-003` confirmation text precedes the commit recipe include in
-    // document order.
-    let tsk003_pos = body
-        .find("confirm `TSK-003` cleared")
-        .expect("speccy-amend.md must keep the step-6 `TSK-003`-clear check (CHK-006)");
+    // The commit recipe runs after the spec hash is re-locked, so the reconcile
+    // delta is committed only once SPEC and tasks are back in sync. Anchor the
+    // ordering on the stable `speccy lock` command rather than on prose wording.
+    let lock_pos = body
+        .find("speccy lock SPEC-NNNN")
+        .expect("speccy-amend.md must re-lock the spec hash before committing (CHK-006)");
     let recipe_pos = body
         .find(r#"{% include "modules/references/commit-recipe.md" %}"#)
         .expect("speccy-amend.md must include the commit recipe");
     assert!(
-        tsk003_pos < recipe_pos,
-        "speccy-amend.md must run the commit recipe after the `TSK-003`-clear check (CHK-006)",
+        lock_pos < recipe_pos,
+        "speccy-amend.md must run the commit recipe after the spec-hash re-lock (CHK-006)",
     );
 }
 

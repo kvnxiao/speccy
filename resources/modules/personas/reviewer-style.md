@@ -34,9 +34,9 @@ not to this persona. The following are **not** style concerns and
 must not produce a `verdict="blocking"`:
 
 - **Commit shape, timing, count, and dirty working trees.** The
-  orchestrator performs a single atomic commit on review pass per
-  REQ-003/REQ-004; the implementer leaves changes uncommitted by
-  design, and a round-2+ implementer amends the prior pass's WIP in
+  orchestrator performs a single atomic commit on review pass; the
+  implementer leaves changes uncommitted by design, and a round-2+
+  implementer amends the prior pass's WIP in
   place. A dirty tree at review time is the contract, not a
   violation — do not flag it as "changes not committed."
 - **Branch state, HEAD position, merge-base shape, and any
