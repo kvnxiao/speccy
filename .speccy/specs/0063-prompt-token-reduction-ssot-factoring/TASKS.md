@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0063
-spec_hash_at_generation: 408d630845d6bc07a11867e09ab6f6e04e9fd79c218b1d72f8bdb129d5820be9
-generated_at: 2026-06-12T20:34:03Z
+spec_hash_at_generation: 8214de57b0948060596f804c12b6ff3e89e0ad2fb2b038c22f4f44cc9d3d23b5
+generated_at: 2026-06-13T03:06:42Z
 ---
 # Tasks: SPEC-0063 Prompt token reduction + SSOT factoring for `resources/` modules — compress SDLC-loop prose, defer two procedures to existing CLI guarantees, then factor duplicated passages into shared modules
 
@@ -503,5 +503,75 @@ Suggested files: `resources/modules/references/retry-shape-summary.md`,
 `resources/modules/personas/reviewer-security.md`,
 `resources/modules/personas/reviewer-correctness.md`,
 `resources/modules/personas/reviewer-docs.md`
+</task-scenarios>
+</task>
+
+<task id="T-003" state="pending" covers="REQ-001 REQ-006 REQ-007 REQ-008">
+## Reconciliation — retire the brittle feature-dev guardrail and complete the deferred A6/C6 provenance-line deletion (commit 3)
+
+This task lands as **commit 3**, an amendment-driven reconciliation after T-001/T-002.
+The 2026-06-12 amendment (DEC-002, REQ-008) authorizes retiring the brittle SPEC-0053
+`feature-dev` substring guardrail, which unblocks the Track 1 A6/C6 provenance-line
+deletions that T-001 deliberately deferred (deleting them earlier would have reddened
+the suite). Edit **source only** — never `.claude/`, `.agents/`, or `.codex/` (ejected
+output). After editing, run `just reeject`. The review-pass `git add -A` captures
+source edits + regenerated packs in this task's single atomic commit.
+
+### Retire the guardrail (REQ-008)
+
+- In `speccy-cli/tests/skill_packs.rs`, in the test
+  `feature_dev_personas_declare_speccy_model_conventions_and_attribution`: delete the
+  `feature-dev` attribution assertion block — the
+  `// The persona body carries a \`feature-dev\` attribution line.` comment, the
+  `read_persona(...)` binding that feeds only this assertion, and the `assert!` on
+  `persona_body.contains("feature-dev")`. **Keep** the structural model-convention
+  assertions: Claude `model: opus[1m]`, Codex `model = "gpt-5.5"`, and both
+  `!...contains("sonnet")` checks. Rename the test to
+  `feature_dev_personas_declare_speccy_model_conventions` (drop `_and_attribution`).
+  If `read_persona` is left unused inside this test after the deletion, remove the
+  now-dangling local use here — but leave the shared `read_persona` helper itself if
+  other tests call it.
+
+### Complete the deferred A6/C6 deletion (residual REQ-001)
+
+- Delete the two-line `> Ported from the feature-dev …` provenance blockquote at the
+  top of each of `resources/modules/personas/reviewer-correctness.md`,
+  `resources/modules/personas/plan-architect.md`, and
+  `resources/modules/personas/plan-explorer.md`. Remove any blank line the blockquote
+  leaves orphaned so the heading/body spacing stays clean. These are Track 1 anchors
+  A6 (reviewer-correctness) and C6 (plan-architect, plan-explorer), now unblocked.
+
+### Close-out
+
+Run `just reeject`, then the full hygiene suite — `cargo test --workspace`, `cargo
+clippy --workspace --all-targets --all-features -- -D warnings`, `cargo +nightly fmt
+--all --check`, `cargo deny check` — all must pass (the renamed test passes with the
+provenance lines gone). Confirm `grep -rn 'Ported from the .feature-dev' resources/
+.claude/ .agents/ .codex/` returns nothing (source + eject) and no ejected file
+contains a `{%` marker. Record the guardrail retirement (REQ-008) and the completed
+A6/C6 cut in `REPORT.md` at ship time.
+
+<task-scenarios>
+Given `speccy-cli/tests/skill_packs.rs` and the three persona bodies after this task,
+when the test file is read and `cargo test --workspace` runs,
+then the `persona_body.contains("feature-dev")` assertion is absent, the test name no
+longer carries `_and_attribution`, the model-convention assertions remain, the three
+provenance blockquotes are gone from source and eject, and the suite passes (CHK-010).
+
+Given the post-edit tree,
+when the four hygiene gates run (`cargo test --workspace`, `cargo clippy --workspace
+--all-targets --all-features -- -D warnings`, `cargo +nightly fmt --all --check`,
+`cargo deny check`),
+then all four pass (CHK-008).
+
+Given the ejected `.claude/`, `.agents/`, and `.codex/` packs after this reeject,
+when scanned,
+then no ejected file contains a `{%` marker and the eject diff mirrors the
+`resources/modules/**` edits — the three deleted provenance blockquotes (CHK-009).
+
+Suggested files: `speccy-cli/tests/skill_packs.rs`,
+`resources/modules/personas/reviewer-correctness.md`,
+`resources/modules/personas/plan-architect.md`,
+`resources/modules/personas/plan-explorer.md`
 </task-scenarios>
 </task>

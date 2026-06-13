@@ -141,7 +141,11 @@ appears once at its canonical site. No passage that is a deliberate inline rule
 followed by a pointer to a longer reference is reduced to the bare pointer
 (SPEC-0049 DEC-002): the act-without-read property is preserved. The cut is prose
 only — no rendered behavior changes except the two determinism trims specified in
-REQ-002 and REQ-003.
+REQ-002 and REQ-003. Among the cut passages are the three
+`> Ported from the feature-dev …` provenance blockquotes (in `reviewer-correctness`,
+`plan-architect`, `plan-explorer`; Track 1 anchors A6/C6); deleting them is
+authorized by REQ-008, which retires the guardrail that previously asserted their
+presence.
 
 <done-when>
 - Each passage enumerated in the Track 1 task bodies as redundant no longer appears
@@ -350,7 +354,10 @@ remains in `speccy-plan`, `speccy-amend`, or `speccy-brainstorm`.
 Each of the two commits leaves the full hygiene suite passing — the guardrail
 tests, lints, formatting, and dependency check all stay green, so the prose and
 factoring edits introduce no regression in the rendered output the tests assert
-over.
+over. The sole authorized guardrail change in this SPEC is REQ-008's retirement of
+the brittle `feature-dev` substring assertion in `skill_packs.rs`; every other
+guardrail assertion stays intact, and the suite stays green once that assertion is
+removed.
 
 <done-when>
 - At each commit, `cargo test --workspace`,
@@ -408,6 +415,48 @@ for Track 2).
 
 </requirement>
 
+<requirement id="REQ-008">
+### REQ-008: The brittle `feature-dev` attribution guardrail is retired
+
+The `feature_dev_personas_declare_speccy_model_conventions_and_attribution` test in
+`speccy-cli/tests/skill_packs.rs` asserts `persona_body.contains("feature-dev")`
+over three persona bodies — a substring match against human-curated prose, the
+anti-pattern AGENTS.md test hygiene forbids, since it gates an editorial provenance
+line and breaks on any legitimate rewrite. That substring assertion is removed and
+the test renamed to drop the `_and_attribution` suffix; its structural
+model-convention assertions (`model: opus[1m]`, `model = "gpt-5.5"`, no `sonnet`)
+are retained, since those check frontmatter structure — a stable surface.
+Attribution provenance is henceforth editorial-only, not test-gated. Removing this
+assertion is what makes REQ-001's deletion of the three `feature-dev` provenance
+blockquotes satisfiable without reddening the suite.
+
+<done-when>
+- The `persona_body.contains("feature-dev")` assertion is absent from
+  `speccy-cli/tests/skill_packs.rs`.
+- The test is renamed to drop `_and_attribution`; its model-convention assertions
+  remain.
+- `cargo test --workspace` passes with the assertion removed and the three
+  provenance blockquotes deleted.
+- The retirement is recorded in `REPORT.md`.
+</done-when>
+
+<behavior>
+- Given the three `feature-dev` provenance blockquotes are deleted, when
+  `cargo test --workspace` runs, then no assertion fails on the absent `feature-dev`
+  substring, because that assertion no longer exists.
+</behavior>
+
+<scenario id="CHK-010">
+Given `speccy-cli/tests/skill_packs.rs` after the reconciliation task lands,
+when the test file is read and `cargo test --workspace` runs,
+then the `persona_body.contains("feature-dev")` assertion is absent, the test name
+no longer carries `_and_attribution`, the model-convention assertions remain, and
+the suite passes with the three provenance blockquotes deleted from source and
+eject.
+</scenario>
+
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -426,6 +475,27 @@ undo (pull one property back inline) should plan and amend ever need to diverge.
 artifact-oriented properties are structurally different and no partial covers them.
 This is the lowest-priority, token-neutral item in the SPEC; its value is one
 source of truth, not runtime tokens.
+</decision>
+
+<decision id="DEC-002">
+**Retire the brittle `feature-dev` attribution guardrail; attribution is editorial.**
+
+Track 1 anchors A6/C6 delete the three `> Ported from the feature-dev …` provenance
+blockquotes, but the SPEC-0053 guardrail
+`feature_dev_personas_declare_speccy_model_conventions_and_attribution`
+(`speccy-cli/tests/skill_packs.rs`) asserts `persona_body.contains("feature-dev")`,
+so deleting the lines reds the suite — an unresolvable conflict between REQ-001 and
+REQ-006 that the pre-ship vet gate surfaced. The substring assertion is itself the
+fault: AGENTS.md test hygiene explicitly forbids substring-matching human-curated
+prose because it gates editorial decisions and breaks on legitimate rewrites. We
+retire that assertion (REQ-008) rather than preserve the provenance lines to satisfy
+it. Attribution provenance is editorial-only henceforth — kept in prose where a
+human finds it useful, surfaced by review if it ever matters, never machine-gated.
+The test's structural model-convention assertions are sound (they check frontmatter,
+a stable surface) and stay. We deliberately do not replace the check with a
+frontmatter `derived_from` field: that would add behavior-neutral metadata to bodies
+that reload into agent context every turn, working against this SPEC's
+token-reduction intent.
 </decision>
 
 ## Notes
@@ -461,4 +531,5 @@ inline sentence, never collapse to a bare pointer.
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-12 | Kevin Xiao | Initial SPEC: Track 1 compresses SDLC-loop prose and defers two procedures (work re-read, ship status round-trips) to existing CLI guarantees; Track 2 factors six duplicated passages into shared modules and supersedes SPEC-0034 DEC-001. |
+| 2026-06-12 | Kevin Xiao | Amend: resolve the REQ-001/REQ-006 contradiction the pre-ship vet gate caught — add REQ-008 retiring the brittle SPEC-0053 `feature-dev` substring guardrail in `skill_packs.rs`, record DEC-002 (attribution is editorial-only, not test-gated), and cross-reference it from REQ-001/REQ-006 so deleting the three `feature-dev` provenance blockquotes (Track 1 anchors A6/C6) keeps the hygiene suite green. |
 </changelog>
