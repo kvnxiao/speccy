@@ -52,17 +52,26 @@ Readiness semantics:
    the repo's loop ledger at `.speccy/MEMORY.md`. Mine the evidence
    already on disk — REPORT.md coverage, the per-task journal
    (`<blockers>` directives, review verdict flips, retry rounds), and
-   the spec diff (`git diff origin/main`, two-dot) — rather than
-   re-deriving the work from scratch. Use the two-dot `git diff
-   origin/main`, **not** `origin/main...HEAD`: the retro runs here at
-   step 3, before the step-6 ship commit, while the loop's per-task
-   work is still uncommitted in the working tree (the work phase never
-   commits per task). The two-dot form diffs the working tree against
-   the ref and so captures that uncommitted work; the three-dot
-   `...HEAD` form compares the merge-base against committed HEAD and
-   silently misses it, handing the retro a stale or empty diff exactly
-   when it must mine the just-completed loop. The entry shape you write
-   here is defined once at:
+   the spec diff — rather than re-deriving the work from scratch.
+
+   Resolve the diff baseline rather than hardcoding `main`, so a repo
+   whose default branch is `master` or `trunk` still works:
+
+   ```bash
+   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
+   ```
+
+   Use the output as `<base-ref>`; if empty (no remote, detached
+   HEAD), fall back to `main`. Read the spec diff with the single-arg
+   `git diff <base-ref>`, **not** `git diff <base-ref>...HEAD`: the
+   retro runs at step 3, before the step-6 ship commit, while the
+   loop's per-task work is still uncommitted in the working tree (the
+   work phase never commits per task). The single-arg form diffs the
+   working tree against the ref and so captures that uncommitted work;
+   the `<base-ref>...HEAD` form compares the merge-base against
+   committed HEAD and silently misses it, handing the retro a stale or
+   empty diff exactly when it must mine the just-completed loop. The
+   entry shape you write here is defined once at:
 
    {% include "modules/references/memory-ledger.md" %}
 
