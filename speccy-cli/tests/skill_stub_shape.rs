@@ -75,12 +75,12 @@ fn stub_skill_names_agent_invocation_and_file_claude_code() {
         let label = format!(".claude/skills/speccy-{phase}/SKILL.md");
         assert!(
             skill_body.contains(&format!("/agent speccy-{phase}")),
-            "`{label}` must contain the literal `/agent speccy-{phase}` (CHK-010 ii)",
+            "`{label}` must contain the literal `/agent speccy-{phase}` (ii)",
         );
         let agent_file_ref = format!(".claude/agents/speccy-{phase}.md");
         assert!(
             skill_body.contains(&agent_file_ref),
-            "`{label}` must reference the matching agent file path `{agent_file_ref}` (CHK-010 ii)",
+            "`{label}` must reference the matching agent file path `{agent_file_ref}` (ii)",
         );
     }
 }
@@ -93,12 +93,12 @@ fn stub_skill_names_agent_invocation_and_file_codex() {
         let label = format!(".agents/skills/speccy-{phase}/SKILL.md");
         assert!(
             skill_body.contains(&format!("/agent speccy-{phase}")),
-            "`{label}` must contain the literal `/agent speccy-{phase}` (CHK-010 ii)",
+            "`{label}` must contain the literal `/agent speccy-{phase}` (ii)",
         );
         let agent_file_ref = format!(".codex/agents/speccy-{phase}.toml");
         assert!(
             skill_body.contains(&agent_file_ref),
-            "`{label}` must reference the matching agent file path `{agent_file_ref}` (CHK-010 ii)",
+            "`{label}` must reference the matching agent file path `{agent_file_ref}` (ii)",
         );
     }
 }
@@ -113,11 +113,11 @@ fn stub_skill_has_no_steps_or_when_to_use_claude_code() {
         let label = format!(".claude/skills/speccy-{phase}/SKILL.md");
         assert!(
             !skill_body.contains("## Steps"),
-            "`{label}` must NOT contain `## Steps` — stubs are thin pointers, not full procedures (CHK-010 iii)",
+            "`{label}` must NOT contain `## Steps` — stubs are thin pointers, not full procedures (iii)",
         );
         assert!(
             !skill_body.contains("## When to use"),
-            "`{label}` must NOT contain `## When to use` — stubs are thin pointers, not full procedures (CHK-010 iii)",
+            "`{label}` must NOT contain `## When to use` — stubs are thin pointers, not full procedures (iii)",
         );
     }
 }
@@ -130,11 +130,11 @@ fn stub_skill_has_no_steps_or_when_to_use_codex() {
         let label = format!(".agents/skills/speccy-{phase}/SKILL.md");
         assert!(
             !skill_body.contains("## Steps"),
-            "`{label}` must NOT contain `## Steps` — stubs are thin pointers, not full procedures (CHK-010 iii)",
+            "`{label}` must NOT contain `## Steps` — stubs are thin pointers, not full procedures (iii)",
         );
         assert!(
             !skill_body.contains("## When to use"),
-            "`{label}` must NOT contain `## When to use` — stubs are thin pointers, not full procedures (CHK-010 iii)",
+            "`{label}` must NOT contain `## When to use` — stubs are thin pointers, not full procedures (iii)",
         );
     }
 }
@@ -191,11 +191,11 @@ fn agent_templates_use_modules_phases_path() {
         let expected = format!("{{% include \"modules/phases/speccy-{phase}.md\" %}}");
         assert!(
             contents.contains(&expected),
-            "agent template `{tmpl_path}` must contain `{expected}` (post-rename path) (T-009 CHK-010)",
+            "agent template `{tmpl_path}` must contain `{expected}` (post-rename path)",
         );
         assert!(
             !contents.contains("modules/skills/speccy-"),
-            "agent template `{tmpl_path}` must NOT contain `modules/skills/speccy-` — path renamed to `modules/phases/` (T-009 CHK-010)",
+            "agent template `{tmpl_path}` must NOT contain `modules/skills/speccy-` — path renamed to `modules/phases/`",
         );
     }
 }
@@ -242,12 +242,12 @@ fn agent_description_prose_is_clean() {
 
         assert!(
             !description_value.contains("context: fork"),
-            "`.claude/agents/speccy-{phase}.md` description value must not contain `context: fork` (dropped in third Changelog row / DEC-001)",
+            "`.claude/agents/speccy-{phase}.md` description value must not contain `context: fork` (dropped in third Changelog row)",
         );
         if let Some(found) = banned.find(description_value) {
             fail(&format!(
                 "`.claude/agents/speccy-{phase}.md` description value must not contain the \
-                 model/effort tier word `{}` (T-009 CHK-010 description-prose invariant)",
+                 model/effort tier word `{}` (description-prose invariant)",
                 found.as_str(),
             ));
         }

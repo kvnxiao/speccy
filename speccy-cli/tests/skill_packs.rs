@@ -266,7 +266,7 @@ fn shipped_descriptions_natural_language_triggers() {
                     .is_some_and(|c| c.is_ascii_digit());
             assert!(
                 !phase_prefix,
-                "`{label}` description must not start with `Phase <digit>` jargon (SPEC-0015 REQ-004); got: {desc:?}",
+                "`{label}` description must not start with `Phase <digit>` jargon; got: {desc:?}",
             );
 
             // Required trigger marker for natural-language activation.
@@ -379,8 +379,7 @@ fn claude_skills_dir() -> std::path::PathBuf {
 fn claude_code_skill_wrappers_match_skill_names() {
     let dir = claude_skills_dir();
     let mut found: Vec<String> = Vec::new();
-    let entries =
-        fs_err::read_dir(&dir).expect("resources/agents/.claude/skills/ must exist after T-005");
+    let entries = fs_err::read_dir(&dir).expect("resources/agents/.claude/skills/ must exist");
     for entry in entries {
         let entry = entry.expect("read_dir entry should be readable");
         let path = entry.path();
@@ -463,13 +462,13 @@ fn claude_code_wrapper_shape_and_body() {
             // directive.
             assert!(
                 !body.trim().starts_with("{%"),
-                "stub wrapper `{}` body must not start with a `{{%` include directive (T-009 REQ-010); got: {:?}",
+                "stub wrapper `{}` body must not start with a `{{%` include directive; got: {:?}",
                 path.display(),
                 body.trim(),
             );
             assert!(
                 body.contains(&format!("/agent {verb}")),
-                "stub wrapper `{}` body must contain `/agent {verb}` (T-009 REQ-010)",
+                "stub wrapper `{}` body must contain `/agent {verb}`",
                 path.display(),
             );
         } else if *verb == "speccy-init" {
@@ -478,7 +477,7 @@ fn claude_code_wrapper_shape_and_body() {
             assert_eq!(
                 body.trim(),
                 expected_body,
-                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (T-009 path rename)",
+                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (path rename)",
                 path.display(),
             );
         } else {
@@ -520,8 +519,7 @@ fn t006_codex_skills_dir() -> std::path::PathBuf {
 fn t006_codex_skill_wrappers_match_skill_names() {
     let dir = t006_codex_skills_dir();
     let mut found: Vec<String> = Vec::new();
-    let entries =
-        fs_err::read_dir(&dir).expect("resources/agents/.agents/skills/ must exist after T-006");
+    let entries = fs_err::read_dir(&dir).expect("resources/agents/.agents/skills/ must exist");
     for entry in entries {
         let entry = entry.expect("read_dir entry should be readable");
         let path = entry.path();
@@ -604,13 +602,13 @@ fn t006_codex_wrapper_shape_and_body() {
             // directive.
             assert!(
                 !body.trim().starts_with("{%"),
-                "stub wrapper `{}` body must not start with a `{{%` include directive (T-009 REQ-010); got: {:?}",
+                "stub wrapper `{}` body must not start with a `{{%` include directive; got: {:?}",
                 path.display(),
                 body.trim(),
             );
             assert!(
                 body.contains(&format!("/agent {verb}")),
-                "stub wrapper `{}` body must contain `/agent {verb}` (T-009 REQ-010)",
+                "stub wrapper `{}` body must contain `/agent {verb}`",
                 path.display(),
             );
         } else if *verb == "speccy-init" {
@@ -619,7 +617,7 @@ fn t006_codex_wrapper_shape_and_body() {
             assert_eq!(
                 body.trim(),
                 expected_body,
-                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (T-009 path rename)",
+                "wrapper `{}` body (post-frontmatter, trimmed) must be the single `{{% include %}}` directive pointing at `modules/phases/` (path rename)",
                 path.display(),
             );
         } else if *verb == "speccy-orchestrate" {
@@ -633,7 +631,7 @@ fn t006_codex_wrapper_shape_and_body() {
             );
             assert!(
                 body.contains("{% include \"modules/skills/speccy-orchestrate-codex-grant.md\" %}"),
-                "wrapper `{}` body must include the Codex permission-grant module (SPEC-0039 REQ-003)",
+                "wrapper `{}` body must include the Codex permission-grant module",
                 path.display(),
             );
         } else {
@@ -688,8 +686,7 @@ fn t009_claude_agents_dir() -> std::path::PathBuf {
 fn t009_claude_code_reviewer_wrappers_exactly_seven() {
     let dir = t009_claude_agents_dir();
     let mut found: Vec<String> = Vec::new();
-    let entries =
-        fs_err::read_dir(&dir).expect("resources/agents/.claude/agents/ must exist after T-009");
+    let entries = fs_err::read_dir(&dir).expect("resources/agents/.claude/agents/ must exist");
     for entry in entries {
         let entry = entry.expect("read_dir entry should be readable");
         let path = entry.path();
@@ -1045,8 +1042,7 @@ fn t010_codex_agents_dir() -> std::path::PathBuf {
 fn t010_codex_reviewer_wrappers_exactly_seven() {
     let dir = t010_codex_agents_dir();
     let mut found: Vec<String> = Vec::new();
-    let entries =
-        fs_err::read_dir(&dir).expect("resources/agents/.codex/agents/ must exist after T-010");
+    let entries = fs_err::read_dir(&dir).expect("resources/agents/.codex/agents/ must exist");
     for entry in entries {
         let entry = entry.expect("read_dir entry should be readable");
         let path = entry.path();
@@ -1268,7 +1264,7 @@ fn t010_persona_bodies_have_no_toml_triple_quote() {
         assert!(
             !body.contains("\"\"\""),
             "persona body `{}` contains the literal substring `\"\"\"`, which would terminate the Codex \
-             reviewer wrapper's TOML triple-quoted `developer_instructions` block prematurely (SPEC-0016 DEC-004). \
+             reviewer wrapper's TOML triple-quoted `developer_instructions` block prematurely. \
              Remove or escape the substring before committing.",
             path.display(),
         );
@@ -1316,7 +1312,7 @@ fn brainstorm_module_body_names_four_routing_destinations() {
     ] {
         assert!(
             body.contains(destination),
-            "speccy-brainstorm.md must name `{destination}` as a routing destination (REQ-002 done-when item 4; CHK-002)",
+            "speccy-brainstorm.md must name `{destination}` as a routing destination",
         );
     }
 }
@@ -1414,7 +1410,7 @@ fn reviewer_tests_persona_loads_evidence() {
     for anchor in FRAMEWORK_ANCHORS {
         assert!(
             !normative.contains(anchor),
-            "`reviewer-tests.md` normative guidance must not name the framework-specific anchor `{anchor}` (SPEC-0031 REQ-005 done-when item 3); move it under `## Example` or rephrase framework-agnostically",
+            "`reviewer-tests.md` normative guidance must not name the framework-specific anchor `{anchor}` (done-when item 3); move it under `## Example` or rephrase framework-agnostically",
         );
     }
 }
@@ -1429,11 +1425,11 @@ fn non_tests_reviewer_files_carry_no_evidence_instruction() {
         let body = read_persona(&file);
         assert!(
             !body.contains("Evidence:"),
-            "`personas/{file}` must not mention `Evidence:` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
+            "`personas/{file}` must not mention `Evidence:` — the asymmetry reserves evidence-loading instruction for the `tests` persona",
         );
         assert!(
             !body.contains("evidence file"),
-            "`personas/{file}` must not mention `evidence file` — the SPEC-0031 REQ-005 asymmetry reserves evidence-loading instruction for the `tests` persona",
+            "`personas/{file}` must not mention `evidence file` — the asymmetry reserves evidence-loading instruction for the `tests` persona",
         );
     }
 }
