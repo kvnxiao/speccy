@@ -359,7 +359,10 @@ fallback string
 `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
 
 
-6. Suggest the next step: `speccy-decompose SPEC-NNNN` to
-   decompose into `TASKS.md`.
+## Exit
 
-This recipe does not loop.
+`SPEC.md` is written, self-reviewed once, and committed alone on a feature
+branch — `TASKS.md` is `speccy-decompose`'s commit, not this
+skill's, so the new-spec path lands two commits (one per skill). Single pass,
+no loop. Next step: `speccy-decompose SPEC-NNNN` to decompose
+into `TASKS.md`.

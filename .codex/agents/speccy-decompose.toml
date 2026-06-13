@@ -316,10 +316,13 @@ fallback string
 `Co-Authored-By: Speccy Skill Pack <noreply@anthropic.com>`.
 
 
-5. Suggest the next step: `speccy-orchestrate SPEC-NNNN`
-   to drive the implementation + review loop end-to-end, or
-   `speccy-work SPEC-NNNN` for one task at a time.
+## Exit
 
-This recipe does not loop.
+`TASKS.md` is written, locked (the two `bootstrap-pending` placeholders are now
+the SPEC sha256 + UTC timestamp), and committed alone on a feature branch.
+Single pass, no loop. Next step:
+`speccy-orchestrate SPEC-NNNN` to drive the implementation +
+review loop end-to-end, or `speccy-work SPEC-NNNN` for one task
+at a time.
 
 """

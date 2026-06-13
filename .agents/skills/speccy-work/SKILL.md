@@ -66,3 +66,12 @@ exit refuses the flip and keeps the task at `in-progress`; on all zeros, the
 appended `<implementer>` block's `Hygiene checks` field records one line per
 gate with its exit code.
 
+## Exit
+
+One task moves to `state="in-review"` with a single `<implementer>` block
+appended to its journal via `speccy journal append`. This is a single-task
+primitive — it does not pick up the next task. Control returns to the caller;
+the next reasonable step is `speccy-review SPEC-NNNN` while any
+task is `in-review`, or `speccy-vet SPEC-NNNN` once all tasks
+are `completed`.
+

@@ -111,8 +111,11 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 
 {% include "modules/references/commit-recipe.md" %}
 
-5. Suggest the next step: `{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN`
-   to drive the implementation + review loop end-to-end, or
-   `{{ cmd_prefix }}speccy-work SPEC-NNNN` for one task at a time.
+## Exit
 
-This recipe does not loop.
+`TASKS.md` is written, locked (the two `bootstrap-pending` placeholders are now
+the SPEC sha256 + UTC timestamp), and committed alone on a feature branch.
+Single pass, no loop. Next step:
+`{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN` to drive the implementation +
+review loop end-to-end, or `{{ cmd_prefix }}speccy-work SPEC-NNNN` for one task
+at a time.

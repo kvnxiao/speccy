@@ -119,6 +119,10 @@ Readiness semantics:
    speccy verify
    ```
 
+   → expected: exit 0. A non-zero exit means the proof shape is broken
+   (uncovered requirement, malformed task state, parser-rejected journal
+   element) — stop and fix before opening the PR.
+
 6. Commit SPEC.md, TASKS.md, REPORT.md, the `.speccy/MEMORY.md`
    mutation from the retro (step 3), and the code changes from the
    loop. Then push:
@@ -161,4 +165,10 @@ Readiness semantics:
    The status flip in step 4 lands in the same PR — no follow-up
    commit needed after merge.
 
-This recipe does not loop.
+## Exit
+
+REPORT.md is written, the SPEC's frontmatter status is flipped to
+`implemented`, the loop's uncommitted work is bundled into one atomic ship
+commit, and a PR is opened (or the existing branch PR updated by push).
+`speccy verify` passed as the CI dry-run. Single pass, no loop — the SPEC has
+shipped; run `speccy archive SPEC-NNNN` if it should leave the active tree.
