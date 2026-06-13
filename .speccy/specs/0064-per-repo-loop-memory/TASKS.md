@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0064
-spec_hash_at_generation: df36aeac00c99b12030d9ff08144f9f590ce098d6a4a097ad79f595af88f4457
-generated_at: 2026-06-13T04:49:24Z
+spec_hash_at_generation: 06a10bdcc1c12b16848a86b8c31e62601a7567044181e8070f3208a6dc4fbf98
+generated_at: 2026-06-13T05:43:15Z
 ---
 # Tasks: SPEC-0064 Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implementer reads before acting, grown by a ship-time retro from the loop's own conventions and mistakes
 
