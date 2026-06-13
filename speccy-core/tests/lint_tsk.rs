@@ -71,8 +71,8 @@ fn tsk_003_fires_at_info_for_bootstrap_pending() -> TestResult {
         .ok_or("TSK-003 expected")?;
     assert_eq!(tsk_003.level, Level::Info);
     assert!(
-        tsk_003.message.contains("speccy tasks"),
-        "message should advise speccy tasks --commit; got: {}",
+        tsk_003.message.contains("speccy lock"),
+        "message should advise speccy lock; got: {}",
         tsk_003.message,
     );
     Ok(())
