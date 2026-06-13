@@ -47,7 +47,56 @@ Readiness semantics:
 
    Canonical REPORT.md shape: `{{ skill_install_path }}/speccy-ship/references/report.md`.
 
-3. Flip the SPEC's frontmatter status. Edit
+3. Ship-time memory retro. With REPORT.md written and before the ship
+   commit (step 6), distill the just-completed loop into mutations of
+   the repo's loop ledger at `.speccy/MEMORY.md`. Mine the evidence
+   already on disk — REPORT.md coverage, the per-task journal
+   (`<blockers>` directives, review verdict flips, retry rounds), and
+   the spec diff (`git diff origin/main...HEAD`) — rather than
+   re-deriving the work from scratch. The entry shape you write here
+   is defined once at:
+
+   {% include "modules/references/memory-ledger.md" %}
+
+   The retro does three things in one pass:
+
+   - **Capture (both feeds).** Append convention-flavoured and/or
+     mistake-flavoured entries to `.speccy/MEMORY.md` in the four-part
+     shape, **one entry per write** so the prose-layer append stays
+     serial. A loop with recorded friction — a blocking-then-passed
+     review round, a retry round, a `<blockers>` directive — yields at
+     least one mistake-flavoured entry whose provenance cites that
+     evidence and whose corrective rule addresses the cause. A clean,
+     frictionless loop with no durable lesson records that explicitly
+     ("no durable lesson this loop") rather than inventing one. Create
+     the file if it does not yet exist.
+
+   - **Consolidate and dedup (human-gated).** Propose promoting stable,
+     repeatedly-affirmed entries up into the durable tier (`AGENTS.md`
+     / rules) and surface each promotion for **human approval** — never
+     promote silently or automatically. On approval, make the
+     durable-tier edit and **remove the promoted entry from
+     `.speccy/MEMORY.md`** so it is not stored in both tiers. Dedup
+     candidates within the ledger and against the repo's existing
+     durable docs (`AGENTS.md`, rule files, anything they point at):
+     drop a candidate already covered there rather than appending it.
+
+   - **Phantom-reference GC.** Re-validate existing ledger entries
+     against the current tree and retire or rewrite any whose
+     referenced construct no longer resolves, so the ledger never
+     feeds a phantom forward to the next implementer. Abstractly-worded
+     convention entries that name no specific construct survive a
+     refactor unchanged; entries pinned to a now-gone module or symbol
+     are retired or reworded to the surviving convention. This is a
+     semantic judgment plus the abstract-authoring discipline the entry
+     reference describes — deliberately not a CLI freshness check, and
+     no such mechanism is added.
+
+   The resulting `.speccy/MEMORY.md` mutation lands in the same ship
+   commit as REPORT.md (step 6), so the lesson and the loop that taught
+   it ship together.
+
+4. Flip the SPEC's frontmatter status. Edit
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what
    makes the SPEC implemented, so the status flip belongs in the
@@ -55,14 +104,15 @@ Readiness semantics:
    because `status` is excluded from `spec_hash_at_generation`, so
    TASKS.md does not need a hash refresh and `TSK-003` cannot fire —
    no post-flip re-check is needed.
-4. Run the CI gate locally as a dry-run *after* the status flip so
+5. Run the CI gate locally as a dry-run *after* the status flip so
    verify reads the post-ship tree:
 
    ```bash
    speccy verify
    ```
 
-5. Commit SPEC.md, TASKS.md, REPORT.md, and the code changes from the
+6. Commit SPEC.md, TASKS.md, REPORT.md, the `.speccy/MEMORY.md`
+   mutation from the retro (step 3), and the code changes from the
    loop. Then push:
 
    - If this branch has no open PR yet, open one. Render the PR body
@@ -100,7 +150,7 @@ Readiness semantics:
      git push
      ```
 
-   The status flip in step 3 lands in the same PR — no follow-up
+   The status flip in step 4 lands in the same PR — no follow-up
    commit needed after merge.
 
 This recipe does not loop.

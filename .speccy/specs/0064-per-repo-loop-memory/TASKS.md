@@ -125,7 +125,7 @@ Suggested files: `resources/modules/phases/speccy-work.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-004 REQ-005 REQ-006">
+<task id="T-003" state="completed" covers="REQ-004 REQ-005 REQ-006">
 ## Add the ship-time retro step to the ship phase body
 
 Modify `resources/modules/phases/speccy-ship.md` to add a retro step at the
