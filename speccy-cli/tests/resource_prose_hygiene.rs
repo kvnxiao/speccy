@@ -337,3 +337,235 @@ fn references_carve_out_allows_worked_instance_ids() {
         "the whitelisted SPEC-0042 example is allowed outside references/ too",
     );
 }
+
+// ---- Wrapper-frontmatter description hygiene ------------------------------
+//
+// The discovery-layer `description` (AGENTS.md -> "Authoring resource prose"
+// item 1) routes skills and subagents and lands verbatim in the host system
+// prompt. Two checks apply to every wrapper, one only to user-routed skills:
+//   * no angle brackets — a stray `<…>` reads as injected markup and is
+//     rejected outright by claude.ai skill upload;
+//   * <= 1024 chars — the upload field cap;
+//   * a "Use when …" + "Do NOT trigger …" clause pair on `skills/**` only —
+//     subagent wrappers are spawned programmatically, never user-routed, so a
+//     negative trigger would be noise.
+// This gates the stable frontmatter `description` field (a structural surface),
+// not body prose, so it survives legitimate editorial rewrites.
+
+/// Case-insensitive "Use when …" trigger-clause marker (tolerates "Use this
+/// when").
+fn trigger_clause_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| {
+        Regex::new(r"(?i)\buse\s+(?:this\s+)?when\b").expect("valid trigger-clause regex")
+    })
+}
+
+/// Case-insensitive "Do NOT …" negative-trigger marker.
+fn negative_clause_regex() -> &'static Regex {
+    static CELL: OnceLock<Regex> = OnceLock::new();
+    CELL.get_or_init(|| Regex::new(r"(?i)\bdo\s+not\b").expect("valid negative-clause regex"))
+}
+
+/// Every wrapper-template source under `resources/agents/**`, sorted. Carries
+/// the routing frontmatter; content-only include templates are filtered out
+/// later by the absence of a `description` field.
+fn wrapper_files(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    collect_tmpl(&root.join("resources").join("agents"), &mut out);
+    out.sort();
+    out
+}
+
+fn collect_tmpl(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs_err::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_tmpl(&path, out);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("tmpl") {
+            out.push(path);
+        }
+    }
+}
+
+/// Strip one matched pair of surrounding ASCII quotes, if present.
+fn unquote(s: &str) -> &str {
+    for q in ['\'', '"'] {
+        if let Some(inner) = s.strip_prefix(q).and_then(|t| t.strip_suffix(q)) {
+            return inner;
+        }
+    }
+    s
+}
+
+/// The `description` routing value of a wrapper, or `None` for a content-only
+/// include template (no frontmatter). Handles YAML `description:` (`.md.tmpl`)
+/// and TOML `description =` (`.codex/*.toml.tmpl`); each is a single physical
+/// line in the current sources.
+fn wrapper_description(body: &str) -> Option<&str> {
+    body.lines().find_map(|line| {
+        let rest = line.trim_start().strip_prefix("description")?.trim_start();
+        let value = rest.strip_prefix(':').or_else(|| rest.strip_prefix('='))?;
+        Some(unquote(value.trim()))
+    })
+}
+
+/// A single description-hygiene problem: file (workspace-relative) plus a
+/// one-line description of what is wrong.
+struct DescIssue {
+    rel_path: String,
+    problem: String,
+}
+
+/// Apply the description checks to one wrapper. `rel_path` is forward-slashed;
+/// the `skills/**` clause pair keys off the `/skills/` path segment.
+fn description_issues(rel_path: &str, desc: &str) -> Vec<DescIssue> {
+    let mut out = Vec::new();
+    let push = |out: &mut Vec<DescIssue>, problem: String| {
+        out.push(DescIssue {
+            rel_path: rel_path.to_owned(),
+            problem,
+        });
+    };
+
+    if desc.contains('<') || desc.contains('>') {
+        push(
+            &mut out,
+            "contains an angle bracket (`<`/`>`); it lands in the system prompt and \
+             breaks claude.ai skill upload — name returned blocks by bare identifier, \
+             e.g. `a drift-review block`"
+                .to_owned(),
+        );
+    }
+    let len = desc.chars().count();
+    if len > 1024 {
+        push(&mut out, format!("is {len} chars; must be <= 1024"));
+    }
+    if rel_path.contains("/skills/") {
+        if !trigger_clause_regex().is_match(desc) {
+            push(
+                &mut out,
+                "is a skill wrapper but has no \"Use when …\" trigger clause".to_owned(),
+            );
+        }
+        if !negative_clause_regex().is_match(desc) {
+            push(
+                &mut out,
+                "is a skill wrapper but has no \"Do NOT trigger …\" clause".to_owned(),
+            );
+        }
+    }
+    out
+}
+
+#[test]
+fn wrapper_descriptions_are_upload_safe_and_well_routed() {
+    let root = workspace_root();
+    let files = wrapper_files(&root);
+
+    // Floor guard: a path or layout change that returns near-zero files would
+    // make the scan pass vacuously.
+    assert!(
+        files.len() >= 30,
+        "wrapper scan found only {} .tmpl files under resources/agents/ — \
+         the scan scope looks broken",
+        files.len(),
+    );
+
+    let mut described = 0usize;
+    let mut issues: Vec<DescIssue> = Vec::new();
+    for path in &files {
+        let rel_path = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let body = fs_err::read_to_string(path).expect("wrapper template must be UTF-8 readable");
+        if let Some(desc) = wrapper_description(&body) {
+            described += 1;
+            issues.extend(description_issues(&rel_path, desc));
+        }
+    }
+
+    // Floor guard: the routing wrappers (10 skills x 2 hosts, plus subagents)
+    // must be found, else the description checks pass vacuously.
+    assert!(
+        described >= 25,
+        "found only {described} wrapper descriptions — the discovery-layer scan looks broken",
+    );
+
+    assert!(
+        issues.is_empty(),
+        "wrapper-description hygiene violations \
+         (see AGENTS.md -> \"Authoring resource prose\" item 1):\n{}",
+        issues
+            .iter()
+            .map(|i| format!("  {} -- {}", i.rel_path, i.problem))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+}
+
+/// Guards the extraction and the checks themselves, so the scan above can't
+/// pass vacuously: extraction handles both wrapper formats and skips
+/// content-only includes, and each check fires on a known-bad input and stays
+/// quiet on a clean one.
+#[test]
+fn wrapper_description_extraction_and_checks() {
+    assert_eq!(
+        wrapper_description("---\nname: x\ndescription: 'hello world'\n---\nbody"),
+        Some("hello world"),
+        "YAML single-quoted description extracts and unquotes",
+    );
+    assert_eq!(
+        wrapper_description("---\nname: x\ndescription: hello world\n---\n"),
+        Some("hello world"),
+        "YAML bare description extracts",
+    );
+    assert_eq!(
+        wrapper_description("name = \"x\"\ndescription = 'hello world'\n"),
+        Some("hello world"),
+        "TOML description extracts and unquotes",
+    );
+    assert_eq!(
+        wrapper_description("{% include \"modules/references/spec.md\" %}\n"),
+        None,
+        "a content-only include template carries no description",
+    );
+
+    let agent = "resources/agents/.claude/agents/x.md.tmpl";
+    let skill = "resources/agents/.claude/skills/x/SKILL.md.tmpl";
+
+    assert!(
+        description_issues(agent, "Does a thing. Returns a `<drift-review>` block.")
+            .iter()
+            .any(|i| i.problem.contains("angle bracket")),
+        "angle brackets are flagged anywhere",
+    );
+    assert!(
+        description_issues(agent, "Does a thing. Use when the caller dispatches it.").is_empty(),
+        "a clean subagent description needs no negative-trigger clause",
+    );
+    assert!(
+        description_issues(skill, "Does a thing. Use when the user says foo.")
+            .iter()
+            .any(|i| i.problem.contains("Do NOT")),
+        "a skill wrapper missing the negative clause is flagged",
+    );
+    assert!(
+        description_issues(skill, "Does a thing. Do NOT trigger on bar.")
+            .iter()
+            .any(|i| i.problem.contains("Use when")),
+        "a skill wrapper missing the trigger clause is flagged",
+    );
+    let long = "x".repeat(1025);
+    assert!(
+        description_issues(skill, &format!("Use when a. Do not b. {long}"))
+            .iter()
+            .any(|i| i.problem.contains("1024")),
+        "an over-length description is flagged",
+    );
+}
