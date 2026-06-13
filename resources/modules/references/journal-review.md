@@ -27,7 +27,7 @@ journal file with one round of review looks like:
 ```markdown
 ---
 spec: SPEC-NNNN
-task: T-001
+task: T-NNN
 generated_at: 2026-05-21T19:45:00Z
 ---
 
@@ -36,12 +36,12 @@ generated_at: 2026-05-21T19:45:00Z
 </implementer>
 
 <review persona="business" verdict="pass" model="claude-sonnet-4-6[1m]/medium" date="2026-05-21T20:30:00Z" round="1">
-The `--timeout-ms` flag satisfies REQ-001 and REQ-002 as written.
+The `--timeout-ms` flag satisfies REQ-NNN and REQ-NNN as written.
 The 30000ms default and 1..=600000 range match the SPEC's
 guardrail values verbatim; the stderr line uses the configured
-budget (per DEC-002) rather than measured elapsed time, which
+budget (per DEC-NNN) rather than measured elapsed time, which
 preserves the deterministic-message property the CI integration
-test depends on. Exit code 124 matches DEC-001's GNU `timeout(1)`
+test depends on. Exit code 124 matches DEC-NNN's GNU `timeout(1)`
 compatibility goal. No business-scope drift: the library crate
 remains free of the timeout knob (per the SPEC's non-goal), and
 no retry-on-timeout behaviour leaked in.
@@ -49,7 +49,7 @@ no retry-on-timeout behaviour leaked in.
 
 <review persona="tests" verdict="pass" model="claude-opus-4-8[1m]/low" date="2026-05-21T20:35:00Z" round="1">
 Red-then-green paper trail in
-`.speccy/specs/NNNN-widget-render-timeout/evidence/T-001.md`
+`.speccy/specs/NNNN-widget-render-timeout/evidence/T-NNN.md`
 records three scenarios with concrete pre-edit and post-edit
 command output. Pre-edit baseline for scenario 1 uses GNU
 `timeout(1)` as the external abort signal — distinguishing the

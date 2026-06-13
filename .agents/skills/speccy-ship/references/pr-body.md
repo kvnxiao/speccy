@@ -173,23 +173,21 @@ One markdown table row per `<coverage>` element in `REPORT.md`, in
 the order the elements appear (the canonical REPORT.md shape lists
 them in numerical requirement order). Each row has four columns:
 
-- **Req**: the `req` attribute value (e.g. `REQ-001`).
-- **Result**: the `result` attribute value (e.g. `satisfied`,
-  `partial`, `not-applicable`, `unsatisfied`).
+- **Req**: the `req` attribute value (e.g. `REQ-NNN`).
+- **Result**: the `result` attribute value (one of `satisfied`,
+  `partial`, `deferred`).
 - **Scenarios**: the `scenarios` attribute value split on
-  whitespace and re-joined with `, ` (e.g. `CHK-001, CHK-002`).
-  An empty `scenarios` attribute (allowed for `not-applicable`
-  rows) renders as an empty cell.
+  whitespace and re-joined with `, ` (e.g. `CHK-NNN, CHK-NNN`).
+  An empty `scenarios` attribute renders as an empty cell.
 - **Retries**: the value of the `Retry count:` line that closes
   the element body, copied verbatim including any per-task
-  parenthetical breakdown (e.g. `0`, `2 (T-001: 1, T-002: 1)`).
+  parenthetical breakdown (e.g. `0`, `2 (T-NNN: 1, T-NNN: 1)`).
 
 Example rendered rows:
 
 ```markdown
-| REQ-001 | satisfied | CHK-001, CHK-002 | 0 |
-| REQ-002 | satisfied | CHK-003, CHK-004 | 1 |
-| REQ-003 | not-applicable |  | 0 |
+| REQ-NNN | satisfied | CHK-NNN, CHK-NNN | 0 |
+| REQ-NNN | satisfied | CHK-NNN, CHK-NNN | 1 |
 ```
 
 ## Anti-patterns

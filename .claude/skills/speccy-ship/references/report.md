@@ -20,8 +20,8 @@ generated_at: 2026-05-22T08:15:00Z
 
 <report spec="SPEC-NNNN">
 
-<coverage req="REQ-001" result="satisfied" scenarios="CHK-001 CHK-002">
-T-001 added `timeout_ms: u32` to `widget-cli/src/args.rs` with a
+<coverage req="REQ-NNN" result="satisfied" scenarios="CHK-NNN CHK-NNN">
+T-NNN added `timeout_ms: u32` to `widget-cli/src/args.rs` with a
 `clap` range value parser bounded `1..=600000` and a `default_value
 = "30000"`. The parser rejects 0 and 600001 at argument-parse time
 with the documented stderr message naming the rejected value and
@@ -30,8 +30,8 @@ the allowed range. Default behaviour was verified via the existing
 back as 30000 when the flag is omitted. Retry count: 0.
 </coverage>
 
-<coverage req="REQ-002" result="satisfied" scenarios="CHK-003 CHK-004">
-T-001 threaded the budget into `widget-core::render::Renderer` as a
+<coverage req="REQ-NNN" result="satisfied" scenarios="CHK-NNN CHK-NNN">
+T-NNN threaded the budget into `widget-core::render::Renderer` as a
 `Duration` field; the render loop polls `Instant::elapsed` once per
 iteration and returns `RenderError::TimedOut { budget_ms }` on
 overshoot. The CLI maps that variant to `std::process::exit(124)`
@@ -43,20 +43,13 @@ Successful renders against `fixtures/trivial.gv` exited 0 with no
 timeout-attributable stderr output. Retry count: 0.
 </coverage>
 
-<coverage req="REQ-003" result="not-applicable" scenarios="">
-REQ-003 was removed from SPEC-NNNN during the 2026-05-21 amendment
-(see the Changelog row in `SPEC.md`); no tasks cover it and no
-scenarios remain. Recorded here to keep the coverage table aligned
-with the historical requirement numbering.
-</coverage>
-
 </report>
 
 ## Notes
 
 The 600000ms upper bound surfaced one design question during review:
 whether the bound should be a CLI-only guardrail or also enforced in
-`widget-core` library callers. DEC-002 in SPEC-NNNN settled this as
+`widget-core` library callers. DEC-NNN in SPEC-NNNN settled this as
 CLI-only; library callers continue to pass any `Duration` they want.
 The integration test suite carries one explicit library-caller test
 passing `Duration::from_secs(3600)` to confirm the library layer
@@ -71,15 +64,15 @@ does not duplicate the bound.
   `outcome` is typically `implemented`, `partial`, or `abandoned`.
 - A `# REPORT: SPEC-NNNN ...` heading opens the body.
 - The `<report>` root element carries the required `spec="SPEC-NNNN"`
-  attribute (the `RPT-001` "report root attribute" rule).
+  attribute; the report-root lint flags its absence.
 - One `<coverage>` element per requirement in the SPEC, in
   numerical order. Required attributes: `req="REQ-NNN"`,
   `result="<verdict>"`, `scenarios="CHK-NNN CHK-NNN ..."`
   (space-separated list of scenario ids that prove the coverage
   claim).
-- `result` values: `satisfied`, `partial`, `not-applicable`,
-  `unsatisfied`. The `scenarios` attribute may be empty for
-  `not-applicable` rows.
+- `result` is one of `satisfied`, `partial`, `deferred`. A requirement
+  dropped by amendment is removed from `SPEC.md` rather than carried as
+  a coverage row, so there is no `not-applicable` result.
 - Coverage body prose is free-form but ends with a `Retry count:
   <N>` line naming how many implementer rounds the requirement
   took to land (zero on a clean first pass).

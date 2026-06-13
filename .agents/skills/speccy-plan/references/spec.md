@@ -71,8 +71,8 @@ budget.
 
 ## Requirements
 
-<requirement id="REQ-001">
-### REQ-001: `--timeout-ms <N>` flag parsed with `clap` value parser
+<requirement id="REQ-NNN">
+### REQ-NNN: `--timeout-ms <N>` flag parsed with `clap` value parser
 
 The CLI accepts `--timeout-ms <N>` where `N` is parsed as `u32`.
 Values outside `1..=600000` are rejected at argument-parse time
@@ -97,14 +97,14 @@ and the allowed range.
   loop is 30000.
 </behavior>
 
-<scenario id="CHK-001">
+<scenario id="CHK-NNN">
 Given a built `widget` binary at HEAD after this SPEC lands,
 when `widget render --timeout-ms 0 fixtures/cycle.gv` runs,
 then the process exits 2 and stderr matches
 `--timeout-ms must be between 1 and 600000 (got 0)`.
 </scenario>
 
-<scenario id="CHK-002">
+<scenario id="CHK-NNN">
 Given the same binary,
 when `widget render fixtures/trivial.gv` runs (no flag),
 then the effective timeout used internally is 30000ms; verified by
@@ -113,8 +113,8 @@ effective value via the `--print-config` debug flag.
 </scenario>
 </requirement>
 
-<requirement id="REQ-002">
-### REQ-002: Render aborts with exit 124 when wall-clock budget exceeded
+<requirement id="REQ-NNN">
+### REQ-NNN: Render aborts with exit 124 when wall-clock budget exceeded
 
 When the render exceeds the configured timeout, the process exits
 124 with stderr line
@@ -140,7 +140,7 @@ is the budget value, not the actual elapsed time.
   carries no timeout message.
 </behavior>
 
-<scenario id="CHK-003">
+<scenario id="CHK-NNN">
 Given a built `widget` binary at HEAD,
 when `widget render --timeout-ms 500 fixtures/cycle.gv` runs,
 then the process exits 124, stderr contains
@@ -148,7 +148,7 @@ then the process exits 124, stderr contains
 wall-clock elapsed is between 500ms and 600ms inclusive.
 </scenario>
 
-<scenario id="CHK-004">
+<scenario id="CHK-NNN">
 Given the same binary,
 when `widget render --timeout-ms 60000 fixtures/trivial.gv` runs,
 then the process exits 0 and stderr contains no substring
@@ -158,13 +158,13 @@ then the process exits 0 and stderr contains no substring
 
 ## Decisions
 
-<decision id="DEC-001">
+<decision id="DEC-NNN">
 Exit code 124 (matching GNU `timeout(1)`) is preferred over a
 project-specific code so that shell pipelines composing `widget` with
 other tools observe a predictable timeout signal.
 </decision>
 
-<decision id="DEC-002">
+<decision id="DEC-NNN">
 The stderr line uses the configured budget value rather than actual
 elapsed time so that integration tests can grep for an exact string
 without flake-prone wall-clock arithmetic.
@@ -201,7 +201,7 @@ knob.
   the proof handle `speccy check` and `REPORT.md` reference.
 - `## Changelog` carries a `<changelog>` table in the
   `Date | Author | Summary` shape; the parser requires it, so a SPEC
-  authored without it trips `SPC-001`.
+  authored without it fails the changelog-required lint.
 - Unresolved placeholder substrings (the conventional unfinished-draft
   markers and angle-bracket ellipses) do not appear anywhere in a real
   SPEC.md; example values are concrete and load-bearing.

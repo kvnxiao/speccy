@@ -17,7 +17,7 @@ generated_at: 2026-05-21T19:30:00Z
 ---
 # Tasks: SPEC-NNNN Widget render timeout flag — `widget render` accepts `--timeout-ms` and aborts long renders
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002">
+<task id="T-NNN" state="pending" covers="REQ-NNN REQ-NNN">
 ## Add `--timeout-ms` flag and wire it into the render entrypoint
 
 Extend the `clap`-derived CLI struct in `widget-cli/src/args.rs` with
@@ -57,7 +57,7 @@ Suggested files: `widget-cli/src/args.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002">
+<task id="T-NNN" state="pending" covers="REQ-NNN">
 ## Document the timeout behaviour in `widget render --help` and the README
 
 Extend the `--timeout-ms` help text in `widget-cli/src/args.rs` to
@@ -91,14 +91,14 @@ Suggested files: `widget-cli/src/args.rs`, `README.md`
   `generated_at`. The hash binds the task decomposition to the SPEC
   revision it was generated from.
 - The `# Tasks: SPEC-NNNN ...` heading appears as the first non-empty
-  Markdown line after the frontmatter (the `TSK-001` "TASKS heading
-  matches SPEC" rule).
+  Markdown line after the frontmatter; the heading-matches-SPEC lint
+  flags any mismatch.
 - Each `<task>` element is a direct child of the document root (no
   outer `<tasks>` wrapper; the parser rejects that element).
-- Required `<task>` attributes: `id` (e.g. `T-001`), `state` (one of
+- Required `<task>` attributes: `id` (e.g. `T-NNN`), `state` (one of
   `pending`, `in-progress`, `in-review`, `completed`), `covers`
   (space-separated list of `REQ-NNN` ids — see the
-  `covers="REQ-001 REQ-002"` form above; this is the canonical
+  `covers="REQ-NNN REQ-NNN"` form above; this is the canonical
   multi-requirement coverage shape).
 - Each `<task>` body opens with `## <one-line task title>`, then
   prose describing the work, then a `<task-scenarios>` block with
@@ -106,8 +106,8 @@ Suggested files: `widget-cli/src/args.rs`, `README.md`
   files the implementer is likely to touch.
 - No `<implementer>`, `<review>`, or `<blockers>` elements appear
   in `TASKS.md`; those live in the per-task journal
-  file at `.speccy/specs/NNNN-slug/journal/T-NNN.md` (the `TSK-006`
-  "no journal elements in TASKS.md" rule).
+  file at `.speccy/specs/NNNN-slug/journal/T-NNN.md`. A journal element
+  placed in `TASKS.md` is flagged by the misplaced-journal-element lint.
 - Unresolved placeholder substrings (the conventional unfinished-draft
   markers and angle-bracket ellipses) do not appear anywhere in a real
   TASKS.md.

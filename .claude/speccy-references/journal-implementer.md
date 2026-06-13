@@ -32,12 +32,12 @@ declaring exactly three fields (CLI-written), then the
 ```markdown
 ---
 spec: SPEC-NNNN
-task: T-001
+task: T-NNN
 generated_at: 2026-05-21T19:45:00Z
 ---
 
 <implementer date="2026-05-21T19:45:00Z" model="claude-opus-4-8[1m]/low" round="1">
-- Reuse survey: Mapped the task area (covered REQ-001 / REQ-002,
+- Reuse survey: Mapped the task area (covered REQ-NNN / REQ-NNN,
   suggested files `widget-cli/src/args.rs` and
   `widget-core/src/render.rs`, and their immediate neighbours).
   Decisions: reuse-as-is — the existing `clap` range-value-parser
@@ -65,9 +65,9 @@ generated_at: 2026-05-21T19:45:00Z
   `fixtures/cycle.gv` with `--timeout-ms 500` and asserts exit 124,
   the stderr line, and wall-clock elapsed in `500..=600ms`.
 
-- Undone: T-002 (help-text and README documentation) is left for a
+- Undone: T-NNN (help-text and README documentation) is left for a
   separate implementer turn per its `<task>` element in TASKS.md.
-  Nothing from T-001's scope is deferred.
+  Nothing from T-NNN's scope is deferred.
 
 - Hygiene checks: `cargo test --workspace` exited 0 with 142 tests
   passing including the new `range_parser_rejects_zero`,
@@ -79,22 +79,22 @@ generated_at: 2026-05-21T19:45:00Z
   dependencies added — `Duration` and `Instant` are `std`).
 
 - Evidence: red-then-green paper trail at
-  `.speccy/specs/NNNN-widget-render-timeout/evidence/T-001.md`.
-  Roll call for the four CHKs under REQ-001 / REQ-002:
-  - CHK-001 (range-parser rejection): demonstrated → evidence
+  `.speccy/specs/NNNN-widget-render-timeout/evidence/T-NNN.md`.
+  Roll call for the four CHKs under REQ-NNN / REQ-NNN:
+  - CHK-NNN (range-parser rejection): demonstrated → evidence
     Scenario 2 covers `--timeout-ms 0` exiting 2 with the
     SPEC-mandated stderr message.
-  - CHK-002 (default 30000ms when flag omitted): hygiene → existing
+  - CHK-NNN (default 30000ms when flag omitted): hygiene → existing
     `render_timeout_observed` unit test in `widget-core` runs under
     `cargo test --workspace` and reads the effective value via the
     `--print-config` debug flag.
-  - CHK-003 (cycle fixture aborts at budget): demonstrated →
+  - CHK-NNN (cycle fixture aborts at budget): demonstrated →
     evidence Scenario 1 captures the pre-edit 60s hang versus the
     post-edit 511ms exit-124 run with the expected stderr line.
-  - CHK-004 (trivial fixture under budget): demonstrated → evidence
+  - CHK-NNN (trivial fixture under budget): demonstrated → evidence
     Scenario 3 confirms the happy path exits 0 with no
     timeout-attributable stderr.
-  No CHK in T-001's scope is `judgment-only`; the timeout contract
+  No CHK in T-NNN's scope is `judgment-only`; the timeout contract
   is fully scriptable.
 
 - Discovered issues: The pre-existing
@@ -106,9 +106,9 @@ generated_at: 2026-05-21T19:45:00Z
   touching the cycle detector sees the context.
 
 - Procedural compliance: This implementer entry lands directly in
-  `journal/T-001.md` per the journal-file schema. No
+  `journal/T-NNN.md` per the journal-file schema. No
   `<implementer-note>` block was written into TASKS.md (the parser
-  rejects that element). T-001's `state` flips from `in-progress`
+  rejects that element). T-NNN's `state` flips from `in-progress`
   to `in-review` via `speccy task transition` as the final step
   of this turn. No shipped skill
   bodies under `skills/` required edits during this task — the

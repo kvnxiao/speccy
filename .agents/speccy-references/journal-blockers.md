@@ -47,7 +47,7 @@ passed. Fix both before respawning the review fan-out.
    (business).** The implementer's round-1 patch writes
    `widget render: aborted after 511ms (timeout reached)` where the
    `511` is `Instant::elapsed().as_millis()` of the actual abort,
-   not the configured `budget_ms`. DEC-002 in SPEC-NNNN explicitly
+   not the configured `budget_ms`. DEC-NNN in SPEC-NNNN explicitly
    requires the configured-budget form so integration tests can grep
    for an exact string. The fix is to format the message from
    `self.budget.as_millis()` (the stored field), not from the
@@ -58,7 +58,7 @@ passed. Fix both before respawning the review fan-out.
    `cargo run -- render --timeout-ms 600001 fixtures/cycle.gv` and
    observed exit 124 with a 600001ms elapsed wait, not exit 2. The
    `clap` `range` builder in `widget-cli/src/args.rs:42` reads
-   `.range(1..600001)` (exclusive upper bound) where REQ-001
+   `.range(1..600001)` (exclusive upper bound) where REQ-NNN
    requires `1..=600000` inclusive. Change `.range(1..600001)` to
    `.range(1..=600000)`. Add a regression unit test
    `range_parser_rejects_600001` exercising the exact boundary.
@@ -66,8 +66,8 @@ passed. Fix both before respawning the review fan-out.
 The mechanical floor (`--timeout-ms` flag present, default 30000,
 exit 124 on overshoot, `RenderError::TimedOut` variant added) is
 clean and reusable for the retry. The semantic half (deterministic
-stderr message + correct upper bound) must land for T-001 to
-satisfy REQ-001 and REQ-002.
+stderr message + correct upper bound) must land for T-NNN to
+satisfy REQ-NNN and REQ-NNN.
 </blockers>
 
 <implementer date="2026-05-21T21:30:00Z" model="claude-opus-4-8[1m]/low" round="2">

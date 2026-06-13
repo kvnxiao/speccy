@@ -38,7 +38,7 @@ reconciliation are not forgotten.
    SPEC.md diff and appending the Changelog row. Do not re-check after
    applying fixes.
 
-   <!-- Shared self-review core for plan + amend; supersedes SPEC-0034 DEC-001 (lists stabilized → extracted). Brainstorm's pre-check is intentionally separate. -->
+   <!-- Shared self-review core, included by the plan and amend skills. -->
 
    **Mechanical/semantic split.** Mechanical issues are
    string-matchable from the SPEC.md text: `TBD`/`TODO` strings,
