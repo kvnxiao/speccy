@@ -48,5 +48,5 @@ The placeholders below are illustrative — substitute your own values.
   the argument layer, not with an ad-hoc check inside the command body.
 - Corrective rule: reach for the existing range-value-parser helper before
   writing a fresh bounds check; keep validation at the parse boundary.
-- Provenance: SPEC-0042 / T-NNN (0042-example-slug), reviewer-style pass.
+- Provenance: SPEC-0042 / T-001 (0042-widget-render-timeout), reviewer-style pass.
 ```

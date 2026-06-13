@@ -107,14 +107,14 @@ folder browser. This is why the template's `journal/` bullet uses
 the `<repo-url>` and `<head-branch>` placeholders.
 
 After substitution, the three bullets look like the following
-(illustrative example — `SPEC-0042`, the slug `example-feature-slug`,
+(illustrative example — `SPEC-0042`, the slug `widget-render-timeout`,
 the repo `acme/widget`, and the branch `feature/example-branch` are
 fictional; substitute your own spec ID, slug, repo URL, and head
 branch at fill time):
 
-- `[SPEC.md](.speccy/specs/0042-example-feature-slug/SPEC.md)`
-- `[REPORT.md](.speccy/specs/0042-example-feature-slug/REPORT.md)`
-- `[journal/](https://github.com/acme/widget/tree/feature/example-branch/.speccy/specs/0042-example-feature-slug/journal)`
+- `[SPEC.md](.speccy/specs/0042-widget-render-timeout/SPEC.md)`
+- `[REPORT.md](.speccy/specs/0042-widget-render-timeout/REPORT.md)`
+- `[journal/](https://github.com/acme/widget/tree/feature/example-branch/.speccy/specs/0042-widget-render-timeout/journal)`
 
 ### `<repo-url>`
 
@@ -183,11 +183,14 @@ them in numerical requirement order). Each row has four columns:
   the element body, copied verbatim including any per-task
   parenthetical breakdown (e.g. `0`, `2 (T-NNN: 1, T-NNN: 1)`).
 
-Example rendered rows:
+Example rendered rows, continuing the `SPEC-0042` worked instance
+(REQ-001 took one retry round for the round-1 off-by-one; REQ-002 and
+REQ-003 landed clean):
 
 ```markdown
-| REQ-NNN | satisfied | CHK-NNN, CHK-NNN | 0 |
-| REQ-NNN | satisfied | CHK-NNN, CHK-NNN | 1 |
+| REQ-001 | satisfied | CHK-001, CHK-002 | 1 |
+| REQ-002 | satisfied | CHK-003, CHK-004 | 0 |
+| REQ-003 | satisfied | CHK-005, CHK-006 | 0 |
 ```
 
 ## Anti-patterns
