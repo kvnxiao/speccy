@@ -154,6 +154,7 @@ then `.speccy/MEMORY.md` is byte-identical before and after (verified by a
 hash comparison in a test that seeds the file and runs init), proving the
 ledger sits outside the set of files the eject pipeline enumerates.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -192,6 +193,7 @@ convention/mistake, a corrective rule, and provenance resolving to the
 producing SPEC/task — a dogfood check, since entry quality is a semantic
 property no prose-substring test can gate.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -241,6 +243,7 @@ then the feed-forward block exists once in
 in any `resources/agents/.<host>/` wrapper — a structural check against the
 no-duplicate-snippet invariant.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -282,6 +285,7 @@ then `.speccy/MEMORY.md` gains an entry whose provenance cites that round and
 whose corrective rule addresses the cause — a dogfood check that the retro
 turns real friction into a durable lesson.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -321,6 +325,7 @@ then the stable entry is offered for human-gated promotion (and on approval
 leaves the ledger) while the already-covered candidate is dropped — a dogfood
 check that consolidation and dedup keep the ledger bounded.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -359,6 +364,7 @@ then that entry is retired or rewritten and is not present in the slice the
 next implementer loads — a dogfood check that hygiene prevents phantom
 feed-forward.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -387,6 +393,7 @@ when `speccy verify --json` runs,
 then its lint output contains no error, warning, or info entry attributable to
 the ledger — a structural check that memory has no enforcement surface.
 </scenario>
+
 </requirement>
 
 ## Decisions

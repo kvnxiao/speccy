@@ -5,7 +5,7 @@ generated_at: 2026-06-13T04:49:24Z
 ---
 # Tasks: SPEC-0064 Per-repo loop memory — an eject-safe `.speccy/MEMORY.md` the implementer reads before acting, grown by a ship-time retro from the loop's own conventions and mistakes
 
-<task id="T-001" state="pending" covers="REQ-002 REQ-006">
+<task id="T-001" state="completed" covers="REQ-002 REQ-006">
 ## Author the shared `memory-ledger.md` entry-shape reference
 
 Create `resources/modules/references/memory-ledger.md`, a new host-neutral
