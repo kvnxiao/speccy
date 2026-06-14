@@ -41,13 +41,13 @@ The full reasoning behind these is in
 Speccy is not yet published to crates.io, so installation is from source:
 
 ```bash
-# from a local clone
+# directly from the repo
+cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
+
+# or from a local clone
 git clone https://github.com/kvnxiao/speccy
 cd speccy
 cargo install --path speccy-cli --locked
-
-# or directly
-cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
 ```
 
 Confirm the binary is on `PATH`:
@@ -88,9 +88,9 @@ your behalf and knows which verbs to call, when, and in what order.
 
 The loop has three zones: a human-led planning phase, an autonomous
 work-and-review loop in the middle, and a human-confirmed ship at the
-end. Planning needs one human approval — the framing — after which
-`/speccy-plan` carries straight through `/speccy-decompose` and stops at a
-contract checkpoint where you review SPEC + TASKS before the loop starts.
+end. Planning needs one human approval, the framing. After that,
+`/speccy-plan` runs straight through `/speccy-decompose` and stops at a
+contract checkpoint, where you review SPEC + TASKS before the loop starts.
 The autonomous zone runs itself and only surfaces to you when a bounded
 budget is exhausted (a task that keeps failing review, or a pre-ship drift
 check that won't converge).
@@ -151,9 +151,9 @@ flowchart TB
 
 </details>
 
-`/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you,
-because shipping pushes a branch and opens a PR — an outward-facing action
-that notifies reviewers and triggers CI. Two more recipes round
+`/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you
+first, because shipping pushes a branch and opens a PR, which notifies
+reviewers and triggers CI. Two more recipes round
 out the set: `/speccy-amend` for mid-loop SPEC changes, and `/speccy-vet`
 for the pre-ship drift check (the orchestrator runs it for you, but it is
 runnable on its own).
