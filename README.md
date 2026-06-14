@@ -9,7 +9,7 @@ what shipped no longer matches what was asked for. Speccy makes the
 contract between intent and behaviour **visible**, so the drift becomes
 loud the moment it happens.
 
-> **Status:** v1.0.0. Speccy is dogfooded by Speccy itself; its
+> Speccy is dogfooded by Speccy itself; its
 > implementation history is preserved under `.speccy/archive/`.
 
 ---
