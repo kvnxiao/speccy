@@ -5,7 +5,7 @@ generated_at: 2026-06-14T02:48:38Z
 ---
 # Tasks: SPEC-0065 Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of future-spec candidates
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Create the `backlog-ledger.md` reference module
 
 Create `resources/modules/references/backlog-ledger.md`, structurally

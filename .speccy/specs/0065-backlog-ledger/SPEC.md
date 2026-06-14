@@ -135,6 +135,7 @@ then the four-field shape, file header, and authoring discipline are documented
 clearly and parallel the memory ledger's structure. Clarity and parallelism are
 a persona-review judgment, not a scriptable assertion.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -175,6 +176,7 @@ when `speccy init` then `speccy verify` run in sequence,
 then no `.speccy/BACKLOG.md` exists afterward and `speccy verify` exits 0 with
 no backlog-attributable diagnostic.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -206,6 +208,7 @@ then each instructs reading `.speccy/BACKLOG.md` as candidate slices and treats
 its absence as silent. Correct placement and wording is a persona-review
 judgment.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -241,6 +244,7 @@ then it appends a four-field entry for future-spec candidates and routes
 spec-local Non-goals to the SPEC's `## Non-goals` instead. The future-vs-local
 distinction is a persona-review judgment, not a scriptable assertion.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-005">
@@ -274,6 +278,7 @@ then it gates mirroring on the per-item "own future spec?" judgment and excludes
 local limitations. The gating judgment is a persona-review judgment, not a
 scriptable assertion.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-006">
@@ -306,6 +311,7 @@ then it instructs a silent delete rather than a tombstone and relies on git and
 the new SPEC's provenance for traceability. Adequacy of the instruction is a
 persona-review judgment.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-007">
@@ -337,6 +343,7 @@ then it references the `.speccy/BACKLOG.md` path and a one-line role for it. The
 path reference is structural (a path the skill operates on); the adequacy of the
 wording is a persona-review judgment.
 </scenario>
+
 </requirement>
 
 ## Decisions
