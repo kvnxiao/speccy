@@ -1,37 +1,27 @@
+---
+name: speccy-bootstrap
+description: 'Seed the Speccy conventions into the project AGENTS.md once `speccy init` has scaffolded the workspace. Writes two sections: a `## Product north star` (captured once via an adaptive draft-or-Socratic flow, then frozen) and an always-upserted `## Speccy conventions` block that orients agents to the phase loop and the `speccy verify` CI gate. Use when the user says "bootstrap speccy", "set up speccy", "seed AGENTS.md for speccy", right after running `speccy init`, or to refresh conventions after a speccy upgrade. Do NOT trigger to edit an existing SPEC (use speccy-amend) or to draft a new SPEC (use speccy-plan); this skill only seeds AGENTS.md.'
+---
 
-# {{ cmd_prefix }}speccy-init
+# speccy-bootstrap
 
-{% if host == "claude-code" %}Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Claude
-Code skill pack into `.claude/skills/`, seed the product north star
-into the project's root `AGENTS.md` (freeze-on-first-write), and
-upsert the canonical `## Speccy conventions` section into the same
-`AGENTS.md` (always-upsert, so re-runs refresh it).
-
-## When to use
-
-Run once per project, before any other Speccy slash-command. Re-run
-with `--force` after upgrading `speccy` to refresh both the shipped
-skill files **and** the `## Speccy conventions` section in
-`AGENTS.md` so your agents pick up newly shipped skills and refined
-rules. The `## Product north star` section is written once and then
-left alone; the conventions section is always re-upserted from the
-canonical template. `speccy init` only ever touches files it ships;
-user-authored skill files in `.claude/skills/` are left alone.{% else %}Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Codex
-skill pack into `.agents/skills/`, seed the product north star into
-the project's root `AGENTS.md` (freeze-on-first-write), and upsert
-the canonical `## Speccy conventions` section into the same
-`AGENTS.md` (always-upsert, so re-runs refresh it).
+Seeds the Speccy conventions into the project's root `AGENTS.md` — the
+`## Product north star` (freeze-on-first-write) and the always-upserted
+`## Speccy conventions` section — and runs `speccy init` to refresh the
+scaffolded `.speccy/` workspace and the `.agents/skills/` skill pack.
+The workspace already exists by the time this skill runs: a prior
+`speccy init` is what ejected this skill pack in the first place. The
+`AGENTS.md` seeding is the part that needs an agent.
 
 ## When to use
 
-Run once per project, before any other Speccy skill. Re-run with
-`--force` after upgrading `speccy` to refresh both the shipped skill
-files **and** the `## Speccy conventions` section in `AGENTS.md` so
-your agents pick up newly shipped skills and refined rules. The
-`## Product north star` section is written once and then left alone;
-the conventions section is always re-upserted from the canonical
-template. `speccy init` only ever touches files it ships;
-user-authored skill files in `.agents/skills/` are left alone.{% endif %}
+Run once per project, right after the first `speccy init`. Re-run after
+upgrading `speccy` to refresh both the shipped skill files **and** the
+`## Speccy conventions` section, so your agents pick up newly shipped
+skills and refined rules. The `## Product north star` section is written
+once and then left alone; the conventions section is always re-upserted
+from the canonical template. `speccy init` only ever touches files it
+ships; user-authored skill files in `.agents/skills/` are left alone.
 
 ## Steps
 
@@ -51,7 +41,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    simply not enumerated.
 
 3. **Inspect `AGENTS.md` at the repo root and decide per-section.**
-   `/speccy-init` seeds two independent sections — `## Product north
+   `/speccy-bootstrap` seeds two independent sections — `## Product north
    star` and `## Speccy conventions` — per the AGENTS.md state matrix:
    north-star (present / absent) × conventions (present / absent),
    four cells.
@@ -86,7 +76,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    Drive the `## Product north star` section as a brainstorm-style
    adaptive iteration over its five subsections in template order:
    opening prose (the project description and motivation paragraph),
-   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Users`, `### Minimal viable product`, `### Quality bar`, and
    `### Known unknowns`. Do not run a fixed question script.
 
    **Inspect the repo first.** Before asking the user anything, read
@@ -118,7 +108,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    multiple-choice when enumerable, draft-and-confirm, hard gate
    before write — are inlined here deliberately. Do not invoke
    `/speccy-brainstorm` or any other sub-skill from this path;
-   `/speccy-init` stays self-contained.
+   `/speccy-bootstrap` stays self-contained.
 
    **Hard gate before write.** Do not write the `## Product north
    star` section to `AGENTS.md` until every one of the five
@@ -129,7 +119,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
 
    When all five subsections are approved, compose them into the
    `## Product north star` section under the subheadings
-   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Users`, `### Minimal viable product`, `### Quality bar`, and
    `### Known unknowns`, with the opening prose at the section root.
    Non-goals belong as prose at the section root or under an
    optional `### Non-goals` subsection if they surfaced during
@@ -164,7 +154,35 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    The canonical body is the literal content below, expanded from
    the shared reference module at render time:
 
-   {% include "modules/references/agents-md-speccy-conventions.md" %}
+   ## Speccy conventions
+
+> Managed by `/speccy-bootstrap`; edits inside this section are
+> overwritten on re-run. Put project-specific rules in a sibling
+> section.
+
+Speccy keeps intent and shipped behavior in sync through a five-phase
+loop. Your harness already surfaces each skill's `description` for
+routing — read those for the per-skill contract. The order and entry
+points:
+
+1. **Plan** — `/speccy-brainstorm` (fuzzy asks) → `/speccy-plan` →
+   `/speccy-decompose`.
+2. **Impl** — `/speccy-work`, one task per invocation.
+3. **Review** — `/speccy-review`, per-task adversarial fan-out.
+4. **Vet** — `/speccy-vet`, the pre-ship holistic drift gate.
+5. **Ship** — `/speccy-ship`, writes `REPORT.md` and opens the PR.
+
+`/speccy-orchestrate` drives phases 2–4 autonomously; `/speccy-amend`
+handles a mid-loop SPEC change.
+
+Per-task implementer notes and reviewer verdicts live in the journal at
+`.speccy/specs/NNNN-slug/journal/T-NNN.md`, sibling to `SPEC.md` and
+`TASKS.md`.
+
+CI: wire `speccy verify` into whichever CI the project uses. It fails on
+broken proof shape (missing requirement coverage, malformed task state)
+and passes when intact — informational by design, not a blocker.
+
 
    Use that body verbatim (heading and all) when writing or
    replacing the section. Do not paraphrase, reorder subsections,
@@ -175,7 +193,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    to `AGENTS.md` (if anything), and the final counts (`N
    created, N overwritten`).
 
-7. **Suggest the next step.** `{{ cmd_prefix }}speccy-plan` to draft the first
+7. **Suggest the next step.** `speccy-plan` to draft the first
    SPEC slice from the now-populated north star.
 
 This recipe does not loop. The bootstrap runs once; subsequent

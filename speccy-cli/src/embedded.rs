@@ -37,22 +37,22 @@ mod tests {
     use super::RESOURCES;
 
     #[test]
-    fn claude_code_pack_contains_init_recipe() {
+    fn claude_code_pack_contains_bootstrap_recipe() {
         assert!(
             RESOURCES
-                .get_file("agents/.claude/skills/speccy-init/SKILL.md.tmpl")
+                .get_file("agents/.claude/skills/speccy-bootstrap/SKILL.md.tmpl")
                 .is_some(),
-            "bundle should contain agents/.claude/skills/speccy-init/SKILL.md.tmpl",
+            "bundle should contain agents/.claude/skills/speccy-bootstrap/SKILL.md.tmpl",
         );
     }
 
     #[test]
-    fn codex_pack_contains_init_recipe() {
+    fn codex_pack_contains_bootstrap_recipe() {
         assert!(
             RESOURCES
-                .get_file("agents/.agents/skills/speccy-init/SKILL.md.tmpl")
+                .get_file("agents/.agents/skills/speccy-bootstrap/SKILL.md.tmpl")
                 .is_some(),
-            "bundle should contain agents/.agents/skills/speccy-init/SKILL.md.tmpl",
+            "bundle should contain agents/.agents/skills/speccy-bootstrap/SKILL.md.tmpl",
         );
     }
 

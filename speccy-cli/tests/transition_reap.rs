@@ -155,7 +155,7 @@ fn completed_transition_skips_held_sidecar_and_still_exits_zero() -> TestResult 
 
     assert!(
         sidecar.as_std_path().exists(),
-        "a held sidecar must be left intact: the try_lock guard skips it (REQ-003)",
+        "a held sidecar must be left intact: the try_lock guard skips it",
     );
 
     // Release for tidy teardown.
@@ -176,7 +176,7 @@ fn non_completed_transition_leaves_sidecar_in_place() -> TestResult {
 
     assert!(
         sidecar.as_std_path().exists(),
-        "a non-completed transition must not touch the lock sidecar (REQ-001)",
+        "a non-completed transition must not touch the lock sidecar",
     );
     Ok(())
 }

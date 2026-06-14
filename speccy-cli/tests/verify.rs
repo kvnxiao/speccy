@@ -175,9 +175,9 @@ fn requirement_with_empty_checks_array_exits_one_and_names_requirement() -> Test
 }
 
 // ---------------------------------------------------------------------------
-// (Former REQ-002 / REQ-003 tests removed: marker containment makes
-// both "dangling CHK reference" and "orphan scenario row" structurally
-// unrepresentable, so neither code can fire.)
+// (Former dangling-CHK-reference / orphan-scenario-row tests removed:
+// marker containment makes both structurally unrepresentable, so
+// neither code can fire.)
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -1042,11 +1042,11 @@ fn malformed_speccy_memory_does_not_affect_verify_lint_output() -> TestResult {
 
     assert_eq!(
         code, baseline_code,
-        "SPEC-0064 CHK-008: a malformed .speccy/MEMORY.md must not change verify's exit code; baseline={baseline_code}, with-memory={code}",
+        "a malformed .speccy/MEMORY.md must not change verify's exit code; baseline={baseline_code}, with-memory={code}",
     );
     assert_eq!(
         lint, baseline_lint,
-        "SPEC-0064 CHK-008: verify's lint output (errors/warnings/info) must be identical whether or not a malformed .speccy/MEMORY.md is present — the ledger has no enforcement surface; baseline:\n{baseline_lint}\nwith-memory:\n{lint}",
+        "verify's lint output (errors/warnings/info) must be identical whether or not a malformed .speccy/MEMORY.md is present — the ledger has no enforcement surface; baseline:\n{baseline_lint}\nwith-memory:\n{lint}",
     );
     Ok(())
 }

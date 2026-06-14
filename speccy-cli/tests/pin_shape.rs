@@ -270,7 +270,7 @@ fn scan_finds_expected_minimum_files() {
     // catching a path-broken scan that returns near-zero files.
     assert!(
         records.len() >= 40,
-        "scan must find at least 40 agent/skill files; found {} — REQ-005 invariants are checked across the full host-pack tree",
+        "scan must find at least 40 agent/skill files; found {} — pin invariants are checked across the full host-pack tree",
         records.len(),
     );
 }
@@ -284,7 +284,7 @@ fn no_long_form_versioned_model_ids() {
         for needle in ["claude-opus-", "claude-sonnet-", "claude-haiku-"] {
             if model.contains(needle) {
                 violations.push(format!(
-                    "`{path}` has `model = {model:?}` containing `{needle}` — REQ-005 forbids long-form versioned snapshot IDs in shipped pins",
+                    "`{path}` has `model = {model:?}` containing `{needle}` — long-form versioned snapshot IDs are forbidden in shipped pins",
                     path = r.path,
                 ));
             }
@@ -292,7 +292,7 @@ fn no_long_form_versioned_model_ids() {
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 long-form-snapshot-ID invariant violated:\n{}",
+        "long-form-snapshot-ID invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -305,14 +305,14 @@ fn no_haiku_in_model_values() {
         let Some(model) = &r.model else { continue };
         if model.contains("haiku") {
             violations.push(format!(
-                "`{path}` has `model = {model:?}` containing `haiku` — REQ-005 disallows Haiku-tier pins anywhere in SPEC-0032's assignment",
+                "`{path}` has `model = {model:?}` containing `haiku` — Haiku-tier pins are disallowed anywhere in the pin assignment",
                 path = r.path,
             ));
         }
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 no-Haiku invariant violated:\n{}",
+        "no-Haiku invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -320,7 +320,7 @@ fn no_haiku_in_model_values() {
 #[test]
 fn claude_pinned_model_matches_alias_with_1m_suffix() {
     let regex = Regex::new(r"^(opus|sonnet)\[1m\]$")
-        .expect("hardcoded REQ-005 Claude Code model-alias regex is valid");
+        .expect("hardcoded Claude Code model-alias regex is valid");
     let records = collect_pin_records(&workspace_root());
     let mut violations: Vec<String> = Vec::new();
     for r in &records {
@@ -330,14 +330,14 @@ fn claude_pinned_model_matches_alias_with_1m_suffix() {
         let Some(model) = &r.model else { continue };
         if !regex.is_match(model) {
             violations.push(format!(
-                "`{path}` has `model: {model:?}` which does not match `^(opus|sonnet)\\[1m\\]$` — REQ-005 requires the `[1m]` 1M-context-window suffix on every Claude Code pin",
+                "`{path}` has `model: {model:?}` which does not match `^(opus|sonnet)\\[1m\\]$` — the `[1m]` 1M-context-window suffix is required on every Claude Code pin",
                 path = r.path,
             ));
         }
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 Claude Code model-alias invariant violated:\n{}",
+        "Claude Code model-alias invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -353,14 +353,14 @@ fn codex_pinned_model_equals_gpt55() {
         let Some(model) = &r.model else { continue };
         if model != "gpt-5.5" {
             violations.push(format!(
-                "`{path}` has `model = {model:?}` — REQ-005 requires every Codex pin to be the literal `gpt-5.5`",
+                "`{path}` has `model = {model:?}` — every Codex pin must be the literal `gpt-5.5`",
                 path = r.path,
             ));
         }
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 Codex model invariant violated:\n{}",
+        "Codex model invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -382,7 +382,7 @@ fn opus_pinned_effort_is_valid() {
         }
         match r.effort.as_deref() {
             None => violations.push(format!(
-                "`{path}` is Opus-pinned ({model:?}) but is missing the `effort:` key — REQ-005 requires every Opus pin to declare an effort tier",
+                "`{path}` is Opus-pinned ({model:?}) but is missing the `effort:` key — every Opus pin must declare an effort tier",
                 path = r.path,
             )),
             Some(value) if !allowed.contains(&value) => violations.push(format!(
@@ -394,7 +394,7 @@ fn opus_pinned_effort_is_valid() {
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 Opus effort invariant violated:\n{}",
+        "Opus effort invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -417,7 +417,7 @@ fn sonnet_pinned_effort_is_valid_and_never_xhigh() {
         }
         match r.effort.as_deref() {
             None => violations.push(format!(
-                "`{path}` is Sonnet-pinned ({model:?}) but is missing the `effort:` key — REQ-005 requires every Sonnet pin to declare an effort tier",
+                "`{path}` is Sonnet-pinned ({model:?}) but is missing the `effort:` key — every Sonnet pin must declare an effort tier",
                 path = r.path,
             )),
             Some(value) if !allowed.contains(&value) => violations.push(format!(
@@ -429,7 +429,7 @@ fn sonnet_pinned_effort_is_valid_and_never_xhigh() {
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 Sonnet effort invariant violated:\n{}",
+        "Sonnet effort invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -455,7 +455,7 @@ fn codex_pinned_reasoning_effort_is_valid() {
         }
         match r.reasoning_effort.as_deref() {
             None => violations.push(format!(
-                "`{path}` carries a Codex `model` pin but is missing `model_reasoning_effort` — REQ-005 requires every Codex pin to declare a reasoning_effort tier",
+                "`{path}` carries a Codex `model` pin but is missing `model_reasoning_effort` — every Codex pin must declare a reasoning_effort tier",
                 path = r.path,
             )),
             Some(value) if !allowed.contains(&value) => violations.push(format!(
@@ -467,7 +467,7 @@ fn codex_pinned_reasoning_effort_is_valid() {
     }
     assert!(
         violations.is_empty(),
-        "REQ-005 Codex reasoning_effort invariant violated:\n{}",
+        "Codex reasoning_effort invariant violated:\n{}",
         violations.join("\n"),
     );
 }
@@ -480,12 +480,12 @@ const UNPINNED_CLAUDE_SKILLS: &[&str] = &[
     ".claude/skills/speccy-decompose/SKILL.md",
     ".claude/skills/speccy-work/SKILL.md",
     ".claude/skills/speccy-ship/SKILL.md",
-    ".claude/skills/speccy-init/SKILL.md",
+    ".claude/skills/speccy-bootstrap/SKILL.md",
     ".claude/skills/speccy-review/SKILL.md",
     "resources/agents/.claude/skills/speccy-decompose/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-work/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-ship/SKILL.md.tmpl",
-    "resources/agents/.claude/skills/speccy-init/SKILL.md.tmpl",
+    "resources/agents/.claude/skills/speccy-bootstrap/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-review/SKILL.md.tmpl",
 ];
 
@@ -497,29 +497,29 @@ fn unpinned_claude_skills_have_no_pin_keys() {
         let path = root.join(rel);
         if !path.exists() {
             violations.push(format!(
-                "`{rel}` must exist (REQ-001 / REQ-002 declare it as an unpinned skill surface)"
+                "`{rel}` must exist (declared as an unpinned skill surface)"
             ));
             continue;
         }
         let pins = read_yaml_pins(&path);
         if let Some(value) = pins.model {
             violations.push(format!(
-                "`{rel}` has `model: {value:?}` — REQ-001 / REQ-002 require this skill to be unpinned (slash-command invocation runs in the parent session)"
+                "`{rel}` has `model: {value:?}` — this skill must be unpinned (slash-command invocation runs in the parent session)"
             ));
         }
         if let Some(value) = pins.effort {
             violations.push(format!(
-                "`{rel}` has `effort: {value:?}` — REQ-001 / REQ-002 require this skill to have no `effort:` key"
+                "`{rel}` has `effort: {value:?}` — this skill must have no `effort:` key"
             ));
         }
         if let Some(value) = pins.context {
             violations.push(format!(
-                "`{rel}` has `context: {value:?}` — DEC-001 dropped `context: fork` from the phase-skill surface"
+                "`{rel}` has `context: {value:?}` — `context: fork` was dropped from the phase-skill surface"
             ));
         }
         if let Some(value) = pins.agent {
             violations.push(format!(
-                "`{rel}` has `agent: {value:?}` — DEC-001 dropped the auto-fork `agent:` pointer from the phase-skill surface"
+                "`{rel}` has `agent: {value:?}` — the auto-fork `agent:` pointer was dropped from the phase-skill surface"
             ));
         }
     }

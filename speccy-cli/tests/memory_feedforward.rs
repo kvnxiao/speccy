@@ -59,8 +59,8 @@ fn work_phase_body_includes_memory_ledger_summary_once() {
     assert_eq!(
         count, 1,
         "`{MEMORY_LEDGER_SUMMARY_INCLUDE}` must appear exactly once in \
-         resources/modules/phases/speccy-work.md (the feed-forward read step; \
-         SPEC-0064 REQ-003 CHK-004); found {count}",
+         resources/modules/phases/speccy-work.md (the feed-forward read step); \
+         found {count}",
     );
 }
 
@@ -82,7 +82,7 @@ fn no_host_wrapper_inlines_memory_ledger_summary_include() {
             !contents.contains(MEMORY_LEDGER_SUMMARY_INCLUDE),
             "host wrapper `{display}` must not inline `{MEMORY_LEDGER_SUMMARY_INCLUDE}`; \
              the memory-ledger summary reaches every host transitively via the \
-             phase-body include, never as a shadowing copy (SPEC-0064 REQ-003 CHK-004)",
+             phase-body include, never as a shadowing copy",
         );
     }
 }

@@ -81,7 +81,7 @@ Readiness semantics:
    ## Memory ledger entry shape
 
 The repo's loop memory lives at `.speccy/MEMORY.md` — a user-owned,
-git-tracked file, a sibling of `.speccy/BACKLOG.md`. `speccy init` never
+git-tracked file. `speccy init` never
 enumerates or overwrites it, so a `--force` reeject leaves it byte-identical
 and learned content survives speccy CLI updates. Its **absence is normal and
 silent**: a missing or malformed ledger produces no `speccy verify` error or

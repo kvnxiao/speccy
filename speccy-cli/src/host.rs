@@ -69,8 +69,8 @@ impl HostChoice {
     /// - `host_display_name`: human-facing host name (`"Claude Code"` or
     ///   `"Codex"`) used in skill prose.
     /// - `skill_install_path`: project-relative skill install directory
-    ///   (`".claude/skills"` or `".agents/skills"`), used by `speccy-init`'s
-    ///   skill body to tell users where the pack lands.
+    ///   (`".claude/skills"` or `".agents/skills"`), used by
+    ///   `speccy-bootstrap`'s skill body to tell users where the pack lands.
     /// - `speccy_references_path`: project-relative host-shared references
     ///   directory (`".claude/speccy-references"` or
     ///   `".agents/speccy-references"`), used by consuming bodies to emit

@@ -15,7 +15,7 @@ fn registry_default_personas_is_first_five_prefix() {
     assert_eq!(
         default,
         &["business", "tests", "security", "style", "correctness"],
-        "DEFAULT_PERSONAS (SPEC-0007) is mechanically derived as &ALL[..5]",
+        "DEFAULT_PERSONAS is mechanically derived as &ALL[..5]",
     );
 }
 

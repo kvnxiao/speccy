@@ -53,7 +53,7 @@ fn split_frontmatter(source: &str) -> Option<(&str, &str)> {
 /// `<host>/<name>/SKILL.md` in the bundle and at
 /// `<dest>/<name>/SKILL.md` in the user's project.
 const SKILL_NAMES: [&str; 8] = [
-    "speccy-init",
+    "speccy-bootstrap",
     "speccy-plan",
     "speccy-decompose",
     "speccy-work",
@@ -125,7 +125,7 @@ fn refuse_without_force() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/skills/speccy-init/SKILL.md",
+        ".claude/skills/speccy-bootstrap/SKILL.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -143,7 +143,7 @@ fn force_overwrites_shipped_files() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/skills/speccy-init/SKILL.md",
+        ".claude/skills/speccy-bootstrap/SKILL.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -153,10 +153,10 @@ fn force_overwrites_shipped_files() -> TestResult {
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let shipped = read_file(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
+    let shipped = read_file(&fx.root, ".claude/skills/speccy-bootstrap/SKILL.md")?;
     assert_ne!(
         shipped, "OLD-SHIPPED-CONTENT",
-        "--force should refresh .claude/skills/speccy-init/SKILL.md",
+        "--force should refresh .claude/skills/speccy-bootstrap/SKILL.md",
     );
     let (yaml, _body) = split_frontmatter(&shipped)
         .ok_or("refreshed SKILL.md must have a `---` frontmatter fence")?;
@@ -164,8 +164,8 @@ fn force_overwrites_shipped_files() -> TestResult {
         .map_err(|err| format!("refreshed SKILL.md frontmatter must parse as YAML: {err}"))?;
     assert_eq!(
         fm.name.as_deref(),
-        Some("speccy-init"),
-        "refreshed SKILL.md `name` field must equal `speccy-init`",
+        Some("speccy-bootstrap"),
+        "refreshed SKILL.md `name` field must equal `speccy-bootstrap`",
     );
     assert!(
         !fm.description.trim().is_empty(),
@@ -199,11 +199,10 @@ fn force_preserves_user_files() -> TestResult {
     Ok(())
 }
 
-// `.speccy/MEMORY.md` is a repo-owned ledger
-// the eject pipeline never enumerates. Like `.speccy/BACKLOG.md`, it sits in
-// the never-planned-against bucket: `speccy init` only scaffolds `.speccy/`
-// and renders the host pack, so neither a first `init` nor `init --force`
-// creates, edits, or deletes it.
+// `.speccy/MEMORY.md` is a repo-owned ledger the eject pipeline never
+// enumerates: it sits in the never-planned-against bucket, so `speccy init`
+// only scaffolds `.speccy/` and renders the host pack — neither a first
+// `init` nor `init --force` creates, edits, or deletes it.
 
 #[test]
 fn force_preserves_speccy_memory_ledger() -> TestResult {
@@ -227,7 +226,7 @@ fn force_preserves_speccy_memory_ledger() -> TestResult {
     let after_claude = read_file(&fx.root, ".speccy/MEMORY.md")?;
     assert_eq!(
         after_claude, seed,
-        "SPEC-0064 REQ-001 / CHK-001: `init --force --host claude-code` must leave .speccy/MEMORY.md byte-identical",
+        "`init --force --host claude-code` must leave .speccy/MEMORY.md byte-identical",
     );
 
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -241,7 +240,7 @@ fn force_preserves_speccy_memory_ledger() -> TestResult {
     let after_codex = read_file(&fx.root, ".speccy/MEMORY.md")?;
     assert_eq!(
         after_codex, seed,
-        "SPEC-0064 REQ-001 / CHK-001: `init --force --host codex` must leave .speccy/MEMORY.md byte-identical",
+        "`init --force --host codex` must leave .speccy/MEMORY.md byte-identical",
     );
     Ok(())
 }
@@ -260,7 +259,7 @@ fn fresh_init_does_not_create_speccy_memory_ledger() -> TestResult {
 
     assert!(
         !fx.root.join(".speccy/MEMORY.md").exists(),
-        "SPEC-0064 REQ-001: a fresh `speccy init` must not create .speccy/MEMORY.md",
+        "a fresh `speccy init` must not create .speccy/MEMORY.md",
     );
     Ok(())
 }
@@ -279,7 +278,9 @@ fn host_detection_precedence() -> TestResult {
             .current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
+            fx.root
+                .join(".agents/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             "--host codex must populate .agents/skills/ regardless of .claude/ presence",
         );
     }
@@ -293,11 +294,15 @@ fn host_detection_precedence() -> TestResult {
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".claude/skills/speccy-init/SKILL.md").exists(),
+            fx.root
+                .join(".claude/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             ".claude/ should win autodetect when both present",
         );
         assert!(
-            !fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
+            !fx.root
+                .join(".agents/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             ".agents/ should NOT be populated when .claude/ won detection",
         );
     }
@@ -351,7 +356,7 @@ fn copy_claude_code_pack_skill_md() -> TestResult {
         let rel = format!(".claude/skills/{skill}/SKILL.md");
         assert!(
             fx.root.join(&rel).exists(),
-            "claude-code pack should drop {rel} (SPEC-0015 REQ-002 + CHK-003)",
+            "claude-code pack should drop {rel}",
         );
         let dest = read_file(&fx.root, &rel)?;
         let (yaml, body) = split_frontmatter(&dest)
@@ -406,10 +411,7 @@ fn copy_codex_pack_skill_md() -> TestResult {
     );
     for skill in SKILL_NAMES {
         let rel = format!(".agents/skills/{skill}/SKILL.md");
-        assert!(
-            fx.root.join(&rel).exists(),
-            "codex pack should drop {rel} (SPEC-0015 REQ-002 + CHK-004)",
-        );
+        assert!(fx.root.join(&rel).exists(), "codex pack should drop {rel}");
         let dest = read_file(&fx.root, &rel)?;
         let (yaml, body) = split_frontmatter(&dest)
             .ok_or_else(|| format!("rendered {rel} must have a `---` frontmatter fence"))?;
@@ -607,7 +609,7 @@ fn t003_init_does_not_create_speccy_skills_dir() -> TestResult {
     let skills_dir = fx.root.join(".speccy").join("skills");
     assert!(
         !skills_dir.exists(),
-        "SPEC-0027 REQ-001: `speccy init` against an empty workspace must not create {skills_dir}",
+        "`speccy init` against an empty workspace must not create {skills_dir}",
     );
     Ok(())
 }
@@ -624,7 +626,7 @@ fn t003_init_plan_summary_does_not_mention_speccy_skills() -> TestResult {
     let stdout = String::from_utf8(output)?;
     assert!(
         !stdout.contains(".speccy/skills/"),
-        "SPEC-0027 REQ-001: init plan summary must contain no `.speccy/skills/` reference; got:\n{stdout}",
+        "init plan summary must contain no `.speccy/skills/` reference; got:\n{stdout}",
     );
     Ok(())
 }
@@ -650,7 +652,7 @@ fn t003_init_force_preserves_pre_existing_speccy_skills_overrides() -> TestResul
     let after = read_file(&fx.root, ".speccy/skills/personas/reviewer-business.md")?;
     assert_eq!(
         after, pre_existing,
-        "SPEC-0027 REQ-001 + DEC-003: `init --force` must leave pre-existing `.speccy/skills/` files byte-for-byte untouched; init writes nothing into the subtree and deletes nothing from it",
+        "`init --force` must leave pre-existing `.speccy/skills/` files byte-for-byte untouched; init writes nothing into the subtree and deletes nothing from it",
     );
     Ok(())
 }
@@ -691,18 +693,18 @@ fn t002_claude_reviewer_agent_files_overwrite_user_edits_under_force() -> TestRe
     let after = read_file(&fx.root, rel)?;
     assert!(
         !after.contains("sentinel-edit-12345"),
-        "SPEC-0044 REQ-001 / CHK-001: `speccy init --force` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
+        "`speccy init --force` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
     );
     assert_eq!(
         after, initial,
-        "SPEC-0044 REQ-001 / CHK-001: after `--force` the file must match the shipped bundle byte-for-byte",
+        "after `--force` the file must match the shipped bundle byte-for-byte",
     );
     assert!(
         stdout
             .lines()
             .any(|l| l.trim_start().starts_with("(!) overwritten")
                 && l.contains(".claude/agents/reviewer-business.md")),
-        "SPEC-0044 REQ-001 / CHK-001: plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
+        "plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
     );
     Ok(())
 }
@@ -734,7 +736,7 @@ fn t002_claude_reviewer_agent_files_recreate_when_deleted() -> TestResult {
     let restored = read_file(&fx.root, rel)?;
     assert!(
         restored.contains("# Reviewer Persona: Business"),
-        "SPEC-0044 REQ-001: `init` after deletion must recreate {rel} from the shipped bundle (Create on absent); got:\n{restored}",
+        "`init` after deletion must recreate {rel} from the shipped bundle (Create on absent); got:\n{restored}",
     );
     Ok(())
 }
@@ -768,18 +770,18 @@ fn t002_codex_reviewer_agent_files_overwrite_user_edits_under_force() -> TestRes
     let after = read_file(&fx.root, rel)?;
     assert!(
         !after.contains("sentinel-edit-67890"),
-        "SPEC-0044 REQ-001 / CHK-002: `speccy init --force --host codex` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
+        "`speccy init --force --host codex` must overwrite the user edit at {rel}; sentinel still present in:\n{after}",
     );
     assert_eq!(
         after, initial,
-        "SPEC-0044 REQ-001 / CHK-002: after `--force` the file must match the shipped bundle byte-for-byte",
+        "after `--force` the file must match the shipped bundle byte-for-byte",
     );
     assert!(
         stdout
             .lines()
             .any(|l| l.trim_start().starts_with("(!) overwritten")
                 && l.contains(".codex/agents/reviewer-security.toml")),
-        "SPEC-0044 REQ-001 / CHK-002: plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
+        "plan summary must show `(!) overwritten` for {rel}; got:\n{stdout}",
     );
 
     fs_err::remove_file(fx.root.join(rel).as_std_path())?;
@@ -793,7 +795,7 @@ fn t002_codex_reviewer_agent_files_overwrite_user_edits_under_force() -> TestRes
     let restored = read_file(&fx.root, rel)?;
     assert!(
         restored.contains("name = \"reviewer-security\""),
-        "SPEC-0044 REQ-001: `init --force --host codex` after deletion must recreate {rel} with the shipped Codex frontmatter",
+        "`init --force --host codex` after deletion must recreate {rel} with the shipped Codex frontmatter",
     );
     Ok(())
 }
@@ -814,7 +816,7 @@ fn exit_codes() -> TestResult {
         let fx = project_with_name("exit-one-conflict")?;
         write_file(
             &fx.root,
-            ".claude/skills/speccy-init/SKILL.md",
+            ".claude/skills/speccy-bootstrap/SKILL.md",
             "differing-content\n",
         )?;
         let mut cmd = Command::cargo_bin("speccy")?;
@@ -1053,22 +1055,22 @@ fn parse_no_pin_skill(root: &Utf8Path, rel: &str) -> TestResult<SkillNoPinsFront
 fn assert_no_pin_keys(rel: &str, fm: &SkillNoPinsFrontmatter) {
     assert!(
         fm.model.is_none(),
-        "rendered {rel} must carry no `model:` key (REQ-001/REQ-002 unpinned SKILL.md); got {:?}",
+        "rendered {rel} must carry no `model:` key (unpinned SKILL.md); got {:?}",
         fm.model,
     );
     assert!(
         fm.effort.is_none(),
-        "rendered {rel} must carry no `effort:` key (REQ-001/REQ-002 unpinned SKILL.md); got {:?}",
+        "rendered {rel} must carry no `effort:` key (unpinned SKILL.md); got {:?}",
         fm.effort,
     );
     assert!(
         fm.context.is_none(),
-        "rendered {rel} must carry no `context:` key (DEC-001 dropped auto-fork); got {:?}",
+        "rendered {rel} must carry no `context:` key (auto-fork dropped); got {:?}",
         fm.context,
     );
     assert!(
         fm.agent.is_none(),
-        "rendered {rel} must carry no `agent:` key (DEC-001 dropped auto-fork); got {:?}",
+        "rendered {rel} must carry no `agent:` key (auto-fork dropped); got {:?}",
         fm.agent,
     );
 }
@@ -1104,8 +1106,8 @@ fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &s
     Ok(())
 }
 
-/// Assert the `speccy-init` SKILL.md rendered file retains its full
-/// body. `speccy-init` is exempt from the thin-stub
+/// Assert the `speccy-bootstrap` SKILL.md rendered file retains its full
+/// body. `speccy-bootstrap` is exempt from the thin-stub
 /// transformation because there is no pinned subagent to delegate to.
 fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     let body = read_file(root, rel)?;
@@ -1114,11 +1116,11 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     let non_empty_lines = post_fm.lines().filter(|l| !l.trim().is_empty()).count();
     assert!(
         non_empty_lines >= 20,
-        "rendered {rel} must retain full body (>= 20 non-empty lines), got {non_empty_lines}; the thin-stub transformation must not apply to speccy-init",
+        "rendered {rel} must retain full body (>= 20 non-empty lines), got {non_empty_lines}; the thin-stub transformation must not apply to speccy-bootstrap",
     );
     assert!(
-        !post_fm.contains("/agent speccy-init"),
-        "rendered {rel} must not delegate to `/agent speccy-init` (REQ-010 / DEC-009: no speccy-init subagent on either host); got:\n{post_fm}",
+        !post_fm.contains("/agent speccy-bootstrap"),
+        "rendered {rel} must not delegate to `/agent speccy-bootstrap` (no speccy-bootstrap subagent on either host); got:\n{post_fm}",
     );
     Ok(())
 }
@@ -1205,15 +1207,15 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         );
     }
 
-    let init_agent = fx.root.join(".claude/agents/speccy-init.md");
+    let init_agent = fx.root.join(".claude/agents/speccy-bootstrap.md");
     assert!(
         !init_agent.exists(),
-        "DEC-009 / REQ-010: speccy init must not render `.claude/agents/speccy-init.md` (no pinned init subagent); found at `{init_agent}`",
+        "speccy init must not render `.claude/agents/speccy-bootstrap.md` (no pinned init subagent); found at `{init_agent}`",
     );
 
     assert_claude_reviewer_pins(&fx.root)?;
 
-    for phase in ["decompose", "work", "ship", "init"] {
+    for phase in ["decompose", "work", "ship", "bootstrap"] {
         let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
         let fm = parse_no_pin_skill(&fx.root, &rel)?;
         assert_no_pin_keys(&rel, &fm);
@@ -1226,7 +1228,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         let agent_path = format!(".claude/agents/speccy-{phase}.md");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
     }
-    assert_init_full_body(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
+    assert_init_full_body(&fx.root, ".claude/skills/speccy-bootstrap/SKILL.md")?;
     Ok(())
 }
 
@@ -1243,13 +1245,13 @@ fn assert_claude_reviewer_pins(root: &Utf8Path) -> TestResult {
             assert_eq!(
                 fm.model.as_deref(),
                 Some(*expected_model),
-                "rendered {rel} must carry `model: {expected_model}` (REQ-003 asymmetric pin); got {:?}",
+                "rendered {rel} must carry `model: {expected_model}` (asymmetric pin); got {:?}",
                 fm.model,
             );
             assert_eq!(
                 fm.effort.as_deref(),
                 Some(*expected_effort),
-                "rendered {rel} must carry `effort: {expected_effort}` (REQ-003 asymmetric pin); got {:?}",
+                "rendered {rel} must carry `effort: {expected_effort}` (asymmetric pin); got {:?}",
                 fm.effort,
             );
         }
@@ -1262,8 +1264,8 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
     // Codex half: mirror of the Claude Code test
     // against the Codex host pack. Asserts the three pinned phase-worker
     // TOMLs, the absence invariants for `speccy-review.toml` and
-    // `speccy-init.toml`, the asymmetric reviewer assignment, the
-    // pinned-phase thin-stub bodies, and the full-body `speccy-init`
+    // `speccy-bootstrap.toml`, the asymmetric reviewer assignment, the
+    // pinned-phase thin-stub bodies, and the full-body `speccy-bootstrap`
     // SKILL.md.
     let fx = project_with_name("t007-codex-pins")?;
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -1282,12 +1284,12 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
     let review_toml = fx.root.join(".codex/agents/speccy-review.toml");
     assert!(
         !review_toml.exists(),
-        "REQ-002 / DEC-002: speccy init must not render `.codex/agents/speccy-review.toml` (orchestrator stays unpinned on Codex); found at `{review_toml}`",
+        "speccy init must not render `.codex/agents/speccy-review.toml` (orchestrator stays unpinned on Codex); found at `{review_toml}`",
     );
-    let init_toml = fx.root.join(".codex/agents/speccy-init.toml");
+    let init_toml = fx.root.join(".codex/agents/speccy-bootstrap.toml");
     assert!(
         !init_toml.exists(),
-        "DEC-009 / REQ-010: speccy init must not render `.codex/agents/speccy-init.toml` (no pinned init subagent); found at `{init_toml}`",
+        "speccy init must not render `.codex/agents/speccy-bootstrap.toml` (no pinned init subagent); found at `{init_toml}`",
     );
 
     assert_codex_reviewer_pins(&fx.root)?;
@@ -1297,7 +1299,7 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
         let agent_path = format!(".codex/agents/speccy-{phase}.toml");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
     }
-    assert_init_full_body(&fx.root, ".agents/skills/speccy-init/SKILL.md")?;
+    assert_init_full_body(&fx.root, ".agents/skills/speccy-bootstrap/SKILL.md")?;
     Ok(())
 }
 

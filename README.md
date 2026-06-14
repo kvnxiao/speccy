@@ -1,76 +1,44 @@
 # Speccy
 
-A deterministic feedback engine for spec-driven development with AI agents.
+A deterministic feedback engine for spec-driven development with AI
+agents.
 
-When humans and AI agents collaborate on software over time, intent
-and shipped behaviour tend to drift apart. Speccy makes the contract
-between them **visible**, so the drift becomes loud the moment it
-happens.
-
-Speccy is a feedback engine, not an enforcement system. Shipped
-skills wrap its CLI into an end-to-end loop that your agent harness
-can drive on your behalf.
+When humans and AI agents build software together over time, intent and
+shipped behaviour drift apart. Small misreadings of intent compound until
+what shipped no longer matches what was asked for. Speccy makes the
+contract between intent and behaviour **visible**, so the drift becomes
+loud the moment it happens.
 
 > **Status:** v1.0.0. Speccy is dogfooded by Speccy itself; its
 > implementation history is preserved under `.speccy/archive/`.
 
 ---
 
-## How it works
+## The idea
 
-After `speccy init`, day-to-day usage happens **inside your agent
-harness**, not in the shell. You type slash-commands (e.g.
-`/speccy-plan`), and the shipped skills invoke the underlying CLI on
-your behalf. The CLI is intentionally thin: it renders prompts
-deterministically, queries workspace state, and runs checks. The
-intelligence (loops, personas, and "what to do next" decisions)
-lives in skill files alongside `.speccy/`.
+- **Drift made visible, not blocked.** Speccy is a feedback engine, not
+  an enforcement system. It tells you what looks off and lets you decide.
+  There is no `--strict` mode and no policy file.
+- **Deterministic core, intelligent edges.** A thin Rust CLI renders
+  prompts, queries workspace state, and runs proof-shape checks. It never
+  calls an LLM. The loops, personas, and "what to do next" decisions live
+  in the skill layer your agent harness drives.
+- **Proof shape, not proof scores.** Every requirement maps to at least
+  one check, and every check says what it proves. The CLI flags
+  structural breakage; whether a test is meaningful goes to review.
+- **Adversarial review catches the drift.** A multi-persona review loop
+  (business, tests, security, style, correctness) runs on the same host
+  that did the implementation, with state living in markdown the next
+  iteration reads.
 
-Consequently, the human-facing CLI surface is deliberately lean —
-a small set of flat commands, each with one job; `--json` toggles
-representation, not content. The current command list lives in
-`docs/ARCHITECTURE.md`; a representative sample:
-
-| Command          | When you type it                                                          |
-| ---------------- | ------------------------------------------------------------------------- |
-| `speccy init`    | Once per repo, to bootstrap.                                              |
-| `speccy status`  | Occasionally, to inspect workspace state.                                 |
-| `speccy check`   | Occasionally, to render the Given/When/Then scenarios for one or more specs. |
-| `speccy verify`  | In CI, as the gate.                                                       |
-| `speccy next`    | Mostly invoked by the shipped skills to resolve the next actionable task. |
-| `speccy lock`    | Invoked by `/speccy-decompose` to record the SPEC.md hash into TASKS.md after decomposition. |
-| `speccy vacancy` | Invoked by `/speccy-plan` to allocate the next free `SPEC-NNNN`. |
-| `speccy archive` | Relocates a shipped, dropped, or superseded SPEC into `.speccy/archive/`. |
-
-Phase prompts (`plan`, `tasks`, `implement`, `review`, `report`) are
-not CLI commands. They live as skill bodies in the host pack and
-drive the loop entirely through the CLI verbs above. The
-deterministic core does state queries, hash recording, and proof-
-shape lint only; it never renders natural-text prompts.
-
-All of this lives inside your repo. The `.speccy/` workspace sits at
-the repo root, and the host skill pack is copied into your local
-`.claude/`, `.agents/`, or `.codex/` folder; nothing is written to a
-global `~/.claude/` or `~/.codex/` skills location. While the shipped
-skills and reviewer personas are generic enough to serve as a
-reasonable starting point, you will likely get better results by
-tuning them to the conventions, vocabulary, and tooling of your own
-repo. Committing those edits alongside the code means every
-contributor on the same harness inherits the same tuning, so agent
-output stays consistent across the team rather than drifting per
-developer.
-
-The same locality makes uninstalling trivial. Delete `.speccy/` and
-the host skill files placed under `.claude/` (for Claude Code) or
-`.agents/` and `.codex/` (for Codex), and you are back where you
-started.
+The full reasoning behind these is in
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ---
 
 ## Install
 
-Speccy is not yet published to crates.io, so installation is from
-source:
+Speccy is not yet published to crates.io, so installation is from source:
 
 ```bash
 # from a local clone
@@ -82,462 +50,166 @@ cargo install --path speccy-cli --locked
 cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
 ```
 
-Subsequently, confirm the binary is on `PATH`:
+Confirm the binary is on `PATH`:
 
 ```bash
 speccy --version
 ```
 
-The shipped skill packs target two agent harnesses: **Claude Code**
-and **Codex**.
+The shipped skill packs target two agent harnesses: **Claude Code** and
+**Codex**.
 
 ---
 
-## Onboarding
+## How to use
 
-Speccy works identically whether the project is greenfield (no code
-yet) or brownfield (existing code, lockfiles, and conventions).
-**There is no mode flag, and no separate brownfield workflow**; the
-CLI does the same thing in both cases. The only thing that shifts
-between them is how much of the **product north star** already lives
-in your project's root `AGENTS.md`.
+Bootstrapping is two one-time steps:
 
-### Step 1: Scaffold the workspace
+1. **In the repo (CLI):** run `speccy init` once to scaffold `.speccy/`
+   and install the host skill pack into `.claude/` (or `.agents/` for
+   Codex).
+2. **In your agent harness:** run `/speccy-bootstrap` once. It seeds your
+   root `AGENTS.md` with the product north star and a `## Speccy
+   conventions` section, so the agent knows when to reach for which skill
+   and how the loop runs. Re-run it after a `speccy` upgrade to refresh
+   the conventions and pick up any newly shipped skills.
 
-From the repo root:
-
-```bash
-speccy init
-```
-
-This command:
-
-- Refuses to run if `.speccy/` already exists. Pass `--force` to
-  refresh the shipped files in place after a `speccy` upgrade.
-- Detects the host harness from `.claude/` or `.codex/` on disk.
-  Pass `--host claude-code` or `--host codex` to override detection.
-- Scaffolds the `.speccy/` directory and the `.speccy/specs/` skeleton.
-- Copies the host skill pack into the host-native location:
-  - Claude Code: `.claude/skills/speccy-*/` and `.claude/agents/`
-  - Codex: `.agents/skills/speccy-*/` and `.codex/agents/`
-- Prints every file it will create or overwrite **before** writing
-  anything.
-
-It should be noted that `speccy init` never edits `AGENTS.md`.
-Seeding the product north star is the next step's responsibility,
-and it belongs to a skill rather than the CLI.
-
-> Alternatively, if you would rather drive the whole bootstrap from
-> the agent harness, invoke the `speccy-init` skill (e.g.
-> `/speccy-init` in Claude Code). It calls `speccy init` and
-> subsequently walks the `AGENTS.md` step interactively.
-
-### Step 2: Make sure `AGENTS.md` carries the product north star
-
-Speccy loads the repo-root `AGENTS.md` into every rendered prompt,
-and that file carries two things side by side:
-
-- A **product north star**: what you are building, who for, what
-  "good enough to ship v1" looks like, and what is explicitly out
-  of scope. This is loaded into every planner, implementer, and
-  reviewer prompt.
-- **Project conventions**: hygiene rules, agent behavioural
-  expectations, and references to language and tooling rule files.
-
-The `speccy-init` skill handles three cases without ever overwriting
-existing content:
-
-- **State A — `AGENTS.md` missing entirely.** The skill walks
-  through a short Q&A (what, who for, v1 outcome, quality bar, known
-  unknowns, and non-goals) and writes a fresh `AGENTS.md` whose
-  first section is `## Product north star`.
-- **State B — `AGENTS.md` exists, but no `## Product north star`
-  section.** The skill runs a narrower Q&A and **appends** a
-  `## Product north star` section without touching what is already
-  there.
-- **State C — `AGENTS.md` already has a product north star.** The
-  skill leaves `AGENTS.md` alone, and you simply confirm that the
-  existing content is current before moving on.
-
-If you are not on a host the `speccy-init` skill ships for, you
-populate `AGENTS.md` by hand; this repo's own `AGENTS.md` is a
-working example.
-
-### Step 3: Drive specs end-to-end from your agent harness
-
-From this point onward, the workflow is entirely slash-commands. The
-golden path consists of these recipes:
+After that, day-to-day work happens **inside your agent harness** as
+slash commands. You type a command; the shipped skill invokes the CLI on
+your behalf and knows which verbs to call, when, and in what order.
 
 ```text
-/speccy-plan      Phase 1: draft SPEC.md from the north star
-/speccy-decompose Phase 2: decompose the SPEC into TASKS.md
-/speccy-work      Phase 3: implementer sub-agent loop, task by task
-/speccy-review    Phase 4: adversarial multi-persona review loop
-/speccy-ship      Phase 5: write REPORT.md, open the PR
+/speccy-brainstorm   atomize a fuzzy idea into first-principle requirements
+/speccy-plan         draft SPEC.md from the product north star
+/speccy-decompose    break the SPEC into agent-sized tasks (TASKS.md)
+/speccy-orchestrate  drive work + review + vet, task by task, until ready to ship
+/speccy-ship         write REPORT.md and open the PR
 ```
 
-If you would rather not chain the per-task recipes by hand, the
-shipped orchestrator drives the full loop end-to-end:
-
-```text
-/speccy-orchestrate   Chain /speccy-work and /speccy-review across every
-                      task in one SPEC, then hand off to /speccy-vet
-                      for the pre-ship drift check before stopping at the
-                      ship boundary.
-/speccy-vet Pre-ship SPEC-vs-implementation drift review with an
-                      autonomous fix-retry loop; invoked by the orchestrator
-                      and also runnable on its own.
-```
-
-In addition, for mid-loop scope changes, there is one more recipe:
-
-```text
-/speccy-amend     Surgically edit SPEC.md and reconcile TASKS.md
-```
-
-Each skill knows which `speccy` CLI commands to invoke, when, and in
-what order, so you are not expected to chain them manually.
-Naturally, if a skill is wrong or missing a step, you should fix the
-skill file directly under `.claude/skills/` or `.agents/skills/`;
-thereafter, the next contributor inherits the fix rather than
-rediscovering the friction themselves.
-
-See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the
-canonical contract on what each phase produces, and on how the state
-machine transitions between them.
-
----
-
-## Lifecycle
-
-End-to-end, the workflow has three zones: a **human-led planning
-phase** at the top, an **autonomous work-and-review loop** in the
-middle driven by `/speccy-orchestrate`, and a **human-confirmed
-ship** at the bottom. Inside the autonomous zone, the orchestrator
-only stops and surfaces to you when a bounded budget is exhausted
-(5 task retries, 3 drift rounds); otherwise it drives itself.
+The loop has three zones: a human-led planning phase, an autonomous
+work-and-review loop in the middle, and a human-confirmed ship at the
+end. The autonomous zone runs itself and only surfaces to you when a
+bounded budget is exhausted (a task that keeps failing review, or a
+pre-ship drift check that won't converge).
 
 ```mermaid
 flowchart TD
-    Start([Fuzzy idea]) --> Init["/speccy-init<br/>one-time bootstrap"]
+    Idea([Fuzzy idea]) --> Init["speccy init (CLI)<br/>scaffold + install skills"]
 
-    subgraph Plan_zone [Human-led planning]
+    subgraph Plan [Plan · human-led]
       direction TB
-      Brain["/speccy-brainstorm<br/>Socratic atomization"]
-      BrainGate{{HUMAN gate<br/>approve framing}}
-      PlanCmd["/speccy-plan<br/>draft SPEC.md"]
-      TasksCmd["/speccy-decompose<br/>decompose TASKS.md"]
-      Brain --> BrainGate --> PlanCmd --> TasksCmd
+      Brain["/speccy-brainstorm"]
+      G1{{HUMAN gate:<br/>approve framing}}
+      PlanCmd["/speccy-plan"]
+      Decomp["/speccy-decompose"]
+      Brain --> G1 --> PlanCmd --> Decomp
     end
 
-    Init --> Brain
-    TasksCmd --> Orch["/speccy-orchestrate"]
-
-    subgraph Auto_zone [Autonomous work-and-review loop]
+    subgraph Loop [Work + review + vet · autonomous]
       direction TB
-      NextQ["speccy next --json<br/>(re-queried each iteration<br/>for ground truth)"]
-      Work["speccy-work sub-agent<br/>one implementer pass"]
-      ReviewFan["speccy-review fan-out (parallel):<br/>reviewer-business · reviewer-tests<br/>reviewer-security · reviewer-style<br/>reviewer-correctness"]
-      NextQ -->|kind=work| Work
-      Work --> NextQ
-      NextQ -->|kind=review| ReviewFan
-      ReviewFan -->|pass or blocking| NextQ
+      Orch["/speccy-orchestrate"]
     end
 
-    Orch --> NextQ
-    ReviewFan -.->|5 retries on same task| Stuck{{HUMAN surfaced<br/>stuck task}}
-    NextQ -->|kind=ship| Vet["/speccy-vet · holistic gate"]
-
-    subgraph Ship_zone [Vet, then human-confirmed ship]
+    subgraph Ship [Ship · human-confirmed]
       direction TB
-      Drift["Phase 1: vet-reviewer ⇄ vet-implementer<br/>(sequential, up to 3 drift rounds)"]
-      Simp["Phase 2: vet-simplifier<br/>scan + apply"]
-      Gate["Phase 3: append gate block<br/>to VET.md"]
-      ShipGate{{HUMAN gate<br/>confirm before ship}}
-      Ship["/speccy-ship<br/>write REPORT, open PR"]
-      Drift -->|pass| Simp --> Gate --> ShipGate --> Ship
-      Drift -.->|3 rounds exhausted| DriftFail{{HUMAN surfaced<br/>drift fail}}
+      G2{{HUMAN gate:<br/>confirm before ship}}
+      ShipCmd["/speccy-ship<br/>REPORT.md + PR"]
+      G2 --> ShipCmd
     end
 
-    Vet --> Drift
-    Ship --> Done([PR opened])
-
-    Stuck -.->|optional| Amend["/speccy-amend<br/>edit SPEC, reconcile TASKS"]
-    DriftFail -.->|optional| Amend
-    Amend -.-> Orch
+    Init --> Boot["/speccy-bootstrap<br/>seed AGENTS.md · one-time"]
+    Boot --> Brain
+    Decomp --> Orch
+    Orch --> G2
+    ShipCmd --> Done([PR opened])
 
     classDef human fill:#ffe4b5,stroke:#cc8400,stroke-width:2px,color:#000
-    class BrainGate,Stuck,DriftFail,ShipGate human
+    class G1,G2 human
 ```
 
-### Where the human steps in
+`/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you,
+because shipping opens a PR and is not reversible. Two more recipes round
+out the set: `/speccy-amend` for mid-loop SPEC changes, and `/speccy-vet`
+for the pre-ship drift check (the orchestrator runs it for you, but it is
+runnable on its own).
 
-The autonomous loop is deliberately bookended by human judgment, not
-threaded with it. The shipped skills only stop and ask at four
-boundaries:
-
-1. **Brainstorm approval** (start) — `/speccy-brainstorm` has a
-   hard gate at the end of its Socratic exchange. The framing does
-   not flow into `/speccy-plan` until you explicitly approve it.
-2. **Stuck task** (mid-loop, surfaced) — if `/speccy-orchestrate`
-   sees the same task flip back to `pending` after review **5
-   times in a row**, the loop stops and surfaces the per-task
-   journal at `.speccy/specs/NNNN-slug/journal/T-NNN.md`. Typical
-   resolution is `/speccy-amend` to reshape the SPEC or task, then
-   resume the loop.
-3. **Drift failure** (pre-ship, surfaced) — if `/speccy-vet`'s
-   drift loop exhausts its 3-round budget without converging, the
-   loop stops and surfaces the holistic findings from
-   `.speccy/specs/NNNN-slug/journal/VET.md`. Typical resolution is
-   again `/speccy-amend` to align the SPEC with what was built, or
-   to revert and redo the offending task.
-4. **Pre-ship confirmation** (end) — even when the holistic gate
-   returns `verdict="pass"`, `/speccy-orchestrate` stops one step
-   short of `/speccy-ship` and asks you. Ship opens a PR (which is
-   irreversible), so it is never auto-invoked.
-
-The planning steps in between (`/speccy-plan` and `/speccy-decompose`)
-are also human-driven, but they do not contain explicit hard gates
-inside the skills themselves — you simply read each step's output
-and type the next slash command. If you trust the prior output, you
-can chain them back-to-back without intervention.
-
-Everything inside the autonomous zone — per-task implementer
-passes, the five-persona parallel review fan-out, the holistic
-drift-fix loop, and the simplifier polish pass — runs without
-asking. The shipped skills are tuned to be loud at the boundaries
-that matter and quiet in between.
+The phases, gates, and review fan-out are documented in
+[`docs/WORKFLOW.md`](./docs/WORKFLOW.md).
 
 ---
 
-## Repo layout after `speccy init`
+## What the CLI gives you
 
-```text
-AGENTS.md                       Product north star + conventions (root)
-CLAUDE.md                       Symlink to AGENTS.md (Claude Code reads this)
+The CLI is a thin deterministic core the skills drive for you, so you
+rarely call it by hand. The shape worth knowing:
 
-.speccy/
-  specs/
-    NNNN-slug/                  One spec, flat layout
-      SPEC.md                   Frontmatter + PRD prose + nested <requirement>/<scenario>/<decision> elements + Changelog
-      TASKS.md                  Frontmatter (spec_hash_at_generation) + <task> elements
-      journal/T-NNN.md          Per-task implementer/reviewer/blockers activity prose (SPEC-0037)
-      journal/VET.md            Per-SPEC pre-ship vet journal: <drift-review>,
-                                <holistic-fix>, <simplifier-*>, and trailing
-                                <gate> blocks. The trailing <gate> is what
-                                `speccy next` reads to decide whether the
-                                ship gate is fresh (SPEC-0044).
-      REPORT.md                 Frontmatter (outcome) + <report>/<coverage> elements (end of loop)
+- `speccy init` scaffolds the workspace and copies the host skill pack.
+- `speccy status` / `speccy next` report workspace state and the derived
+  next action.
+- `speccy check` renders the Given/When/Then scenarios for a spec or
+  task.
+- `speccy verify` is your CI gate (see below).
 
-.claude/                        (if host is Claude Code)
-  skills/speccy-*/              Workflow recipes (init, brainstorm, plan,
-                                decompose, work, review, amend, ship,
-                                orchestrate, vet). Interactive skills
-                                eject as full-body SKILL.md; pinned phase
-                                workers (decompose, work, ship) eject as a
-                                SKILL.md body that defers to the matching
-                                agent file as the canonical procedure source.
-  agents/speccy-{decompose,work,ship}.md  Pinned phase-worker sub-agents (full body)
-  agents/reviewer-*.md                    Reviewer persona sub-agents
-  agents/vet-{reviewer,implementer,simplifier}.md
-                                Vet sub-agents driven by /speccy-vet
-                                (drift review + drift fix + simplifier polish)
-  agents/plan-{explorer,architect}.md     Read-only plan-time grounding sub-agents
-  speccy-references/                      Host-shared reference files imported
-                                from multiple skill bodies (evidence.md,
-                                journal-blockers.md, reconcile-policy.md,
-                                retry-shape.md). Skill-local references
-                                (e.g. spec.md, tasks.md) live under each
-                                skill's own references/ subdirectory.
-
-.agents/                        (if host is Codex)
-  skills/speccy-*/                          Codex skill SKILL.md files
-  speccy-references/                        Codex twin of host-shared refs
-.codex/
-  agents/speccy-{decompose,work,ship}.toml  Pinned phase-worker sub-agents
-  agents/reviewer-*.toml                    Reviewer persona sub-agents
-  agents/vet-{reviewer,implementer,simplifier}.toml
-                                            Vet sub-agents (Codex twins)
-  agents/plan-{explorer,architect}.toml     Plan-time grounding sub-agents (Codex twins)
-```
-
-The requirement-to-scenario graph lives in-band as XML element tags
-inside `SPEC.md`; there is no per-spec `spec.toml`.
-
-Specs may additionally be grouped under an optional **mission
-folder** (`.speccy/specs/[focus]/MISSION.md` plus one folder per
-spec inside the focus). Grouping is opt-in, however. Solo projects
-with a single focus area typically stay flat, and mission folders
-earn their existence only when two or more related specs share
-enough context that loading them together at plan time becomes
-cheaper than rediscovering the context on every run.
+Every command has stable text output, and a handful carry stable `--json`
+envelopes for tooling. The full per-command surface is in
+[`docs/CLI.md`](./docs/CLI.md).
 
 ---
 
-## Model pinning
+## CI gate
 
-Speccy's shipped skill packs pin specific model and effort tiers for
-each phase of the development loop. The pin assignment is asymmetric
-and reflects the work-shape of each role: mechanical phases pin a
-mid-tier model so they run cheaply; adversarial reviewers pin a
-higher tier so they catch real drift. Interactive / orchestrator
-skills (`/speccy-init`, `/speccy-brainstorm`, `/speccy-plan`,
-`/speccy-amend`, `/speccy-review`, `/speccy-orchestrate`,
-`/speccy-vet`) stay unpinned and inherit whatever model the parent
-session is using.
-
-### Pin assignment
-
-| Phase / persona         | Claude Code (`.claude/agents/...md`)    | Codex (`.codex/agents/...toml`)              | Agent file ships? |
-| ----------------------- | --------------------------------------- | -------------------------------------------- | ----------------- |
-| `speccy-decompose`      | `model: opus[1m]`, `effort: medium`     | `model = "gpt-5.5"`, reasoning effort medium | yes               |
-| `speccy-work`           | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort medium | yes               |
-| `speccy-ship`           | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort medium | yes               |
-| `speccy-init`           | unpinned, inherits session              | unpinned, inherits session                   | no                |
-| `speccy-review`         | unpinned, inherits session              | unpinned, inherits session                   | no                |
-| `reviewer-business`     | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `reviewer-tests`        | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `reviewer-architecture` | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `reviewer-security`     | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `reviewer-style`        | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
-| `reviewer-correctness`  | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `reviewer-docs`         | `model: sonnet[1m]`, `effort: medium`   | `model = "gpt-5.5"`, reasoning effort low    | yes               |
-| `vet-reviewer`          | `model: opus[1m]`, `effort: xhigh`      | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `vet-implementer`       | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort low    | yes               |
-| `vet-simplifier`        | `model: opus[1m]`, `effort: medium`     | `model = "gpt-5.5"`, reasoning effort low    | yes               |
-| `plan-explorer`         | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-| `plan-architect`        | `model: opus[1m]`, `effort: high`       | `model = "gpt-5.5"`, reasoning effort high   | yes               |
-
-The `[1m]` suffix selects the 1M-context variant on Claude Code so
-each agent can read the full SPEC, the full diff, and the relevant
-TASKS.md slice without truncation. On Codex, `gpt-5.5` covers every
-pinned role and the asymmetric work-shape is carried entirely by
-`model_reasoning_effort`.
-
-The pinned phase workers (`speccy-decompose`, `speccy-work`,
-`speccy-ship`) ship sub-agent files. `speccy-init` and
-`speccy-review` ship no agent file on either host — only the
-SKILL.md surface — because both phases need to drive the parent
-session directly (interactive Q&A in init's case; serial TASKS.md
-writes in review's case).
-
-### Activating a pin (opt-in)
-
-The pin lives in the agent file, not the slash-command surface.
-Typing `/speccy-work` runs the workflow in the **parent session at
-the parent session's model**; the agent file is ignored. To
-activate the pin, invoke the sub-agent explicitly before running
-the phase:
-
-- **Claude Code:** `/agent speccy-work` (or use the host's sub-agent
-  spawning tool), then run `/speccy-work`.
-- **Codex:** invoke the equivalent sub-agent spawner against
-  `.codex/agents/speccy-work.toml`, then run `/speccy-work`.
-
-For the pinned phases, the SKILL.md body defers to the matching
-agent file as the canonical procedure source. The agent file's
-body is the single on-disk source of truth for that phase.
-`/speccy-init`'s SKILL.md and `/speccy-review`'s SKILL.md both
-remain full-body because there is no sub-agent file for either
-to defer to.
-
-The `/speccy-review` orchestrator stays unpinned on both hosts
-deliberately: it is the sole writer to `TASKS.md` during the review
-loop (reviewer sub-agents return their verdicts and the
-orchestrator serializes the state transition), and it needs the
-parent session's full capacity to fan out, parse return messages,
-and consolidate verdicts without dropping state. Pinning it to a
-sub-agent would either force a serial-write race or strand the
-verdict-consolidation logic in a context that does not own
-`TASKS.md`.
-
-> **Design lesson.** An earlier draft of this work auto-forked the
-> mechanical phases into pinned sub-agents via Claude Code's
-> `context: fork` mechanism. Auto-forking hides the sub-agent's
-> tool output from the parent session by design, which on
-> multi-minute phase work produces minutes of dead air in the
-> parent UI with no progress signal. The opt-in `/agent` surface
-> preserves the cost-and-time pin without the silent-by-design UX
-> cost.
-
-### Overriding a pin
-
-The shipped pins are defaults, not policy. To swap models or
-remove a pin entirely, edit the agent file's YAML or TOML
-frontmatter under `.claude/agents/` or `.codex/agents/` and commit
-the change. Examples:
-
-- Lock `speccy-work` to a specific Claude version for
-  reproducibility: change `model: opus[1m]` to
-  `model: claude-opus-4-8[1m]` in
-  `.claude/agents/speccy-work.md`.
-- Run a reviewer at a lighter tier in a cost-sensitive repo:
-  change `model: opus[1m]` to `model: sonnet[1m]` (and adjust
-  `effort:` accordingly) in
-  `.claude/agents/reviewer-business.md`.
-- Remove the pin entirely so the sub-agent inherits the parent
-  session's model: delete the `model:` and `effort:` lines.
-
-Pins use **aliases** (`sonnet[1m]`, `opus[1m]`, `gpt-5.5`) rather
-than long-form versioned snapshot IDs by default so they float
-forward as vendors ship newer generations of each tier. Users who
-want byte-stable reproducibility across a release boundary can
-lock to a specific version by editing the alias to a long-form ID
-in the ejected file.
-
----
-
-## CI integration
-
-Add `speccy verify` to your pipeline as a gate:
+Add `speccy verify` to your pipeline:
 
 ```yaml
 - name: speccy verify
   run: speccy verify
 ```
 
-It exits non-zero when the proof shape is broken (parse failures,
-missing required frontmatter, requirements without scenarios,
-dangling requirement or scenario references, journal-shape
-violations, and so on), and zero otherwise. Only error-level lint
-findings gate the exit code; spec-hash drift (TASKS.md stale
-relative to SPEC.md) is surfaced as a warning, not a failure. Pass
-`--json` for a schema-versioned envelope that downstream tooling can
-parse.
-
-`speccy verify` is the **only** command that exits non-zero on
-findings. Everything else surfaces problems and exits zero, so that
-drift stays loud while the CLI itself never blocks you mid-loop.
+It exits non-zero when the proof shape is broken (parse failures, missing
+required frontmatter, requirements without scenarios, dangling
+references, journal-shape violations) and zero otherwise. Spec-hash drift
+is a warning, not a failure. It never runs your project tests; your own
+test commands run alongside it. `speccy verify` is the only command that
+exits non-zero on findings, so drift stays loud while the CLI never
+blocks you mid-loop.
 
 ---
 
-## Design
+## It lives in your repo
 
-Speccy commits to a small set of durable principles:
+Everything Speccy installs sits inside your repo. The `.speccy/`
+workspace holds your specs; the host skill pack is copied into your local
+`.claude/`, `.agents/`, or `.codex/` folder. Nothing is written to a
+global skills location.
 
-1. **Feedback, not enforcement.** Speccy makes drift visible; it
-   does not block agents from making mistakes.
-2. **Deterministic core, intelligent edges.** The Rust CLI is
-   mechanical: it renders prompts, queries state, and runs checks.
-   It does not call LLMs.
-3. **Proof shape, not proof scores.** Every Requirement maps to at
-   least one Check, and every Check declares what it proves. One
-   structural anti-pattern is flagged (no-op commands as sole
-   proof); the rest is review's job.
-4. **Review owns semantic judgment.** Multi-persona adversarial
-   review (business, tests, security, style, and correctness by
-   default) is the mechanism by which drift gets caught. Personas
-   live as markdown skills.
-5. **Stay small.** A handful of nouns (Mission, Spec, Requirement,
-   Task, Check), a small flat command surface, and no mode toggles.
-   `--json` toggles representation, never content.
-6. **Surface unknowns; never invent.** An ambiguous spec means stop
-   and surface the ambiguity; an inability to validate something
-   means say so out loud.
+```text
+AGENTS.md            Product north star + conventions (root; CLAUDE.md symlinks here)
+.speccy/specs/       One folder per spec: SPEC.md, TASKS.md, journal/, REPORT.md
+.speccy/archive/     Shipped specs, relocated out of the hot path
+.claude/skills/      Workflow recipes (speccy-plan, -work, -review, ...)
+.claude/agents/      Pinned phase workers + reviewer/vet/plan sub-agents
+```
 
-The full architecture (schema, lint codes, JSON contracts, and the
-deliberate list of "what we do not do") lives in
-[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+The shipped skills and personas are a reasonable starting point, but you
+will get better results tuning them to your repo's conventions,
+vocabulary, and tooling. Commit those edits and every contributor on the
+same harness inherits the tuning, so agent output stays consistent across
+the team. To uninstall, delete `.speccy/` and the host skill files and
+you are back where you started. The full layout is in
+[`docs/SCHEMA.md`](./docs/SCHEMA.md).
+
+---
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md): design rationale.
+  What Speccy is, what it believes, what it deliberately doesn't do.
+- [`docs/CLI.md`](./docs/CLI.md): every command, flag, and `--json`
+  envelope.
+- [`docs/SCHEMA.md`](./docs/SCHEMA.md): file layout, artifact templates,
+  element grammars, and the lint registry.
+- [`docs/WORKFLOW.md`](./docs/WORKFLOW.md): the loop, the review
+  personas, and the per-phase model pins.
 
 ---
 

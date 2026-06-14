@@ -132,7 +132,7 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
                  contains `.speccy/specs/*` which is a glob discovery of \
                  .speccy/specs/; use `speccy status --json`, \
                  `speccy next --json`, or `speccy vacancy --json` CLI \
-                 envelopes instead (SPEC-0033 REQ-008 / CHK-014)",
+                 envelopes instead",
                 line_no = idx + 1,
             );
         }
@@ -163,8 +163,7 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
                 "module file `resources/{path}` \
                  contains `{pattern}` which is a {desc}; \
                  obtain the path from `speccy status --json` or \
-                 `speccy next --json` path fields instead \
-                 (SPEC-0033 REQ-008 / CHK-014)",
+                 `speccy next --json` path fields instead",
             );
         }
 
@@ -187,7 +186,7 @@ fn chk014_no_direct_speccy_resource_patterns_in_skills_or_phases() {
             "module file `resources/{path}` \
              contains a directory-enumeration instruction targeting \
              `.speccy/specs/`; use `speccy status --json` or \
-             `speccy next --json` instead (SPEC-0033 REQ-008 / CHK-014)",
+             `speccy next --json` instead",
         );
     }
 }
@@ -207,8 +206,7 @@ fn chk015_speccy_plan_uses_vacancy_not_status_for_new_spec_id() {
         !body.contains("speccy status --json"),
         "`resources/modules/skills/speccy-plan.md` must NOT invoke \
          `speccy status --json` to allocate a new SPEC ID \
-         — use `speccy vacancy --json` instead \
-         (SPEC-0033 REQ-008 / CHK-015)",
+         — use `speccy vacancy --json` instead",
     );
 }
 
@@ -231,43 +229,16 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
     // invocation that should no longer appear in skill or persona bodies.
     // We look for them in code fences where they would be executed.
     let deleted_verb_patterns: &[(&str, &str)] = &[
-        ("speccy plan ", "`speccy plan` (deleted in SPEC-0033 T-001)"),
-        (
-            "speccy plan\n",
-            "`speccy plan` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy tasks ",
-            "`speccy tasks` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy tasks\n",
-            "`speccy tasks` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy implement ",
-            "`speccy implement` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy implement\n",
-            "`speccy implement` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy review ",
-            "`speccy review` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy review\n",
-            "`speccy review` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy report ",
-            "`speccy report` (deleted in SPEC-0033 T-001)",
-        ),
-        (
-            "speccy report\n",
-            "`speccy report` (deleted in SPEC-0033 T-001)",
-        ),
+        ("speccy plan ", "`speccy plan` (deleted)"),
+        ("speccy plan\n", "`speccy plan` (deleted)"),
+        ("speccy tasks ", "`speccy tasks` (deleted)"),
+        ("speccy tasks\n", "`speccy tasks` (deleted)"),
+        ("speccy implement ", "`speccy implement` (deleted)"),
+        ("speccy implement\n", "`speccy implement` (deleted)"),
+        ("speccy review ", "`speccy review` (deleted)"),
+        ("speccy review\n", "`speccy review` (deleted)"),
+        ("speccy report ", "`speccy report` (deleted)"),
+        ("speccy report\n", "`speccy report` (deleted)"),
     ];
 
     for (path, body) in &all_module_bodies() {
@@ -277,7 +248,7 @@ fn no_old_cli_verbs_in_skill_or_phase_bodies() {
                 "module file `resources/{path}` \
                  contains `{pattern}` which references the deleted command \
                  {desc}; remove or replace with the equivalent current \
-                 workflow (SPEC-0033 REQ-008)",
+                 workflow",
             );
         }
     }
@@ -297,8 +268,7 @@ fn no_kind_filter_flag_in_skill_or_phase_bodies() {
             "module file `resources/{path}` \
              contains `--kind` which references the removed \
              `speccy next --kind` flag; replace with \
-             `speccy next SPEC-NNNN --json` or `speccy next --json` \
-             (SPEC-0033 REQ-008 / T-004)",
+             `speccy next SPEC-NNNN --json` or `speccy next --json`",
         );
     }
 }
@@ -396,7 +366,7 @@ fn collect_skill_local_refs(root: &std::path::Path, out: &mut Vec<ReferenceFile>
                 .join(&name);
             assert!(
                 codex_path.is_file(),
-                "SPEC-0038 REQ-007 cross-host parity: Claude Code ships \
+                "cross-host parity: Claude Code ships \
                  `{}` but Codex sibling `{}` is missing",
                 claude_path.display(),
                 codex_path.display(),
@@ -441,7 +411,7 @@ fn collect_shared_refs(root: &std::path::Path, out: &mut Vec<ReferenceFile>) {
         let codex_path = codex_shared.join(&name);
         assert!(
             codex_path.is_file(),
-            "SPEC-0038 REQ-007 cross-host parity: Claude Code ships \
+            "cross-host parity: Claude Code ships \
              `{}` but Codex sibling `{}` is missing",
             claude_path.display(),
             codex_path.display(),
@@ -555,7 +525,7 @@ fn chk022_no_orphan_references() {
     let refs = enumerate_reference_files(&root);
     assert!(
         !refs.is_empty(),
-        "SPEC-0038 REQ-007: expected at least one reference file under \
+        "expected at least one reference file under \
          .claude/skills/*/references/ or .claude/speccy-references/; \
          found none — run `speccy init --force` against the workspace \
          to refresh the dogfood tree",
@@ -591,7 +561,7 @@ fn chk022_no_orphan_references() {
             .count();
         assert!(
             claude_hits >= 1,
-            "SPEC-0038 REQ-007: reference file `{}` shipped under the \
+            "reference file `{}` shipped under the \
              Claude Code host pack has zero consuming-body pointers; \
              expected at least one body under .claude/skills/ or \
              .claude/agents/ to contain the substring `{}`",
@@ -606,7 +576,7 @@ fn chk022_no_orphan_references() {
             .count();
         assert!(
             codex_hits >= 1,
-            "SPEC-0038 REQ-007: reference file `{}` shipped under the \
+            "reference file `{}` shipped under the \
              Codex host pack has zero consuming-body pointers; \
              expected at least one body under .agents/skills/ or \
              .codex/agents/ to contain the substring `{}`",
@@ -623,7 +593,7 @@ fn chk022_no_orphan_references() {
         });
         if let Some(off) = first_diff(&claude_bytes, &codex_bytes) {
             panic_with_message(&format!(
-                "SPEC-0038 REQ-007 cross-host parity: reference `{}` \
+                "cross-host parity: reference `{}` \
                  differs from sibling `{}` at byte offset {off}",
                 r.claude_path.display(),
                 r.codex_path.display(),
@@ -639,7 +609,7 @@ fn chk022_no_orphan_references() {
         });
         if let Some(off) = first_diff(&source_bytes, &claude_bytes) {
             panic_with_message(&format!(
-                "SPEC-0038 REQ-007 source-to-host parity: canonical source \
+                "source-to-host parity: canonical source \
                  `{}` differs from Claude Code host copy `{}` at byte \
                  offset {off}",
                 r.source.display(),
@@ -650,7 +620,7 @@ fn chk022_no_orphan_references() {
         // (3) Source-to-host parity (Codex).
         if let Some(off) = first_diff(&source_bytes, &codex_bytes) {
             panic_with_message(&format!(
-                "SPEC-0038 REQ-007 source-to-host parity: canonical source \
+                "source-to-host parity: canonical source \
                  `{}` differs from Codex host copy `{}` at byte offset {off}",
                 r.source.display(),
                 r.codex_path.display(),
@@ -668,7 +638,7 @@ fn chk022_no_orphan_references() {
             .unwrap_or_default();
         assert_eq!(
             source_name, r.name,
-            "SPEC-0038 REQ-007: reference name `{}` does not match its \
+            "reference name `{}` does not match its \
              source basename `{source_name}`",
             r.name,
         );

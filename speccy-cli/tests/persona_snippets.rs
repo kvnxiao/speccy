@@ -45,7 +45,7 @@ fn require_module_file(name: &str) -> &'static str {
     read_module_file(name).unwrap_or_else(|| {
         panic_with_message(&format!(
             "RESOURCES bundle must contain `modules/personas/{name}`; \
-             T-006 requires this snippet to be created",
+             this snippet must be created",
         ))
     })
 }
@@ -91,7 +91,7 @@ fn snippet_files_exist() {
         let body = read_module_file(snippet);
         assert!(
             body.is_some(),
-            "snippet `resources/modules/personas/{snippet}` must exist (T-006 REQ-007); \
+            "snippet `resources/modules/personas/{snippet}` must exist; \
              create it alongside the six reviewer persona body files",
         );
         let content = body.expect("checked above");
@@ -114,7 +114,7 @@ fn no_partials_subdirectory() {
         .join("_partials");
     assert!(
         !partials.exists(),
-        "`resources/modules/personas/_partials/` must not exist (REQ-007); \
+        "`resources/modules/personas/_partials/` must not exist; \
          snippets live co-located in the personas/ directory itself",
     );
 }
@@ -129,7 +129,7 @@ fn persona_bodies_include_verdict_contract_snippet() {
         let body = require_module_file(&file);
         assert!(
             body.contains(expected_include),
-            "persona `{file}` must contain `{expected_include}` exactly once (T-006 REQ-007); \
+            "persona `{file}` must contain `{expected_include}` exactly once; \
              the verdict-return contract text is shared across all six personas",
         );
     }
@@ -145,7 +145,7 @@ fn persona_bodies_include_diff_fetch_snippet() {
         let body = require_module_file(&file);
         assert!(
             body.contains(expected_include),
-            "persona `{file}` must contain `{expected_include}` (T-006 REQ-007); \
+            "persona `{file}` must contain `{expected_include}`; \
              the diff-fetch command boilerplate is shared across all six personas",
         );
     }
@@ -161,7 +161,7 @@ fn persona_bodies_include_inline_note_format_snippet() {
         let body = require_module_file(&file);
         assert!(
             body.contains(expected_include),
-            "persona `{file}` must contain `{expected_include}` (T-006 REQ-007); \
+            "persona `{file}` must contain `{expected_include}`; \
              the inline note format template is shared across all six personas",
         );
     }
@@ -202,7 +202,7 @@ fn no_master_template_file_exists() {
             assert!(
                 !name.ends_with(".j2"),
                 "master template file `{name}` must not exist under `resources/modules/personas/`; \
-                 the six persona body files are the source of truth (REQ-007)",
+                 the six persona body files are the source of truth",
             );
             // No file like "reviewer.md.tmpl" which would serve as a master template
             let is_reviewer_master_tmpl =

@@ -172,7 +172,7 @@ fn commit_recipe_states_idempotency_check_exactly_once() {
     assert_eq!(
         occurrences, 1,
         "commit-recipe.md must state the `git diff --cached --quiet` idempotency check \
-         exactly once (CHK-008 'recipe stated once'); found {occurrences}",
+         exactly once ('recipe stated once'); found {occurrences}",
     );
 }
 
@@ -187,7 +187,7 @@ fn commit_recipe_delegates_trailer_via_include() {
     assert!(
         body.contains(expected_include),
         "commit-recipe.md must delegate the trailer to identity-sourcing via \
-         `{expected_include}` (CHK-008 delegation property)",
+         `{expected_include}` (delegation property)",
     );
 
     // The canonical identity-sourcing rule opens with this section heading.
@@ -196,7 +196,7 @@ fn commit_recipe_delegates_trailer_via_include() {
     assert!(
         !body.contains("## Sourcing your recorded identity"),
         "commit-recipe.md must not restate the identity-sourcing rule inline; \
-         it must pull it in via `{expected_include}` (CHK-008 delegation property)",
+         it must pull it in via `{expected_include}` (delegation property)",
     );
 }
 
@@ -209,14 +209,14 @@ fn commit_recipe_specifies_no_git_short_circuit() {
     assert!(
         body.contains("git rev-parse --is-inside-work-tree"),
         "commit-recipe.md must probe for a git repository via \
-         `git rev-parse --is-inside-work-tree` to drive the no-git short-circuit (CHK-013)",
+         `git rev-parse --is-inside-work-tree` to drive the no-git short-circuit",
     );
 
     let lower = body.to_lowercase();
     assert!(
         lower.contains("not a git repository") && lower.contains("without erroring"),
         "commit-recipe.md must state that when the project is not a git repository the \
-         commit step is skipped without erroring (CHK-013, REQ-010)",
+         commit step is skipped without erroring",
     );
 }
 
@@ -229,26 +229,26 @@ fn branch_guard_names_three_detection_tiers_in_order() {
 
     let tier1 = body
         .find("origin/HEAD")
-        .expect("branch-guard.md must name the `origin/HEAD` detection tier (CHK-003)");
+        .expect("branch-guard.md must name the `origin/HEAD` detection tier");
     let tier2 = body
         .find("init.defaultBranch")
-        .expect("branch-guard.md must name the `init.defaultBranch` detection tier (CHK-003)");
+        .expect("branch-guard.md must name the `init.defaultBranch` detection tier");
     // Tier 3 is the `{main, master}` name-match fallback. Anchor on the
     // distinctive `` `main` or `master` `` phrasing rather than bare `main`,
     // which would also match the illustrative `origin/main` in tier 1.
     let tier3 = body
         .find("`main` or `master`")
-        .expect("branch-guard.md must name the `{main, master}` name-match tier (CHK-003)");
+        .expect("branch-guard.md must name the `{main, master}` name-match tier");
 
     assert!(
         tier1 < tier2,
         "branch-guard.md must place the `origin/HEAD` tier before the \
-         `init.defaultBranch` tier (CHK-003 ordered chain)",
+         `init.defaultBranch` tier (ordered chain)",
     );
     assert!(
         tier2 < tier3,
         "branch-guard.md must place the `{{main, master}}` name-match tier last, \
-         after `init.defaultBranch` (CHK-003 ordered chain)",
+         after `init.defaultBranch` (ordered chain)",
     );
 
     // The chain is ordered "each tier used only when the prior does not
@@ -256,7 +256,7 @@ fn branch_guard_names_three_detection_tiers_in_order() {
     assert!(
         body.contains("does not resolve"),
         "branch-guard.md must gate each detection tier on the prior one not \
-         resolving (CHK-003 'each tier used only when the prior does not resolve')",
+         resolving ('each tier used only when the prior does not resolve')",
     );
 }
 
@@ -273,35 +273,35 @@ fn branch_guard_states_creation_condition_and_notice() {
     assert!(
         body.contains("spec-") && lower.contains("basename"),
         "branch-guard.md must derive the branch name as the `spec-` prefix plus the \
-         spec directory basename (CHK-001 derivation property)",
+         spec directory basename (derivation property)",
     );
     assert!(
         body.contains("git switch -c"),
         "branch-guard.md must use `git switch -c` to create and switch to the branch \
-         (CHK-002 create path)",
+         (create path)",
     );
 
     // Creation condition: create only on default-branch-or-detached.
     assert!(
         lower.contains("detached"),
         "branch-guard.md must create the branch on the default-branch-or-detached-HEAD \
-         condition (CHK-002)",
+         condition",
     );
     assert!(
         lower.contains("reuse") || lower.contains("reuses"),
         "branch-guard.md must reuse the current branch when HEAD is on any other branch \
-         (CHK-002 reuse path)",
+         (reuse path)",
     );
 
     // Notice: emitted only on the create path.
     assert!(
         lower.contains("notice"),
-        "branch-guard.md must describe the one-line creation notice (CHK-002)",
+        "branch-guard.md must describe the one-line creation notice",
     );
     assert!(
         lower.contains("only on the create path") || lower.contains("not on the reuse path"),
         "branch-guard.md must emit the creation notice only on the create path, never on \
-         the reuse path (CHK-002)",
+         the reuse path",
     );
 }
 
@@ -314,14 +314,14 @@ fn branch_guard_specifies_no_git_short_circuit() {
     assert!(
         body.contains("git rev-parse --is-inside-work-tree"),
         "branch-guard.md must probe for a git repository via \
-         `git rev-parse --is-inside-work-tree` to drive the no-git short-circuit (CHK-013)",
+         `git rev-parse --is-inside-work-tree` to drive the no-git short-circuit",
     );
 
     let lower = body.to_lowercase();
     assert!(
         lower.contains("not a git repository") && lower.contains("without erroring"),
         "branch-guard.md must state that when the project is not a git repository the \
-         branch-guard is skipped without erroring (CHK-013, REQ-010)",
+         branch-guard is skipped without erroring",
     );
 }
 
@@ -335,7 +335,7 @@ fn review_fanout_includes_shared_commit_recipe() {
     assert!(
         body.contains(expected_include),
         "review-fanout.md must pull the shared commit recipe via `{expected_include}` \
-         (CHK-009 review side); the hand-rolled inline copy must be removed",
+         (review side); the hand-rolled inline copy must be removed",
     );
 }
 
@@ -347,12 +347,12 @@ fn review_fanout_retains_add_dash_a_and_title_prefix() {
 
     assert!(
         body.contains("git add -A"),
-        "review-fanout.md must retain `git add -A` staging after the refactor (CHK-010); \
+        "review-fanout.md must retain `git add -A` staging after the refactor; \
          the review-pass commit stages the whole tree under the clean-tree precondition",
     );
     assert!(
         body.contains("[SPEC-NNNN/T-NNN]:"),
-        "review-fanout.md must retain the `[SPEC-NNNN/T-NNN]:` title prefix (CHK-010); \
+        "review-fanout.md must retain the `[SPEC-NNNN/T-NNN]:` title prefix; \
          the consistency check correlates commits to tasks by grepping for it",
     );
 }
@@ -366,13 +366,13 @@ fn review_fanout_drops_inline_status_porcelain_precheck() {
     assert!(
         !body.contains("git status --porcelain"),
         "review-fanout.md must no longer contain the inline `git status --porcelain` \
-         pre-check (CHK-009 review side, DEC-004); the recipe's unified \
+         pre-check (review side); the recipe's unified \
          `git diff --cached --quiet` check subsumes it",
     );
     assert!(
         !body.contains("git diff --cached --quiet"),
         "review-fanout.md must not restate the recipe's `git diff --cached --quiet` \
-         idempotency check inline; it is delegated to the included recipe (CHK-009)",
+         idempotency check inline; it is delegated to the included recipe",
     );
 }
 
@@ -385,11 +385,11 @@ fn review_fanout_retains_unguarded_branch_statement_no_branch_guard() {
     assert!(
         body.contains("Commits land on whatever HEAD is"),
         "review-fanout.md must retain the unguarded \"Commits land on whatever HEAD is\" \
-         statement (REQ-008 review side); the review-pass commit is not branch-guarded",
+         statement (review side); the review-pass commit is not branch-guarded",
     );
     assert!(
         !body.contains(r#"{% include "modules/references/branch-guard.md" %}"#),
-        "review-fanout.md must not add a branch-guard include (REQ-008 review side); \
+        "review-fanout.md must not add a branch-guard include (review side); \
          only the three authoring skills guard the branch, not the review-pass commit",
     );
 }
@@ -437,15 +437,15 @@ fn decompose_includes_shared_commit_recipe_and_branch_guard() {
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
         body.contains(recipe_include),
-        "speccy-decompose.md must pull the shared commit recipe via `{recipe_include}` \
-         (CHK-005); the hand-rolled inline bootstrap commit must be removed",
+        "speccy-decompose.md must pull the shared commit recipe via `{recipe_include}`; \
+         the hand-rolled inline bootstrap commit must be removed",
     );
 
     let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
     assert!(
         body.contains(guard_include),
         "speccy-decompose.md must run the branch-guard prelude via `{guard_include}` \
-         ahead of the commit so the commit lands on a feature branch (REQ-007 decompose side)",
+         ahead of the commit so the commit lands on a feature branch (decompose side)",
     );
 }
 
@@ -458,14 +458,14 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
 
     assert!(
         body.contains("[SPEC-NNNN]: decompose tasks"),
-        "speccy-decompose.md must title the commit `[SPEC-NNNN]: decompose tasks` (CHK-005)",
+        "speccy-decompose.md must title the commit `[SPEC-NNNN]: decompose tasks`",
     );
 
     // Narrow staging of TASKS.md alone — the staging command names the path.
     assert!(
         body.contains("git add <spec-dir>/TASKS.md"),
         "speccy-decompose.md must stage the spec's TASKS.md narrowly via \
-         `git add <spec-dir>/TASKS.md` (CHK-005)",
+         `git add <spec-dir>/TASKS.md`",
     );
 
     // SPEC.md must no longer be in the staging set: it is committed by
@@ -476,7 +476,7 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
     assert!(
         !body.contains("git add <spec-dir>/SPEC.md"),
         "speccy-decompose.md must not stage SPEC.md — it is committed by speccy-plan, \
-         not the decompose commit (DEC-005, CHK-005)",
+         not the decompose commit",
     );
 
     // The commit still runs after `speccy lock`: the lock step text precedes
@@ -489,7 +489,7 @@ fn decompose_stages_tasks_md_alone_with_decompose_title() {
         .expect("speccy-decompose.md must include the commit recipe");
     assert!(
         lock_pos < recipe_pos,
-        "speccy-decompose.md must run `speccy lock` before the commit recipe (CHK-005)",
+        "speccy-decompose.md must run `speccy lock` before the commit recipe",
     );
 }
 
@@ -503,7 +503,7 @@ fn decompose_drops_combined_bootstrap_title() {
         !body.contains("create spec and decompose tasks"),
         "speccy-decompose.md must no longer carry the combined \
          `create spec and decompose tasks` title — it is split into a per-skill \
-         `[SPEC-NNNN]: decompose tasks` commit (CHK-005, DEC-005)",
+         `[SPEC-NNNN]: decompose tasks` commit",
     );
 }
 
@@ -516,7 +516,7 @@ fn decompose_drops_inline_diff_cached_recipe() {
     assert!(
         !body.contains("git diff --cached --quiet"),
         "speccy-decompose.md must not restate the recipe's `git diff --cached --quiet` \
-         idempotency check inline; it is delegated to the included recipe (CHK-009)",
+         idempotency check inline; it is delegated to the included recipe",
     );
 }
 
@@ -563,15 +563,15 @@ fn plan_includes_shared_commit_recipe_and_branch_guard() {
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
         body.contains(recipe_include),
-        "speccy-plan.md must pull the shared commit recipe via `{recipe_include}` \
-         (CHK-004); the SPEC.md commit step must delegate to the shared recipe",
+        "speccy-plan.md must pull the shared commit recipe via `{recipe_include}`; \
+         the SPEC.md commit step must delegate to the shared recipe",
     );
 
     let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
     assert!(
         body.contains(guard_include),
         "speccy-plan.md must run the branch-guard prelude via `{guard_include}` \
-         ahead of the commit so SPEC.md lands on a feature branch (REQ-003)",
+         ahead of the commit so SPEC.md lands on a feature branch",
     );
 }
 
@@ -584,14 +584,14 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
 
     assert!(
         body.contains("[SPEC-NNNN]: create spec"),
-        "speccy-plan.md must title the commit `[SPEC-NNNN]: create spec` (CHK-004)",
+        "speccy-plan.md must title the commit `[SPEC-NNNN]: create spec`",
     );
 
     // Narrow staging of SPEC.md alone — the staging command names the path.
     assert!(
         body.contains("git add <spec-dir>/SPEC.md"),
         "speccy-plan.md must stage the spec's SPEC.md narrowly via \
-         `git add <spec-dir>/SPEC.md` (CHK-004)",
+         `git add <spec-dir>/SPEC.md`",
     );
 
     // The whole-tree staging forms are forbidden in the commit step. The
@@ -603,7 +603,7 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
     assert!(
         !body.contains("git add <spec-dir>/TASKS.md"),
         "speccy-plan.md must not stage TASKS.md — it is committed by speccy-decompose, \
-         not the plan commit (DEC-005, CHK-004)",
+         not the plan commit",
     );
 
     // The commit runs after the step-3 self-review pass: the self-review
@@ -616,7 +616,7 @@ fn plan_stages_spec_md_alone_with_create_spec_title_after_self_review() {
         .expect("speccy-plan.md must include the commit recipe");
     assert!(
         self_review_pos < recipe_pos,
-        "speccy-plan.md must run the self-review pass before the commit recipe (CHK-004)",
+        "speccy-plan.md must run the self-review pass before the commit recipe",
     );
 }
 
@@ -631,12 +631,12 @@ fn plan_retains_vacancy_id_allocation() {
         body.contains("speccy vacancy --json"),
         "speccy-plan.md must still allocate the spec id via `speccy vacancy --json`; \
          the new commit step must not displace the vacancy-not-status invariant \
-         (CHK-015, REQ-003 task constraint)",
+         (task constraint)",
     );
     assert!(
         !body.contains("speccy status --json"),
         "speccy-plan.md must not allocate the id via `speccy status --json`; the \
-         vacancy-not-status invariant requires `speccy vacancy --json` (CHK-015)",
+         vacancy-not-status invariant requires `speccy vacancy --json`",
     );
 }
 
@@ -683,15 +683,15 @@ fn amend_includes_shared_commit_recipe_and_branch_guard() {
     let recipe_include = r#"{% include "modules/references/commit-recipe.md" %}"#;
     assert!(
         body.contains(recipe_include),
-        "speccy-amend.md must pull the shared commit recipe via `{recipe_include}` \
-         (CHK-006); the amend reconcile-delta commit step must delegate to the shared recipe",
+        "speccy-amend.md must pull the shared commit recipe via `{recipe_include}`; \
+         the amend reconcile-delta commit step must delegate to the shared recipe",
     );
 
     let guard_include = r#"{% include "modules/references/branch-guard.md" %}"#;
     assert!(
         body.contains(guard_include),
         "speccy-amend.md must run the branch-guard prelude via `{guard_include}` \
-         ahead of the commit so the reconcile delta lands on a feature branch (REQ-005)",
+         ahead of the commit so the reconcile delta lands on a feature branch",
     );
 }
 
@@ -704,7 +704,7 @@ fn amend_titles_commit_and_sources_why_from_changelog() {
 
     assert!(
         body.contains("[SPEC-NNNN]: amend — <why>"),
-        "speccy-amend.md must title the commit `[SPEC-NNNN]: amend — <why>` (CHK-006)",
+        "speccy-amend.md must title the commit `[SPEC-NNNN]: amend — <why>`",
     );
 
     // `<why>` is sourced from the newest `## Changelog` row, not separately
@@ -712,7 +712,7 @@ fn amend_titles_commit_and_sources_why_from_changelog() {
     assert!(
         body.contains("## Changelog"),
         "speccy-amend.md must source the commit title's `<why>` from the newest \
-         `## Changelog` row (CHK-006), not a separate prompt",
+         `## Changelog` row, not a separate prompt",
     );
 
     // The commit recipe runs after the spec hash is re-locked, so the reconcile
@@ -720,13 +720,13 @@ fn amend_titles_commit_and_sources_why_from_changelog() {
     // ordering on the stable `speccy lock` command rather than on prose wording.
     let lock_pos = body
         .find("speccy lock SPEC-NNNN")
-        .expect("speccy-amend.md must re-lock the spec hash before committing (CHK-006)");
+        .expect("speccy-amend.md must re-lock the spec hash before committing");
     let recipe_pos = body
         .find(r#"{% include "modules/references/commit-recipe.md" %}"#)
         .expect("speccy-amend.md must include the commit recipe");
     assert!(
         lock_pos < recipe_pos,
-        "speccy-amend.md must run the commit recipe after the spec-hash re-lock (CHK-006)",
+        "speccy-amend.md must run the commit recipe after the spec-hash re-lock",
     );
 }
 
@@ -741,19 +741,19 @@ fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
     // SPEC.md is always in the staging set.
     assert!(
         body.contains("<spec-dir>/SPEC.md"),
-        "speccy-amend.md must stage the spec's `SPEC.md` in the amend delta (CHK-006)",
+        "speccy-amend.md must stage the spec's `SPEC.md` in the amend delta",
     );
 
     // The reconciled TASKS.md is staged when one exists, and the journal
     // blocker files appended this run are staged too.
     assert!(
         body.contains("<spec-dir>/TASKS.md"),
-        "speccy-amend.md must stage the reconciled `TASKS.md` when one exists (CHK-006)",
+        "speccy-amend.md must stage the reconciled `TASKS.md` when one exists",
     );
     assert!(
         body.contains("<spec-dir>/journal/T-NNN.md"),
         "speccy-amend.md must stage the per-task journal blocker files appended this run \
-         (`<spec-dir>/journal/T-NNN.md`) (CHK-006)",
+         (`<spec-dir>/journal/T-NNN.md`)",
     );
 
     // Narrow staging only. The surrounding prose legitimately *forbids* the
@@ -764,7 +764,7 @@ fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
     // which is the observable property the broad forms would violate.
     assert!(
         body.contains("git add <paths>"),
-        "speccy-amend.md must use narrow `git add <paths>` staging (CHK-006)",
+        "speccy-amend.md must use narrow `git add <paths>` staging",
     );
 
     // The staging set tolerates an absent TASKS.md — the prose must
@@ -774,7 +774,7 @@ fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
     assert!(
         lower.contains("when one exists") || lower.contains("only when it exists"),
         "speccy-amend.md must qualify `TASKS.md` staging as conditional on the file \
-         existing (CHK-007)",
+         existing",
     );
     // Collapse interior whitespace so the assertion does not hinge on where
     // the prose happens to line-wrap.
@@ -782,8 +782,7 @@ fn amend_stages_spec_md_and_tolerates_absent_tasks_md() {
     assert!(
         collapsed.contains("without failing on the absent tasks file")
             || collapsed.contains("without failing on the missing tasks file"),
-        "speccy-amend.md must state that an absent `TASKS.md` does not fail the commit \
-         (CHK-007)",
+        "speccy-amend.md must state that an absent `TASKS.md` does not fail the commit",
     );
 }
 
@@ -861,8 +860,8 @@ fn branch_guard_included_by_exactly_the_three_authoring_sources() {
     ] {
         assert!(
             module_body(rel).contains(guard_include),
-            "`{rel}` must include the branch-guard prelude via `{guard_include}` \
-             (REQ-008, CHK-011); the branch-guard is scoped to the authoring skills",
+            "`{rel}` must include the branch-guard prelude via `{guard_include}`; \
+             the branch-guard is scoped to the authoring skills",
         );
     }
 
@@ -875,7 +874,7 @@ fn branch_guard_included_by_exactly_the_three_authoring_sources() {
     ] {
         assert!(
             !module_body(rel).contains(guard_include),
-            "`{rel}` must NOT include the branch-guard prelude (REQ-008, CHK-011); \
+            "`{rel}` must NOT include the branch-guard prelude; \
              only the plan, decompose, and amend sources are branch-guarded",
         );
     }
@@ -886,7 +885,7 @@ fn branch_guard_included_by_exactly_the_three_authoring_sources() {
         module_body("modules/skills/partials/review-fanout.md")
             .contains("Commits land on whatever HEAD is"),
         "review-fanout.md must retain its unguarded \"Commits land on whatever HEAD is\" \
-         statement (REQ-008, CHK-011); the review-pass commit is not branch-guarded",
+         statement; the review-pass commit is not branch-guarded",
     );
 }
 
@@ -918,8 +917,8 @@ fn authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate() {
         let body = module_body(rel);
         assert!(
             body.contains(staging_cmd),
-            "`{rel}` must stage its spec artifacts narrowly via `{staging_cmd}` \
-             (REQ-009, CHK-012); the commit must not stage the whole tree",
+            "`{rel}` must stage its spec artifacts narrowly via `{staging_cmd}`; \
+             the commit must not stage the whole tree",
         );
     }
 
@@ -934,7 +933,7 @@ fn authoring_bodies_stage_narrow_paths_with_no_clean_tree_gate() {
     ] {
         assert!(
             !module_body(rel).contains("git stash"),
-            "`{rel}` must not stash on a dirty tree (REQ-009, CHK-012); the authoring \
+            "`{rel}` must not stash on a dirty tree; the authoring \
              skills proceed on a dirty tree and carry unrelated changes onto the new branch",
         );
     }

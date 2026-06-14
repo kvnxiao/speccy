@@ -1,0 +1,5 @@
+---
+name: speccy-bootstrap
+description: 'Seed the Speccy conventions into the project AGENTS.md once `speccy init` has scaffolded the workspace. Writes two sections: a `## Product north star` (captured once via an adaptive draft-or-Socratic flow, then frozen) and an always-upserted `## Speccy conventions` block that orients agents to the phase loop and the `speccy verify` CI gate. Use when the user says "bootstrap speccy", "set up speccy", "seed AGENTS.md for speccy", right after running `speccy init`, or to refresh conventions after a speccy upgrade. Do NOT trigger to edit an existing SPEC (use speccy-amend) or to draft a new SPEC (use speccy-plan); this skill only seeds AGENTS.md.'
+---
+{% include "modules/phases/speccy-bootstrap.md" %}

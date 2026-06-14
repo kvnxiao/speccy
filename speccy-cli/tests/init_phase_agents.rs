@@ -86,7 +86,7 @@ fn phase_worker_skill_stub_is_thin() -> TestResult {
         let count = common::non_blank_line_count_outside_shared_markers(&body);
         assert!(
             count <= 10,
-            "T-009: {rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
+            "{rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
         );
     }
     Ok(())
@@ -106,7 +106,7 @@ fn phase_worker_skill_stub_has_no_disallowed_frontmatter_keys() -> TestResult {
         for key in disallowed {
             assert!(
                 !fm.lines().any(|l| l.trim_start().starts_with(key)),
-                "T-009: {rel} frontmatter must not contain `{key}`; got frontmatter:\n{fm}",
+                "{rel} frontmatter must not contain `{key}`; got frontmatter:\n{fm}",
             );
         }
     }
@@ -124,12 +124,12 @@ fn phase_worker_skill_stub_names_agent_file_and_invocation_path() -> TestResult 
         let agent_file = format!(".claude/agents/{phase}.md");
         assert!(
             body.contains(&agent_file),
-            "T-009: {rel} must name the agent file `{agent_file}`; got:\n{body}",
+            "{rel} must name the agent file `{agent_file}`; got:\n{body}",
         );
         let invocation = format!("/agent {phase}");
         assert!(
             body.contains(&invocation),
-            "T-009: {rel} must reference the `/agent {phase}` invocation path; got:\n{body}",
+            "{rel} must reference the `/agent {phase}` invocation path; got:\n{body}",
         );
     }
     Ok(())
@@ -159,12 +159,12 @@ fn phase_worker_agent_has_model_and_effort_frontmatter() -> TestResult {
         assert!(
             fm.lines()
                 .any(|l| l.trim() == format!("model: {expected_model}")),
-            "T-009: {rel} frontmatter must contain `model: {expected_model}`; got:\n{fm}",
+            "{rel} frontmatter must contain `model: {expected_model}`; got:\n{fm}",
         );
         assert!(
             fm.lines()
                 .any(|l| l.trim() == format!("effort: {expected_effort}")),
-            "T-009: {rel} frontmatter must contain `effort: {expected_effort}`; got:\n{fm}",
+            "{rel} frontmatter must contain `effort: {expected_effort}`; got:\n{fm}",
         );
     }
     Ok(())
@@ -183,19 +183,19 @@ fn phase_worker_agent_has_full_body_with_no_minijinja_markup() -> TestResult {
         let non_blank = non_blank_line_count(post_fm);
         assert!(
             non_blank > 10,
-            "T-009: {rel} must have a substantive body (>10 non-blank lines in the body); got {non_blank} non-blank body lines",
+            "{rel} must have a substantive body (>10 non-blank lines in the body); got {non_blank} non-blank body lines",
         );
         assert!(
             !body.contains("{{"),
-            "T-009: {rel} must contain no unsubstituted `{{{{` MiniJinja token; got:\n{body}",
+            "{rel} must contain no unsubstituted `{{{{` MiniJinja token; got:\n{body}",
         );
         assert!(
             !body.contains("{%"),
-            "T-009: {rel} must contain no unsubstituted `{{%` MiniJinja token; got:\n{body}",
+            "{rel} must contain no unsubstituted `{{%` MiniJinja token; got:\n{body}",
         );
         assert!(
             !body.contains("{#"),
-            "T-009: {rel} must contain no unsubstituted `{{#` MiniJinja token; got:\n{body}",
+            "{rel} must contain no unsubstituted `{{#` MiniJinja token; got:\n{body}",
         );
     }
     Ok(())
@@ -223,7 +223,7 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
         let count = common::non_blank_line_count_outside_shared_markers(&body);
         assert!(
             count <= 10,
-            "CHK-017: {rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
+            "{rel} must have ≤10 non-blank lines outside shared-marker blocks; got {count}:\n{body}",
         );
     }
     for phase in &["speccy-work", "speccy-decompose", "speccy-ship"] {
@@ -232,12 +232,12 @@ fn chk017_codex_skill_stub_names_toml_agent_and_invocation_path() -> TestResult 
         let toml_file = format!(".codex/agents/{phase}.toml");
         assert!(
             body.contains(&toml_file),
-            "CHK-017: {rel} must name the TOML agent file `{toml_file}`; got:\n{body}",
+            "{rel} must name the TOML agent file `{toml_file}`; got:\n{body}",
         );
         let invocation = format!("/agent {phase}");
         assert!(
             body.contains(&invocation),
-            "CHK-017: {rel} must reference `/agent {phase}`; got:\n{body}",
+            "{rel} must reference `/agent {phase}`; got:\n{body}",
         );
     }
     Ok(())
@@ -263,7 +263,7 @@ fn chk017_codex_toml_has_model_and_effort_at_top_level() -> TestResult {
             .ok_or_else(|| format!("{rel}: missing top-level `model` key"))?;
         assert_eq!(
             model, "gpt-5.5",
-            "CHK-017: {rel} must have `model = \"gpt-5.5\"` at top level",
+            "{rel} must have `model = \"gpt-5.5\"` at top level",
         );
         let effort = table
             .get("model_reasoning_effort")
@@ -271,7 +271,7 @@ fn chk017_codex_toml_has_model_and_effort_at_top_level() -> TestResult {
             .ok_or_else(|| format!("{rel}: missing top-level `model_reasoning_effort` key"))?;
         assert_eq!(
             effort, "medium",
-            "CHK-017: {rel} must have `model_reasoning_effort = \"medium\"` at top level",
+            "{rel} must have `model_reasoning_effort = \"medium\"` at top level",
         );
     }
     Ok(())
@@ -297,15 +297,15 @@ fn chk017_codex_toml_has_full_developer_instructions() -> TestResult {
         let non_blank = non_blank_line_count(instructions);
         assert!(
             non_blank > 10,
-            "CHK-017: {rel} `developer_instructions` must be substantive (>10 non-blank lines); got {non_blank}",
+            "{rel} `developer_instructions` must be substantive (>10 non-blank lines); got {non_blank}",
         );
         assert!(
             !instructions.contains("{{"),
-            "CHK-017: {rel} `developer_instructions` must contain no `{{{{` MiniJinja token",
+            "{rel} `developer_instructions` must contain no `{{{{` MiniJinja token",
         );
         assert!(
             !instructions.contains("{%"),
-            "CHK-017: {rel} `developer_instructions` must contain no `{{%` MiniJinja token",
+            "{rel} `developer_instructions` must contain no `{{%` MiniJinja token",
         );
     }
     Ok(())
@@ -325,7 +325,7 @@ fn phase_worker_agent_files_are_created_by_claude_init() -> TestResult {
         let path = format!(".claude/agents/{phase}.md");
         assert!(
             fx.root.join(&path).exists(),
-            "T-009: `speccy init --host claude-code` must create `{path}` (phase-worker agent)",
+            "`speccy init --host claude-code` must create `{path}` (phase-worker agent)",
         );
     }
     Ok(())
@@ -340,7 +340,7 @@ fn phase_worker_agent_files_are_created_by_codex_init() -> TestResult {
         let path = format!(".codex/agents/{phase}.toml");
         assert!(
             fx.root.join(&path).exists(),
-            "T-009: `speccy init --host codex` must create `{path}` (phase-worker agent)",
+            "`speccy init --host codex` must create `{path}` (phase-worker agent)",
         );
     }
     Ok(())

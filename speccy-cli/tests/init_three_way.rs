@@ -68,21 +68,21 @@ fn chk011_fresh_init_creates_speccy_plan_skill_md_with_substantive_body() -> Tes
     let body = read_file(&fx.root, rel)?;
     assert!(
         fx.root.join(rel).exists(),
-        "CHK-011: {rel} must be created by `speccy init --host claude-code`",
+        "{rel} must be created by `speccy init --host claude-code`",
     );
     let (_, post_fm) = split_frontmatter(&body)
         .ok_or_else(|| format!("{rel} must have a `---` frontmatter fence"))?;
     assert!(
         post_fm.lines().filter(|l| !l.trim().is_empty()).count() > 5,
-        "CHK-011: {rel} body must be substantive (more than 5 non-blank lines); got:\n{post_fm}",
+        "{rel} body must be substantive (more than 5 non-blank lines); got:\n{post_fm}",
     );
     assert!(
         !body.contains("{{"),
-        "CHK-011: {rel} must contain no unsubstituted `{{` MiniJinja token; got:\n{body}",
+        "{rel} must contain no unsubstituted `{{` MiniJinja token; got:\n{body}",
     );
     assert!(
         !body.contains("{%"),
-        "CHK-011: {rel} must contain no unsubstituted `{{%` MiniJinja token; got:\n{body}",
+        "{rel} must contain no unsubstituted `{{%` MiniJinja token; got:\n{body}",
     );
     Ok(())
 }
@@ -112,12 +112,12 @@ fn chk019_byte_identical_files_log_unchanged_and_exit_zero() -> TestResult {
         let trimmed = line.trim_start();
         assert!(
             !trimmed.starts_with("created ") && !trimmed.starts_with("(!) overwritten"),
-            "CHK-019: plan must not include `created` or `(!) overwritten` lines when all files are byte-identical; got line: `{line}`",
+            "plan must not include `created` or `(!) overwritten` lines when all files are byte-identical; got line: `{line}`",
         );
     }
     assert!(
         stdout.contains("unchanged"),
-        "CHK-019: re-init with byte-identical files must log `unchanged` entries; got:\n{stdout}",
+        "re-init with byte-identical files must log `unchanged` entries; got:\n{stdout}",
     );
     Ok(())
 }
@@ -144,7 +144,7 @@ fn chk019_byte_identical_no_mtime_change() -> TestResult {
 
     assert_eq!(
         mtime_before, mtime_after,
-        "CHK-019: mtime of {rel} must not change when re-init finds byte-identical content",
+        "mtime of {rel} must not change when re-init finds byte-identical content",
     );
     Ok(())
 }
@@ -189,11 +189,11 @@ fn chk020_differing_file_stderr_names_path_and_force_flag() -> TestResult {
 
     assert!(
         stderr.contains("speccy-plan") || stderr.contains("SKILL.md"),
-        "CHK-020: stderr must name the differing file path; got:\n{stderr}",
+        "stderr must name the differing file path; got:\n{stderr}",
     );
     assert!(
         stderr.contains("--force"),
-        "CHK-020: stderr must mention `--force`; got:\n{stderr}",
+        "stderr must mention `--force`; got:\n{stderr}",
     );
     Ok(())
 }
@@ -214,7 +214,7 @@ fn chk020_differing_file_is_unchanged_after_refuse() -> TestResult {
     let after = read_file(&fx.root, rel)?;
     assert_eq!(
         after, modified,
-        "CHK-020: the differing file must be byte-identical to its pre-invocation state after the refused init",
+        "the differing file must be byte-identical to its pre-invocation state after the refused init",
     );
     Ok(())
 }
@@ -242,12 +242,14 @@ fn chk020_atomic_refuse_no_other_file_written() -> TestResult {
     // refuse means no other planned target is written.
     assert!(
         !fx.root.join(".speccy/.gitkeep").exists(),
-        "CHK-020: atomic batch refuse must leave .speccy/.gitkeep uncreated when one planned file conflicts",
+        "atomic batch refuse must leave .speccy/.gitkeep uncreated when one planned file conflicts",
     );
-    // The speccy-init SKILL.md must also not be created.
+    // The speccy-bootstrap SKILL.md must also not be created.
     assert!(
-        !fx.root.join(".claude/skills/speccy-init/SKILL.md").exists(),
-        "CHK-020: atomic batch refuse must leave other planned targets uncreated",
+        !fx.root
+            .join(".claude/skills/speccy-bootstrap/SKILL.md")
+            .exists(),
+        "atomic batch refuse must leave other planned targets uncreated",
     );
     Ok(())
 }
@@ -276,7 +278,7 @@ fn chk021_force_overwrites_differing_file_logs_overwritten() -> TestResult {
 
     assert!(
         stdout.contains("overwritten"),
-        "CHK-021: --force with differing file must log `overwritten` for the differing file; got:\n{stdout}",
+        "--force with differing file must log `overwritten` for the differing file; got:\n{stdout}",
     );
     Ok(())
 }
@@ -305,12 +307,12 @@ fn chk021_force_identical_files_logged_unchanged_not_overwritten() -> TestResult
         if line.contains("speccy-plan") && line.contains("SKILL.md") {
             assert!(
                 line.contains("overwritten"),
-                "CHK-021: the differing file line must say `overwritten`; got: `{line}`",
+                "the differing file line must say `overwritten`; got: `{line}`",
             );
         } else if line.trim_start().starts_with('.') || line.trim_start().starts_with(".speccy") {
             assert!(
                 line.contains("unchanged"),
-                "CHK-021: byte-identical files must be logged `unchanged`, not `overwritten`; got line: `{line}`",
+                "byte-identical files must be logged `unchanged`, not `overwritten`; got line: `{line}`",
             );
         }
     }
@@ -332,14 +334,14 @@ fn chk021_force_differing_file_content_matches_planned() -> TestResult {
     let after = read_file(&fx.root, rel)?;
     assert_eq!(
         after, original,
-        "CHK-021: --force must restore the differing file to the planned content",
+        "--force must restore the differing file to the planned content",
     );
     Ok(())
 }
 
 // -----------------------------------------------------------------------
-// No .claude/agents/speccy-init.md, no
-// .claude/agents/speccy-review.md, no .codex/agents/speccy-init.toml, no
+// No .claude/agents/speccy-bootstrap.md, no
+// .claude/agents/speccy-review.md, no .codex/agents/speccy-bootstrap.toml, no
 // .codex/agents/speccy-review.toml.
 // -----------------------------------------------------------------------
 
@@ -351,13 +353,13 @@ fn chk022_no_interactive_skill_agent_files_created() -> TestResult {
     run_init(&fx.root, &[]).success();
 
     let forbidden_claude = [
-        ".claude/agents/speccy-init.md",
+        ".claude/agents/speccy-bootstrap.md",
         ".claude/agents/speccy-review.md",
     ];
     for path in forbidden_claude {
         assert!(
             !fx.root.join(path).exists(),
-            "CHK-022 / DEC-008: `speccy init --host claude-code` must NOT create `{path}` (interactive skill; no agent counterpart)",
+            "`speccy init --host claude-code` must NOT create `{path}` (interactive skill; no agent counterpart)",
         );
     }
 
@@ -371,13 +373,13 @@ fn chk022_no_interactive_skill_agent_files_created() -> TestResult {
     cmd.assert().success();
 
     let forbidden_codex = [
-        ".codex/agents/speccy-init.toml",
+        ".codex/agents/speccy-bootstrap.toml",
         ".codex/agents/speccy-review.toml",
     ];
     for path in forbidden_codex {
         assert!(
             !fx.root.join(path).exists(),
-            "CHK-022 / DEC-008: `speccy init --host codex` must NOT create `{path}` (interactive skill; no agent counterpart)",
+            "`speccy init --host codex` must NOT create `{path}` (interactive skill; no agent counterpart)",
         );
     }
     Ok(())

@@ -5,7 +5,7 @@
 
 ## Product north star
 
-> Maintained by the `speccy-init` skill; Speccy has no separate `VISION.md`.
+> Maintained by the `speccy-bootstrap` skill; Speccy has no separate `VISION.md`.
 > Note: "Mission" is reserved for the Speccy noun (a focus-area grouping under
 > `.speccy/specs/[focus]/MISSION.md`). Mission folders are optional and earn
 > their existence only when 2+ related specs share plan-time context.
@@ -34,7 +34,7 @@ toward completion without humans re-explaining intent at every step.
 
 ### Minimal viable product
 
-- A lean Rust CLI implementing the surface in `docs/ARCHITECTURE.md`. Phase
+- A lean Rust CLI implementing the surface in `docs/CLI.md`. Phase
   prompts live in the shipped skill bodies; the binary never renders
   natural-text prompts that skills and subagent bodies already cover.
 - Skill packs for AI harnesses driving the full development loop, including an
@@ -69,7 +69,7 @@ broader audiences are out of scope for the MVP.
 - Whether the default persona fan-out holds on real work or needs to become
   project-configurable.
 
-Non-goals live in `docs/ARCHITECTURE.md` → "What We Deliberately Don't Do".
+Non-goals live in `docs/ARCHITECTURE.md` → "What we deliberately don't do".
 
 ## Core principles
 
@@ -94,7 +94,7 @@ Durable beliefs; schema and CLI will evolve, these shouldn't.
    prompts. Speccy never grades tests algorithmically.
 
 5. **Stay small.** Five nouns (Mission, Spec, Requirement, Task, Check), a small
-   flat command surface (list in `docs/ARCHITECTURE.md`), no mode toggles, no
+   flat command surface (list in `docs/CLI.md`), no mode toggles, no
    orchestration runtime, no greenfield/brownfield distinction.
 
 6. **Surface unknowns; never invent.** Ambiguous spec → stop and surface it.
@@ -102,8 +102,11 @@ Durable beliefs; schema and CLI will evolve, these shouldn't.
 
 ## Where the design lives
 
-`docs/ARCHITECTURE.md` is the only source of truth for the schema, CLI surface,
-lint codes, and implementation sequence. Read it before touching code. If a
+The `docs/` set is the source of truth for the design and contract:
+`docs/ARCHITECTURE.md` (design rationale and what we deliberately don't do),
+`docs/CLI.md` (the command surface and JSON envelopes), `docs/SCHEMA.md` (file
+formats, element grammars, and lint codes), and `docs/WORKFLOW.md` (the phase
+loop and harness layer). Read the relevant doc before touching code. If a
 design decision isn't documented, ask before deciding.
 
 ## Skill pack source of truth
@@ -123,7 +126,7 @@ never source. Source lives under `resources/`:
   bodies in via MiniJinja `{% include %}`.
 
 Template variables wrappers may reference are catalogued in
-`docs/ARCHITECTURE.md` → "Per-host template variables".
+`docs/WORKFLOW.md` → "Per-host template variables".
 
 Rules:
 
@@ -230,7 +233,7 @@ Before any commit lands, all four must pass:
 - `cargo +nightly fmt --all --check`
 - `cargo deny check`
 
-## Conventions for AI agents specifically
+## Rules for AI agents
 
 - Identify yourself in commits via the `Co-Authored-By` trailer.
 - Prefer narrow, well-scoped commits over sprawling ones.
@@ -292,12 +295,40 @@ Before any commit lands, all four must pass:
 compliance` in your `<implementer>` block. Never patch
   the ejected file.
 
-## Implementer / reviewer activity records
+## Per-task journal
 
-Implementer handoffs, reviewer verdicts, and blocker directives live in
-`.speccy/specs/NNNN-slug/journal/T-NNN.md` (sibling to `SPEC.md` and
-`TASKS.md`): YAML frontmatter (`spec`, `task`, `generated_at`) plus the
-closed-set elements `<implementer>`, `<review>`, and `<blockers>`. These
-elements are rejected inside `TASKS.md` `<task>` bodies (`TSK-006`). Full
-grammar, attribute schemas, and the `JNL-001`/`JNL-002`/`JNL-003` lints:
-`docs/ARCHITECTURE.md` → "TASKS.md per-task journal".
+`.speccy/specs/NNNN-slug/journal/T-NNN.md` holds YAML frontmatter
+(`spec`, `task`, `generated_at`) plus the closed-set elements
+`<implementer>`, `<review>`, and `<blockers>`. These elements are
+rejected inside `TASKS.md` `<task>` bodies (`TSK-006`). Full grammar,
+attribute schemas, and the `JNL-001`/`JNL-002`/`JNL-003` lints:
+`docs/SCHEMA.md` → "TASKS.md per-task journal".
+
+## Speccy conventions
+
+> Managed by `/speccy-bootstrap`; edits inside this section are
+> overwritten on re-run. Put project-specific rules in a sibling
+> section.
+
+Speccy keeps intent and shipped behavior in sync through a five-phase
+loop. Your harness already surfaces each skill's `description` for
+routing — read those for the per-skill contract. The order and entry
+points:
+
+1. **Plan** — `/speccy-brainstorm` (fuzzy asks) → `/speccy-plan` →
+   `/speccy-decompose`.
+2. **Impl** — `/speccy-work`, one task per invocation.
+3. **Review** — `/speccy-review`, per-task adversarial fan-out.
+4. **Vet** — `/speccy-vet`, the pre-ship holistic drift gate.
+5. **Ship** — `/speccy-ship`, writes `REPORT.md` and opens the PR.
+
+`/speccy-orchestrate` drives phases 2–4 autonomously; `/speccy-amend`
+handles a mid-loop SPEC change.
+
+Per-task implementer notes and reviewer verdicts live in the journal at
+`.speccy/specs/NNNN-slug/journal/T-NNN.md`, sibling to `SPEC.md` and
+`TASKS.md`.
+
+CI: wire `speccy verify` into whichever CI the project uses. It fails on
+broken proof shape (missing requirement coverage, malformed task state)
+and passes when intact — informational by design, not a blocker.

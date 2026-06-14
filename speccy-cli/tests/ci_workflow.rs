@@ -47,7 +47,7 @@ fn materialization_step_does_not_reference_stale_claude_commands_path() {
     let body = CI_WORKFLOW;
     assert!(
         !body.contains(".claude/commands"),
-        "ci.yml must not reference the stale `.claude/commands` path (SPEC-0015 moved the install destination to `.claude/skills`)",
+        "ci.yml must not reference the stale `.claude/commands` path (the install destination moved to `.claude/skills`)",
     );
 }
 
@@ -95,7 +95,7 @@ fn project_test_commands_run_directly_before_speccy_verify() {
         assert!(
             idx < verify_idx,
             "ci.yml must run `{label}` directly before `{SPECCY_VERIFY_STEP}`; \
-             `speccy verify` is a shape-only validator (SPEC-0018 REQ-003), \
+             `speccy verify` is a shape-only validator, \
              not a wrapper around project tests",
         );
     }
@@ -122,7 +122,7 @@ fn speccy_verify_step_does_not_run_project_tests() {
             assert_eq!(
                 trimmed, "run: ./target/debug/speccy verify",
                 "the `speccy verify` step must invoke only `./target/debug/speccy verify` \
-                 (SPEC-0018 REQ-003 makes verify shape-only); got: `{trimmed}`",
+                 (verify is shape-only); got: `{trimmed}`",
             );
             found = true;
             break;
@@ -130,7 +130,7 @@ fn speccy_verify_step_does_not_run_project_tests() {
     }
     assert!(
         found,
-        "ci.yml must contain a step named `speccy verify` (SPEC-0018 REQ-003 shape gate)",
+        "ci.yml must contain a step named `speccy verify` (shape gate)",
     );
 }
 
