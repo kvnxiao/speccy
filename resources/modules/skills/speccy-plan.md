@@ -38,6 +38,13 @@ is already agreed.
    existing mission folder (`.speccy/specs/[focus]/NNNN-slug/`).
    Do not invent a new mission folder for a single spec.
 
+   Then read the backlog as candidate input. When `.speccy/BACKLOG.md`
+   is present, read it and surface its entries as candidate slices for
+   the spec being framed — a deferred candidate may be exactly the slice
+   to draft now. Absence is normal and silent: a missing file is not an
+   error, proceed without comment. If this spec promotes a backlog
+   candidate, note which entry so step 5 can strike it.
+
 2. Write SPEC.md following the PRD template.
 
    When the slice touches existing code, invoke the `plan-explorer`
@@ -58,6 +65,20 @@ is already agreed.
    bullet list (when cohesive grouping serves the SPEC better). Agent
    discretion; neither choice is surfaced as a self-review issue.
 
+   **Record a future-spec candidate, if one was cut.** When framing
+   this spec deliberately cuts a piece of scope that is worth its OWN
+   later spec — "not this spec, but its own SPEC later" — append a
+   backlog entry to `.speccy/BACKLOG.md` in the shipped four-field
+   shape, self-creating the file with its header (copied verbatim from
+   the reference) when absent. Provenance names the originating spec and
+   phase: `SPEC-NNNN, plan`. Distinguish the two kinds of cut: a
+   future-spec candidate goes to the backlog, but a cut that is merely
+   out of THIS spec's scope is a spec-local Non-goal — record it in the
+   SPEC's `## Non-goals`, not the backlog. The entry shape and authoring
+   discipline:
+
+{% include "modules/references/backlog-ledger.md" %}
+
 3. **Self-review pass.** Run this pass exactly once after writing
    SPEC.md. Do not re-check after applying fixes.
 
@@ -71,7 +92,15 @@ is already agreed.
    signals an over-scoped session — 26 open questions is a scope smell,
    not a format limitation.
 
-5. Branch-guard, then commit `SPEC.md` alone. After the self-review
+5. Strike a promoted backlog candidate, if this spec promoted one.
+   When the spec just drafted IS a backlog candidate promoted into its
+   own SPEC (noted at step 1), delete that entry from
+   `.speccy/BACKLOG.md` outright. No struck-through line, no "promoted
+   to SPEC-NNNN" residue — git history and the new SPEC's own provenance
+   are the trail, and the backlog stays a live list of current
+   candidates only. If no candidate was promoted, skip this step.
+
+6. Branch-guard, then commit `SPEC.md` alone. After the self-review
    pass completes, commit the just-written `SPEC.md` so a
    `{{ cmd_prefix }}speccy-plan` run-then-stop leaves `SPEC.md` already
    committed. The commit covers only the spec's `SPEC.md` —

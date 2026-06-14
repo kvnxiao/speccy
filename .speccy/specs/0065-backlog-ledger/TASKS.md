@@ -46,7 +46,7 @@ Suggested files: `resources/modules/references/backlog-ledger.md` (new),
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-003 REQ-004 REQ-006">
+<task id="T-002" state="completed" covers="REQ-001 REQ-003 REQ-004 REQ-006">
 ## Wire speccy-plan to read, append, and strike backlog entries
 
 Edit the skill body `resources/modules/skills/speccy-plan.md` (plan is a
