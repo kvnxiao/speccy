@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0065
 outcome: implemented
-generated_at: 2026-06-14T04:00:00Z
+generated_at: 2026-06-14T04:33:04Z
 ---
 
 # REPORT: SPEC-0065 Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of future-spec candidates
@@ -78,13 +78,32 @@ reads, plan/ship append). The line reaches the conventions block produced by
 reejection parity. Retry count: 0.
 </coverage>
 
+<coverage req="REQ-008" result="satisfied" scenarios="CHK-010">
+Added by amendment after the initial ship (Changelog 2026-06-14). T-007 widened
+`/speccy-amend`'s commit staging step in
+`resources/modules/skills/speccy-amend.md` with an existence-guarded
+`.speccy/BACKLOG.md` stage (the `test -f` idiom mirroring the plan path), so a
+backlog entry appended during a brainstorm-framed amendment rides into the amend
+reconcile commit instead of being left dirty — closing the durability gap the
+invocation-1 vet flagged as a non-blocking residual. A post-amend whole-SPEC
+re-check (vet invocation 2) verified REQ-008's wiring; round 1 of that re-check
+caught a stale brainstorm step-7 committer clause (it named speccy-plan as the
+sole committer), which the round-1 fix generalized to also name speccy-amend for
+the amendment hand-off, and round 2 passed with ejected parity. CHK-010
+(existence-guard adequacy and placement) confirmed by reviewer personas. Retry
+count: 0 (per-task); 1 vet re-check round.
+</coverage>
+
 </report>
 
 ## Notes
 
-The vet gate (invocation 1, round 2) flagged one open human decision not
-blocking ship: a brainstorm session that frames an amendment (rather than a new
-SPEC) may append to BACKLOG.md, but speccy-amend's narrow staging does not
-include BACKLOG.md, leaving that entry uncommitted until the next plan run.
-The vet reviewer judged this outside the SPEC's stated producer set (DEC-002)
-and did not block. This is a candidate for a future backlog entry.
+The vet gate (invocation 1, round 2) flagged one non-blocking residual: a
+brainstorm session that frames an amendment (rather than a new SPEC) may append
+to BACKLOG.md, but speccy-amend's narrow staging did not include BACKLOG.md,
+leaving that entry uncommitted until the next plan run. Rather than defer it,
+the SPEC was amended (REQ-008) to close it directly — speccy-amend now commits
+an inherited backlog mutation via an existence-guarded stage (see the REQ-008
+coverage above). The post-amend re-check (vet invocation 2) caught and fixed a
+downstream prose inconsistency the change introduced, then passed. No residual
+remains open from this loop.
