@@ -113,6 +113,21 @@ Readiness semantics:
    commit as REPORT.md (step 6), so the lesson and the loop that taught
    it ship together.
 
+   **Mirror the future-spec subset of the deferred section.** Walk the
+   REPORT "Deferred / known limitations" entries written at step 2 (the
+   `<coverage result="deferred">` rows and any out-of-scope items) and
+   ask, per item, "its own future SPEC, or just a limitation of this
+   one?". Mirror ONLY the future-spec-worthy subset into
+   `.speccy/BACKLOG.md` as four-field entries with provenance
+   `SPEC-NNNN, ship`, self-creating the file with its header (copied
+   verbatim from the reference) when absent. Items judged local
+   limitations — bug-level caveats, small follow-ups — stay in REPORT.md
+   only and are not appended, so the backlog stays a high-signal
+   new-spec register. This append lands in the same ship commit
+   (step 6). The entry shape and authoring discipline:
+
+{% include "modules/references/backlog-ledger.md" %}
+
 4. Flip the SPEC's frontmatter status. Edit
    `.speccy/specs/NNNN-slug/SPEC.md` and change `status: in-progress`
    to `status: implemented`. The diff that ships in this PR is what

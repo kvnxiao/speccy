@@ -124,7 +124,7 @@ ejected trees
 </task-scenarios>
 </task>
 
-<task id="T-004" state="pending" covers="REQ-001 REQ-005">
+<task id="T-004" state="completed" covers="REQ-001 REQ-005">
 ## Wire speccy-ship to mirror the judgment-gated future-spec subset
 
 Edit the **phase** body `resources/modules/phases/speccy-ship.md` (ship is a
