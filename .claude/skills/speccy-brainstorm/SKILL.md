@@ -205,7 +205,11 @@ own judgment.
    SPEC's `## Non-goals` via the routing list below, not the backlog.
    Brainstorm writes no SPEC and never promotes a candidate, so it
    never strikes a backlog entry — promotion is the writing skill's job.
-   The entry shape and authoring discipline:
+   Brainstorm itself never commits; the writing skill it hands off to
+   (`/speccy-plan`, step 8) sweeps this dirty
+   `.speccy/BACKLOG.md` into its commit, so the candidate is recorded
+   durably rather than left as an uncommitted working-tree change. The
+   entry shape and authoring discipline:
 
 ## Backlog ledger entry shape
 

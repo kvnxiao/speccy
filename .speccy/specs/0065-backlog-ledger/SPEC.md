@@ -2,7 +2,7 @@
 id: SPEC-0065
 slug: backlog-ledger
 title: Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of future-spec candidates
-status: in-progress
+status: implemented
 created: 2026-06-13
 supersedes: []
 ---

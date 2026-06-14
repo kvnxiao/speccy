@@ -347,9 +347,23 @@ never on the reuse path.
    Then run the shared commit recipe, supplying its two
    behaviour-varying parameters as follows:
 
-   - **Staging breadth: narrow `git add <spec-dir>/SPEC.md`.** Stage
-     exactly the spec's `SPEC.md` and nothing else. Do not use
-     `git add -A` or `git add .`.
+   - **Staging breadth: narrow `git add <spec-dir>/SPEC.md`, plus
+     `.speccy/BACKLOG.md` when it is dirty.** Stage the spec's
+     `SPEC.md`, and the backlog file too when this loop touched it —
+     a step-2 append, a step-5 strike, or an entry the preceding
+     `speccy-brainstorm` appended and left for this
+     commit to sweep up. Stage it whenever the file exists — `git add`
+     on an unchanged path is a no-op, and this also catches a
+     first-append `.speccy/BACKLOG.md` that is still untracked, which
+     `git diff` would miss:
+
+     ```bash
+     test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
+     ```
+
+     so the recorded or retired candidate survives the commit rather
+     than riding on as an uncommitted working-tree change. Stage
+     nothing else. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
        substituted for the resolved spec id.

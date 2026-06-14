@@ -148,8 +148,8 @@ Readiness semantics:
    element) — stop and fix before opening the PR.
 
 6. Commit SPEC.md, TASKS.md, REPORT.md, the `.speccy/MEMORY.md`
-   mutation from the retro (step 3), and the code changes from the
-   loop. Then push:
+   mutation and any `.speccy/BACKLOG.md` mutation from the retro
+   (step 3), and the code changes from the loop. Then push:
 
    - If this branch has no open PR yet, open one. Render the PR body
      from the canonical template at
