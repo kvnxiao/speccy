@@ -5,6 +5,7 @@ title: Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of fut
 status: implemented
 created: 2026-06-13
 supersedes: []
+archived_at: 2026-06-14
 ---
 
 # SPEC-0065: Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of future-spec candidates
