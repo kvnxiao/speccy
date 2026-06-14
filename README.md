@@ -100,7 +100,7 @@ flowchart LR
     Idea([Fuzzy idea])
 
     subgraph Plan [Plan · human-led]
-      direction LR
+      direction TB
       Brain["/speccy-brainstorm"]
       G1{{HUMAN gate:<br/>approve framing}}
       PlanCmd["/speccy-plan"]
