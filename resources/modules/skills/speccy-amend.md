@@ -104,9 +104,12 @@ reconciliation are not forgotten.
    mismatch-clear check in step 6 confirms the SPEC and tasks are back
    in sync, commit this amend's delta so the reconciled artifacts are
    recorded together. The commit covers the spec's `SPEC.md`, the
-   reconciled `TASKS.md` **when one exists**, and any per-task journal
+   reconciled `TASKS.md` **when one exists**, any per-task journal
    blocker files this amend appended this run
-   (`<spec-dir>/journal/T-NNN.md`). When the spec has no `TASKS.md` yet,
+   (`<spec-dir>/journal/T-NNN.md`), and `.speccy/BACKLOG.md` when it is
+   dirty — a brainstorm session framing this amendment may have appended
+   a future-spec candidate, and amend commits that inherited mutation
+   rather than leaving it dirty. When the spec has no `TASKS.md` yet,
    the commit contains `SPEC.md` (plus any journal files) without failing
    on the absent tasks file — drop the missing `TASKS.md` from the
    staging list rather than requiring it to exist.
@@ -125,8 +128,19 @@ reconciliation are not forgotten.
      amend delta and nothing else: `<spec-dir>/SPEC.md`, the reconciled
      `<spec-dir>/TASKS.md` **only when it exists** (omit it from the list
      when the spec has no tasks file yet — do not let a missing path
-     fail the stage), and each `<spec-dir>/journal/T-NNN.md` blocker file
-     appended this run. Do not use `git add -A` or `git add .`.
+     fail the stage), each `<spec-dir>/journal/T-NNN.md` blocker file
+     appended this run, plus `.speccy/BACKLOG.md` when it exists. Stage
+     the backlog under an existence guard so a brainstorm-framed
+     amendment's inherited append rides into this commit, while an absent
+     file does not fail the stage — `git add` on an unchanged path is a
+     no-op, and the guard also catches a first-append untracked backlog
+     `git diff` would miss:
+
+     ```bash
+     test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
+     ```
+
+     Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: amend — <why>` with `SPEC-NNNN`
        substituted for the resolved spec id, and `<why>` a title-length

@@ -227,7 +227,7 @@ Suggested files: `speccy-cli/tests/init.rs`
 </task-scenarios>
 </task>
 
-<task id="T-007" state="pending" covers="REQ-008">
+<task id="T-007" state="completed" covers="REQ-008">
 ## Stage an inherited `.speccy/BACKLOG.md` in the amend commit
 
 Edit the skill body `resources/modules/skills/speccy-amend.md` so its commit
