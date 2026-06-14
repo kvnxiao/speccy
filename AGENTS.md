@@ -5,7 +5,7 @@
 
 ## Product north star
 
-> Maintained by the `speccy-init` skill; Speccy has no separate `VISION.md`.
+> Maintained by the `speccy-bootstrap` skill; Speccy has no separate `VISION.md`.
 > Note: "Mission" is reserved for the Speccy noun (a focus-area grouping under
 > `.speccy/specs/[focus]/MISSION.md`). Mission folders are optional and earn
 > their existence only when 2+ related specs share plan-time context.

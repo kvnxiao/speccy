@@ -139,38 +139,38 @@ fn stub_skill_has_no_steps_or_when_to_use_codex() {
     }
 }
 
-/// The `speccy-init` SKILL.md files keep their full procedural body
+/// The `speccy-bootstrap` SKILL.md files keep their full procedural body
 /// (the stub-shape transformation does not apply to init since it
 /// has no subagent file to defer to).
 #[test]
 fn init_skill_stays_full_body_claude_code() {
     let root = workspace_root();
-    let path = root.join(".claude/skills/speccy-init/SKILL.md");
+    let path = root.join(".claude/skills/speccy-bootstrap/SKILL.md");
     let body = fs_err::read_to_string(&path)
-        .expect(".claude/skills/speccy-init/SKILL.md must be readable");
+        .expect(".claude/skills/speccy-bootstrap/SKILL.md must be readable");
     assert!(
         body.contains("## Steps"),
-        ".claude/skills/speccy-init/SKILL.md must carry the full procedural body (## Steps) since init has no subagent to defer to",
+        ".claude/skills/speccy-bootstrap/SKILL.md must carry the full procedural body (## Steps) since init has no subagent to defer to",
     );
     assert!(
         body.contains("## When to use"),
-        ".claude/skills/speccy-init/SKILL.md must carry the full procedural body (## When to use) since init has no subagent to defer to",
+        ".claude/skills/speccy-bootstrap/SKILL.md must carry the full procedural body (## When to use) since init has no subagent to defer to",
     );
 }
 
 #[test]
 fn init_skill_stays_full_body_codex() {
     let root = workspace_root();
-    let path = root.join(".agents/skills/speccy-init/SKILL.md");
+    let path = root.join(".agents/skills/speccy-bootstrap/SKILL.md");
     let body = fs_err::read_to_string(&path)
-        .expect(".agents/skills/speccy-init/SKILL.md must be readable");
+        .expect(".agents/skills/speccy-bootstrap/SKILL.md must be readable");
     assert!(
         body.contains("## Steps"),
-        ".agents/skills/speccy-init/SKILL.md must carry the full procedural body (## Steps) since init has no subagent to defer to",
+        ".agents/skills/speccy-bootstrap/SKILL.md must carry the full procedural body (## Steps) since init has no subagent to defer to",
     );
     assert!(
         body.contains("## When to use"),
-        ".agents/skills/speccy-init/SKILL.md must carry the full procedural body (## When to use) since init has no subagent to defer to",
+        ".agents/skills/speccy-bootstrap/SKILL.md must carry the full procedural body (## When to use) since init has no subagent to defer to",
     );
 }
 

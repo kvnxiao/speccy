@@ -1,5 +1,5 @@
 
-# {{ cmd_prefix }}speccy-init
+# {{ cmd_prefix }}speccy-bootstrap
 
 {% if host == "claude-code" %}Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Claude
 Code skill pack into `.claude/skills/`, seed the product north star
@@ -51,7 +51,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    simply not enumerated.
 
 3. **Inspect `AGENTS.md` at the repo root and decide per-section.**
-   `/speccy-init` seeds two independent sections — `## Product north
+   `/speccy-bootstrap` seeds two independent sections — `## Product north
    star` and `## Speccy conventions` — per the AGENTS.md state matrix:
    north-star (present / absent) × conventions (present / absent),
    four cells.
@@ -118,7 +118,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    multiple-choice when enumerable, draft-and-confirm, hard gate
    before write — are inlined here deliberately. Do not invoke
    `/speccy-brainstorm` or any other sub-skill from this path;
-   `/speccy-init` stays self-contained.
+   `/speccy-bootstrap` stays self-contained.
 
    **Hard gate before write.** Do not write the `## Product north
    star` section to `AGENTS.md` until every one of the five

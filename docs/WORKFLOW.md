@@ -393,7 +393,7 @@ grounding sub-agents. The Codex parallel is
 
 Skills that stay in the parent session (no agent file) are the ones that
 either need interactive user prompts or own serialised writes to TASKS.md
-/ the journal: `speccy-init`, `speccy-review`, `speccy-orchestrate`, and
+/ the journal: `speccy-bootstrap`, `speccy-review`, `speccy-orchestrate`, and
 `speccy-vet` fall into this bucket.
 
 ### Per-host template variables
@@ -493,7 +493,7 @@ workers are deliberately small, they defer to the agent file, but are
 not fixed-line stubs; they may inline entry preconditions or policy
 references that callers need to see without reading the agent body.
 
-- `/speccy-init`: bootstrap the project (interactive)
+- `/speccy-bootstrap`: bootstrap the project (interactive)
 - `/speccy-brainstorm`: atomize a fuzzy ask before drafting a SPEC
 - `/speccy-plan`: Phase 1 (AGENTS.md north star + optional MISSION.md → SPEC)
 - `/speccy-decompose`: Phase 2 (SPEC → TASKS, then `speccy lock`)
@@ -600,7 +600,7 @@ Speccy's shipped skill packs pin specific model and effort tiers for each
 phase of the development loop. The pin assignment is asymmetric and
 reflects the work-shape of each role: mechanical phases pin a mid-tier
 model so they run cheaply; adversarial reviewers pin a higher tier so they
-catch real drift. Interactive / orchestrator skills (`/speccy-init`,
+catch real drift. Interactive / orchestrator skills (`/speccy-bootstrap`,
 `/speccy-brainstorm`, `/speccy-plan`, `/speccy-amend`, `/speccy-review`,
 `/speccy-orchestrate`, `/speccy-vet`) stay unpinned and inherit whatever
 model the parent session is using.
@@ -612,7 +612,7 @@ model the parent session is using.
 | `speccy-decompose` | `model: opus[1m]`, `effort: medium` | `model = "gpt-5.5"`, reasoning effort medium | yes |
 | `speccy-work` | `model: opus[1m]`, `effort: high` | `model = "gpt-5.5"`, reasoning effort medium | yes |
 | `speccy-ship` | `model: sonnet[1m]`, `effort: medium` | `model = "gpt-5.5"`, reasoning effort medium | yes |
-| `speccy-init` | unpinned, inherits session | unpinned, inherits session | no |
+| `speccy-bootstrap` | unpinned, inherits session | unpinned, inherits session | no |
 | `speccy-review` | unpinned, inherits session | unpinned, inherits session | no |
 | `reviewer-business` | `model: opus[1m]`, `effort: xhigh` | `model = "gpt-5.5"`, reasoning effort high | yes |
 | `reviewer-tests` | `model: opus[1m]`, `effort: xhigh` | `model = "gpt-5.5"`, reasoning effort high | yes |
@@ -633,7 +633,7 @@ slice without truncation. On Codex, `gpt-5.5` covers every pinned role and
 the asymmetric work-shape is carried entirely by `model_reasoning_effort`.
 
 The pinned phase workers (`speccy-decompose`, `speccy-work`,
-`speccy-ship`) ship sub-agent files. `speccy-init` and `speccy-review`
+`speccy-ship`) ship sub-agent files. `speccy-bootstrap` and `speccy-review`
 ship no agent file on either host, only the SKILL.md surface, because
 both phases need to drive the parent session directly (interactive Q&A in
 init's case; serial TASKS.md writes in review's case).
@@ -661,7 +661,7 @@ the sub-agent explicitly before running the phase:
 
 For the pinned phases, the SKILL.md body defers to the matching agent file
 as the canonical procedure source. The agent file's body is the single
-on-disk source of truth for that phase. `/speccy-init`'s SKILL.md and
+on-disk source of truth for that phase. `/speccy-bootstrap`'s SKILL.md and
 `/speccy-review`'s SKILL.md both remain full-body because there is no
 sub-agent file for either to defer to.
 

@@ -480,12 +480,12 @@ const UNPINNED_CLAUDE_SKILLS: &[&str] = &[
     ".claude/skills/speccy-decompose/SKILL.md",
     ".claude/skills/speccy-work/SKILL.md",
     ".claude/skills/speccy-ship/SKILL.md",
-    ".claude/skills/speccy-init/SKILL.md",
+    ".claude/skills/speccy-bootstrap/SKILL.md",
     ".claude/skills/speccy-review/SKILL.md",
     "resources/agents/.claude/skills/speccy-decompose/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-work/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-ship/SKILL.md.tmpl",
-    "resources/agents/.claude/skills/speccy-init/SKILL.md.tmpl",
+    "resources/agents/.claude/skills/speccy-bootstrap/SKILL.md.tmpl",
     "resources/agents/.claude/skills/speccy-review/SKILL.md.tmpl",
 ];
 

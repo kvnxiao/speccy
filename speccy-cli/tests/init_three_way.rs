@@ -244,9 +244,11 @@ fn chk020_atomic_refuse_no_other_file_written() -> TestResult {
         !fx.root.join(".speccy/.gitkeep").exists(),
         "atomic batch refuse must leave .speccy/.gitkeep uncreated when one planned file conflicts",
     );
-    // The speccy-init SKILL.md must also not be created.
+    // The speccy-bootstrap SKILL.md must also not be created.
     assert!(
-        !fx.root.join(".claude/skills/speccy-init/SKILL.md").exists(),
+        !fx.root
+            .join(".claude/skills/speccy-bootstrap/SKILL.md")
+            .exists(),
         "atomic batch refuse must leave other planned targets uncreated",
     );
     Ok(())
@@ -338,8 +340,8 @@ fn chk021_force_differing_file_content_matches_planned() -> TestResult {
 }
 
 // -----------------------------------------------------------------------
-// No .claude/agents/speccy-init.md, no
-// .claude/agents/speccy-review.md, no .codex/agents/speccy-init.toml, no
+// No .claude/agents/speccy-bootstrap.md, no
+// .claude/agents/speccy-review.md, no .codex/agents/speccy-bootstrap.toml, no
 // .codex/agents/speccy-review.toml.
 // -----------------------------------------------------------------------
 
@@ -351,7 +353,7 @@ fn chk022_no_interactive_skill_agent_files_created() -> TestResult {
     run_init(&fx.root, &[]).success();
 
     let forbidden_claude = [
-        ".claude/agents/speccy-init.md",
+        ".claude/agents/speccy-bootstrap.md",
         ".claude/agents/speccy-review.md",
     ];
     for path in forbidden_claude {
@@ -371,7 +373,7 @@ fn chk022_no_interactive_skill_agent_files_created() -> TestResult {
     cmd.assert().success();
 
     let forbidden_codex = [
-        ".codex/agents/speccy-init.toml",
+        ".codex/agents/speccy-bootstrap.toml",
         ".codex/agents/speccy-review.toml",
     ];
     for path in forbidden_codex {

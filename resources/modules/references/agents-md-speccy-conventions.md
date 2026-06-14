@@ -1,12 +1,12 @@
 ## Speccy conventions
 
-> Managed by `/speccy-init`; edits inside this section are
+> Managed by `/speccy-bootstrap`; edits inside this section are
 > overwritten on re-run. Put project-specific additions in a sibling
 > section.
 
 ### When to use which skill
 
-- `/speccy-init` — bootstrap a new Speccy workspace by scaffolding
+- `/speccy-bootstrap` — bootstrap a new Speccy workspace by scaffolding
   `.speccy/` and seeding both the product north star and this
   conventions section into `AGENTS.md`. Run once per project before
   any other `speccy-*` skill. Re-running refreshes this section.

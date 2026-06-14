@@ -104,7 +104,7 @@ struct RecipeFrontmatter {
 }
 
 const SKILL_NAMES: &[&str] = &[
-    "speccy-init",
+    "speccy-bootstrap",
     "speccy-plan",
     "speccy-decompose",
     "speccy-work",
@@ -127,8 +127,8 @@ const HOST_SKILL_ROOTS: &[(&str, &str)] = &[("claude-code", ".claude"), ("codex"
 /// became thin stubs. These stubs do not contain a
 /// single `{% include %}` directive, do not contain `## When to use`,
 /// and do not carry a full `speccy …` command in a code fence — they
-/// are pointer-only bodies. The fourth phase (`speccy-init`) keeps its
-/// full body sourced from `modules/phases/speccy-init.md` (it is
+/// are pointer-only bodies. The fourth phase (`speccy-bootstrap`) keeps its
+/// full body sourced from `modules/phases/speccy-bootstrap.md` (it is
 /// excluded from the stub transformation).
 // `speccy-work` migrated from
 // stub-delegate to pure-include shape, so it is no longer a "stub"
@@ -452,7 +452,7 @@ fn claude_code_wrapper_shape_and_body() {
 
         // The three pinned phase-worker skills (`speccy-decompose`,
         // `speccy-work`, `speccy-ship`) have thin stub bodies instead
-        // of a single `{% include %}` directive. `speccy-init` keeps
+        // of a single `{% include %}` directive. `speccy-bootstrap` keeps
         // its full body but includes from `modules/phases/` rather
         // than `modules/skills/`.
         // All other skills follow the single-include shape.
@@ -471,7 +471,7 @@ fn claude_code_wrapper_shape_and_body() {
                 "stub wrapper `{}` body must contain `/agent {verb}`",
                 path.display(),
             );
-        } else if *verb == "speccy-init" {
+        } else if *verb == "speccy-bootstrap" {
             // init keeps full body but include path moved to modules/phases/.
             let expected_body = format!("{{% include \"modules/phases/{verb}.md\" %}}");
             assert_eq!(
@@ -589,7 +589,7 @@ fn t006_codex_wrapper_shape_and_body() {
 
         // The three pinned phase-worker skills (`speccy-decompose`,
         // `speccy-work`, `speccy-ship`) have thin stub bodies instead
-        // of a single `{% include %}` directive. `speccy-init` keeps
+        // of a single `{% include %}` directive. `speccy-bootstrap` keeps
         // its full body but includes from `modules/phases/` rather
         // than `modules/skills/`.
         // The Codex
@@ -611,7 +611,7 @@ fn t006_codex_wrapper_shape_and_body() {
                 "stub wrapper `{}` body must contain `/agent {verb}`",
                 path.display(),
             );
-        } else if *verb == "speccy-init" {
+        } else if *verb == "speccy-bootstrap" {
             // init keeps full body but include path moved to modules/phases/.
             let expected_body = format!("{{% include \"modules/phases/{verb}.md\" %}}");
             assert_eq!(

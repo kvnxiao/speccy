@@ -29,7 +29,7 @@ F-6: Optional PreToolUse hook templates shipped by speccy init
   - Edit to impl files before test files within a task's [~] window
   - git commit while any task is [~]
 - Why: warnings (not blocks) fit Principle 1; host-side fits Principle 2.
-- Risk: each hook is one more thing speccy-init can wreck — ship opt-in.
+- Risk: each hook is one more thing speccy-bootstrap can wreck — ship opt-in.
 
 Tier 3 — reject
 

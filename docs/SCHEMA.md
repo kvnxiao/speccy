@@ -128,7 +128,7 @@ loaded into every rendered prompt, so the north star is always in
 context for any planner, implementer, or reviewer agent.
 
 When `AGENTS.md` is missing or lacks a product north star section, the
-**`speccy-init` skill** (not the CLI) runs an interactive Q&A to
+**`speccy-bootstrap` skill** (not the CLI) runs an interactive Q&A to
 populate it. The skill detects three states:
 
 1. AGENTS.md missing entirely → bootstrap from scratch via full Q&A

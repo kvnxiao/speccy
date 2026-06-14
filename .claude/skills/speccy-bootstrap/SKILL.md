@@ -1,26 +1,26 @@
 ---
-name: speccy-init
-description: 'Bootstrap a new Speccy workspace by scaffolding `.speccy/` and installing the host-native skill pack. Use when the user says "set up speccy", "init speccy", "add speccy to this repo", or wants to start a spec-driven workflow somewhere that has no `.speccy/` yet. Also seeds two canonical sections into `AGENTS.md`: the `## Product north star` (freeze-on-first-write, captured via an adaptive draft-or-Socratic flow) and the `## Speccy conventions` section (always-upsert canonical boilerplate covering when-to-use-which-skill, the dev loop, test hygiene, commit hygiene, and the CI-gate suggestion). Run once per project before any other speccy-* skill. Requires: no preconditions. Do NOT trigger when `.speccy/` already exists — use speccy-amend for SPEC edits or speccy-plan for a new SPEC instead.'
+name: speccy-bootstrap
+description: 'Bootstrap a new Speccy workspace by scaffolding `.speccy/` and installing the host-native skill pack. Use when the user says "bootstrap speccy", "set up speccy", "init speccy", "add speccy to this repo", or wants to start a spec-driven workflow somewhere that has no `.speccy/` yet. Also seeds two canonical sections into `AGENTS.md`: the `## Product north star` (freeze-on-first-write, captured via an adaptive draft-or-Socratic flow) and the `## Speccy conventions` section (always-upsert canonical boilerplate covering when-to-use-which-skill, the dev loop, test hygiene, commit hygiene, and the CI-gate suggestion). Run once per project before any other speccy-* skill. Requires: no preconditions. Do NOT trigger when `.speccy/` already exists — use speccy-amend for SPEC edits or speccy-plan for a new SPEC instead.'
 ---
 
-# speccy-init
+# /speccy-bootstrap
 
-Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Codex
-skill pack into `.agents/skills/`, seed the product north star into
-the project's root `AGENTS.md` (freeze-on-first-write), and upsert
-the canonical `## Speccy conventions` section into the same
+Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Claude
+Code skill pack into `.claude/skills/`, seed the product north star
+into the project's root `AGENTS.md` (freeze-on-first-write), and
+upsert the canonical `## Speccy conventions` section into the same
 `AGENTS.md` (always-upsert, so re-runs refresh it).
 
 ## When to use
 
-Run once per project, before any other Speccy skill. Re-run with
-`--force` after upgrading `speccy` to refresh both the shipped skill
-files **and** the `## Speccy conventions` section in `AGENTS.md` so
-your agents pick up newly shipped skills and refined rules. The
-`## Product north star` section is written once and then left alone;
-the conventions section is always re-upserted from the canonical
-template. `speccy init` only ever touches files it ships;
-user-authored skill files in `.agents/skills/` are left alone.
+Run once per project, before any other Speccy slash-command. Re-run
+with `--force` after upgrading `speccy` to refresh both the shipped
+skill files **and** the `## Speccy conventions` section in
+`AGENTS.md` so your agents pick up newly shipped skills and refined
+rules. The `## Product north star` section is written once and then
+left alone; the conventions section is always re-upserted from the
+canonical template. `speccy init` only ever touches files it ships;
+user-authored skill files in `.claude/skills/` are left alone.
 
 ## Steps
 
@@ -40,7 +40,7 @@ user-authored skill files in `.agents/skills/` are left alone.
    simply not enumerated.
 
 3. **Inspect `AGENTS.md` at the repo root and decide per-section.**
-   `/speccy-init` seeds two independent sections — `## Product north
+   `/speccy-bootstrap` seeds two independent sections — `## Product north
    star` and `## Speccy conventions` — per the AGENTS.md state matrix:
    north-star (present / absent) × conventions (present / absent),
    four cells.
@@ -107,7 +107,7 @@ user-authored skill files in `.agents/skills/` are left alone.
    multiple-choice when enumerable, draft-and-confirm, hard gate
    before write — are inlined here deliberately. Do not invoke
    `/speccy-brainstorm` or any other sub-skill from this path;
-   `/speccy-init` stays self-contained.
+   `/speccy-bootstrap` stays self-contained.
 
    **Hard gate before write.** Do not write the `## Product north
    star` section to `AGENTS.md` until every one of the five
@@ -155,13 +155,13 @@ user-authored skill files in `.agents/skills/` are left alone.
 
    ## Speccy conventions
 
-> Managed by `/speccy-init`; edits inside this section are
+> Managed by `/speccy-bootstrap`; edits inside this section are
 > overwritten on re-run. Put project-specific additions in a sibling
 > section.
 
 ### When to use which skill
 
-- `/speccy-init` — bootstrap a new Speccy workspace by scaffolding
+- `/speccy-bootstrap` — bootstrap a new Speccy workspace by scaffolding
   `.speccy/` and seeding both the product north star and this
   conventions section into `AGENTS.md`. Run once per project before
   any other `speccy-*` skill. Re-running refreshes this section.
@@ -290,7 +290,7 @@ not block anyone from making mistakes.
    to `AGENTS.md` (if anything), and the final counts (`N
    created, N overwritten`).
 
-7. **Suggest the next step.** `speccy-plan` to draft the first
+7. **Suggest the next step.** `/speccy-plan` to draft the first
    SPEC slice from the now-populated north star.
 
 This recipe does not loop. The bootstrap runs once; subsequent

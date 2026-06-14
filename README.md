@@ -61,13 +61,22 @@ The shipped skill packs target two agent harnesses: **Claude Code** and
 
 ---
 
-## How you use it
+## How to use
 
-Run `speccy init` once per repo to scaffold `.speccy/` and install the
-host skill pack. After that, day-to-day work happens **inside your agent
-harness** as slash commands. You type a command; the shipped skill
-invokes the CLI on your behalf and knows which verbs to call, when, and
-in what order.
+Bootstrapping is two one-time steps:
+
+1. **In the repo (CLI):** run `speccy init` once to scaffold `.speccy/`
+   and install the host skill pack into `.claude/` (or `.agents/` for
+   Codex).
+2. **In your agent harness:** run `/speccy-bootstrap` once. It seeds your
+   root `AGENTS.md` with the product north star and a `## Speccy
+   conventions` section, so the agent knows when to reach for which skill
+   and how the loop runs. Re-run it after a `speccy` upgrade to refresh
+   the conventions and pick up any newly shipped skills.
+
+After that, day-to-day work happens **inside your agent harness** as
+slash commands. You type a command; the shipped skill invokes the CLI on
+your behalf and knows which verbs to call, when, and in what order.
 
 ```text
 /speccy-brainstorm   atomize a fuzzy idea into first-principle requirements
@@ -85,7 +94,7 @@ pre-ship drift check that won't converge).
 
 ```mermaid
 flowchart TD
-    Idea([Fuzzy idea]) --> Init["speccy init<br/>one-time bootstrap"]
+    Idea([Fuzzy idea]) --> Init["speccy init (CLI)<br/>scaffold + install skills"]
 
     subgraph Plan [Plan · human-led]
       direction TB
@@ -108,7 +117,8 @@ flowchart TD
       G2 --> ShipCmd
     end
 
-    Init --> Brain
+    Init --> Boot["/speccy-bootstrap<br/>seed AGENTS.md · one-time"]
+    Boot --> Brain
     Decomp --> Orch
     Orch --> G2
     ShipCmd --> Done([PR opened])

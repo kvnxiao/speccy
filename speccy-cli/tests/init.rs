@@ -53,7 +53,7 @@ fn split_frontmatter(source: &str) -> Option<(&str, &str)> {
 /// `<host>/<name>/SKILL.md` in the bundle and at
 /// `<dest>/<name>/SKILL.md` in the user's project.
 const SKILL_NAMES: [&str; 8] = [
-    "speccy-init",
+    "speccy-bootstrap",
     "speccy-plan",
     "speccy-decompose",
     "speccy-work",
@@ -125,7 +125,7 @@ fn refuse_without_force() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/skills/speccy-init/SKILL.md",
+        ".claude/skills/speccy-bootstrap/SKILL.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -143,7 +143,7 @@ fn force_overwrites_shipped_files() -> TestResult {
     mkdir(&fx.root, ".claude")?;
     write_file(
         &fx.root,
-        ".claude/skills/speccy-init/SKILL.md",
+        ".claude/skills/speccy-bootstrap/SKILL.md",
         "OLD-SHIPPED-CONTENT",
     )?;
 
@@ -153,10 +153,10 @@ fn force_overwrites_shipped_files() -> TestResult {
         .current_dir(fx.root.as_std_path());
     cmd.assert().success();
 
-    let shipped = read_file(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
+    let shipped = read_file(&fx.root, ".claude/skills/speccy-bootstrap/SKILL.md")?;
     assert_ne!(
         shipped, "OLD-SHIPPED-CONTENT",
-        "--force should refresh .claude/skills/speccy-init/SKILL.md",
+        "--force should refresh .claude/skills/speccy-bootstrap/SKILL.md",
     );
     let (yaml, _body) = split_frontmatter(&shipped)
         .ok_or("refreshed SKILL.md must have a `---` frontmatter fence")?;
@@ -164,8 +164,8 @@ fn force_overwrites_shipped_files() -> TestResult {
         .map_err(|err| format!("refreshed SKILL.md frontmatter must parse as YAML: {err}"))?;
     assert_eq!(
         fm.name.as_deref(),
-        Some("speccy-init"),
-        "refreshed SKILL.md `name` field must equal `speccy-init`",
+        Some("speccy-bootstrap"),
+        "refreshed SKILL.md `name` field must equal `speccy-bootstrap`",
     );
     assert!(
         !fm.description.trim().is_empty(),
@@ -279,7 +279,9 @@ fn host_detection_precedence() -> TestResult {
             .current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
+            fx.root
+                .join(".agents/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             "--host codex must populate .agents/skills/ regardless of .claude/ presence",
         );
     }
@@ -293,11 +295,15 @@ fn host_detection_precedence() -> TestResult {
         cmd.arg("init").current_dir(fx.root.as_std_path());
         cmd.assert().success();
         assert!(
-            fx.root.join(".claude/skills/speccy-init/SKILL.md").exists(),
+            fx.root
+                .join(".claude/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             ".claude/ should win autodetect when both present",
         );
         assert!(
-            !fx.root.join(".agents/skills/speccy-init/SKILL.md").exists(),
+            !fx.root
+                .join(".agents/skills/speccy-bootstrap/SKILL.md")
+                .exists(),
             ".agents/ should NOT be populated when .claude/ won detection",
         );
     }
@@ -811,7 +817,7 @@ fn exit_codes() -> TestResult {
         let fx = project_with_name("exit-one-conflict")?;
         write_file(
             &fx.root,
-            ".claude/skills/speccy-init/SKILL.md",
+            ".claude/skills/speccy-bootstrap/SKILL.md",
             "differing-content\n",
         )?;
         let mut cmd = Command::cargo_bin("speccy")?;
@@ -1101,8 +1107,8 @@ fn assert_thin_stub_body(root: &Utf8Path, rel: &str, agent_path: &str, phase: &s
     Ok(())
 }
 
-/// Assert the `speccy-init` SKILL.md rendered file retains its full
-/// body. `speccy-init` is exempt from the thin-stub
+/// Assert the `speccy-bootstrap` SKILL.md rendered file retains its full
+/// body. `speccy-bootstrap` is exempt from the thin-stub
 /// transformation because there is no pinned subagent to delegate to.
 fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     let body = read_file(root, rel)?;
@@ -1111,11 +1117,11 @@ fn assert_init_full_body(root: &Utf8Path, rel: &str) -> TestResult {
     let non_empty_lines = post_fm.lines().filter(|l| !l.trim().is_empty()).count();
     assert!(
         non_empty_lines >= 20,
-        "rendered {rel} must retain full body (>= 20 non-empty lines), got {non_empty_lines}; the thin-stub transformation must not apply to speccy-init",
+        "rendered {rel} must retain full body (>= 20 non-empty lines), got {non_empty_lines}; the thin-stub transformation must not apply to speccy-bootstrap",
     );
     assert!(
-        !post_fm.contains("/agent speccy-init"),
-        "rendered {rel} must not delegate to `/agent speccy-init` (no speccy-init subagent on either host); got:\n{post_fm}",
+        !post_fm.contains("/agent speccy-bootstrap"),
+        "rendered {rel} must not delegate to `/agent speccy-bootstrap` (no speccy-bootstrap subagent on either host); got:\n{post_fm}",
     );
     Ok(())
 }
@@ -1202,15 +1208,15 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         );
     }
 
-    let init_agent = fx.root.join(".claude/agents/speccy-init.md");
+    let init_agent = fx.root.join(".claude/agents/speccy-bootstrap.md");
     assert!(
         !init_agent.exists(),
-        "speccy init must not render `.claude/agents/speccy-init.md` (no pinned init subagent); found at `{init_agent}`",
+        "speccy init must not render `.claude/agents/speccy-bootstrap.md` (no pinned init subagent); found at `{init_agent}`",
     );
 
     assert_claude_reviewer_pins(&fx.root)?;
 
-    for phase in ["decompose", "work", "ship", "init"] {
+    for phase in ["decompose", "work", "ship", "bootstrap"] {
         let rel = format!(".claude/skills/speccy-{phase}/SKILL.md");
         let fm = parse_no_pin_skill(&fx.root, &rel)?;
         assert_no_pin_keys(&rel, &fm);
@@ -1223,7 +1229,7 @@ fn t007_init_renders_claude_code_pin_assignments_matching_dogfood_pack() -> Test
         let agent_path = format!(".claude/agents/speccy-{phase}.md");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
     }
-    assert_init_full_body(&fx.root, ".claude/skills/speccy-init/SKILL.md")?;
+    assert_init_full_body(&fx.root, ".claude/skills/speccy-bootstrap/SKILL.md")?;
     Ok(())
 }
 
@@ -1259,8 +1265,8 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
     // Codex half: mirror of the Claude Code test
     // against the Codex host pack. Asserts the three pinned phase-worker
     // TOMLs, the absence invariants for `speccy-review.toml` and
-    // `speccy-init.toml`, the asymmetric reviewer assignment, the
-    // pinned-phase thin-stub bodies, and the full-body `speccy-init`
+    // `speccy-bootstrap.toml`, the asymmetric reviewer assignment, the
+    // pinned-phase thin-stub bodies, and the full-body `speccy-bootstrap`
     // SKILL.md.
     let fx = project_with_name("t007-codex-pins")?;
     let mut cmd = Command::cargo_bin("speccy")?;
@@ -1281,10 +1287,10 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
         !review_toml.exists(),
         "speccy init must not render `.codex/agents/speccy-review.toml` (orchestrator stays unpinned on Codex); found at `{review_toml}`",
     );
-    let init_toml = fx.root.join(".codex/agents/speccy-init.toml");
+    let init_toml = fx.root.join(".codex/agents/speccy-bootstrap.toml");
     assert!(
         !init_toml.exists(),
-        "speccy init must not render `.codex/agents/speccy-init.toml` (no pinned init subagent); found at `{init_toml}`",
+        "speccy init must not render `.codex/agents/speccy-bootstrap.toml` (no pinned init subagent); found at `{init_toml}`",
     );
 
     assert_codex_reviewer_pins(&fx.root)?;
@@ -1294,7 +1300,7 @@ fn t007_init_renders_codex_pin_assignments_matching_dogfood_pack() -> TestResult
         let agent_path = format!(".codex/agents/speccy-{phase}.toml");
         assert_thin_stub_body(&fx.root, &rel, &agent_path, phase)?;
     }
-    assert_init_full_body(&fx.root, ".agents/skills/speccy-init/SKILL.md")?;
+    assert_init_full_body(&fx.root, ".agents/skills/speccy-bootstrap/SKILL.md")?;
     Ok(())
 }
 
