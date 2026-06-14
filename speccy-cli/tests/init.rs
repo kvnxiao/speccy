@@ -199,11 +199,10 @@ fn force_preserves_user_files() -> TestResult {
     Ok(())
 }
 
-// `.speccy/MEMORY.md` is a repo-owned ledger
-// the eject pipeline never enumerates. Like `.speccy/BACKLOG.md`, it sits in
-// the never-planned-against bucket: `speccy init` only scaffolds `.speccy/`
-// and renders the host pack, so neither a first `init` nor `init --force`
-// creates, edits, or deletes it.
+// `.speccy/MEMORY.md` is a repo-owned ledger the eject pipeline never
+// enumerates: it sits in the never-planned-against bucket, so `speccy init`
+// only scaffolds `.speccy/` and renders the host pack — neither a first
+// `init` nor `init --force` creates, edits, or deletes it.
 
 #[test]
 fn force_preserves_speccy_memory_ledger() -> TestResult {
