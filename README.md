@@ -195,7 +195,7 @@ blocks you mid-loop.
 
 ---
 
-## It lives in your repo
+## Local by design
 
 Everything Speccy installs sits inside your repo. The `.speccy/`
 workspace holds your specs; the host skill pack is copied into your local
