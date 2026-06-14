@@ -70,16 +70,9 @@ is already agreed.
    discretion; neither choice is surfaced as a self-review issue.
 
    **Record a future-spec candidate, if one was cut.** When framing
-   this spec deliberately cuts a piece of scope that is worth its OWN
-   later spec — "not this spec, but its own SPEC later" — append a
-   backlog entry to `.speccy/BACKLOG.md` in the shipped four-field
-   shape, self-creating the file with its header (copied verbatim from
-   the reference) when absent. Provenance names the originating spec and
-   phase: `SPEC-NNNN, plan`. Distinguish the two kinds of cut: a
-   future-spec candidate goes to the backlog, but a cut that is merely
-   out of THIS spec's scope is a spec-local Non-goal — record it in the
-   SPEC's `## Non-goals`, not the backlog. The entry shape and authoring
-   discipline:
+   this spec deliberately cuts a piece of scope worth its OWN later
+   spec, append a candidate with provenance `SPEC-NNNN, plan`, per the
+   reference below.
 
 ## Backlog ledger entry shape
 
@@ -91,6 +84,17 @@ silent**: a missing or malformed file produces no `speccy verify` error or
 warning, and the CLI never reads it. The backlog is a flat, unordered list of
 candidate specs — ideas worth their own SPEC later, not deferrals within a spec
 already in flight.
+
+### When to append a candidate
+
+A producing phase appends an entry here only when it deliberately cuts a piece
+of scope worth its OWN later spec — "not this spec, but its own SPEC later."
+Self-create the file with the header below (copied verbatim) on first append,
+then record the cut in the four-field shape below.
+
+Distinguish the two kinds of cut. A future-spec candidate goes here. A cut that
+is merely out of the current spec's scope is a spec-local Non-goal — it belongs
+in that SPEC's `## Non-goals`, not the backlog.
 
 ### The file header
 
@@ -352,17 +356,7 @@ never on the reuse path.
      `SPEC.md`, and the backlog file too when this loop touched it —
      a step-2 append, a step-5 strike, or an entry the preceding
      `speccy-brainstorm` appended and left for this
-     commit to sweep up. Stage it whenever the file exists — `git add`
-     on an unchanged path is a no-op, and this also catches a
-     first-append `.speccy/BACKLOG.md` that is still untracked, which
-     `git diff` would miss:
-
-     ```bash
-     test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
-     ```
-
-     so the recorded or retired candidate survives the commit rather
-     than riding on as an uncommitted working-tree change. Stage
+     commit to sweep up — under the existence guard below. Stage
      nothing else. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
@@ -370,6 +364,21 @@ never on the reuse path.
      - **Body:** the trimmed value of the `title:` field from SPEC.md's
        YAML frontmatter (the one-line title slug, not the full document
        heading).
+
+## Staging the inherited backlog
+
+Stage `.speccy/BACKLOG.md` whenever it exists, so a candidate this loop touched
+— one this skill appended or struck, or one a preceding brainstorm session
+appended and left dirty — rides into this commit rather than persisting as an
+uncommitted working-tree change. Guard the add on the file's existence:
+`git add` on an unchanged path is a no-op, and the guard also catches a
+first-append `.speccy/BACKLOG.md` that is still untracked, which `git diff`
+would miss:
+
+```bash
+test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
+```
+
 
    With those two parameters fixed, run the shared recipe — it defines
    the no-git short-circuit, the unified stage-then-`git diff --cached

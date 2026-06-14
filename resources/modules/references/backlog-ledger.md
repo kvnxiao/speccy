@@ -9,6 +9,17 @@ warning, and the CLI never reads it. The backlog is a flat, unordered list of
 candidate specs — ideas worth their own SPEC later, not deferrals within a spec
 already in flight.
 
+### When to append a candidate
+
+A producing phase appends an entry here only when it deliberately cuts a piece
+of scope worth its OWN later spec — "not this spec, but its own SPEC later."
+Self-create the file with the header below (copied verbatim) on first append,
+then record the cut in the four-field shape below.
+
+Distinguish the two kinds of cut. A future-spec candidate goes here. A cut that
+is merely out of the current spec's scope is a spec-local Non-goal — it belongs
+in that SPEC's `## Non-goals`, not the backlog.
+
 ### The file header
 
 When the file self-creates on first append, the producing skill copies in this

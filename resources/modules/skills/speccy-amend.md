@@ -129,18 +129,9 @@ reconciliation are not forgotten.
      `<spec-dir>/TASKS.md` **only when it exists** (omit it from the list
      when the spec has no tasks file yet — do not let a missing path
      fail the stage), each `<spec-dir>/journal/T-NNN.md` blocker file
-     appended this run, plus `.speccy/BACKLOG.md` when it exists. Stage
-     the backlog under an existence guard so a brainstorm-framed
-     amendment's inherited append rides into this commit, while an absent
-     file does not fail the stage — `git add` on an unchanged path is a
-     no-op, and the guard also catches a first-append untracked backlog
-     `git diff` would miss:
-
-     ```bash
-     test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
-     ```
-
-     Do not use `git add -A` or `git add .`.
+     appended this run, plus `.speccy/BACKLOG.md` under the existence
+     guard below, so a brainstorm-framed amendment's inherited append
+     rides into this commit. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: amend — <why>` with `SPEC-NNNN`
        substituted for the resolved spec id, and `<why>` a title-length
@@ -149,6 +140,8 @@ reconciliation are not forgotten.
        off the row you just wrote.
      - **Body:** the full text of that newest `## Changelog` row,
        explaining why the amendment was needed.
+
+{% include "modules/references/backlog-staging.md" %}
 
    With those two parameters fixed, run the shared recipe — it defines
    the no-git short-circuit, the unified stage-then-`git diff --cached

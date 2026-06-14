@@ -118,13 +118,11 @@ Readiness semantics:
    `<coverage result="deferred">` rows and any out-of-scope items) and
    ask, per item, "its own future SPEC, or just a limitation of this
    one?". Mirror ONLY the future-spec-worthy subset into
-   `.speccy/BACKLOG.md` as four-field entries with provenance
-   `SPEC-NNNN, ship`, self-creating the file with its header (copied
-   verbatim from the reference) when absent. Items judged local
-   limitations — bug-level caveats, small follow-ups — stay in REPORT.md
-   only and are not appended, so the backlog stays a high-signal
-   new-spec register. This append lands in the same ship commit
-   (step 6). The entry shape and authoring discipline:
+   `.speccy/BACKLOG.md` with provenance `SPEC-NNNN, ship`, per the
+   reference below. Items judged local limitations — bug-level caveats,
+   small follow-ups — stay in REPORT.md only and are not appended, so
+   the backlog stays a high-signal new-spec register. This append lands
+   in the same ship commit (step 6).
 
 {% include "modules/references/backlog-ledger.md" %}
 

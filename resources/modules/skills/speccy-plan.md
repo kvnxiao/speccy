@@ -66,16 +66,9 @@ is already agreed.
    discretion; neither choice is surfaced as a self-review issue.
 
    **Record a future-spec candidate, if one was cut.** When framing
-   this spec deliberately cuts a piece of scope that is worth its OWN
-   later spec — "not this spec, but its own SPEC later" — append a
-   backlog entry to `.speccy/BACKLOG.md` in the shipped four-field
-   shape, self-creating the file with its header (copied verbatim from
-   the reference) when absent. Provenance names the originating spec and
-   phase: `SPEC-NNNN, plan`. Distinguish the two kinds of cut: a
-   future-spec candidate goes to the backlog, but a cut that is merely
-   out of THIS spec's scope is a spec-local Non-goal — record it in the
-   SPEC's `## Non-goals`, not the backlog. The entry shape and authoring
-   discipline:
+   this spec deliberately cuts a piece of scope worth its OWN later
+   spec, append a candidate with provenance `SPEC-NNNN, plan`, per the
+   reference below.
 
 {% include "modules/references/backlog-ledger.md" %}
 
@@ -123,17 +116,7 @@ is already agreed.
      `SPEC.md`, and the backlog file too when this loop touched it —
      a step-2 append, a step-5 strike, or an entry the preceding
      `{{ cmd_prefix }}speccy-brainstorm` appended and left for this
-     commit to sweep up. Stage it whenever the file exists — `git add`
-     on an unchanged path is a no-op, and this also catches a
-     first-append `.speccy/BACKLOG.md` that is still untracked, which
-     `git diff` would miss:
-
-     ```bash
-     test -f .speccy/BACKLOG.md && git add .speccy/BACKLOG.md
-     ```
-
-     so the recorded or retired candidate survives the commit rather
-     than riding on as an uncommitted working-tree change. Stage
+     commit to sweep up — under the existence guard below. Stage
      nothing else. Do not use `git add -A` or `git add .`.
    - **Title and body.**
      - **Title:** `[SPEC-NNNN]: create spec` with `SPEC-NNNN`
@@ -141,6 +124,8 @@ is already agreed.
      - **Body:** the trimmed value of the `title:` field from SPEC.md's
        YAML frontmatter (the one-line title slug, not the full document
        heading).
+
+{% include "modules/references/backlog-staging.md" %}
 
    With those two parameters fixed, run the shared recipe — it defines
    the no-git short-circuit, the unified stage-then-`git diff --cached

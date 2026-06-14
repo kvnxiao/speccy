@@ -188,25 +188,18 @@ own judgment.
    framing.
 
 7. **Record a future-spec candidate, if one was deliberately deferred.**
-   When the Socratic exchange settled on cutting a piece of scope that
-   is worth its OWN later spec — "not this spec, but its own SPEC
-   later" — append a backlog entry to `.speccy/BACKLOG.md` in the
-   shipped four-field shape, self-creating the file with its header
-   (copied verbatim from the reference) when absent. Provenance names
-   the originating spec and phase: `SPEC-NNNN, brainstorm`. This is the
-   one disk write the brainstorm itself performs; everything else stays
-   ephemeral chat. Distinguish the two kinds of cut: a future-spec
-   candidate goes to the backlog, but a cut that is merely out of the
-   forthcoming spec's scope is a spec-local Non-goal — it rides into the
-   SPEC's `## Non-goals` via the routing list below, not the backlog.
-   Brainstorm writes no SPEC and never promotes a candidate, so it
-   never strikes a backlog entry — promotion is the writing skill's job.
-   Brainstorm itself never commits; the writing skill it hands off to at
-   step 8 (`{{ cmd_prefix }}speccy-plan` for a new SPEC,
-   `{{ cmd_prefix }}speccy-amend` for an amendment) sweeps this dirty
-   `.speccy/BACKLOG.md` into its commit, so the candidate is recorded
-   durably rather than left as an uncommitted working-tree change. The
-   entry shape and authoring discipline:
+   When the Socratic exchange settled on cutting a piece of scope worth
+   its OWN later spec, append a candidate with provenance
+   `SPEC-NNNN, brainstorm`, per the reference below. This is the one
+   disk write the brainstorm itself performs; everything else stays
+   ephemeral chat. Brainstorm writes no SPEC and never promotes a
+   candidate, so it never strikes a backlog entry — promotion is the
+   writing skill's job. Brainstorm itself never commits; the writing
+   skill it hands off to at step 8 (`{{ cmd_prefix }}speccy-plan` for a
+   new SPEC, `{{ cmd_prefix }}speccy-amend` for an amendment) sweeps this
+   dirty `.speccy/BACKLOG.md` into its commit, so the candidate is
+   recorded durably rather than left as an uncommitted working-tree
+   change.
 
 {% include "modules/references/backlog-ledger.md" %}
 
