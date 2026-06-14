@@ -191,7 +191,7 @@ ejected trees
 </task-scenarios>
 </task>
 
-<task id="T-006" state="pending" covers="REQ-002">
+<task id="T-006" state="completed" covers="REQ-002">
 ## Regression-test that init never touches a user-owned `.speccy/BACKLOG.md`
 
 Test-only — no production change. `speccy init` enumerates a fixed manifest
