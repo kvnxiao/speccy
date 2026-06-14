@@ -1,37 +1,23 @@
 
 # {{ cmd_prefix }}speccy-bootstrap
 
-{% if host == "claude-code" %}Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Claude
-Code skill pack into `.claude/skills/`, seed the product north star
-into the project's root `AGENTS.md` (freeze-on-first-write), and
-upsert the canonical `## Speccy conventions` section into the same
-`AGENTS.md` (always-upsert, so re-runs refresh it).
+Seeds the Speccy conventions into the project's root `AGENTS.md` — the
+`## Product north star` (freeze-on-first-write) and the always-upserted
+`## Speccy conventions` section — and runs `speccy init` to refresh the
+scaffolded `.speccy/` workspace and the `{% if host == "claude-code" %}.claude{% else %}.agents{% endif %}/skills/` skill pack.
+The workspace already exists by the time this skill runs: a prior
+`speccy init` is what ejected this skill pack in the first place. The
+`AGENTS.md` seeding is the part that needs an agent.
 
 ## When to use
 
-Run once per project, before any other Speccy slash-command. Re-run
-with `--force` after upgrading `speccy` to refresh both the shipped
-skill files **and** the `## Speccy conventions` section in
-`AGENTS.md` so your agents pick up newly shipped skills and refined
-rules. The `## Product north star` section is written once and then
-left alone; the conventions section is always re-upserted from the
-canonical template. `speccy init` only ever touches files it ships;
-user-authored skill files in `.claude/skills/` are left alone.{% else %}Bootstraps a Speccy workspace: scaffold `.speccy/`, copy the Codex
-skill pack into `.agents/skills/`, seed the product north star into
-the project's root `AGENTS.md` (freeze-on-first-write), and upsert
-the canonical `## Speccy conventions` section into the same
-`AGENTS.md` (always-upsert, so re-runs refresh it).
-
-## When to use
-
-Run once per project, before any other Speccy skill. Re-run with
-`--force` after upgrading `speccy` to refresh both the shipped skill
-files **and** the `## Speccy conventions` section in `AGENTS.md` so
-your agents pick up newly shipped skills and refined rules. The
-`## Product north star` section is written once and then left alone;
-the conventions section is always re-upserted from the canonical
-template. `speccy init` only ever touches files it ships;
-user-authored skill files in `.agents/skills/` are left alone.{% endif %}
+Run once per project, right after the first `speccy init`. Re-run after
+upgrading `speccy` to refresh both the shipped skill files **and** the
+`## Speccy conventions` section, so your agents pick up newly shipped
+skills and refined rules. The `## Product north star` section is written
+once and then left alone; the conventions section is always re-upserted
+from the canonical template. `speccy init` only ever touches files it
+ships; user-authored skill files in `{% if host == "claude-code" %}.claude{% else %}.agents{% endif %}/skills/` are left alone.
 
 ## Steps
 
@@ -86,7 +72,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
    Drive the `## Product north star` section as a brainstorm-style
    adaptive iteration over its five subsections in template order:
    opening prose (the project description and motivation paragraph),
-   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Users`, `### Minimal viable product`, `### Quality bar`, and
    `### Known unknowns`. Do not run a fixed question script.
 
    **Inspect the repo first.** Before asking the user anything, read
@@ -129,7 +115,7 @@ user-authored skill files in `.agents/skills/` are left alone.{% endif %}
 
    When all five subsections are approved, compose them into the
    `## Product north star` section under the subheadings
-   `### Users`, `### V1.0 outcome`, `### Quality bar`, and
+   `### Users`, `### Minimal viable product`, `### Quality bar`, and
    `### Known unknowns`, with the opening prose at the section root.
    Non-goals belong as prose at the section root or under an
    optional `### Non-goals` subsection if they surfaced during
