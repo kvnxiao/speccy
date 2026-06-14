@@ -26,7 +26,7 @@ loud the moment it happens.
 - **Proof shape, not proof scores.** Every requirement maps to at least
   one check, and every check says what it proves. The CLI flags
   structural breakage; whether a test is meaningful goes to review.
-- **Adversarial review catches the drift.** A multi-persona review loop
+- **Adversarial review catches drift.** A multi-persona review loop
   (business, tests, security, style, correctness) runs on the same host
   that did the implementation, with state living in markdown the next
   iteration reads.
