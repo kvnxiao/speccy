@@ -95,6 +95,9 @@ The autonomous zone runs itself and only surfaces to you when a bounded
 budget is exhausted (a task that keeps failing review, or a pre-ship drift
 check that won't converge).
 
+<details>
+<summary>Workflow diagram (click to expand)</summary>
+
 ```mermaid
 flowchart TB
     Idea([Fuzzy idea])
@@ -145,6 +148,8 @@ flowchart TB
     classDef soft fill:#e4f0ff,stroke:#3b78c2,stroke-width:2px,color:#000
     class C1 soft
 ```
+
+</details>
 
 `/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you,
 because shipping pushes a branch and opens a PR — an outward-facing action
