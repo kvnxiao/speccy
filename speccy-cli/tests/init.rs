@@ -264,6 +264,83 @@ fn fresh_init_does_not_create_speccy_memory_ledger() -> TestResult {
     Ok(())
 }
 
+// `.speccy/BACKLOG.md` is the future-spec candidate register. Like
+// `.speccy/MEMORY.md` it is user-owned and sits in the never-planned-against
+// bucket: `speccy init` only scaffolds `.speccy/` and renders the host pack,
+// so neither a first `init` nor `init --force` creates, edits, or deletes it,
+// and its path never appears among the ejected paths the init plan reports.
+
+#[test]
+fn force_preserves_speccy_backlog_ledger() -> TestResult {
+    // Seed `.speccy/BACKLOG.md` with arbitrary non-empty content, run
+    // `init --force` for both shipped hosts in the same fixture, and assert
+    // the file's sha256 is unchanged after each and its path never surfaces in
+    // the ejected-paths plan summary — proving the backlog sits outside the
+    // set of files the eject pipeline enumerates.
+    let fx = project_with_name("backlog-preserve")?;
+    let seed = "# Speccy backlog\n\n## Title: extract the foo helper\n\n- What & why: ...\n";
+    write_file(&fx.root, ".speccy/BACKLOG.md", seed)?;
+    let seed_hash = common::sha256_hex(seed.as_bytes());
+
+    for host in ["claude-code", "codex"] {
+        let mut cmd = Command::cargo_bin("speccy")?;
+        cmd.arg("init")
+            .arg("--force")
+            .arg("--host")
+            .arg(host)
+            .current_dir(fx.root.as_std_path());
+        let output = cmd.assert().success().get_output().stdout.clone();
+        let stdout = String::from_utf8(output)?;
+
+        let after = read_file(&fx.root, ".speccy/BACKLOG.md")?;
+        assert_eq!(
+            common::sha256_hex(after.as_bytes()),
+            seed_hash,
+            "`init --force --host {host}` must leave .speccy/BACKLOG.md sha256-identical",
+        );
+        assert!(
+            !stdout.contains("BACKLOG.md"),
+            "`init --force --host {host}` plan summary must not report .speccy/BACKLOG.md among ejected paths; got:\n{stdout}",
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn fresh_init_does_not_create_speccy_backlog_ledger() -> TestResult {
+    // A fresh `init` in a repo without `.speccy/BACKLOG.md` must not create
+    // one; its absence is normal and silent. A follow-up `speccy verify` then
+    // exits 0 with no backlog-attributable diagnostic.
+    let fx = project_with_name("backlog-absent")?;
+    let mut cmd = Command::cargo_bin("speccy")?;
+    cmd.arg("init")
+        .arg("--host")
+        .arg("claude-code")
+        .current_dir(fx.root.as_std_path());
+    cmd.assert().success();
+
+    assert!(
+        !fx.root.join(".speccy/BACKLOG.md").exists(),
+        "a fresh `speccy init` must not create .speccy/BACKLOG.md",
+    );
+
+    let mut verify = Command::cargo_bin("speccy")?;
+    verify.arg("verify").current_dir(fx.root.as_std_path());
+    let output = verify
+        .assert()
+        .success()
+        .code(0)
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(output)?;
+    assert!(
+        !stdout.to_ascii_lowercase().contains("backlog"),
+        "`speccy verify` must emit no backlog-attributable diagnostic; got:\n{stdout}",
+    );
+    Ok(())
+}
+
 #[test]
 fn host_detection_precedence() -> TestResult {
     // 1. --host wins over filesystem signals.

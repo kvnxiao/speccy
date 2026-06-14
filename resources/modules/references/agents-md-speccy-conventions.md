@@ -23,6 +23,9 @@ Per-task implementer notes and reviewer verdicts live in the journal at
 `.speccy/specs/NNNN-slug/journal/T-NNN.md`, sibling to `SPEC.md` and
 `TASKS.md`.
 
+Future-spec candidates live in `.speccy/BACKLOG.md`: planning reads it as
+candidate input; plan and ship append to it.
+
 CI: wire `speccy verify` into whichever CI the project uses. It fails on
 broken proof shape (missing requirement coverage, malformed task state)
 and passes when intact — informational by design, not a blocker.
