@@ -29,8 +29,8 @@ Later sections reference this as "Why fan-outs run inline".
   against existing tasks; it does not plan or decompose.
 
 Stops one step before invoking `{{ cmd_prefix }}speccy-ship`
-(ship opens a PR — irreversible — and is always confirmed by the
-user). Do not invoke this skill for ad-hoc "implement one task" or
+(ship pushes a branch and opens a PR — an outward-facing action —
+and is always confirmed by the user). Do not invoke this skill for ad-hoc "implement one task" or
 "review one task" asks; prefer the single-task primitives.
 
 ## Argument
@@ -256,8 +256,9 @@ workflow has already completed and the only remaining step is user
 confirmation before opening a PR.
 
 Ask the user via {% if host == "claude-code" %}`AskUserQuestion`{% else %}the Codex equivalent user-prompt primitive{% endif %} whether to invoke
-`{{ cmd_prefix }}speccy-ship` now. Ship opens a PR — irreversible —
-so this confirmation is always explicit; never auto-ship.
+`{{ cmd_prefix }}speccy-ship` now. Ship pushes a branch and opens a
+PR — an outward-facing action that notifies reviewers and triggers
+CI — so this confirmation is always explicit; never auto-ship.
 
 - On confirm: spawn a `speccy-ship` sub-agent.
   {% if host == "claude-code" %}Invoke the `Task` tool with `subagent_type: "speccy-ship"`. The

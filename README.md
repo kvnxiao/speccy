@@ -9,7 +9,7 @@ what shipped no longer matches what was asked for. Speccy makes the
 contract between intent and behaviour **visible**, so the drift becomes
 loud the moment it happens.
 
-> **Status:** v1.0.0. Speccy is dogfooded by Speccy itself; its
+> Speccy is dogfooded by Speccy itself; its
 > implementation history is preserved under `.speccy/archive/`.
 
 ---
@@ -26,7 +26,7 @@ loud the moment it happens.
 - **Proof shape, not proof scores.** Every requirement maps to at least
   one check, and every check says what it proves. The CLI flags
   structural breakage; whether a test is meaningful goes to review.
-- **Adversarial review catches the drift.** A multi-persona review loop
+- **Adversarial review catches drift.** A multi-persona review loop
   (business, tests, security, style, correctness) runs on the same host
   that did the implementation, with state living in markdown the next
   iteration reads.
@@ -41,13 +41,13 @@ The full reasoning behind these is in
 Speccy is not yet published to crates.io, so installation is from source:
 
 ```bash
-# from a local clone
+# directly from the repo
+cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
+
+# or from a local clone
 git clone https://github.com/kvnxiao/speccy
 cd speccy
 cargo install --path speccy-cli --locked
-
-# or directly
-cargo install --git https://github.com/kvnxiao/speccy speccy-cli --locked
 ```
 
 Confirm the binary is on `PATH`:
@@ -88,47 +88,72 @@ your behalf and knows which verbs to call, when, and in what order.
 
 The loop has three zones: a human-led planning phase, an autonomous
 work-and-review loop in the middle, and a human-confirmed ship at the
-end. The autonomous zone runs itself and only surfaces to you when a
-bounded budget is exhausted (a task that keeps failing review, or a
-pre-ship drift check that won't converge).
+end. Planning needs one human approval, the framing. After that,
+`/speccy-plan` runs straight through `/speccy-decompose` and stops at a
+contract checkpoint, where you review SPEC + TASKS before the loop starts.
+The autonomous zone runs itself and only surfaces to you when a bounded
+budget is exhausted (a task that keeps failing review, or a pre-ship drift
+check that won't converge).
+
+<details>
+<summary>Workflow diagram (click to expand)</summary>
 
 ```mermaid
-flowchart TD
-    Idea([Fuzzy idea]) --> Init["speccy init (CLI)<br/>scaffold + install skills"]
+flowchart TB
+    Idea([Fuzzy idea])
 
-    subgraph Plan [Plan · human-led]
-      direction TB
+    subgraph Frame [Brainstorm · human-led]
+      direction LR
       Brain["/speccy-brainstorm"]
       G1{{HUMAN gate:<br/>approve framing}}
-      PlanCmd["/speccy-plan"]
-      Decomp["/speccy-decompose"]
-      Brain --> G1 --> PlanCmd --> Decomp
+      Brain --> G1
     end
 
-    subgraph Loop [Work + review + vet · autonomous]
-      direction TB
-      Orch["/speccy-orchestrate"]
+    subgraph Author [Plan + decompose · autonomous]
+      direction LR
+      PlanCmd["/speccy-plan<br/>writes SPEC.md"]
+      Decomp["/speccy-decompose<br/>writes TASKS.md"]
+      PlanCmd -->|auto| Decomp
+    end
+
+    C1{{soft checkpoint:<br/>review SPEC + TASKS}}
+
+    subgraph Loop ["/speccy-orchestrate · autonomous"]
+      direction LR
+      Work["/speccy-work<br/>implement one task"]
+      Review["/speccy-review<br/>5-persona fan-out"]
+      Vet["/speccy-vet<br/>holistic drift gate"]
+      Work --> Review
+      Review -->|next task / retry| Work
+      Review -->|all tasks done| Vet
+      Vet -->|drift: fix loop| Vet
     end
 
     subgraph Ship [Ship · human-confirmed]
-      direction TB
+      direction LR
       G2{{HUMAN gate:<br/>confirm before ship}}
       ShipCmd["/speccy-ship<br/>REPORT.md + PR"]
       G2 --> ShipCmd
     end
 
-    Init --> Boot["/speccy-bootstrap<br/>seed AGENTS.md · one-time"]
-    Boot --> Brain
-    Decomp --> Orch
-    Orch --> G2
+    Idea --> Brain
+    G1 --> PlanCmd
+    Decomp --> C1
+    C1 --> Work
+    Vet -->|pass| G2
     ShipCmd --> Done([PR opened])
 
     classDef human fill:#ffe4b5,stroke:#cc8400,stroke-width:2px,color:#000
     class G1,G2 human
+    classDef soft fill:#e4f0ff,stroke:#3b78c2,stroke-width:2px,color:#000
+    class C1 soft
 ```
 
-`/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you,
-because shipping opens a PR and is not reversible. Two more recipes round
+</details>
+
+`/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you
+first, because shipping pushes a branch and opens a PR, which notifies
+reviewers and triggers CI. Two more recipes round
 out the set: `/speccy-amend` for mid-loop SPEC changes, and `/speccy-vet`
 for the pre-ship drift check (the orchestrator runs it for you, but it is
 runnable on its own).
@@ -175,7 +200,7 @@ blocks you mid-loop.
 
 ---
 
-## It lives in your repo
+## Local by design
 
 Everything Speccy installs sits inside your repo. The `.speccy/`
 workspace holds your specs; the host skill pack is copied into your local

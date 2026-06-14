@@ -455,9 +455,9 @@ fn copy_claude_code_pack_skill_md() -> TestResult {
         );
     }
 
-    // Slash-prefix invariant: Claude Code's `speccy-plan` skill points
-    // the main agent at the `/speccy-decompose` skill as the suggested next
-    // step. The renderer must substitute `{{ cmd_prefix }}` to `"/"`.
+    // Slash-prefix invariant: Claude Code's `speccy-plan` skill continues
+    // into the `/speccy-decompose` skill. The renderer must substitute
+    // `{{ cmd_prefix }}` to `"/"`.
     let plan_body = read_file(&fx.root, ".claude/skills/speccy-plan/SKILL.md")?;
     assert!(
         plan_body.contains("/speccy-decompose"),

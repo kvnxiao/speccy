@@ -135,10 +135,18 @@ is already agreed.
 
 {% include "modules/references/commit-recipe.md" %}
 
+7. **Continue into decompose.** With `SPEC.md` committed, invoke
+   `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` to produce `TASKS.md`.
+   Follow it inline in this session, not as an isolated spawned sub-agent.
+   {% include "modules/skills/partials/inline-fanout-rationale.md" %}
+   Decompose fans out to `plan-architect`, and its exit owns the pre-loop
+   checkpoint — so this skill surfaces none of its own.
+
 ## Exit
 
 `SPEC.md` is written, self-reviewed once, and committed alone on a feature
 branch — `TASKS.md` is `{{ cmd_prefix }}speccy-decompose`'s commit, not this
-skill's, so the new-spec path lands two commits (one per skill). Single pass,
-no loop. Next step: `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` to decompose
-into `TASKS.md`.
+skill's, so the new-spec path lands two commits (one per skill). This skill
+then continues into `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` (step 7),
+which produces `TASKS.md` and stops at the pre-loop checkpoint. Single pass,
+no loop.
