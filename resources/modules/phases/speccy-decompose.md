@@ -115,7 +115,15 @@ Decomposes the SPEC into an ordered, single-agent-sized task list in
 
 `TASKS.md` is written, locked (the two `bootstrap-pending` placeholders are now
 the SPEC sha256 + UTC timestamp), and committed alone on a feature branch.
-Single pass, no loop. Next step:
-`{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN` to drive the implementation +
-review loop end-to-end, or `{{ cmd_prefix }}speccy-work SPEC-NNNN` for one task
-at a time.
+Single pass, no loop.
+
+**Pre-loop checkpoint — stop here.** `SPEC.md` + `TASKS.md` are the contract the
+implementation loop is measured against, and nothing downstream re-checks the
+contract itself (review and vet only catch the implementation drifting *from*
+it). Hand it back for one look before any implementation tokens are spent:
+surface a one-line summary (`SPEC-NNNN`: N requirements, N tasks) and the two
+paths — `{{ cmd_prefix }}speccy-orchestrate SPEC-NNNN` to drive the loop (or
+`{{ cmd_prefix }}speccy-work SPEC-NNNN` one task at a time), or
+`{{ cmd_prefix }}speccy-amend SPEC-NNNN` to revise the contract first. Do not
+auto-invoke the loop — this is a soft checkpoint, but the go-ahead is the
+user's to give.

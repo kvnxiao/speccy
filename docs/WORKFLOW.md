@@ -52,6 +52,11 @@ planning phase. The skill body instructs the agent to:
   nested `<scenario>` element blocks for IDs and check scenarios;
 - surface material questions inline in SPEC.md.
 
+On the new-SPEC path the skill then continues into Phase 2
+(`/speccy-decompose`) in the same session rather than returning to the
+user, so planning carries straight through to a decomposed task list and
+its pre-loop checkpoint.
+
 Mid-loop amendments use the parallel `/speccy-amend` skill (see
 [Amendment](#amendment)).
 
@@ -76,6 +81,13 @@ TASKS.md frontmatter field; the skill calls it once after decomposition
 lands. If TASKS.md already exists, decomposition runs as an amendment
 under `/speccy-amend`, which preserves completed tasks, modifies or
 removes invalidated tasks, and adds new ones for new requirements.
+
+Decomposition exits at a pre-loop checkpoint. `SPEC.md` + `TASKS.md` are
+the contract the implementation loop is measured against, and nothing
+downstream re-checks the contract itself (review and vet only catch the
+implementation drifting *from* it), so the skill stops and hands the
+contract back for one review before `/speccy-orchestrate` (or
+`/speccy-work`) begins.
 
 ### Phase 3: Implementation (single-task primitive)
 
@@ -508,10 +520,11 @@ A typical full session in Claude Code looks like:
 
 ```text
 /speccy-plan
-[agent reads `speccy vacancy --json`, writes SPEC.md]
+[agent writes SPEC.md, then carries through /speccy-decompose on its
+ own: writes TASKS.md, runs `speccy lock SPEC-001`, and stops at the
+ pre-loop checkpoint surfacing SPEC + TASKS for one review]
 
-/speccy-decompose SPEC-001
-[agent writes TASKS.md, then `speccy lock SPEC-001`]
+[review the contract; proceed to the loop, or /speccy-amend to revise]
 
 /speccy-work SPEC-001/T-001
 [agent implements one task, flips state="pending" -> state="in-review", exits]

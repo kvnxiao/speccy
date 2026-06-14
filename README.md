@@ -88,9 +88,12 @@ your behalf and knows which verbs to call, when, and in what order.
 
 The loop has three zones: a human-led planning phase, an autonomous
 work-and-review loop in the middle, and a human-confirmed ship at the
-end. The autonomous zone runs itself and only surfaces to you when a
-bounded budget is exhausted (a task that keeps failing review, or a
-pre-ship drift check that won't converge).
+end. Planning needs one human approval — the framing — after which
+`/speccy-plan` carries straight through `/speccy-decompose` and stops at a
+contract checkpoint where you review SPEC + TASKS before the loop starts.
+The autonomous zone runs itself and only surfaces to you when a bounded
+budget is exhausted (a task that keeps failing review, or a pre-ship drift
+check that won't converge).
 
 ```mermaid
 flowchart TD
@@ -102,7 +105,8 @@ flowchart TD
       G1{{HUMAN gate:<br/>approve framing}}
       PlanCmd["/speccy-plan"]
       Decomp["/speccy-decompose"]
-      Brain --> G1 --> PlanCmd --> Decomp
+      C1{{soft checkpoint:<br/>review SPEC + TASKS}}
+      Brain --> G1 --> PlanCmd -->|auto| Decomp --> C1
     end
 
     subgraph Loop [Work + review + vet · autonomous]
@@ -119,16 +123,19 @@ flowchart TD
 
     Init --> Boot["/speccy-bootstrap<br/>seed AGENTS.md · one-time"]
     Boot --> Brain
-    Decomp --> Orch
+    C1 --> Orch
     Orch --> G2
     ShipCmd --> Done([PR opened])
 
     classDef human fill:#ffe4b5,stroke:#cc8400,stroke-width:2px,color:#000
     class G1,G2 human
+    classDef soft fill:#e4f0ff,stroke:#3b78c2,stroke-width:2px,color:#000
+    class C1 soft
 ```
 
 `/speccy-orchestrate` stops one step short of `/speccy-ship` and asks you,
-because shipping opens a PR and is not reversible. Two more recipes round
+because shipping pushes a branch and opens a PR — an outward-facing action
+that notifies reviewers and triggers CI. Two more recipes round
 out the set: `/speccy-amend` for mid-loop SPEC changes, and `/speccy-vet`
 for the pre-ship drift check (the orchestrator runs it for you, but it is
 runnable on its own).

@@ -248,6 +248,7 @@ Brainstorm's output is the framing the user approved, which flows into SPEC.md
 via the routing list above when the writing skill runs; its only disk write is
 a deferred future-spec candidate appended to `.speccy/BACKLOG.md` at step 7. The
 skill ends by invoking `{{ cmd_prefix }}speccy-plan` (new SPEC)
-or `{{ cmd_prefix }}speccy-amend` (existing SPEC); the step after that is
-`{{ cmd_prefix }}speccy-decompose SPEC-NNNN` (decompose into TASKS.md). Single
-pass, no loop.
+or `{{ cmd_prefix }}speccy-amend` (existing SPEC). On the new-SPEC path,
+`{{ cmd_prefix }}speccy-plan` then carries through
+`{{ cmd_prefix }}speccy-decompose` to the pre-loop checkpoint on its own — no
+separate decompose invocation needed. Single pass, no loop.
