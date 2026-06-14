@@ -162,7 +162,7 @@ ejected trees
 </task-scenarios>
 </task>
 
-<task id="T-005" state="pending" covers="REQ-007">
+<task id="T-005" state="completed" covers="REQ-007">
 ## Name the backlog in the bootstrap conventions block
 
 Edit the conventions reference
