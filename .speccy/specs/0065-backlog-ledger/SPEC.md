@@ -346,6 +346,41 @@ wording is a persona-review judgment.
 
 </requirement>
 
+<requirement id="REQ-008">
+### REQ-008: Amend commits an inherited backlog mutation
+
+A brainstorm session framing an amendment can append a future-spec candidate to
+`.speccy/BACKLOG.md` — brainstorm does not gate its append to the new-spec path —
+leaving the file dirty when `/speccy-amend` runs. `/speccy-amend`'s staging step
+stages an existing `.speccy/BACKLOG.md` (existence-guarded), so that mutation is
+captured in the amend's reconcile commit and survives a branch switch, mirroring
+the plan path's commit of a brainstorm append. Amend stays a committer of an
+inherited entry, not an originating producer.
+
+<done-when>
+- The amend body's commit staging stages `.speccy/BACKLOG.md` when the file
+  exists, alongside SPEC.md / TASKS.md / journal blocker files, and does not
+  fail when it is absent.
+- The instruction reaches the host skill packs via reejection (parity holds).
+</done-when>
+
+<behavior>
+- Given a dirty `.speccy/BACKLOG.md` at amend time, when amend commits its
+  reconcile delta, then the backlog mutation is included in that commit.
+- Given no `.speccy/BACKLOG.md`, when amend runs its staging step, then the
+  absent path does not fail the stage.
+</behavior>
+
+<scenario id="CHK-010">
+Given the ejected amend skill body at HEAD,
+when a reviewer reads its commit staging step,
+then it stages an existing `.speccy/BACKLOG.md` under an existence guard so an
+inherited backlog mutation is committed, and tolerates the file's absence.
+Adequacy of the existence guard and its placement is a persona-review judgment.
+</scenario>
+
+</requirement>
+
 ## Decisions
 
 <decision id="DEC-001">
@@ -388,7 +423,10 @@ vet would double-capture.
 
 **Consequences:** Per-spec backlog growth stays low and deliberate. An idea
 emerging mid-build is captured at ship or by hand, not at review time. The
-per-spec add rate becomes a focus signal in its own right.
+per-spec add rate becomes a focus signal in its own right. This producer set
+governs who *appends*; `/speccy-amend` never appends, but it *commits* an entry
+left dirty by a brainstorm-framed amendment (REQ-008), so that handoff's
+durability matches the plan path without widening the appender set.
 </decision>
 
 <decision id="DEC-003">
@@ -462,4 +500,5 @@ CLI-managed framing of DEC-001.
 | Date | Author | Summary |
 | --- | --- | --- |
 | 2026-06-13 | Kevin Xiao | Initial SPEC: convention-only `.speccy/BACKLOG.md` future-spec register — reference module + four-field entry shape (REQ-001), init-immune user-owned lifecycle (REQ-002), planning reads (REQ-003) and appends on scope-cut (REQ-004), ship mirrors the judgment-gated subset (REQ-005), promotion strikes the entry (REQ-006), and bootstrap names it in the conventions block (REQ-007). |
+| 2026-06-14 | Kevin Xiao | Amend: add REQ-008 — `/speccy-amend` commits an inherited `.speccy/BACKLOG.md` mutation via an existence-guarded stage, closing the durability gap on the brainstorm→amend handoff that the new-spec path's plan-commit already covers; clarified DEC-002 to distinguish appender (producer) from committer. Surfaced by the SPEC-0065 vet residual. |
 </changelog>

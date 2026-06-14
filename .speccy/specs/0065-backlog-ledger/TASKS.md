@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0065
-spec_hash_at_generation: 67e8f7b223eed51d41e69b403f26bb86c5b969a2c99565cde6b1d15a21090094
-generated_at: 2026-06-14T02:48:38Z
+spec_hash_at_generation: 5ba74afcc23ac29519fbf63fd7d3166316e2b3e3cc25e5351aa52d0141b07f66
+generated_at: 2026-06-14T04:15:22Z
 ---
 # Tasks: SPEC-0065 Backlog ledger — a convention-only `.speccy/BACKLOG.md` register of future-spec candidates
 
@@ -224,5 +224,40 @@ then no `.speccy/BACKLOG.md` exists and `speccy verify` exits 0 with no
 backlog-attributable diagnostic.
 
 Suggested files: `speccy-cli/tests/init.rs`
+</task-scenarios>
+</task>
+
+<task id="T-007" state="pending" covers="REQ-008">
+## Stage an inherited `.speccy/BACKLOG.md` in the amend commit
+
+Edit the skill body `resources/modules/skills/speccy-amend.md` so its commit
+staging step stages an existing `.speccy/BACKLOG.md` under an existence guard,
+alongside the SPEC.md / TASKS.md / journal-blocker paths it already stages.
+Mirror the pattern the plan body now uses (`test -f .speccy/BACKLOG.md &&
+git add .speccy/BACKLOG.md`) — existence-guarded so a first-append untracked
+file is caught and an absent file does not fail the stage. The amend narrow
+`git add <paths>` breadth is otherwise unchanged; this only widens the list by
+the guarded backlog path, so a brainstorm-framed amendment's backlog append
+rides into the reconcile commit instead of being left dirty.
+
+Run `just reeject`, commit the regenerated `.claude/`/`.codex/`/`.agents/`
+packs; `cargo test --workspace` (dogfood parity) must stay green. Generic
+placeholders only — the amend body is not under the references carve-out.
+
+<task-scenarios>
+Given the ejected speccy-amend skill body at HEAD after this task,
+when a reviewer reads its commit staging step,
+then it stages an existing `.speccy/BACKLOG.md` under an existence guard so an
+inherited backlog mutation is committed, and tolerates the file's absence
+without failing the stage. Adequacy of the existence guard and its placement is
+a persona-review judgment.
+
+Given the resources tree and ejected packs at HEAD,
+when the packs are re-ejected,
+then the guarded backlog stage appears in the ejected amend bodies (parity
+holds across `.claude/` and `.agents/`).
+
+Suggested files: `resources/modules/skills/speccy-amend.md`, regenerated
+ejected trees (via `just reeject`)
 </task-scenarios>
 </task>
