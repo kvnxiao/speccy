@@ -9,11 +9,12 @@ assumptions and open questions, then stop and wait for explicit user
 approval. Only after the user approves the framing does the agent
 invoke `{{ cmd_prefix }}speccy-plan` to write SPEC.md.
 
-The output of this skill is **ephemeral chat**: nothing is written to
-disk. Salient outputs flow into SPEC.md's existing sections when
-`{{ cmd_prefix }}speccy-plan` runs next (see "Routing" below).
-Inspired by the obra/superpowers brainstorming skill, trimmed to
-Speccy's stay-small principles.
+The output of this skill is **ephemeral chat**: salient outputs flow
+into SPEC.md's existing sections when `{{ cmd_prefix }}speccy-plan`
+runs next (see "Routing" below). The one exception is a deliberately
+deferred future-spec candidate, which the skill appends to
+`.speccy/BACKLOG.md` at step 7. Inspired by the obra/superpowers
+brainstorming skill, trimmed to Speccy's stay-small principles.
 
 ## When to use
 
@@ -57,6 +58,12 @@ own judgment.
    them into SPEC.md's existing sections (Summary prose and
    `<requirement>` grounding) when `{{ cmd_prefix }}speccy-plan` runs
    next (see "Routing" below) — never into a standalone report file.
+
+   Then read the backlog as candidate input. When `.speccy/BACKLOG.md`
+   is present, read it and fold its entries into the candidate framings
+   you propose at step 3 — a deferred candidate may be exactly the slice
+   the user is now reaching for. Absence is normal and silent: a missing
+   file is not an error, proceed without comment.
 
    Don't dump the context back at the user — use it to ground your
    clarifying questions.
@@ -180,7 +187,25 @@ own judgment.
    re-present. Continue until the user explicitly approves the
    framing.
 
-7. **Invoke the writing skill.** Once the user has approved, invoke
+7. **Record a future-spec candidate, if one was deliberately deferred.**
+   When the Socratic exchange settled on cutting a piece of scope that
+   is worth its OWN later spec — "not this spec, but its own SPEC
+   later" — append a backlog entry to `.speccy/BACKLOG.md` in the
+   shipped four-field shape, self-creating the file with its header
+   (copied verbatim from the reference) when absent. Provenance names
+   the originating spec and phase: `SPEC-NNNN, brainstorm`. This is the
+   one disk write the brainstorm itself performs; everything else stays
+   ephemeral chat. Distinguish the two kinds of cut: a future-spec
+   candidate goes to the backlog, but a cut that is merely out of the
+   forthcoming spec's scope is a spec-local Non-goal — it rides into the
+   SPEC's `## Non-goals` via the routing list below, not the backlog.
+   Brainstorm writes no SPEC and never promotes a candidate, so it
+   never strikes a backlog entry — promotion is the writing skill's job.
+   The entry shape and authoring discipline:
+
+{% include "modules/references/backlog-ledger.md" %}
+
+8. **Invoke the writing skill.** Once the user has approved, invoke
    the right skill for the path:
 
    - For a **new SPEC**, invoke `{{ cmd_prefix }}speccy-plan`, which
@@ -194,9 +219,10 @@ own judgment.
      and spec-hash re-record — so the brainstormed amendment doesn't
      drop the reconciliation steps and produce hash drift.
 
-   The brainstorm chat is ephemeral — nothing was written to disk
-   during steps 1-6. The salient outputs flow into SPEC.md via the
-   routing list below when the writing prompt runs.
+   The brainstorm chat is ephemeral — the only disk write is the
+   backlog entry from step 7, if a future-spec candidate was deferred.
+   The salient outputs flow into SPEC.md via the routing list below
+   when the writing prompt runs.
 
 ## Routing brainstorm outputs into SPEC.md
 
@@ -220,9 +246,10 @@ not invent a new SPEC.md section for brainstorm output:
 
 ## Exit
 
-Brainstorm writes nothing to disk — its output is the framing the user
-approved, which flows into SPEC.md via the routing list above when the writing
-skill runs. The skill ends by invoking `{{ cmd_prefix }}speccy-plan` (new SPEC)
+Brainstorm's output is the framing the user approved, which flows into SPEC.md
+via the routing list above when the writing skill runs; its only disk write is
+a deferred future-spec candidate appended to `.speccy/BACKLOG.md` at step 7. The
+skill ends by invoking `{{ cmd_prefix }}speccy-plan` (new SPEC)
 or `{{ cmd_prefix }}speccy-amend` (existing SPEC); the step after that is
 `{{ cmd_prefix }}speccy-decompose SPEC-NNNN` (decompose into TASKS.md). Single
 pass, no loop.

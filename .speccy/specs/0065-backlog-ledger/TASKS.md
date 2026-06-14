@@ -91,7 +91,7 @@ ejected trees (via `just reeject`)
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-001 REQ-003 REQ-004">
+<task id="T-003" state="completed" covers="REQ-001 REQ-003 REQ-004">
 ## Wire speccy-brainstorm to read and append backlog entries
 
 Edit the skill body `resources/modules/skills/speccy-brainstorm.md`
