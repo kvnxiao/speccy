@@ -99,19 +99,31 @@ check that won't converge).
 flowchart TB
     Idea([Fuzzy idea])
 
-    subgraph Plan [Plan · human-led]
+    subgraph Frame [Brainstorm · human-led]
       direction LR
       Brain["/speccy-brainstorm"]
       G1{{HUMAN gate:<br/>approve framing}}
-      PlanCmd["/speccy-plan"]
-      Decomp["/speccy-decompose"]
-      C1{{soft checkpoint:<br/>review SPEC + TASKS}}
-      Brain --> G1 --> PlanCmd -->|auto| Decomp --> C1
+      Brain --> G1
     end
 
-    subgraph Loop [Work + review + vet · autonomous]
+    subgraph Author [Plan + decompose · autonomous]
       direction LR
-      Orch["/speccy-orchestrate"]
+      PlanCmd["/speccy-plan<br/>writes SPEC.md"]
+      Decomp["/speccy-decompose<br/>writes TASKS.md"]
+      PlanCmd -->|auto| Decomp
+    end
+
+    C1{{soft checkpoint:<br/>review SPEC + TASKS}}
+
+    subgraph Loop ["/speccy-orchestrate · autonomous"]
+      direction LR
+      Work["/speccy-work<br/>implement one task"]
+      Review["/speccy-review<br/>5-persona fan-out"]
+      Vet["/speccy-vet<br/>holistic drift gate"]
+      Work --> Review
+      Review -->|next task / retry| Work
+      Review -->|all tasks done| Vet
+      Vet -->|drift: fix loop| Vet
     end
 
     subgraph Ship [Ship · human-confirmed]
@@ -122,8 +134,10 @@ flowchart TB
     end
 
     Idea --> Brain
-    C1 --> Orch
-    Orch --> G2
+    G1 --> PlanCmd
+    Decomp --> C1
+    C1 --> Work
+    Vet -->|pass| G2
     ShipCmd --> Done([PR opened])
 
     classDef human fill:#ffe4b5,stroke:#cc8400,stroke-width:2px,color:#000
