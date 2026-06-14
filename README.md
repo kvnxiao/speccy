@@ -96,11 +96,11 @@ budget is exhausted (a task that keeps failing review, or a pre-ship drift
 check that won't converge).
 
 ```mermaid
-flowchart LR
+flowchart TB
     Idea([Fuzzy idea])
 
     subgraph Plan [Plan · human-led]
-      direction TB
+      direction LR
       Brain["/speccy-brainstorm"]
       G1{{HUMAN gate:<br/>approve framing}}
       PlanCmd["/speccy-plan"]
