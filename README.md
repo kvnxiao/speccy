@@ -96,11 +96,11 @@ budget is exhausted (a task that keeps failing review, or a pre-ship drift
 check that won't converge).
 
 ```mermaid
-flowchart TD
-    Idea([Fuzzy idea]) --> Init["speccy init (CLI)<br/>scaffold + install skills"]
+flowchart LR
+    Idea([Fuzzy idea])
 
     subgraph Plan [Plan · human-led]
-      direction TB
+      direction LR
       Brain["/speccy-brainstorm"]
       G1{{HUMAN gate:<br/>approve framing}}
       PlanCmd["/speccy-plan"]
@@ -110,19 +110,18 @@ flowchart TD
     end
 
     subgraph Loop [Work + review + vet · autonomous]
-      direction TB
+      direction LR
       Orch["/speccy-orchestrate"]
     end
 
     subgraph Ship [Ship · human-confirmed]
-      direction TB
+      direction LR
       G2{{HUMAN gate:<br/>confirm before ship}}
       ShipCmd["/speccy-ship<br/>REPORT.md + PR"]
       G2 --> ShipCmd
     end
 
-    Init --> Boot["/speccy-bootstrap<br/>seed AGENTS.md · one-time"]
-    Boot --> Brain
+    Idea --> Brain
     C1 --> Orch
     Orch --> G2
     ShipCmd --> Done([PR opened])
