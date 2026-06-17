@@ -334,46 +334,28 @@ pub fn to_json_journal_block(entry: &JournalEntry) -> JsonJournalBlock {
 }
 
 /// Project one parsed [`JournalEntry`] into its attributes-only
-/// [`JsonJournalBlockAttrs`] shape — the same attribute mapping as
-/// [`to_json_journal_block`] minus the `body`.
-/// Mirrors the full-block projection so the two cannot drift in which
+/// [`JsonJournalBlockAttrs`] shape: the full-block projection minus the
+/// `body`. Deriving from [`to_json_journal_block`] keeps a single
+/// attribute-mapping site, so the two views cannot drift in which
 /// optionals each block type carries.
 #[must_use = "the projected attrs are an entry of the bundle's prior-rounds index"]
 pub fn to_json_journal_block_attrs(entry: &JournalEntry) -> JsonJournalBlockAttrs {
-    match entry {
-        JournalEntry::Implementer {
-            date, model, round, ..
-        } => JsonJournalBlockAttrs {
-            block: "implementer",
-            date: date.clone(),
-            round: *round,
-            model: Some(model.clone()),
-            persona: None,
-            verdict: None,
-        },
-        JournalEntry::Review {
-            date,
-            model,
-            persona,
-            verdict,
-            round,
-            ..
-        } => JsonJournalBlockAttrs {
-            block: "review",
-            date: date.clone(),
-            round: *round,
-            model: Some(model.clone()),
-            persona: Some(persona.clone()),
-            verdict: Some(verdict.clone()),
-        },
-        JournalEntry::Blockers { date, round, .. } => JsonJournalBlockAttrs {
-            block: "blockers",
-            date: date.clone(),
-            round: *round,
-            model: None,
-            persona: None,
-            verdict: None,
-        },
+    let JsonJournalBlock {
+        block,
+        date,
+        round,
+        model,
+        persona,
+        verdict,
+        body: _,
+    } = to_json_journal_block(entry);
+    JsonJournalBlockAttrs {
+        block,
+        date,
+        round,
+        model,
+        persona,
+        verdict,
     }
 }
 
@@ -452,68 +434,28 @@ pub fn to_json_vet_block(block: &VetBlock) -> JsonVetBlock {
 }
 
 /// Project one parsed [`VetBlock`] into its attributes-only
-/// [`JsonVetBlockAttrs`] shape — the same attribute mapping as
-/// [`to_json_vet_block`] minus the body.
+/// [`JsonVetBlockAttrs`] shape: the full-block projection minus the body.
+/// Deriving from [`to_json_vet_block`] keeps a single attribute-mapping
+/// site, so the two VET views cannot drift in how they serialize each
+/// block type.
 #[must_use = "the projected attrs are part of the prior VET invocation index"]
 pub fn to_json_vet_block_attrs(block: &VetBlock) -> JsonVetBlockAttrs {
-    match block {
-        VetBlock::DriftReview {
-            verdict,
-            round,
-            date,
-            model,
-            ..
-        } => JsonVetBlockAttrs {
-            block: "drift-review",
-            verdict: verdict.clone(),
-            date: Some(date.clone()),
-            round: Some(*round),
-            model: Some(model.clone()),
-            tasks_hash: None,
-        },
-        VetBlock::HolisticFix {
-            verdict,
-            round,
-            date,
-            model,
-            ..
-        } => JsonVetBlockAttrs {
-            block: "holistic-fix",
-            verdict: verdict.clone(),
-            date: Some(date.clone()),
-            round: Some(*round),
-            model: Some(model.clone()),
-            tasks_hash: None,
-        },
-        VetBlock::SimplifierScan { verdict, .. } => JsonVetBlockAttrs {
-            block: "simplifier-scan",
-            verdict: verdict.clone(),
-            date: None,
-            round: None,
-            model: None,
-            tasks_hash: None,
-        },
-        VetBlock::SimplifierApply { verdict, .. } => JsonVetBlockAttrs {
-            block: "simplifier-apply",
-            verdict: verdict.clone(),
-            date: None,
-            round: None,
-            model: None,
-            tasks_hash: None,
-        },
-        VetBlock::Gate {
-            verdict,
-            tasks_hash,
-            date,
-            ..
-        } => JsonVetBlockAttrs {
-            block: "gate",
-            verdict: verdict.clone(),
-            date: Some(date.clone()),
-            round: None,
-            model: None,
-            tasks_hash: Some(tasks_hash.clone()),
-        },
+    let JsonVetBlock {
+        block,
+        verdict,
+        date,
+        round,
+        model,
+        tasks_hash,
+        body: _,
+    } = to_json_vet_block(block);
+    JsonVetBlockAttrs {
+        block,
+        verdict,
+        date,
+        round,
+        model,
+        tasks_hash,
     }
 }
 

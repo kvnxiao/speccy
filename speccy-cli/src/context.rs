@@ -224,7 +224,12 @@ fn assemble_bundle(
     project_root: &Utf8Path,
     cwd: &Utf8Path,
 ) -> Result<ContextBundle, ContextError> {
-    let spec = resolve_spec(ws, &location.spec_id)?;
+    // The task lookup already proved the spec exists and parsed, so the
+    // not-found branch here is defensive.
+    let spec =
+        find_spec(ws, &location.spec_id).ok_or_else(|| ContextError::SpecDocUnavailable {
+            spec_id: location.spec_id.clone(),
+        })?;
 
     let spec_md = spec
         .spec_md_ok()
@@ -273,7 +278,9 @@ fn assemble_spec_bundle(
     project_root: &Utf8Path,
     cwd: &Utf8Path,
 ) -> Result<SpecContextBundle, ContextError> {
-    let spec = resolve_spec_for_context(ws, spec_id)?;
+    let spec = find_spec(ws, spec_id).ok_or_else(|| ContextError::SpecNotFound {
+        spec_id: spec_id.to_owned(),
+    })?;
     let spec_file = spec
         .spec_md_ok()
         .ok_or_else(|| ContextError::SpecDocUnavailable {
@@ -645,28 +652,15 @@ fn build_intent(spec_doc: &SpecDoc) -> Intent {
     }
 }
 
-/// Locate the spec in the workspace by its `SPEC-NNNN` identifier. The
-/// task lookup already proved the spec exists and parsed, so the
-/// not-found branch is defensive.
-fn resolve_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Result<&'w ParsedSpec, ContextError> {
+/// Locate the spec in the workspace by its `SPEC-NNNN` identifier.
+/// Returns `None` when no active spec carries that id; callers map the
+/// miss to the error that fits their entry path (defensive
+/// `SpecDocUnavailable` on the task path, user-facing `SpecNotFound` on
+/// the bare-spec path).
+fn find_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Option<&'w ParsedSpec> {
     ws.specs
         .iter()
         .find(|s| s.spec_id.as_deref() == Some(spec_id))
-        .ok_or_else(|| ContextError::SpecDocUnavailable {
-            spec_id: spec_id.to_owned(),
-        })
-}
-
-fn resolve_spec_for_context<'w>(
-    ws: &'w Workspace,
-    spec_id: &str,
-) -> Result<&'w ParsedSpec, ContextError> {
-    ws.specs
-        .iter()
-        .find(|s| s.spec_id.as_deref() == Some(spec_id))
-        .ok_or_else(|| ContextError::SpecNotFound {
-            spec_id: spec_id.to_owned(),
-        })
 }
 
 /// Render the bundle in the human-readable text form. `--json` toggles

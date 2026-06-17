@@ -38,15 +38,18 @@ would actually experience.
 Read these for context:
 
 - `paths.spec_md` — the contract you are checking against.
-- A sibling or parent `MISSION.md`, if one exists near the spec path
-  and is relevant to cross-spec invariants.
-- `AGENTS.md` — for product north star and non-goals that
-  constrain what the diff is allowed to do.
+- `MISSION.md` in the spec's parent focus directory (the folder above
+  the spec dir that `paths.spec_md` sits in), if one exists — for
+  cross-spec invariants.
 - The bundle's `vet_journal.latest_invocation` — the current
   holistic-loop section. On round 2+ it contains prior
   `<drift-review>` and `<holistic-fix>` blocks for this invocation.
   Ignore `vet_journal.prior_invocations` unless you need audit
   history; it describes older states of the world.
+
+`AGENTS.md` is loaded by your harness; reference its product north
+star and non-goals — which bound what the diff may do — directly
+rather than re-reading the file.
 
 You do **not** need to read per-task journal files (`T-NNN.md`).
 Per-task history is not your concern; the diff vs SPEC as a unit

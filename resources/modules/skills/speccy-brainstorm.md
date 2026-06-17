@@ -38,8 +38,9 @@ your own judgment.
 
 ## Steps
 
-1. **Explore project context.** Read `AGENTS.md`. If the ask might
-   overlap with an existing slice, query the workspace index:
+1. **Explore project context.** The `AGENTS.md` product north star is
+   already in your context — lean on it to frame the ask. If the ask
+   might overlap with an existing slice, query the workspace index:
 
    ```bash
    speccy status --json
