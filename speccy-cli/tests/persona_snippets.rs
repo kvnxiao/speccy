@@ -16,6 +16,9 @@
 //!   `{% include %}` for `no-tasks-md-writes.md`.
 //! - [`persona_bodies_include_diff_fetch_snippet`]: each persona uses `{%
 //!   include %}` for `diff-fetch-command.md`.
+//! - [`rendered_reviewer_personas_use_context_diff_command`]: rendered reviewer
+//!   agents tell personas to read `diff_command` from the context bundle and do
+//!   not contain the stale hardcoded merge-base placeholder.
 //! - [`rendered_personas_contain_no_minijinja_markup`]: the ejected
 //!   `.claude/agents/reviewer-<persona>.md` files have no `{{`, `{%`, or `{#`.
 //! - [`no_master_template_file_exists`]: no `reviewer.md.j2` or similar exists.
@@ -186,6 +189,40 @@ fn rendered_personas_contain_no_minijinja_markup() {
                  all include directives must be fully expanded at render time",
             );
         }
+    }
+}
+
+/// The shared diff-fetch snippet must render into every reviewer persona for
+/// both host packs. This gates the stable contract: reviewers read the
+/// command from `speccy context` rather than carrying a stale placeholder.
+#[test]
+fn rendered_reviewer_personas_use_context_diff_command() {
+    let claude = render_host_pack(HostChoice::ClaudeCode)
+        .expect("render_host_pack(claude-code) must succeed");
+    let codex = render_host_pack(HostChoice::Codex).expect("render_host_pack(codex) must succeed");
+
+    for persona in personas::ALL {
+        let claude_rel = format!(".claude/agents/reviewer-{persona}.md");
+        let claude_file = require_rendered_file(&claude, &claude_rel);
+        assert!(
+            claude_file.contents.contains("diff_command"),
+            "rendered `{claude_rel}` must tell the persona to read `diff_command` from the context bundle",
+        );
+        assert!(
+            !claude_file.contents.contains("git diff <merge-base>"),
+            "rendered `{claude_rel}` must not contain stale hardcoded merge-base diff guidance",
+        );
+
+        let codex_rel = format!(".codex/agents/reviewer-{persona}.toml");
+        let codex_file = require_rendered_file(&codex, &codex_rel);
+        assert!(
+            codex_file.contents.contains("diff_command"),
+            "rendered `{codex_rel}` must tell the persona to read `diff_command` from the context bundle",
+        );
+        assert!(
+            !codex_file.contents.contains("git diff <merge-base>"),
+            "rendered `{codex_rel}` must not contain stale hardcoded merge-base diff guidance",
+        );
     }
 }
 

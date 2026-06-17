@@ -1,8 +1,9 @@
 //! Serde `Serialize` structs for the `speccy context` bundle envelope.
 //!
-//! `speccy context <task-selector> --json` emits one schema-versioned
-//! JSON bundle scoped to a single task. This module owns the envelope's
-//! `Serialize` shape; assembly from parsed workspace state lives in
+//! `speccy context <selector> --json` emits one schema-versioned JSON bundle:
+//! task selectors keep the task-scoped envelope, while a bare `SPEC-NNNN`
+//! emits the spec-scoped vet envelope. This module owns the envelopes'
+//! `Serialize` shapes; assembly from parsed workspace state lives in
 //! [`crate::context`].
 //!
 //! The envelope follows the workspace-wide convention established by
@@ -21,6 +22,8 @@
 
 use crate::journal_show_output::JsonJournalBlock;
 use crate::journal_show_output::JsonJournalBlockAttrs;
+use crate::journal_show_output::JsonVetBlock;
+use crate::journal_show_output::JsonVetBlockAttrs;
 use serde::Serialize;
 use speccy_core::consistency::ConsistencyBlock;
 
@@ -228,4 +231,113 @@ pub struct BundlePaths {
     /// Repo-relative forward-slash path to the task's journal file under
     /// `<spec-dir>/journal/<task-id>.md`, whether or not it exists yet.
     pub journal: String,
+}
+
+/// The `speccy context SPEC-NNNN --json` bundle envelope for whole-SPEC vet
+/// workflows.
+///
+/// `schema_version` is declared first so it is the first serialized field,
+/// matching the task-scoped context bundle and the other JSON envelopes.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecContextBundle {
+    /// Schema version. Pinned at `1` pre-v1.
+    pub schema_version: u32,
+    /// Spec identity from SPEC.md frontmatter.
+    pub spec: SpecIdentity,
+    /// Authoring-intent slice: goals, non-goals, decisions.
+    pub intent: Intent,
+    /// Every requirement contract in declared order.
+    pub requirements: Vec<CoveringRequirement>,
+    /// Every task as a compact index entry: id, state, covers, and title.
+    pub tasks: Vec<SpecTaskEntry>,
+    /// Every task whose state is not `completed`, using the same compact
+    /// entry shape as `tasks`.
+    pub non_completed_tasks: Vec<SpecTaskEntry>,
+    /// The per-SPEC VET journal sliced to the latest invocation in full plus
+    /// prior invocations as attributes only.
+    pub vet_journal: SpecVetJournal,
+    /// Repo-relative paths to the spec's files for follow-up targeted reads.
+    pub paths: SpecBundlePaths,
+    /// A suggested working-tree `git diff` command against the repo's default
+    /// branch, runnable as-is from the repo root.
+    pub diff_command: String,
+}
+
+/// One task projected into the spec-scoped task index.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecTaskEntry {
+    /// The `T-NNN` id.
+    pub id: String,
+    /// The task state in its on-disk string form.
+    pub state: String,
+    /// The `covers` requirement ids in source order.
+    pub covers: Vec<String>,
+    /// The first `##` heading found in the task body, or the empty string when
+    /// the task body has no title heading.
+    pub title: String,
+}
+
+/// The spec-scoped VET journal projection.
+///
+/// When `<spec-dir>/journal/VET.md` exists, `exists` is `true`, the
+/// frontmatter fields carry the parsed `spec` / `generated_at`, and
+/// `latest_invocation` holds the last invocation section's full blocks. Prior
+/// invocation prose is not inlined: `prior_invocations` carries only
+/// attributes so agents can see that older history exists and drill into it
+/// with `speccy journal show SPEC-NNNN --json` when needed. When VET.md is
+/// absent, `exists` is `false`, the frontmatter fields are absent,
+/// `latest_invocation` is `null`, and `prior_invocations` is empty.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecVetJournal {
+    /// Whether `journal/VET.md` exists.
+    pub exists: bool,
+    /// `spec:` frontmatter field; present only when the file exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+    /// `generated_at:` frontmatter field; present only when the file exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generated_at: Option<String>,
+    /// The latest invocation section in full, or `null` when the journal is
+    /// absent or has no parsed invocation sections.
+    pub latest_invocation: Option<SpecVetInvocation>,
+    /// Prior invocation sections as attributes-only block indexes.
+    pub prior_invocations: Vec<SpecVetInvocationAttrs>,
+}
+
+/// One VET invocation section projected with full block bodies.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecVetInvocation {
+    /// The `N` in `## Invocation N`.
+    pub number: u32,
+    /// The ISO8601 datetime on the heading line.
+    pub date: String,
+    /// The highest round among round-bearing blocks in this invocation.
+    pub latest_round: Option<u32>,
+    /// Blocks in document order, with bodies included.
+    pub blocks: Vec<JsonVetBlock>,
+}
+
+/// One prior VET invocation projected without block bodies.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecVetInvocationAttrs {
+    /// The `N` in `## Invocation N`.
+    pub number: u32,
+    /// The ISO8601 datetime on the heading line.
+    pub date: String,
+    /// The highest round among round-bearing blocks in this invocation.
+    pub latest_round: Option<u32>,
+    /// Blocks in document order, attributes only.
+    pub blocks: Vec<JsonVetBlockAttrs>,
+}
+
+/// Repo-relative paths surfaced by the spec-scoped context bundle.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpecBundlePaths {
+    /// Repo-relative forward-slash path to the spec's `SPEC.md`.
+    pub spec_md: String,
+    /// Repo-relative forward-slash path to the spec's `TASKS.md`.
+    pub tasks_md: String,
+    /// Repo-relative forward-slash path to `journal/VET.md`, whether or not
+    /// it exists yet.
+    pub vet_journal: String,
 }

@@ -33,34 +33,20 @@ would actually experience.
 
 ## Input
 
-The caller (the `{{ cmd_prefix }}speccy-vet` skill)
-pre-resolves two values and passes them in your prompt:
-
-- `<spec-dir>` — the spec's directory under `.speccy/specs/` (e.g.,
-  `.speccy/specs/NNNN-slug/`). Use this for
-  `SPEC.md`, `TASKS.md`, mission files, and the journal.
-- `<base-ref>` — the diff baseline ref (default branch name like
-  `main`, or `master`). Use it for `git diff <base-ref>`.
-
 {% include "modules/personas/vet-input-resolution.md" %}
-
-If you skip this and use `...HEAD`, you would re-derive the same
-drift you flagged in round 1.
 
 Read these for context:
 
-- `<spec-dir>/SPEC.md` — the contract you are checking against.
-- `<spec-dir>/MISSION.md` (or the parent mission folder's file)
-  if one exists — for cross-spec invariants.
+- `paths.spec_md` — the contract you are checking against.
+- A sibling or parent `MISSION.md`, if one exists near the spec path
+  and is relevant to cross-spec invariants.
 - `AGENTS.md` — for product north star and non-goals that
   constrain what the diff is allowed to do.
-- **`<spec-dir>/journal/VET.md`** — the holistic-loop journal.
-  On round 1 of a fresh invocation it will only have the current
-  invocation's section header. On round 2+ within the same
-  invocation, prior `<drift-review>` and `<holistic-fix>` blocks
-  appear under the current `## Invocation N` header — see "Round
-  2+ scrutiny" below. Ignore prior invocations' sections; they
-  describe an older state of the world.
+- The bundle's `vet_journal.latest_invocation` — the current
+  holistic-loop section. On round 2+ it contains prior
+  `<drift-review>` and `<holistic-fix>` blocks for this invocation.
+  Ignore `vet_journal.prior_invocations` unless you need audit
+  history; it describes older states of the world.
 
 You do **not** need to read per-task journal files (`T-NNN.md`).
 Per-task history is not your concern; the diff vs SPEC as a unit

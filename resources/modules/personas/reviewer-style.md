@@ -101,14 +101,8 @@ re-parsing the diff.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona style --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
     `signup.rs:78` uses `.unwrap()` while every other call site in
     `src/auth/` uses `?` propagation through `AuthError`. Match the
     surrounding style and propagate.
-    EOF
-
-    <verdict persona="style" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="signup.rs:78 uses .unwrap() against the surrounding ?-propagation style." />

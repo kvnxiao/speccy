@@ -66,7 +66,7 @@ anything**. Per Speccy's atomic-landing convention,
 uncommitted changes from the loop (per-task journal updates,
 holistic changes, SPEC.md status flip, REPORT.md) into one commit
 at PR time. VET.md, being under
-`.speccy/specs/<spec-dir>/journal/`, ships alongside the per-task
+`.speccy/specs/NNNN-slug/journal/`, ships alongside the per-task
 journal files.
 
 If a human invokes this skill directly (outside the orchestrator),
@@ -76,8 +76,8 @@ can decide whether to commit, revert, or continue editing.
 ## Holistic journal
 
 This skill maintains a single per-SPEC journal file at
-`<spec-dir>/journal/VET.md` (`<spec-dir>` is resolved in
-Phase 0 below). The journal is the **persistent state** of the
+the `paths.vet_journal` file resolved in Phase 0 below. The journal is
+the **persistent state** of the
 holistic loop:
 
 1. **Round-to-round communication** — round N's reviewer reads it

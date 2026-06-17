@@ -46,14 +46,8 @@ deliverable is a security verdict on this slice of work.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona security --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
     bcrypt cost factor 10; project policy in `AGENTS.md` requires
     >= 12. See `src/auth/password.ts:14`. Bump and re-run the hash
     benchmarks.
-    EOF
-
-    <verdict persona="security" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="bcrypt cost 10 below the AGENTS.md policy floor of 12." />
