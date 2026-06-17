@@ -78,7 +78,11 @@ your own judgment.
    message. Default to multiple-choice: when the answer space is
    enumerable, offer the options through the host's structured-choice
    affordance if it has one, else as a short lettered list in prose —
-   a concrete menu is faster to answer and pins the answer space.
+   a concrete menu is faster to answer and pins the answer space. Name
+   the option you recommend and give a one-line reason inline in its
+   description: with the host affordance, put it first and tag it
+   recommended; in the prose fallback, append `(recommended: why)` to
+   that letter. Recommend, don't decide — the user still picks.
    Reserve open-ended questions for genuinely open answer spaces.
    Don't batch three questions into one message — that nudges the user
    toward shallow answers. Keep asking until you can fill the framing
@@ -122,7 +126,10 @@ your own judgment.
       (`a.`, `b.`, ...), the question, and your proposed default — or
       `?` when you genuinely have no default and need the user to
       decide. A row with a default is a silent assumption made
-      visible; a `?` row is an open question. Close the table with:
+      visible; a `?` row is an open question — still name the approach
+      you lean toward, and why, in the question text, but leave the
+      default `?` so the user actively chooses instead of inheriting a
+      silent assumption. Close the table with:
       "Reply 'go' to take the defaults, or override any row by key."
       Reaching key `z.` signals an over-scoped session — a scope
       smell, not a format limit.
