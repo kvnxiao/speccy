@@ -6,6 +6,9 @@
 //! - [`suggested_diff_command`] — returns a `git diff` command string in
 //!   merge-base form against the repository's default branch, for the `speccy
 //!   context` bundle.
+//! - [`suggested_worktree_diff_command`] — returns a `git diff` command string
+//!   against the repository's default branch that includes working-tree
+//!   changes, for the spec-scoped vet context bundle.
 //!
 //! Treats git unavailability as a non-fatal lookup: shell-out failures
 //! degrade rather than propagating an error — `repo_sha` to the empty
@@ -69,6 +72,21 @@ pub fn suggested_diff_command(cwd: &Utf8Path) -> String {
     format!("git diff {base}...HEAD")
 }
 
+/// Build the suggested working-tree `git diff` command string for the
+/// spec-scoped `speccy context` bundle, against the repository's default
+/// branch.
+///
+/// The returned string is runnable as-is from the repo root:
+/// `git diff <base>` where `<base>` is the resolved default branch (e.g.
+/// `origin/main`). This form intentionally includes uncommitted changes,
+/// which the holistic vet loop needs between reviewer / implementer rounds.
+/// Best-effort fallback behavior matches [`suggested_diff_command`].
+#[must_use = "the suggested diff command is part of the context bundle contract"]
+pub fn suggested_worktree_diff_command(cwd: &Utf8Path) -> String {
+    let base = default_branch(cwd);
+    format!("git diff {base}")
+}
+
 /// Probe the repository's default branch via `git symbolic-ref
 /// refs/remotes/origin/HEAD`, returning a ref usable as a diff baseline
 /// (e.g. `origin/main`).
@@ -111,6 +129,7 @@ mod tests {
     use super::DEFAULT_BRANCH_FALLBACK;
     use super::repo_sha;
     use super::suggested_diff_command;
+    use super::suggested_worktree_diff_command;
     use camino::Utf8PathBuf;
 
     #[test]
@@ -132,6 +151,17 @@ mod tests {
         assert_eq!(
             suggested_diff_command(&path),
             format!("git diff {DEFAULT_BRANCH_FALLBACK}...HEAD"),
+        );
+    }
+
+    #[test]
+    fn suggested_worktree_diff_command_outside_a_repo_falls_back_to_main_baseline() {
+        let tmp = tempfile::tempdir().expect("tempdir creation should succeed");
+        let path = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf())
+            .expect("tempdir path should be UTF-8");
+        assert_eq!(
+            suggested_worktree_diff_command(&path),
+            format!("git diff {DEFAULT_BRANCH_FALLBACK}"),
         );
     }
 }

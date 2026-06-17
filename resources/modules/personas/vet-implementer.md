@@ -23,21 +23,10 @@ important:
 
 ## Input
 
-The caller (the `{{ cmd_prefix }}speccy-vet` skill)
-pre-resolves two values and passes them in your prompt:
-
-- `<spec-dir>` — the spec's directory under `.speccy/specs/`. Use
-  for `SPEC.md`, `TASKS.md`, mission files.
-- `<base-ref>` — the diff baseline ref. Use for
-  `git diff <base-ref>`.
-
 The caller's prompt also includes a `<drift-review verdict="blocking">`
 block listing the drift findings. Read it carefully, then orient
-yourself in the existing implementation:
-
-```bash
-git diff <base-ref>
-```
+yourself in the existing implementation with the context bundle's
+`diff_command`.
 
 {% include "modules/personas/vet-input-resolution.md" %}
 

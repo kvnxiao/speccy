@@ -133,10 +133,11 @@ fn all_json_commands_emit_schema_version_first() -> TestResult {
     // envelope to stdout regardless of exit status (e.g. `verify` emits the
     // report before returning a non-zero gate code), and the contract under
     // test is the envelope shape, not command success.
-    let commands: [(&str, &[&str]); 7] = [
+    let commands: [(&str, &[&str]); 8] = [
         ("status --json", &["status", "--json"]),
         ("next --json", &["next", "--json"]),
         ("context --json", &["context", "SPEC-0001/T-001", "--json"]),
+        ("context spec --json", &["context", "SPEC-0001", "--json"]),
         ("verify --json", &["verify", "--json"]),
         ("vacancy --json", &["vacancy", "--json"]),
         (

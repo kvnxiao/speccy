@@ -45,15 +45,9 @@ fan-out -- invoked when a diff plausibly drifts documentation.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona docs --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
-    SPEC-NNNN DEC-NNN says project-local overrides live in
+    DEC-NNN says project-local overrides live in
     `.speccy/skills/personas/`; the renamed resolver in
     `personas.rs:120` now reads from `.speccy/personas/`. Either
     update the decision (with a Changelog row) or restore the path.
-    EOF
-
-    <verdict persona="docs" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="personas.rs:120 reads a path that contradicts DEC-NNN; doc and code disagree." />

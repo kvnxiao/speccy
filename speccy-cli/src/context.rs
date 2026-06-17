@@ -1,9 +1,9 @@
 //! `speccy context` command logic.
 //!
-//! `speccy context <task-selector> [--json]` resolves a task selector and
-//! emits one schema-versioned bundle scoped to that task. The bundle is a
-//! single read that replaces a loop subagent's multi-step entry recipe
-//! (full SPEC.md + TASKS.md + journal + `speccy check`).
+//! `speccy context <selector> [--json]` resolves either a task selector or a
+//! bare spec selector and emits one schema-versioned bundle. Task selectors
+//! (`T-NNN` / `SPEC-NNNN/T-NNN`) retain the existing task-scoped bundle; a
+//! bare `SPEC-NNNN` emits a whole-SPEC bundle for the vet loop.
 //!
 //! This module owns selector resolution (reusing `task_lookup` exactly as
 //! `speccy check` does, so the two commands accept the same grammar and
@@ -28,6 +28,7 @@
 //! the status at read time is the feedback mechanism. The command performs
 //! no writes anywhere.
 
+use crate::check_selector::bare_spec_regex;
 use crate::context_output::BundleJournal;
 use crate::context_output::BundlePaths;
 use crate::context_output::ContextBundle;
@@ -36,10 +37,18 @@ use crate::context_output::DecisionEntry;
 use crate::context_output::Intent;
 use crate::context_output::ScenarioEntry;
 use crate::context_output::SiblingEntry;
+use crate::context_output::SpecBundlePaths;
+use crate::context_output::SpecContextBundle;
 use crate::context_output::SpecIdentity;
+use crate::context_output::SpecTaskEntry;
+use crate::context_output::SpecVetInvocation;
+use crate::context_output::SpecVetInvocationAttrs;
+use crate::context_output::SpecVetJournal;
 use crate::context_output::TaskEntry;
 use crate::journal_show_output::to_json_journal_block;
 use crate::journal_show_output::to_json_journal_block_attrs;
+use crate::journal_show_output::to_json_vet_block;
+use crate::journal_show_output::to_json_vet_block_attrs;
 use crate::paths::to_repo_relative;
 use camino::Utf8Path;
 use speccy_core::consistency::ConsistencyBlock;
@@ -48,8 +57,12 @@ use speccy_core::consistency::detect as detect_consistency;
 use speccy_core::context::resolve_covering_requirements;
 use speccy_core::lint::ParsedSpec;
 use speccy_core::parse::SpecDoc;
+use speccy_core::parse::Task;
+use speccy_core::parse::TasksDoc;
+use speccy_core::parse::VetBlock;
 use speccy_core::parse::latest_round;
 use speccy_core::parse::parse_journal_xml;
+use speccy_core::parse::parse_vet_in_flight;
 use speccy_core::task_lookup::LookupError;
 use speccy_core::task_lookup::TaskLocation;
 use speccy_core::task_lookup::find as find_task;
@@ -77,6 +90,21 @@ pub enum ContextError {
         /// The spec whose element tree could not be parsed.
         spec_id: String,
     },
+    /// A bare `SPEC-NNNN` selector resolved to no active spec.
+    #[error("spec `{spec_id}` not found in any active spec directory")]
+    SpecNotFound {
+        /// The requested spec id.
+        spec_id: String,
+    },
+    /// The resolved spec's TASKS.md is absent or failed to parse, so the
+    /// spec-scoped task index cannot be assembled.
+    #[error(
+        "TASKS.md for `{spec_id}` is absent or failed to parse; cannot assemble spec context bundle"
+    )]
+    TasksDocUnavailable {
+        /// The spec whose TASKS.md could not be used.
+        spec_id: String,
+    },
     /// Walked up from cwd without locating a `.speccy/` directory.
     #[error(".speccy/ directory not found walking up from current directory")]
     ProjectRootNotFound,
@@ -85,6 +113,16 @@ pub enum ContextError {
     #[error("journal at {path} failed to parse; cannot assemble context bundle")]
     JournalParse {
         /// The unparseable journal path.
+        path: camino::Utf8PathBuf,
+        /// Underlying parse error.
+        #[source]
+        source: Box<speccy_core::error::ParseError>,
+    },
+    /// The spec-scoped VET journal exists but failed to parse under the
+    /// in-flight VET journal grammar.
+    #[error("VET journal at {path} failed to parse; cannot assemble spec context bundle")]
+    VetJournalParse {
+        /// The unparseable VET journal path.
         path: camino::Utf8PathBuf,
         /// Underlying parse error.
         #[source]
@@ -110,8 +148,8 @@ impl From<WorkspaceError> for ContextError {
 /// `speccy context` arguments.
 #[derive(Debug, Clone)]
 pub struct ContextArgs {
-    /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`
-    /// (qualified). Same grammar as `speccy check`.
+    /// Selector: `SPEC-NNNN` for a whole-SPEC vet bundle, `T-NNN`
+    /// (unqualified), or `SPEC-NNNN/T-NNN` (qualified) for a task bundle.
     pub selector: String,
     /// Emit the JSON envelope. Without it, the same bundle content renders
     /// in a human-readable text form — `--json` toggles representation,
@@ -138,25 +176,39 @@ pub fn run(args: ContextArgs, cwd: &Utf8Path, out: &mut dyn Write) -> Result<(),
 
     let project_root = crate::cwd::resolve_root(cwd, ContextError::ProjectRootNotFound)?;
 
-    // Resolve the selector before touching the workspace scan result, so
-    // an invalid-format selector fails fast with the shared diagnostic.
-    let task_ref = parse_ref(&selector)?;
-
     // `speccy context` is a read command and never refuses on drift; like
     // `speccy check` it scans active specs only (archived specs are not in
-    // scope for a task-context read).
-    let ws = scan_with_archive(&project_root, false);
+    // scope for context reads).
+    if bare_spec_regex().is_match(&selector) {
+        let ws = scan_with_archive(&project_root, false);
+        let bundle = assemble_spec_bundle(&ws, &selector, &project_root, cwd)?;
+        if json {
+            write_json(&bundle, out)?;
+        } else {
+            render_spec_text(&bundle, out)?;
+        }
+        return Ok(());
+    }
 
+    // Resolve task selectors before touching the workspace scan result, so
+    // an invalid-format task selector still fails fast with the shared
+    // diagnostic class.
+    let task_ref = parse_ref(&selector)?;
+    let ws = scan_with_archive(&project_root, false);
     let location = find_task(&ws, &task_ref)?;
     let bundle = assemble_bundle(&ws, &location, &project_root, cwd)?;
-
     if json {
-        let mut text = serde_json::to_string(&bundle)?;
-        text.push('\n');
-        out.write_all(text.as_bytes())?;
+        write_json(&bundle, out)?;
     } else {
         render_text(&bundle, out)?;
     }
+    Ok(())
+}
+
+fn write_json<T: serde::Serialize>(bundle: &T, out: &mut dyn Write) -> Result<(), ContextError> {
+    let mut text = serde_json::to_string(bundle)?;
+    text.push('\n');
+    out.write_all(text.as_bytes())?;
     Ok(())
 }
 
@@ -172,7 +224,12 @@ fn assemble_bundle(
     project_root: &Utf8Path,
     cwd: &Utf8Path,
 ) -> Result<ContextBundle, ContextError> {
-    let spec = resolve_spec(ws, &location.spec_id)?;
+    // The task lookup already proved the spec exists and parsed, so the
+    // not-found branch here is defensive.
+    let spec =
+        find_spec(ws, &location.spec_id).ok_or_else(|| ContextError::SpecDocUnavailable {
+            spec_id: location.spec_id.clone(),
+        })?;
 
     let spec_md = spec
         .spec_md_ok()
@@ -211,6 +268,69 @@ fn assemble_bundle(
         paths,
         diff_command,
         consistency,
+    })
+}
+
+/// Assemble the whole-SPEC context bundle used by the vet loop.
+fn assemble_spec_bundle(
+    ws: &Workspace,
+    spec_id: &str,
+    project_root: &Utf8Path,
+    cwd: &Utf8Path,
+) -> Result<SpecContextBundle, ContextError> {
+    let spec = find_spec(ws, spec_id).ok_or_else(|| ContextError::SpecNotFound {
+        spec_id: spec_id.to_owned(),
+    })?;
+    let spec_file = spec
+        .spec_md_ok()
+        .ok_or_else(|| ContextError::SpecDocUnavailable {
+            spec_id: spec_id.to_owned(),
+        })?;
+    let spec_doc = spec
+        .spec_doc_ok()
+        .ok_or_else(|| ContextError::SpecDocUnavailable {
+            spec_id: spec_id.to_owned(),
+        })?;
+    let tasks_md_path =
+        spec.tasks_md_path
+            .as_deref()
+            .ok_or_else(|| ContextError::TasksDocUnavailable {
+                spec_id: spec_id.to_owned(),
+            })?;
+    let tasks_md = spec
+        .tasks_md_ok()
+        .ok_or_else(|| ContextError::TasksDocUnavailable {
+            spec_id: spec_id.to_owned(),
+        })?;
+
+    let identity = SpecIdentity {
+        id: spec_file.frontmatter.id.clone(),
+        title: spec_file.frontmatter.title.clone(),
+        status: spec_file.frontmatter.status.as_str().to_owned(),
+    };
+    let intent = build_intent(spec_doc);
+    let requirements = build_all_requirements(spec_doc);
+    let tasks = build_task_index(tasks_md);
+    let non_completed_tasks = tasks
+        .iter()
+        .filter(|task| task.state != "completed")
+        .cloned()
+        .collect();
+    let vet_path = spec.dir.join("journal").join("VET.md");
+    let vet_journal = build_vet_journal(&vet_path)?;
+    let paths = build_spec_paths(spec, tasks_md_path, &vet_path, project_root);
+    let diff_command = crate::git::suggested_worktree_diff_command(cwd);
+
+    Ok(SpecContextBundle {
+        schema_version: 1,
+        spec: identity,
+        intent,
+        requirements,
+        tasks,
+        non_completed_tasks,
+        vet_journal,
+        paths,
+        diff_command,
     })
 }
 
@@ -284,6 +404,19 @@ fn build_paths(
     }
 }
 
+fn build_spec_paths(
+    spec: &ParsedSpec,
+    tasks_md_path: &Utf8Path,
+    vet_path: &Utf8Path,
+    project_root: &Utf8Path,
+) -> SpecBundlePaths {
+    SpecBundlePaths {
+        spec_md: to_repo_relative(&spec.spec_md_path, project_root),
+        tasks_md: to_repo_relative(tasks_md_path, project_root),
+        vet_journal: to_repo_relative(vet_path, project_root),
+    }
+}
+
 /// Inline the selected task's per-task journal into the bundle.
 ///
 /// Resolves `<spec-dir>/journal/<task-id>.md` (the same path `speccy journal
@@ -349,6 +482,60 @@ fn build_journal(journal_path: &Utf8Path) -> Result<BundleJournal, ContextError>
     })
 }
 
+/// Inline the latest VET invocation and index prior invocations without
+/// bodies. Missing VET.md is normal before the first vet append.
+fn build_vet_journal(vet_path: &Utf8Path) -> Result<SpecVetJournal, ContextError> {
+    let src = match fs_err::read_to_string(vet_path.as_std_path()) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(SpecVetJournal {
+                exists: false,
+                spec: None,
+                generated_at: None,
+                latest_invocation: None,
+                prior_invocations: Vec::new(),
+            });
+        }
+        Err(e) => return Err(ContextError::Io(e)),
+    };
+
+    let doc =
+        parse_vet_in_flight(&src, vet_path).map_err(|source| ContextError::VetJournalParse {
+            path: vet_path.to_path_buf(),
+            source,
+        })?;
+
+    let (latest_invocation, prior_invocations) = match doc.invocations.split_last() {
+        Some((latest, prior)) => {
+            let latest = SpecVetInvocation {
+                number: latest.number,
+                date: latest.date.clone(),
+                latest_round: latest_vet_round(&latest.blocks),
+                blocks: latest.blocks.iter().map(to_json_vet_block).collect(),
+            };
+            let prior = prior
+                .iter()
+                .map(|inv| SpecVetInvocationAttrs {
+                    number: inv.number,
+                    date: inv.date.clone(),
+                    latest_round: latest_vet_round(&inv.blocks),
+                    blocks: inv.blocks.iter().map(to_json_vet_block_attrs).collect(),
+                })
+                .collect();
+            (Some(latest), prior)
+        }
+        None => (None, Vec::new()),
+    };
+
+    Ok(SpecVetJournal {
+        exists: true,
+        spec: Some(doc.spec),
+        generated_at: Some(doc.generated_at),
+        latest_invocation,
+        prior_invocations,
+    })
+}
+
 /// Project the resolved task's `<task>` entry into the bundle: the parsed
 /// `id`, `state`, and `covers` alongside the verbatim body bytes.
 fn build_task_entry(location: &TaskLocation<'_>) -> TaskEntry {
@@ -387,6 +574,63 @@ fn build_requirements(location: &TaskLocation<'_>, spec_doc: &SpecDoc) -> Vec<Co
         .collect()
 }
 
+fn build_all_requirements(spec_doc: &SpecDoc) -> Vec<CoveringRequirement> {
+    spec_doc
+        .requirements
+        .iter()
+        .map(|req| CoveringRequirement {
+            id: req.id.clone(),
+            body: req.body.clone(),
+            done_when: req.done_when.clone(),
+            behavior: req.behavior.clone(),
+            scenarios: req
+                .scenarios
+                .iter()
+                .map(|s| ScenarioEntry {
+                    id: s.id.clone(),
+                    body: s.body.clone(),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+fn build_task_index(tasks_md: &TasksDoc) -> Vec<SpecTaskEntry> {
+    tasks_md
+        .tasks
+        .iter()
+        .map(|task| SpecTaskEntry {
+            id: task.id.clone(),
+            state: task.state.as_str().to_owned(),
+            covers: task.covers.clone(),
+            title: task_title(task),
+        })
+        .collect()
+}
+
+fn task_title(task: &Task) -> String {
+    for line in task.body.lines() {
+        let trimmed = line.trim();
+        if let Some(title) = trimmed.strip_prefix("## ") {
+            return title.trim().to_owned();
+        }
+    }
+    String::new()
+}
+
+fn latest_vet_round(blocks: &[VetBlock]) -> Option<u32> {
+    blocks.iter().filter_map(vet_block_round).max()
+}
+
+fn vet_block_round(block: &VetBlock) -> Option<u32> {
+    match block {
+        VetBlock::DriftReview { round, .. } | VetBlock::HolisticFix { round, .. } => Some(*round),
+        VetBlock::SimplifierScan { .. }
+        | VetBlock::SimplifierApply { .. }
+        | VetBlock::Gate { .. } => None,
+    }
+}
+
 /// Project the SPEC.md element tree's intent surfaces into the bundle:
 /// the `<goals>` and `<non-goals>` bodies plus every `<decision>` with
 /// its id and body, in declared order. The Summary narrative,
@@ -408,16 +652,15 @@ fn build_intent(spec_doc: &SpecDoc) -> Intent {
     }
 }
 
-/// Locate the spec in the workspace by its `SPEC-NNNN` identifier. The
-/// task lookup already proved the spec exists and parsed, so the
-/// not-found branch is defensive.
-fn resolve_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Result<&'w ParsedSpec, ContextError> {
+/// Locate the spec in the workspace by its `SPEC-NNNN` identifier.
+/// Returns `None` when no active spec carries that id; callers map the
+/// miss to the error that fits their entry path (defensive
+/// `SpecDocUnavailable` on the task path, user-facing `SpecNotFound` on
+/// the bare-spec path).
+fn find_spec<'w>(ws: &'w Workspace, spec_id: &str) -> Option<&'w ParsedSpec> {
     ws.specs
         .iter()
         .find(|s| s.spec_id.as_deref() == Some(spec_id))
-        .ok_or_else(|| ContextError::SpecDocUnavailable {
-            spec_id: spec_id.to_owned(),
-        })
 }
 
 /// Render the bundle in the human-readable text form. `--json` toggles
@@ -573,5 +816,44 @@ fn render_consistency(
             writeln!(out, "- {} {} [{}]", drift.task_id, kind, drift.tasks_state)?;
         }
     }
+    Ok(())
+}
+
+fn render_spec_text(bundle: &SpecContextBundle, out: &mut dyn Write) -> Result<(), ContextError> {
+    writeln!(out, "schema_version: {}", bundle.schema_version)?;
+    writeln!(out, "spec: {} — {}", bundle.spec.id, bundle.spec.title)?;
+    writeln!(out, "status: {}", bundle.spec.status)?;
+    writeln!(out, "\n## Goals\n{}", bundle.intent.goals.trim_end())?;
+    writeln!(
+        out,
+        "\n## Non-goals\n{}",
+        bundle.intent.non_goals.trim_end()
+    )?;
+    writeln!(out, "\n## Requirements")?;
+    for req in &bundle.requirements {
+        writeln!(out, "- {}", req.id)?;
+    }
+    writeln!(out, "\n## Tasks")?;
+    for task in &bundle.tasks {
+        let title = if task.title.is_empty() {
+            "(untitled)"
+        } else {
+            task.title.as_str()
+        };
+        writeln!(out, "- {} [{}] {title}", task.id, task.state)?;
+    }
+    if bundle.non_completed_tasks.is_empty() {
+        writeln!(out, "\n## Non-completed tasks\n(none)")?;
+    } else {
+        writeln!(out, "\n## Non-completed tasks")?;
+        for task in &bundle.non_completed_tasks {
+            writeln!(out, "- {} [{}]", task.id, task.state)?;
+        }
+    }
+    writeln!(out, "\n## Paths")?;
+    writeln!(out, "- SPEC.md: {}", bundle.paths.spec_md)?;
+    writeln!(out, "- TASKS.md: {}", bundle.paths.tasks_md)?;
+    writeln!(out, "- VET.md: {}", bundle.paths.vet_journal)?;
+    writeln!(out, "\n## Suggested diff command\n{}", bundle.diff_command)?;
     Ok(())
 }

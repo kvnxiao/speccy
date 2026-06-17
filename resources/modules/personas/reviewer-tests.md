@@ -137,16 +137,10 @@ anchoring on per-framework strings.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona tests --verdict blocking --model claude-sonnet-4-6[1m]/medium <<'EOF'
     `signup.spec.ts:34` asserts `mockHash.toHaveBeenCalled()` but
     never invokes the real `hashPassword` function -- the test passes
     even if `hashPassword` is `(_) => "plaintext"`. Replace the mock
     with the real implementation and assert the persisted column is a
     hash.
-    EOF
-
-    <verdict persona="tests" verdict="blocking" model="claude-sonnet-4-6[1m]/medium" rationale="signup.spec.ts:34 asserts a mock call, not real hashPassword behaviour." />

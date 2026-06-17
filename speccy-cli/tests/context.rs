@@ -241,6 +241,27 @@ fn tasks_md_states(spec_id: &str, states: &[&str]) -> String {
     body
 }
 
+/// A TASKS.md whose tasks carry title headings, states, and covers so the
+/// spec-scoped context bundle can assert the compact task index.
+fn tasks_md_indexed(spec_id: &str, task_specs: &[(&str, &str, &str, &str)]) -> String {
+    use std::fmt::Write as _;
+    let mut body = format!(
+        "---\nspec: {spec_id}\nspec_hash_at_generation: bootstrap-pending\n\
+         generated_at: 2026-06-10T00:00:00Z\n---\n\n# Tasks: {spec_id}\n\n",
+    );
+    for (id, state, covers, title) in task_specs {
+        write!(
+            body,
+            "<task id=\"{id}\" state=\"{state}\" covers=\"{covers}\">\n\
+             ## {title}\n\n\
+             body prose for {id}.\n\n\
+             <task-scenarios>\n- placeholder.\n</task-scenarios>\n</task>\n\n",
+        )
+        .expect("writing to a String is infallible");
+    }
+    body
+}
+
 /// Stand up a real git repo at `root` with one initial commit on `main`
 /// and no `[SPEC/T-NNN]:`-prefixed commits. Returns `Ok(false)` (skip) when
 /// git is unavailable, mirroring the live merge-base test's skip path.
@@ -394,10 +415,10 @@ fn invoke_json_err(root: &Utf8Path, selector: &str) -> ContextError {
         &mut out,
     )
     .expect_err("expected ContextError");
-    // A selector failure must not write any partial bundle to stdout.
+    // A context error must not write any partial bundle to stdout.
     assert!(
         out.is_empty(),
-        "selector failure must produce no partial stdout; got {} bytes",
+        "context error must produce no partial stdout; got {} bytes",
         out.len(),
     );
     err
@@ -481,6 +502,232 @@ fn qualified_selector_emits_json_with_schema_version_first() -> TestResult {
         trimmed.starts_with("{\"schema_version\":1"),
         "schema_version must be the first serialized field; got prefix: {}",
         trimmed.chars().take(40).collect::<String>(),
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Bare spec selector → whole-SPEC bundle for vet: stdout parses as one JSON
+// document whose first serialized field is `schema_version = 1`, with all
+// requirement contracts and compact task indexes present.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn spec_selector_emits_spec_bundle_with_requirement_and_task_indexes() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_indexed(
+            "SPEC-0042",
+            &[
+                ("T-001", "completed", "REQ-001", "First slice"),
+                ("T-002", "pending", "REQ-002 REQ-003", "Second slice"),
+                ("T-003", "in-review", "REQ-004", "Review slice"),
+            ],
+        )),
+    )?;
+
+    let stdout = invoke_json(&ws.root, "SPEC-0042")?;
+    let value = parse_one_json(&stdout);
+    assert_eq!(
+        value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64),
+        Some(1),
+        "schema_version must be 1; payload: {stdout}",
+    );
+    assert!(
+        stdout.trim_start().starts_with("{\"schema_version\":1"),
+        "schema_version must be the first serialized field; got prefix: {}",
+        stdout.chars().take(40).collect::<String>(),
+    );
+
+    let requirements = value
+        .get("requirements")
+        .and_then(serde_json::Value::as_array)
+        .expect("spec bundle carries requirements array");
+    assert_eq!(
+        requirements.len(),
+        5,
+        "spec bundle carries every requirement contract",
+    );
+    assert!(
+        serde_json::to_string(requirements)?.contains("REQ005_SCENARIO_MARKER"),
+        "the final requirement's scenario body must be present",
+    );
+
+    let tasks = value
+        .get("tasks")
+        .and_then(serde_json::Value::as_array)
+        .expect("spec bundle carries task index");
+    assert_eq!(tasks.len(), 3, "all tasks appear in the task index");
+    let first = tasks.first().expect("fixture has a first task");
+    assert_eq!(
+        first.get("title").and_then(serde_json::Value::as_str),
+        Some("First slice"),
+        "task title is derived from the task body heading",
+    );
+    assert!(
+        first.get("body").is_none(),
+        "spec-scoped task index must not inline task bodies",
+    );
+
+    let non_completed = value
+        .get("non_completed_tasks")
+        .and_then(serde_json::Value::as_array)
+        .expect("spec bundle carries non-completed task list");
+    let non_completed_ids: Vec<&str> = non_completed
+        .iter()
+        .filter_map(|task| task.get("id").and_then(serde_json::Value::as_str))
+        .collect();
+    assert_eq!(
+        non_completed_ids,
+        ["T-002", "T-003"],
+        "pending and in-review tasks are indexed as non-completed",
+    );
+
+    let vet = value
+        .get("vet_journal")
+        .expect("spec bundle carries VET journal marker");
+    assert_eq!(
+        vet.get("exists").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "absent VET.md is an explicit empty marker",
+    );
+    assert!(
+        vet.get("latest_invocation")
+            .is_some_and(serde_json::Value::is_null),
+        "absent VET.md has no latest invocation",
+    );
+
+    let paths = value.get("paths").expect("spec bundle has paths");
+    assert_eq!(
+        paths.get("vet_journal").and_then(serde_json::Value::as_str),
+        Some(".speccy/specs/0042-alpha/journal/VET.md"),
+        "VET.md path is repo-relative and surfaced even when absent",
+    );
+    assert_eq!(
+        value
+            .get("diff_command")
+            .and_then(serde_json::Value::as_str),
+        Some("git diff main"),
+        "spec bundle diff command includes working-tree changes",
+    );
+    Ok(())
+}
+
+#[test]
+fn unknown_spec_selector_surfaces_spec_not_found() -> TestResult {
+    let ws = Workspace::new()?;
+    write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_indexed(
+            "SPEC-0042",
+            &[("T-001", "completed", "REQ-001", "First slice")],
+        )),
+    )?;
+
+    let err = invoke_json_err(&ws.root, "SPEC-9999");
+    assert!(
+        matches!(&err, ContextError::SpecNotFound { spec_id } if spec_id == "SPEC-9999"),
+        "expected SpecNotFound for unknown bare spec selector; got {err:?}",
+    );
+    Ok(())
+}
+
+#[test]
+fn spec_bundle_slices_vet_journal_to_latest_invocation() -> TestResult {
+    let ws = Workspace::new()?;
+    let spec_dir = write_spec(
+        &ws.root,
+        "0042-alpha",
+        &spec_md_five_requirements("SPEC-0042"),
+        Some(&tasks_md_indexed(
+            "SPEC-0042",
+            &[("T-001", "completed", "REQ-001", "First slice")],
+        )),
+    )?;
+    let journal = spec_dir.join("journal");
+    fs_err::create_dir_all(journal.as_std_path())?;
+    fs_err::write(
+        journal.join("VET.md").as_std_path(),
+        indoc! {r#"---
+            spec: SPEC-0042
+            generated_at: 2026-06-10T00:00:00Z
+            ---
+
+            ## Invocation 1 — 2026-06-10T01:00:00Z
+
+            <drift-review verdict="blocking" round="1" date="2026-06-10T01:01:00Z" model="m/hi">
+            PRIOR_DRIFT_BODY_MARKER
+            </drift-review>
+
+            <gate verdict="failed" tasks_hash="aaaaaaaa" date="2026-06-10T01:02:00Z">
+            PRIOR_GATE_BODY_MARKER
+            </gate>
+
+            ## Invocation 2 — 2026-06-10T02:00:00Z
+
+            <drift-review verdict="pass" round="1" date="2026-06-10T02:01:00Z" model="m/hi">
+            LATEST_DRIFT_BODY_MARKER
+            </drift-review>
+        "#},
+    )?;
+
+    let value = parse_one_json(&invoke_json(&ws.root, "SPEC-0042")?);
+    let vet = value
+        .get("vet_journal")
+        .expect("spec bundle carries VET journal");
+    assert_eq!(
+        vet.get("exists").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "VET.md exists",
+    );
+
+    let latest = vet
+        .get("latest_invocation")
+        .and_then(serde_json::Value::as_object)
+        .expect("latest invocation is present");
+    assert_eq!(
+        latest.get("number").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "latest invocation is the last section",
+    );
+    let latest_blocks = latest
+        .get("blocks")
+        .and_then(serde_json::Value::as_array)
+        .expect("latest invocation carries full blocks");
+    assert!(
+        serde_json::to_string(latest_blocks)?.contains("LATEST_DRIFT_BODY_MARKER"),
+        "latest invocation keeps block bodies",
+    );
+
+    let prior = vet
+        .get("prior_invocations")
+        .and_then(serde_json::Value::as_array)
+        .expect("prior invocation index is present");
+    assert_eq!(prior.len(), 1, "only invocation 1 is prior");
+    let prior_blocks = prior
+        .first()
+        .and_then(|inv| inv.get("blocks"))
+        .and_then(serde_json::Value::as_array)
+        .expect("prior invocation carries attrs-only blocks");
+    assert_eq!(
+        prior_blocks.len(),
+        2,
+        "prior invocation indexes both blocks"
+    );
+    assert!(
+        prior_blocks.iter().all(|block| block.get("body").is_none()),
+        "prior invocation blocks must not carry body prose",
+    );
+    assert!(
+        !serde_json::to_string(prior)?.contains("PRIOR_DRIFT_BODY_MARKER"),
+        "prior invocation body prose is not inlined",
     );
     Ok(())
 }

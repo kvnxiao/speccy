@@ -49,15 +49,9 @@ suspected.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona architecture --verdict blocking --model claude-opus-4-8[1m]/high <<'EOF'
-    SPEC-NNNN DEC-NNN fixed the parser layer as the only consumer of
+    DEC-NNN fixed the parser layer as the only consumer of
     `serde-saphyr`; this diff introduces a direct `serde-saphyr` call
     in `speccy-cli` instead of going through `speccy-core::parse`.
     Route through the parser or amend the decision explicitly.
-    EOF
-
-    <verdict persona="architecture" verdict="blocking" model="claude-opus-4-8[1m]/high" rationale="speccy-cli calls serde-saphyr directly, bypassing the parser layer DEC-NNN fixed." />

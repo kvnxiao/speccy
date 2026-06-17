@@ -91,16 +91,16 @@ enum Command {
         #[arg(long)]
         include_archive: bool,
     },
-    /// Emit a task-scoped context bundle for loop subagents (one JSON read).
+    /// Emit a task- or spec-scoped context bundle for loop subagents.
     ///
-    /// Resolves the task with the same selector grammar `speccy check`
-    /// uses (`T-NNN` or `SPEC-NNNN/T-NNN`) and prints a single
-    /// schema-versioned bundle scoped to that task. `--json` toggles
-    /// representation, never content; agents always pass `--json`. The
-    /// command performs no writes anywhere. Selector failures exit
-    /// non-zero with no partial stdout.
+    /// A bare `SPEC-NNNN` prints a whole-SPEC bundle for the vet loop.
+    /// Task selectors (`T-NNN` or `SPEC-NNNN/T-NNN`) retain the task-scoped
+    /// bundle and same lookup diagnostics as `speccy check`. `--json`
+    /// toggles representation, never content; agents always pass `--json`.
+    /// The command performs no writes anywhere. Failures exit non-zero with
+    /// no partial stdout.
     Context {
-        /// Task selector: `T-NNN` (unqualified) or `SPEC-NNNN/T-NNN`.
+        /// Selector: `SPEC-NNNN`, `T-NNN`, or `SPEC-NNNN/T-NNN`.
         #[arg(value_name = "SELECTOR")]
         selector: String,
         /// Emit JSON envelope (`schema_version = 1`).

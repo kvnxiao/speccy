@@ -53,21 +53,19 @@ speccy check [SELECTOR]           Render check scenarios (no execution).
                                     CHK-NNN:             every spec's CHK-NNN
                                     T-NNN:               scenarios covering an unqualified task
                                     --include-archive:   also scan `.speccy/archive/`
-speccy context TASK-SELECTOR      Emit one task-scoped JSON bundle for a loop subagent's
-                                  entry read: the single call that replaces the old
-                                  full-SPEC + full-TASKS + journal + `speccy check`
-                                  recipe. Resolves the selector with the same grammar
-                                  as `speccy check` (`T-NNN` and `SPEC-NNNN/T-NNN`) and
-                                  the same ambiguity / not-found diagnostic classes;
-                                  selector failures exit non-zero with no partial
-                                  stdout. A pure read command:
+speccy context SELECTOR           Emit one JSON bundle for loop subagent entry reads.
+                                  Task selectors (`T-NNN`, `SPEC-NNNN/T-NNN`) emit the
+                                  existing task-scoped bundle and keep the same
+                                  ambiguity / not-found diagnostic classes as
+                                  `speccy check`. Bare spec selectors (`SPEC-NNNN`)
+                                  emit a spec-scoped vet bundle. Failures exit
+                                  non-zero with no partial stdout. A pure read command:
                                   performs no writes anywhere.
                                     --json:              schema_version=1 envelope (first field).
                                                          `--json` toggles representation, never
                                                          content; agents always pass it. There is no
-                                                         bare-spec form and no content-mode flag.
-                                  Envelope sections (one superset payload; roles ignore
-                                  fields they do not need):
+                                                         content-mode flag.
+                                  Task envelope sections:
                                     identity     spec frontmatter id, title, status
                                     intent       <goals>, <non-goals>, every <decision>
                                                  with its DEC id + body (Summary,
@@ -106,7 +104,29 @@ speccy context TASK-SELECTOR      Emit one task-scoped JSON bundle for a loop su
                                     consistency  workspace status plus only the drift
                                                  entries matching the selected task;
                                                  never refuses on drift
-                                  Size invariant (contract, not implementation detail):
+                                  Spec envelope sections:
+                                    identity     spec frontmatter id, title, status
+                                    intent       <goals>, <non-goals>, every <decision>
+                                                 with DEC id + body
+                                    requirements every requirement contract in full, in
+                                                 declared order
+                                    tasks        every task as id, state, covers, title
+                                                 only, never bodies
+                                    non_completed_tasks
+                                                 same compact shape, filtered to tasks
+                                                 whose state is not `completed`
+                                    vet_journal  absent VET.md is `exists:false`;
+                                                 otherwise the latest invocation's blocks
+                                                 are inlined with bodies and prior
+                                                 invocations are attributes-only indexes
+                                                 with no bodies
+                                    paths        repo-relative SPEC.md, TASKS.md, and VET.md
+                                                 paths for follow-up targeted reads
+                                    diff_command working-tree diff against the default branch,
+                                                 runnable as-is from the repo root; includes
+                                                 uncommitted holistic changes and degrades on
+                                                 git probe failure
+                                  Task size invariant (contract, not implementation detail):
                                   the bundle scales with the task, not the spec. For a
                                   fixed task, growing the spec changes the bundle only in
                                   bounded ways: one added sibling adds exactly one
@@ -622,15 +642,19 @@ because the project's own tests would fail. Project tests run through the
 project's own test runner (e.g. `cargo test`, `pnpm test`); CI
 orchestrates both that runner and `speccy verify` side by side.
 
-### Reviewer diff scoping
+### Reviewer and vet diff scoping
 
 The diff a reviewer sub-agent reasons over is fetched by the sub-agent
 itself, never inlined into its spawn prompt. The command comes from the
-`diff_command` field of the `speccy context` bundle the persona opens
-with: a merge-base diff against the repository's default branch
+`diff_command` field of the task-scoped `speccy context` bundle the
+persona opens with: a merge-base diff against the repository's default branch
 (`git diff <base>...HEAD`, where `<base>` is e.g. `origin/main`),
 optionally scoped with `-- <suggested-files>` from the task body. The
 CLI derives the suggestion via read-only git probes and degrades to a
 `main`-baseline string when the probe fails (no remote, detached HEAD,
 git unavailable); it never fetches the diff itself and never mutates the
 repository.
+
+The spec-scoped bundle used by vet also carries `diff_command`, but its
+command is `git diff <base>` rather than `...HEAD` so it includes
+uncommitted holistic fixes between vet rounds.

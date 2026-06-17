@@ -50,14 +50,8 @@ delivers.
 
 ## Example
 
-Append the `<review>` block (body on stdin), then return the thin
-verdict:
+Blocking finding body:
 
-    speccy journal append SPEC-NNNN/T-NNN --block review \
-      --persona business --verdict blocking --model claude-opus-4-8[1m]/high <<'EOF'
     REQ-NNN says duplicate-email returns 409 with "already exists" in
     the body; handler returns 400. See `src/auth/signup.ts:42`. The
     error code is the contract; please fix before merge.
-    EOF
-
-    <verdict persona="business" verdict="blocking" model="claude-opus-4-8[1m]/high" rationale="REQ-NNN duplicate-email returns 400, not the contracted 409." />

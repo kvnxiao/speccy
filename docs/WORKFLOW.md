@@ -156,9 +156,9 @@ session:
   journal round in full (with the prior rounds indexed by attributes),
   and the suggested diff command in a single roundtrip. (`reviewer-tests`
   keeps its separate caveat that `speccy check` exit codes are not test
-  evidence. That is unrelated to the entry read.) Vet personas are
-  excluded: their review is whole-SPEC holistic scope, which a
-  task-scoped bundle cannot serve, so they keep their full reads;
+  evidence. That is unrelated to the entry read.) Vet personas use the
+  separate spec-scoped `speccy context SPEC-NNNN --json` bundle because
+  their scope is whole-SPEC rather than task-scoped;
 - has each reviewer sub-agent append its own `<review>` block to
   `.speccy/specs/NNNN-slug/journal/T-NNN.md` via
   `speccy journal append --block review` and return a thin verdict
@@ -240,14 +240,13 @@ sub-agent per persona in the default fan-out.
 Each persona sub-agent is loaded from its host-native agent file
 (`.claude/agents/reviewer-<persona>.md` or its Codex parallel,
 materialised from `resources/modules/personas/reviewer-<persona>.md` by
-`speccy init`). The shipped persona body composes a prompt that includes:
+`speccy init`). The spawn prompt gives the task selector; the persona
+opens `speccy context SPEC-NNNN/T-NNN --json`, which provides:
 
-- the relevant SPEC.md (full, including its `### Decisions` block)
-- the task body from TASKS.md (the bare `<task>` element)
-- prior implementer / reviewer / blocker history from
-  `.speccy/specs/NNNN-slug/journal/T-NNN.md`
-- the diff for the task's claimed work
-- `AGENTS.md`
+- the selected task body, parsed id/state/covers, and sibling task index
+- covering requirement contracts and scenarios
+- the latest per-task journal round plus a prior-round attributes index
+- repo-relative follow-up paths and the suggested `diff_command`
 - the persona's review-style guidance from the shipped persona body
 
 The reviewer sub-agent reads the prompt, performs the review, and appends
@@ -640,10 +639,12 @@ model the parent session is using.
 | `plan-explorer` | `model: opus[1m]`, `effort: high` | `model = "gpt-5.5"`, reasoning effort high | yes |
 | `plan-architect` | `model: opus[1m]`, `effort: high` | `model = "gpt-5.5"`, reasoning effort high | yes |
 
-The `[1m]` suffix selects the 1M-context variant on Claude Code so each
-agent can read the full SPEC, the full diff, and the relevant TASKS.md
-slice without truncation. On Codex, `gpt-5.5` covers every pinned role and
-the asymmetric work-shape is carried entirely by `model_reasoning_effort`.
+The `[1m]` suffix selects the 1M-context variant on Claude Code for the
+roles that still need broad reasoning headroom: adversarial review,
+holistic vetting, planning, and high-noise diffs. Entry reads are now
+bounded by `speccy context` bundles rather than full SPEC/TASKS prompt
+inlining. On Codex, `gpt-5.5` covers every pinned role and the
+asymmetric work-shape is carried entirely by `model_reasoning_effort`.
 
 The pinned phase workers (`speccy-decompose`, `speccy-work`,
 `speccy-ship`) ship sub-agent files. `speccy-bootstrap` and `speccy-review`
