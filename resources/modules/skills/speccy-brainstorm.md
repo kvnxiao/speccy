@@ -120,14 +120,14 @@ your own judgment.
 
    4. **Decisions I need from you.** ONE table merging every fork that
       would change the SPEC shape. Each row carries an alpha key
-      (`a.`, `b.`, ...), the question, and your proposed default — or
-      `?` when you genuinely have no default and need the user to
-      decide. A row with a default is a silent assumption made
-      visible; a `?` row is an open question — still name the approach
-      you lean toward, and why, in the question text, but leave the
-      default `?` so the user actively chooses instead of inheriting a
-      silent assumption. Close the table with:
-      "Reply 'go' to take the defaults, or override any row by key."
+      (`a.`, `b.`, ...), the question, and your recommendation — or
+      `?` when you genuinely have no recommendation and need the user
+      to decide. A row with a recommendation is a silent assumption
+      made visible; a `?` row is an open question — still name the
+      approach you lean toward, and why, in the question text, but
+      leave the recommendation `?` so the user actively chooses instead
+      of inheriting a silent assumption. Close the table with:
+      "Reply 'approve' to take the recommendations, or override any row by key."
       Reaching key `z.` signals an over-scoped session — a scope
       smell, not a format limit.
 
