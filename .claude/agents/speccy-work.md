@@ -272,6 +272,13 @@ and for each thing you decide to add, place it in one tier:
    caught at review is a full bounce-and-respawn round. Address the
    findings now; do not defer them to the reviewers.
 
+   **Scan for leaked provenance first — the most common avoidable
+   bounce.** Strip any planning-artifact citation used as the reason a
+   line exists — a bare REQ/CHK/DEC/SPEC id, a doc path (`docs/…`), or a
+   rule-file pointer in source, docstrings, or test comments — keeping the
+   self-standing prose. The checklist below carries the full taxonomy and
+   is what the style reviewer runs, so a miss here is a guaranteed bounce.
+
    **Reviewer north-star map.** Hold your diff to all four review
    outcomes:
 
