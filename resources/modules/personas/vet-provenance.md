@@ -99,7 +99,5 @@ one thin verdict as your final message:
 
 {% include "modules/personas/vet-no-rollback.md" %}
 
-{% include "modules/references/identity-sourcing.md" %}
-
 The orchestrator owns all code-state rollback. Do not write to
 `TASKS.md`, per-task journal files, or VET.md.

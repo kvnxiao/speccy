@@ -2,7 +2,7 @@
 id: SPEC-0066
 slug: provenance-cleanup
 title: Pre-ship provenance cleanup — broaden the provenance convention and add a dedicated vet cleanup pass
-status: in-progress
+status: implemented
 created: 2026-06-21
 supersedes: []
 ---
