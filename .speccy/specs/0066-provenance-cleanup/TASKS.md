@@ -47,7 +47,7 @@ plus the `just reeject` regenerated mirrors under `.claude/`, `.agents/`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-002 REQ-003">
+<task id="T-002" state="completed" covers="REQ-002 REQ-003">
 ## Add the single-concern `vet-provenance` subagent (body + per-host wrappers)
 
 Create the dedicated provenance-cleanup subagent, modeled on `vet-simplifier`.
