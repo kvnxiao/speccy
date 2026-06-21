@@ -87,21 +87,29 @@ and learned content survives speccy CLI updates. Its **absence is normal and
 silent**: a missing or malformed ledger produces no `speccy verify` error or
 warning, and the implementer simply has no slice to load.
 
-### The four-part entry shape
+### What earns an entry
 
-Every entry — whether it records a convention the loop followed or a mistake it
-made — carries the same four parts. Convention-flavoured and mistake-flavoured
-entries differ only by which feed produced them, never in shape:
+Record an entry only when the lesson is **durable across specs and not already
+enforced** by an existing gate, reviewer persona, or `AGENTS.md`/rule. Recording
+nothing is the default outcome: a lesson a future implementer would re-derive
+anyway, or one a gate already catches, earns no line. The bar is high on purpose
+— the ledger stays small by refusing low-signal intake, not by capping or
+evicting.
 
-- **Trigger** — when the entry applies: a task area, a file region, or a
-  recurring situation. This is what a future implementer matches against to
-  decide the entry is relevant to the slice in front of them.
-- **Convention or mistake** — the thing observed: the convention that was
-  followed, or the mistake that was made.
-- **Corrective rule** — the actionable instruction to follow next time, stated
-  so the implementer can act on it without re-deriving the context.
-- **Provenance** — the SPEC / task / review that produced the entry, named by
-  real identifier so the entry is auditable back to its source.
+### The one-line entry shape
+
+Every entry is a **single line** carrying three parts and no narrative:
+
+- **Trigger** — the situation a future implementer matches against to decide
+  the entry is relevant to the slice in front of them: a task area, a file
+  region, or a recurring situation.
+- **Corrective rule** — the action to take next time, stated so the implementer
+  can act on it without re-deriving the context.
+- **Provenance tag** — a compact bracketed `[SPEC-NNNN/T-NNN]` tag naming the
+  SPEC and task that produced the entry, so it is auditable back to its source.
+
+There is no mistake or history field: how the lesson was learned is not forward
+signal, only the corrective rule is.
 
 ### Authoring discipline
 
@@ -111,24 +119,20 @@ entries differ only by which feed produced them, never in shape:
   line, or module name becomes a phantom reference the moment that construct
   changes. Write the rule, not the address.
 
-- **Provenance must resolve to a real SPEC / task / review identifier**, never
-  a fabricated one. Dangling SPEC/task provenance is the only structurally
-  checkable slice of ledger hygiene; the rest is a semantic judgment the
-  ship-time retro owns, deliberately not a CLI freshness check. Keeping
-  provenance honest at authoring time is what makes that future check possible.
+- **The provenance tag is bracketed and resolves to a real SPEC and task**,
+  never a fabricated one. Use the `[SPEC-NNNN/T-NNN]` form; drop the task
+  segment to `[SPEC-NNNN]` only for a spec-wide lesson that no single task
+  owns. Dangling SPEC/task provenance is the only structurally checkable slice
+  of ledger hygiene; the rest is a semantic judgment the ship-time retro owns,
+  deliberately not a CLI freshness check. Keeping provenance honest at authoring
+  time is what makes that future check possible.
 
 ### Worked example
 
 The placeholders below are illustrative — substitute your own values.
 
 ```markdown
-- Trigger: implementing a new CLI subcommand that parses a bounded numeric
-  flag.
-- Convention: bounded numeric flags are validated with a range value parser at
-  the argument layer, not with an ad-hoc check inside the command body.
-- Corrective rule: reach for the existing range-value-parser helper before
-  writing a fresh bounds check; keep validation at the parse boundary.
-- Provenance: SPEC-0042 / T-001 (0042-widget-render-timeout), reviewer-style pass.
+- Implementing a new CLI subcommand that parses a bounded numeric flag → reach for the existing range-value-parser helper before writing a fresh bounds check; keep validation at the parse boundary. [SPEC-0042/T-001]
 ```
 
 

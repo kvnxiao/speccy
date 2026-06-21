@@ -5,7 +5,7 @@ generated_at: 2026-06-21T19:34:29Z
 ---
 # Tasks: SPEC-0067 Bounded memory ledger — a higher capture bar, one-line entries, and autonomous compaction keep `.speccy/MEMORY.md` small and high-signal
 
-<task id="T-001" state="pending" covers="REQ-002">
+<task id="T-001" state="completed" covers="REQ-002">
 ## Rewrite the memory-ledger entry-shape reference to the one-line shape
 
 Replace the four-part entry shape in
