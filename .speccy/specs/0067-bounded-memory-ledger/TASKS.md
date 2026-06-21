@@ -78,7 +78,7 @@ Suggested files: `resources/modules/phases/speccy-ship.md`
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-005">
+<task id="T-003" state="completed" covers="REQ-005">
 ## Align the read-side summary and confirm the no-duplicate-snippet invariant
 
 Update `resources/modules/references/memory-ledger-summary.md` so its closing
