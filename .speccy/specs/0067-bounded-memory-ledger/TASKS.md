@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0067
-spec_hash_at_generation: 55d83349f2ed443b01795cd68c8375b074b056a744b3d927b72a4373ef704c0d
-generated_at: 2026-06-21T09:18:31Z
+spec_hash_at_generation: f4a3ddac50a27face88582fe14a545410f0f214b1cab38e8350c6787bebf5046
+generated_at: 2026-06-21T19:34:29Z
 ---
 # Tasks: SPEC-0067 Bounded memory ledger — a higher capture bar, one-line entries, and autonomous compaction keep `.speccy/MEMORY.md` small and high-signal
 

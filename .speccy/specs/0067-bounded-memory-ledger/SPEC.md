@@ -399,10 +399,6 @@ ledger's role, not its entry shape, so it needs no edit. The existing memory
 feed-forward test keys on the include structure, not the prose, so it stays
 green.
 
-**Concurrent-spec note.** SPEC-0066 (provenance-cleanup) may also edit the
-provenance wording in `memory-ledger.md`; a merge reconciliation between the two
-branches is expected at ship time.
-
 ## Open Questions
 
 None — the capture bar, entry format, compaction autonomy, promotion gate,
