@@ -5,7 +5,7 @@ generated_at: 2026-06-21T09:12:29Z
 ---
 # Tasks: SPEC-0066 Pre-ship provenance cleanup — broaden the provenance convention and add a dedicated vet cleanup pass
 
-<task id="T-001" state="pending" covers="REQ-001">
+<task id="T-001" state="completed" covers="REQ-001">
 ## Broaden the shared provenance convention bullet
 
 Edit the "No provenance or doc-pointer meta-annotation" bullet in
