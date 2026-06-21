@@ -2,7 +2,7 @@
 id: SPEC-0067
 slug: bounded-memory-ledger
 title: Bounded memory ledger — a higher capture bar, one-line entries, and autonomous compaction keep `.speccy/MEMORY.md` small and high-signal
-status: in-progress
+status: implemented
 created: 2026-06-21
 supersedes: []
 ---
