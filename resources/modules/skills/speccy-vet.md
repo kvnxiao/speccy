@@ -12,10 +12,11 @@ final check before the PR opens.
 
 This skill is **autonomous up to the ship point**. It fans out
 review and implementer sub-agents, loops on drift, applies a
-simplifier polish pass, and returns a single short verdict to its
-caller. The caller (typically `{{ cmd_prefix }}speccy-orchestrate`
-at the `ship` boundary, but a human can invoke this directly) is
-the one that gates the actual PR opening.
+simplifier polish pass and a provenance-cleanup pass, and returns a
+single short verdict to its caller. The caller (typically
+`{{ cmd_prefix }}speccy-orchestrate` at the `ship` boundary, but a
+human can invoke this directly) is the one that gates the actual PR
+opening.
 
 ## When to use
 
@@ -59,8 +60,8 @@ session.
 
 ## What this skill writes and commits
 
-This skill writes to VET.md and lets implementer / simplifier
-sub-agents modify the working tree. It **does not commit
+This skill writes to VET.md and lets implementer / simplifier /
+provenance sub-agents modify the working tree. It **does not commit
 anything**. Per Speccy's atomic-landing convention,
 `{{ cmd_prefix }}speccy-ship` is the committer — it bundles all
 uncommitted changes from the loop (per-task journal updates,
@@ -96,7 +97,10 @@ appends: the vet sub-agents append their own `<drift-review>` /
 `<holistic-fix>` / `<simplifier-scan>` / `<simplifier-apply>` blocks,
 and this skill's session appends the terminal `<gate>` block (it is
 the sole author of `<gate>` and, under the orchestrator, of git
-commits, but it does not transcribe sub-agent blocks).
+commits, but it does not transcribe sub-agent blocks). The
+provenance-cleanup pass appends no block — its outcome is recorded in
+the `<gate>` summary line and the returned verdict — so the closed
+VET block set is unchanged by it.
 
 ### File format
 

@@ -16,6 +16,10 @@
 //!   `{% include %}` for `no-tasks-md-writes.md`.
 //! - [`persona_bodies_include_diff_fetch_snippet`]: each persona uses `{%
 //!   include %}` for `diff-fetch-command.md`.
+//! - [`vet_provenance_delegates_convention_via_include`][]: the
+//!   `vet-provenance.md` body sources the provenance definition via `{% include
+//!   %}` of `convention-checklist.md` and does not restate the checklist
+//!   definition inline.
 //! - [`rendered_reviewer_personas_use_context_diff_command`]: rendered reviewer
 //!   agents tell personas to read `diff_command` from the context bundle and do
 //!   not contain the stale hardcoded merge-base placeholder.
@@ -168,6 +172,32 @@ fn persona_bodies_include_inline_note_format_snippet() {
              the inline note format template is shared across all six personas",
         );
     }
+}
+
+/// The `vet-provenance.md` persona body sources its provenance definition
+/// via `{% include %}` of the convention checklist and does not restate the
+/// checklist definition inline. This gates the share-via-include property:
+/// a body that inlined a full copy of the checklist definition would defeat
+/// the single-source-of-truth design.
+#[test]
+fn vet_provenance_delegates_convention_via_include() {
+    let body = require_module_file("vet-provenance.md");
+
+    let expected_include = r#"{% include "modules/references/convention-checklist.md" %}"#;
+    assert!(
+        body.contains(expected_include),
+        "vet-provenance.md must source the provenance definition via \
+         `{expected_include}` (delegation property)",
+    );
+
+    // The convention checklist opens with this H2 heading. Its presence in
+    // the persona body (rather than only via the include) would mean the
+    // checklist definition was restated inline, defeating the delegation.
+    assert!(
+        !body.contains("## Convention-drift checklist"),
+        "vet-provenance.md must not restate the convention checklist inline; \
+         it must pull it in via `{expected_include}` (delegation property)",
+    );
 }
 
 /// The rendered `.claude/agents/reviewer-<persona>.md` files produced by

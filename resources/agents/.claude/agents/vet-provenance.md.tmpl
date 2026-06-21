@@ -1,0 +1,7 @@
+---
+name: vet-provenance
+description: Single-concern provenance-cleanup sub-agent for speccy-vet. Scans the cumulative SPEC-NNNN working-tree diff for leaked provenance — comment, doc, and test-doc prose citing a planning artifact, numbered rule, or design doc as the reason a line exists — and in apply-mode rewrites the offending prose to drop the bare pointer while preserving intent, honouring the runtime-artifact carve-out and touching only prose, then runs the project hygiene suite. Use when speccy-vet dispatches the pre-ship provenance pass after drift clears; returns a single thin verdict and appends no journal block.
+model: opus[1m]
+effort: medium
+---
+{% include "modules/personas/vet-provenance.md" %}
