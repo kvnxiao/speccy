@@ -34,7 +34,7 @@ hand-bootstrap the file or write an `## Invocation N` heading — the first
 The invocation number `N` for this run is whatever the CLI assigns
 on the first append — you do not pick it or write the heading. After
 the first block of this invocation lands (the round-1
-`<drift-review>` the vet-reviewer appends, or the Phase 3 `<gate>` on
+`<drift-review>` the vet-reviewer appends, or the Phase 4 `<gate>` on
 a Phase 0 early-exit), read it back with `speccy journal show
 SPEC-NNNN --json` to learn the invocation number for the return
 contract's `invocation` field.
@@ -283,10 +283,87 @@ the return block.
         --verdict blocking` so the trail is complete. Record
         `simplifier="reverted"`.
 
-### Phase 3 — append the `<gate>` block via the CLI
+### Phase 3 — provenance-cleanup pass
+
+Drift is `pass` and the simplifier pass has resolved. Run one
+provenance-cleanup pass over the same cumulative diff. Like the
+simplifier, this phase is behaviour-preserving and does **not** affect
+the verdict (a revert still yields `verdict="pass"`). It dispatches the
+single-concern `vet-provenance` sub-agent once over the whole diff — not
+per task — and records its outcome **only** through the Phase 4 `<gate>`
+block's one-line summary plus the verdict returned to the caller: it
+appends no journal block, adds no new `VetBlockKind`, and adds no field
+to the return block.
+
+The `vet-provenance` sub-agent is apply-mode: it rewrites prose in place,
+so its edits must be reverted on a hygiene failure. As in Phase 2, the
+running session snapshots the pre-pass working tree **before** dispatching
+the sub-agent, so the rollback target holds the pre-rewrite state. Phase 2
+drops its own stash on both the `applied` and `clean` exits, so no prior
+snapshot survives into this phase — Phase 3 takes its own.
+
+1. **Snapshot the working tree** before the apply, so the running
+   session owns the rollback. The sub-agent applies its rewrites in
+   place and cannot reliably roll back itself; owning the snapshot here,
+   ahead of the dispatch, bounds the blast radius and keeps the
+   pre-rewrite state as the revert target.
+
+   ```bash
+   git stash push --include-untracked -m "speccy-holistic-pre-provenance-<spec>-<invocation>"
+   git stash apply
+   ```
+
+   The first command snapshots uncommitted state and clears it to HEAD;
+   the second restores the working tree so the sub-agent has the current
+   implementation to work on. The stash remains as the rollback target —
+   the pre-rewrite state — see "Protect the journal from rollback" above.
+
+2. **Spawn the provenance sub-agent.** Prompt:
+
+   > Provenance-cleanup pass for `SPEC-NNNN`. Run `speccy context
+   > SPEC-NNNN --json` and use its `diff_command` to see the whole
+   > cumulative diff (working tree included). Your sole concern is
+   > leaked provenance; honour the runtime-artifact carve-out and edit
+   > prose only.
+   >
+   > Apply your rewrites and run the project's hygiene gates as defined
+   > in its `AGENTS.md`. **If any hygiene step fails, do NOT attempt to
+   > revert yourself.** Return `verdict="blocking"` with a one-line
+   > description of what failed; the caller owns the rollback.
+   >
+   > Append **no** journal block — the vet block set is closed. Return a
+   > single thin `<verdict>` element as your final message.
+
+   {% if host == "claude-code" %}Invoke the `Task` tool with
+   `subagent_type: "vet-provenance"`.{% else %}Invoke Codex's native sub-agent-spawn primitive against the
+   registered `vet-provenance` sub-agent at
+   `.codex/agents/vet-provenance.toml`.{% endif %}
+
+   The sub-agent appends no block; its entire output is the prose it
+   rewrites and the thin `<verdict>` it returns. Read that verdict.
+
+3. Resolve the snapshot based on the verdict. The provenance pass
+   appends no block, so this step only keeps or reverts **code**:
+
+   - **`clean`** (no leaks found, nothing rewritten) or **`applied`**
+     (hygiene green): `git stash drop` — discard the pre-pass snapshot,
+     keep the working tree as-is.
+
+   - **`blocking`** (hygiene failed), sub-agent error, or
+     missing/malformed verdict: run the journal-safe revert sequence
+     (see "Protect the journal from rollback" above), restoring the
+     pre-rewrite snapshot. The verdict is unaffected — this is a
+     behaviour-preserving polish pass.
+
+   Whatever the outcome, summarise it in one clause of the Phase 4
+   `<gate>` body (for example `"provenance: clean"`, `"provenance: 2
+   comments rewritten"`, or `"provenance: reverted on hygiene
+   failure"`). It does not change the surfaced `verdict`.
+
+### Phase 4 — append the `<gate>` block via the CLI
 
 **Every** exit path — Phase 0 integrity failures, Phase 1
-round-budget exhaustion, Phase 1 `stuck` reverts, Phase 2
+round-budget exhaustion, Phase 1 `stuck` reverts, Phase 2 and Phase 3
 completion (pass or revert), and the success path — appends
 exactly one `<gate>` block to `paths.vet_journal` via
 `speccy journal append --block gate`, **before** surfacing the
@@ -323,10 +400,12 @@ You supply only `--verdict` and the one-line body:
 - `--verdict` — `passed` when the surfaced verdict will be
   `verdict="pass"`; `failed` when it will be `verdict="fail"`
   (including every Phase 0 early-exit path).
-- body — a single line summarising what happened (examples: `"Drift
-  cleared on round 2; simplifier applied; clean."`, `"Phase 0
-  integrity check failed: task T-NNN not completed."`, `"Drift round
-  budget exhausted at round 3 without a pass."`).
+- body — a single line summarising what happened, including the
+  provenance pass outcome since it has no journal block of its own
+  (examples: `"Drift cleared on round 2; simplifier applied;
+  provenance: 2 comments rewritten."`, `"Phase 0 integrity check
+  failed: task T-NNN not completed."`, `"Drift round budget exhausted
+  at round 3 without a pass."`).
 
 Validation runs before any write; a malformed body or an attempt to
 add a second gate to a gate-terminated section leaves VET.md

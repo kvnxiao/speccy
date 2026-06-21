@@ -148,6 +148,7 @@ then none of those forms can be rationalised as acceptable, and the carve-out
 still clearly permits naming a path the code operates on. This is a
 persona-review judgment, not a scriptable assertion.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -195,6 +196,7 @@ then it reads as a single-concern provenance pass and instructs
 intent-preserving rewrite, carve-out respect, and prose-only scope. This is a
 persona-review judgment, not a scriptable assertion.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -242,6 +244,7 @@ when the wrappers are re-ejected,
 then the subagent is present in both `.claude/agents/` and `.codex/agents/`
 with the persona body inlined — gating resource-to-ejected parity.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-004">
@@ -290,6 +293,7 @@ then the provenance phase runs once over the cumulative diff at pre-ship and
 records via the gate summary plus verdict, and the per-task review fan-out is
 unchanged. This is a persona-review judgment, not a scriptable assertion.
 </scenario>
+
 </requirement>
 
 ## Decisions

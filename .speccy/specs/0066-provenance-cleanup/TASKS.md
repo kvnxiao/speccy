@@ -1,7 +1,7 @@
 ---
 spec: SPEC-0066
-spec_hash_at_generation: 8a1c80a52ccc227239f525172f6d34648795d3f00c134d24f9c5012e71978e10
-generated_at: 2026-06-21T09:12:29Z
+spec_hash_at_generation: fe836fa1bcf816623d9e6fa1382befb3c5c17d6a0e0e1f8d91806313a4ab2be3
+generated_at: 2026-06-21T09:48:16Z
 ---
 # Tasks: SPEC-0066 Pre-ship provenance cleanup — broaden the provenance convention and add a dedicated vet cleanup pass
 
@@ -104,7 +104,7 @@ Suggested files: `resources/modules/personas/vet-provenance.md`,
 </task-scenarios>
 </task>
 
-<task id="T-003" state="pending" covers="REQ-004">
+<task id="T-003" state="completed" covers="REQ-004">
 ## Wire the pre-ship provenance-cleanup phase into the vet flow
 
 Add a dedicated provenance-cleanup phase to
