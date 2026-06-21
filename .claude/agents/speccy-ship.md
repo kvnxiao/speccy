@@ -137,28 +137,43 @@ The placeholders below are illustrative — substitute your own values.
 ```
 
 
-   The retro does three things in one pass:
+   The retro does these things in one pass:
 
-   - **Capture (both feeds).** Append convention-flavoured and/or
-     mistake-flavoured entries to `.speccy/MEMORY.md` in the four-part
-     shape, **one entry per write** so the prose-layer append stays
-     serial. A loop with recorded friction — a blocking-then-passed
-     review round, a retry round, a `<blockers>` directive — yields at
-     least one mistake-flavoured entry whose provenance cites that
-     evidence and whose corrective rule addresses the cause. A clean,
-     frictionless loop with no durable lesson records that explicitly
-     ("no durable lesson this loop") rather than inventing one. Create
-     the file if it does not yet exist.
+   - **Capture.** Append a one-line entry to `.speccy/MEMORY.md` only
+     when the lesson is **durable across specs and not already enforced**
+     by an existing gate, reviewer persona, or `AGENTS.md`/rule — when a
+     gate already catches the lesson, the gate is the memory and you
+     record nothing. **Recording nothing is the default outcome**, even
+     for a loop that hit friction (a blocking-then-passed review round, a
+     retry round, a `<blockers>` directive) whose only lesson an existing
+     persona or rule already enforces. There is no mandate to write at
+     least one entry per friction loop and no "no durable lesson this
+     loop" sentinel — a loop that earns no entry simply leaves the ledger
+     untouched. When a loop does surface a genuinely new, durable,
+     not-yet-enforced lesson, append exactly that lesson, **one entry per
+     write** so the prose-layer append stays serial. Create the file if
+     it does not yet exist.
 
-   - **Consolidate and dedupe (human-gated).** Propose promoting stable,
-     repeatedly-affirmed entries up into the durable tier (`AGENTS.md`
-     / rules) and surface each promotion for **human approval** — never
-     promote silently or automatically. On approval, make the
-     durable-tier edit and **remove the promoted entry from
-     `.speccy/MEMORY.md`** so it is not stored in both tiers. Dedupe
-     candidates within the ledger and against the repo's existing
-     durable docs (`AGENTS.md`, rule files, anything they point at):
-     drop a candidate already covered there rather than appending it.
+   - **Compact (autonomous).** Before appending, run the bounding work
+     that can only shrink the ledger — it needs no human approval and
+     runs unattended in an `orchestrate → ship` run, because every
+     outcome either refuses a write or shrinks the file. Drop a candidate
+     already covered by an existing ledger line or by a durable doc
+     (`AGENTS.md`, rule files, anything they point at) rather than
+     appending it, and merge a new lesson into a near-duplicate existing
+     line rather than adding a second. Compaction never deletes a
+     non-redundant entry. Boundedness rests on this pass, not on
+     promotion firing.
+
+   - **Promote (human-gated).** Promotion of a stable,
+     repeatedly-affirmed entry up into the durable tier (`AGENTS.md` /
+     rules) is the **single memory mutation that requires human
+     approval** — surface each promotion for approval and never promote
+     silently or automatically, including in an autonomous run. On
+     approval, make the durable-tier edit and **remove the promoted entry
+     from `.speccy/MEMORY.md`** so it is not stored in both tiers. The
+     ledger stays bounded by the autonomous compaction above even when
+     promotion never runs.
 
    - **Phantom-reference GC.** Re-validate existing ledger entries
      against the current tree and retire or rewrite any whose

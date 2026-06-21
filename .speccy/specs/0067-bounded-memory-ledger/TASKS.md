@@ -41,7 +41,7 @@ Suggested files: `resources/modules/references/memory-ledger.md`
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-001 REQ-003 REQ-004">
+<task id="T-002" state="completed" covers="REQ-001 REQ-003 REQ-004">
 ## Rewrite the ship-time retro: capture bar, autonomous compaction, single human gate
 
 Rewrite step 3 of `resources/modules/phases/speccy-ship.md`. Replace the
