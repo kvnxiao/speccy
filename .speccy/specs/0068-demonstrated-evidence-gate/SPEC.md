@@ -2,7 +2,7 @@
 id: SPEC-0068
 slug: demonstrated-evidence-gate
 title: Evidence-backed demonstrated gate — `speccy journal append` refuses an implementer block claiming `demonstrated` coverage with no backing evidence scenario
-status: in-progress
+status: implemented
 created: 2026-06-27
 supersedes: []
 ---
