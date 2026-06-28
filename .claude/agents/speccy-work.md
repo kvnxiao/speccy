@@ -142,11 +142,11 @@ statement, read-only scope, worked examples, and the
 3. Branch on the rule result.
 
    **First-attempt branch.** Proceed with the recipe below
-   (steps 4–11) unchanged: flip state to `in-progress`, read
+   (steps 4–12) unchanged: flip state to `in-progress`, read
    scenarios, load the memory ledger slice, run the bounded reuse
-   survey, implement from scratch, self-review, run the hygiene gate,
-   flip to `in-review`, append the round-1 `<implementer>` block via
-   `speccy journal append`.
+   survey, implement from scratch, write the evidence file, self-review,
+   run the hygiene gate, flip to `in-review`, append the round-1
+   `<implementer>` block via `speccy journal append`.
 
    **Retry branch.** Enter retry mode:
 
@@ -172,10 +172,13 @@ statement, read-only scope, worked examples, and the
      the first-attempt branch uses (the hygiene gate runs unchanged).
      Never edit the `state` attribute in TASKS.md directly.
    - Append the next `<implementer>` block via `speccy journal
-     append` (step 10); the CLI derives and stamps the incremented
+     append` (step 11); the CLI derives and stamps the incremented
      round. The retry-mode `Completed` field describes the amend
      (what changed this round in response to the blockers), not a
-     restatement of the cumulative task work.
+     restatement of the cumulative task work. If the retry adds or
+     changes a `demonstrated` CHK, update the evidence file (step 9)
+     first — the append refuses an unbacked `demonstrated` claim on
+     every round, not just round 1.
 
 4. Flip the target task's `state` from `pending` to `in-progress`
    through the transition command — never by editing the `state`
@@ -264,7 +267,21 @@ and for each thing you decide to add, place it in one tier:
    scenarios being satisfied (it renders them, it does not run
    them).
 
-9. Self-review before handoff. Immediately after implementation and
+9. Write the evidence file before appending. For every CHK you intend
+   to label `demonstrated` in the step-11 roll call, write a
+   red-then-green `### Scenario` into the canonical evidence file at
+   `.speccy/specs/NNNN-slug/evidence/T-NNN.md` (sibling of `SPEC.md`
+   and `TASKS.md`) — one scenario per `demonstrated` CHK, each showing
+   the pre-edit red and post-edit green. This is a hard precondition of
+   the append, not optional paperwork: `speccy journal append --block
+   implementer` now refuses the block when its roll call labels a CHK
+   `demonstrated` while that evidence file is absent or carries no
+   `### Scenario` heading, naming the offending CHK id(s) and leaving
+   the journal byte-identical. A CHK proved by a passing suite test is
+   `hygiene` (cite the test), not `demonstrated`, and needs no
+   scenario. Canonical evidence shape: `.claude/speccy-references/evidence.md`.
+
+10. Self-review before handoff. Immediately after implementation and
    **before** the exit transition's `in-review` flip, re-read your
    own diff through the reviewers' lens and fix what you find in
    place. This is the cheap place to catch drift: a fix here is a
@@ -355,7 +372,7 @@ diff you already have open — is far cheaper than a bounce-and-respawn.
     silencer.
 
 
-10. Exit transition. **Hygiene gate.** Before flipping `state` from `in-progress` to `in-review`, run the project's hygiene gates as defined in its `AGENTS.md` (`## Standard hygiene` or the project-equivalent — the gates and their count are whatever that project declares). Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
+11. Exit transition. **Hygiene gate.** Before flipping `state` from `in-progress` to `in-review`, run the project's hygiene gates as defined in its `AGENTS.md` (`## Standard hygiene` or the project-equivalent — the gates and their count are whatever that project declares). Any non-zero exit refuses the flip and keeps the task at `in-progress`; on all zeros, proceed with the flip and record one line per gate naming its exit code in the appended `<implementer>` block's `Hygiene checks` field. When the implementation is done, flip the task's
    `state` from `in-progress` to `in-review` through the transition
    command — never by editing the `state` attribute in TASKS.md
    directly:
@@ -433,7 +450,7 @@ inherited environment variable.
    never lands and no re-read is needed; confirm `speccy next --json`
    reports no consistency drift.
 
-11. Exit. Do not continue to the next task. If the caller wants
+12. Exit. Do not continue to the next task. If the caller wants
    another task, the caller invokes this skill again.
 
 After exit, the next reasonable step depends on TASKS.md state: if

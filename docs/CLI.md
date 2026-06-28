@@ -180,7 +180,13 @@ speccy journal append SELECTOR    Append one validated block to a journal, body 
                                   advisory per-file lock (10s timeout) serializes
                                   concurrent appenders; validation runs before any write,
                                   so a rejected block leaves the journal byte-identical
-                                  (or still absent).
+                                  (or still absent). An `implementer` block is additionally
+                                  refused when its `Evidence:` roll call labels a CHK
+                                  `demonstrated` while the canonical evidence file
+                                  `evidence/T-NNN.md` is absent or carries no `### Scenario`
+                                  heading; the error names the offending CHK id(s), the
+                                  expected evidence path, and whether the file was missing
+                                  or present-without-a-scenario.
 speccy journal show SELECTOR      Parse the resolved journal and emit its frontmatter
                                   and blocks, filtered.
                                     --round <latest|N>: highest round, or round N

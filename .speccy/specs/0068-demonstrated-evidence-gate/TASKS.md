@@ -77,7 +77,7 @@ Suggested files: `speccy-core/src/parse/journal_xml/evidence.rs`,
 </task-scenarios>
 </task>
 
-<task id="T-002" state="pending" covers="REQ-003">
+<task id="T-002" state="completed" covers="REQ-003">
 ## Make evidence-file creation an explicit recipe step and disambiguate the labels
 
 Edit the source modules under `resources/` (never the ejected copies under
