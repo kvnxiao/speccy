@@ -13,6 +13,12 @@ your own ids and values.
 The journal `<implementer>` block's `Evidence:` field carries a CHK-by-CHK roll
 call; this file backs the entries it labels `demonstrated`.
 
+`demonstrated` versus `hygiene` in one line: a CHK proved by a passing suite
+test is `hygiene` (cite the test); a CHK labelled `demonstrated` needs a
+red-then-green `### Scenario` in this file, and `speccy journal append` refuses
+the implementer block — naming the offending CHK id(s) and leaving the journal
+byte-identical — when a `demonstrated` claim has no backing scenario here.
+
 - Every `demonstrated` label ↔ exactly one `### Scenario N` block here. Cite the
   scenario heading verbatim in the roll call so the reviewer navigates without
   grepping.

@@ -166,11 +166,16 @@ this order, each as a bullet line prefixed by `- <Field>:`.
   trail, then an explicit roll call accounting for every
   `CHK-NNN` under the task's covered REQs. Each CHK is labelled
   with how it is proved:
-  - `demonstrated`: a red-then-green scenario in the evidence file
-    proves it; cite the scenario heading.
+  - `demonstrated`: a red-then-green `### Scenario` in the evidence
+    file proves it; cite the scenario heading. `speccy journal append`
+    refuses this block — naming the offending CHK id(s) and leaving the
+    journal byte-identical — when a `demonstrated` claim has no backing
+    scenario in `evidence/T-NNN.md`, so write the scenario before
+    appending.
   - `hygiene`: a project test in the project's hygiene suite covers
     it; cite the test name or file path so a reviewer can re-run the
-    same scope.
+    same scope. A CHK proved by a passing suite test is `hygiene`, not
+    `demonstrated`, and needs no scenario.
   - `judgment-only`: no scriptable demonstration is possible (e.g.,
     "error message is clear to a user", "naming reads well in
     context"); reviewer-business or reviewer-style judges it on

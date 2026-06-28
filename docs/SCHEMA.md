@@ -820,6 +820,17 @@ returning them for a single writer to transcribe; the append lock, not a
 sole-writer convention, is what keeps concurrent appends from
 interleaving.
 
+`journal append` additionally gates the `<implementer>` block on backing
+evidence: when the block's `Evidence:` roll call labels a CHK
+`demonstrated`, the append checks the canonical sibling evidence file
+`evidence/T-NNN.md` and refuses the write — naming the offending CHK
+id(s), the expected path, and whether the file was missing or
+present-without-a-scenario — unless that file carries at least one
+`### Scenario` heading. Detection is a line-scoped heuristic over the
+free-form roll call (a CHK counts as `demonstrated` only when its own line
+carries the token), not a parsed grammar. The refusal is append-time only;
+no `speccy verify` lint enforces the `demonstrated`-to-scenario link.
+
 Each `journal/T-NNN.md` file has YAML frontmatter binding it to its task
 plus a chronological body of bare `<implementer>`, `<review>`, and
 `<blockers>` element blocks (no wrapper element):
