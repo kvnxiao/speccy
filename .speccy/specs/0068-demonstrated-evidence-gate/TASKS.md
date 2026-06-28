@@ -5,7 +5,7 @@ generated_at: 2026-06-27T21:05:38Z
 ---
 # Tasks: SPEC-0068 Evidence-backed demonstrated gate — `speccy journal append` refuses an implementer block claiming `demonstrated` coverage with no backing evidence scenario
 
-<task id="T-001" state="pending" covers="REQ-001 REQ-002">
+<task id="T-001" state="completed" covers="REQ-001 REQ-002">
 ## Add the demonstrated-evidence append-time gate
 
 Add a pure detection module `speccy-core/src/parse/journal_xml/evidence.rs`

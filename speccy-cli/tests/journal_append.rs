@@ -523,3 +523,218 @@ fn held_lock_makes_waiting_append_time_out_nonzero() -> TestResult {
     );
     Ok(())
 }
+
+/// The canonical evidence path for T-001 under a spec dir.
+fn evidence_path(spec_dir: &Utf8Path) -> Utf8PathBuf {
+    spec_dir.join("evidence").join("T-001.md")
+}
+
+/// Append an implementer block whose roll call claims `demonstrated` for a CHK
+/// via the bullet form, with no evidence file present: refused, naming the CHK
+/// id and the expected path, and the journal is never created.
+#[test]
+fn bullet_demonstrated_with_no_evidence_is_refused() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+    assert!(!jpath.as_std_path().exists(), "journal must start absent");
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("- CHK-001 (range parser): demonstrated -> evidence")
+        .assert()
+        .failure()
+        .stderr(contains("CHK-001"))
+        .stderr(contains("T-001.md"));
+
+    assert!(
+        !jpath.as_std_path().exists(),
+        "a refused first append must not create the journal",
+    );
+    Ok(())
+}
+
+/// The prose roll-call form is refused identically when no evidence file
+/// exists.
+#[test]
+fn prose_demonstrated_with_no_evidence_is_refused() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("CHK-002 demonstrated by some_passing_test")
+        .assert()
+        .failure()
+        .stderr(contains("CHK-002"))
+        .stderr(contains("T-001.md"));
+
+    assert!(
+        !jpath.as_std_path().exists(),
+        "the prose form must be refused identically, leaving no journal",
+    );
+    Ok(())
+}
+
+/// An evidence file present but carrying no `### Scenario` heading is refused
+/// with the present-but-no-scenario message.
+#[test]
+fn evidence_present_without_scenario_is_refused() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+    let evidence = evidence_path(&spec_dir);
+    fs_err::create_dir_all(
+        evidence
+            .parent()
+            .expect("evidence has a parent")
+            .as_std_path(),
+    )?;
+    fs_err::write(
+        evidence.as_std_path(),
+        "# Evidence\n\nProse only, no scenario heading here.\n",
+    )?;
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("- CHK-001 (range parser): demonstrated")
+        .assert()
+        .failure()
+        .stderr(contains("present but carries no `### Scenario`"));
+
+    assert!(
+        !jpath.as_std_path().exists(),
+        "a refused append must not create the journal",
+    );
+    Ok(())
+}
+
+/// An evidence file written first with a `### Scenario` heading lets the
+/// demonstrated-claiming append succeed; the journal contains the block.
+#[test]
+fn demonstrated_backed_by_scenario_succeeds() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+    let evidence = evidence_path(&spec_dir);
+    fs_err::create_dir_all(
+        evidence
+            .parent()
+            .expect("evidence has a parent")
+            .as_std_path(),
+    )?;
+    fs_err::write(
+        evidence.as_std_path(),
+        "# Evidence\n\n### Scenario 1 - range parser (CHK-001)\n\n<red>...</red>\n<green>...</green>\n",
+    )?;
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin("- CHK-001 (range parser): demonstrated")
+        .assert()
+        .success();
+
+    let src = fs_err::read_to_string(jpath.as_std_path())?;
+    let doc = parse_journal_xml(&src, &jpath)?;
+    assert_eq!(doc.entries.len(), 1, "the implementer block was written");
+    Ok(())
+}
+
+/// A roll call labelling every CHK `hygiene` or `judgment-only` succeeds with
+/// no evidence file present — the gate fires only on `demonstrated` claims.
+#[test]
+fn no_demonstrated_label_succeeds_without_evidence() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+    assert!(
+        !evidence_path(&spec_dir).as_std_path().exists(),
+        "no evidence file is set up for this case",
+    );
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin(
+            "- CHK-001 (default when omitted): hygiene -> existing test\n\
+             - CHK-002 (persona-only contract): judgment-only",
+        )
+        .assert()
+        .success();
+
+    let src = fs_err::read_to_string(jpath.as_std_path())?;
+    let doc = parse_journal_xml(&src, &jpath)?;
+    assert_eq!(doc.entries.len(), 1, "the block was written");
+    Ok(())
+}
+
+/// A body whose only `demonstrated` token sits on a CHK-less line succeeds with
+/// no evidence file — the incidental token does not over-trigger the gate.
+#[test]
+fn demonstrated_token_on_chk_less_line_succeeds_without_evidence() -> TestResult {
+    let (ws, spec_dir) = workspace_with_pending_task()?;
+    let jpath = journal_path(&spec_dir);
+
+    Command::cargo_bin("speccy")?
+        .args([
+            "journal",
+            "append",
+            "SPEC-0042/T-001",
+            "--block",
+            "implementer",
+            "--model",
+            "test-model",
+        ])
+        .current_dir(ws.root.as_std_path())
+        .write_stdin(
+            "The fix was demonstrated to hold under the suite.\n\
+             - CHK-001 (range parser): hygiene -> existing test",
+        )
+        .assert()
+        .success();
+
+    let src = fs_err::read_to_string(jpath.as_std_path())?;
+    let doc = parse_journal_xml(&src, &jpath)?;
+    assert_eq!(doc.entries.len(), 1, "the block was written");
+    Ok(())
+}

@@ -40,6 +40,7 @@ use speccy_core::parse::VetBlockInputs;
 use speccy_core::parse::VetBlockKind;
 use speccy_core::parse::VetDoc;
 use speccy_core::parse::VetSerializeError;
+use speccy_core::parse::demonstrated_chk_ids;
 use speccy_core::parse::derive_round;
 use speccy_core::parse::parse_journal_xml;
 use speccy_core::parse::parse_vet_in_flight;
@@ -47,6 +48,7 @@ use speccy_core::parse::plan_vet_append;
 use speccy_core::parse::render_fresh_frontmatter;
 use speccy_core::parse::render_fresh_vet_frontmatter;
 use speccy_core::parse::render_vet_section_heading;
+use speccy_core::parse::scenario_heading_count;
 use speccy_core::parse::validate_and_render_block;
 use speccy_core::parse::validate_and_render_vet_block;
 use speccy_core::task_lookup::LookupError;
@@ -212,6 +214,23 @@ pub enum JournalError {
         #[source]
         source: Box<speccy_core::error::ParseError>,
     },
+    /// An `implementer` block's roll call labels one or more CHKs
+    /// `demonstrated`, but the canonical evidence file is absent or carries no
+    /// `### Scenario` heading to back the claim. The append is refused before
+    /// any write, so the journal is left byte-identical (or still absent).
+    #[error(
+        "implementer block claims `demonstrated` for {chk_ids} but {reason} at {evidence_path}; \
+         write a `### Scenario` there backing each demonstrated CHK, then re-append; \
+         journal left unchanged"
+    )]
+    MissingDemonstratedEvidence {
+        /// The offending CHK id(s), comma-separated.
+        chk_ids: String,
+        /// The expected canonical evidence path (`evidence/T-NNN.md`).
+        evidence_path: Utf8PathBuf,
+        /// Whether the file was missing or present-without-a-scenario.
+        reason: &'static str,
+    },
     /// Lock acquisition timed out after [`LOCK_TIMEOUT`].
     #[error(
         "timed out after {timeout_secs}s waiting for the journal lock at {path}; \
@@ -339,6 +358,7 @@ fn run_task_append(
 
     let task_id = location.task.id.clone();
     let spec_id = location.spec_id.clone();
+    let spec_dir = &location.spec_dir;
     let journal_dir = location.spec_dir.join("journal");
     let journal_path = journal_dir.join(format!("{task_id}.md"));
 
@@ -356,6 +376,7 @@ fn run_task_append(
     // --- critical section: derive → validate → append → write ---
     let inputs = AppendInputs {
         journal_path: &journal_path,
+        spec_dir,
         spec_id: &spec_id,
         task_id: &task_id,
         block: kind,
@@ -453,6 +474,7 @@ fn run_vet_append(
 /// Resolved, borrowed inputs for the critical-section append.
 struct AppendInputs<'a> {
     journal_path: &'a Utf8Path,
+    spec_dir: &'a Utf8Path,
     spec_id: &'a str,
     task_id: &'a str,
     block: TaskBlockKind,
@@ -466,6 +488,7 @@ struct AppendInputs<'a> {
 fn append_under_lock(inputs: &AppendInputs<'_>) -> Result<(), JournalError> {
     let &AppendInputs {
         journal_path,
+        spec_dir,
         spec_id,
         task_id,
         block,
@@ -516,6 +539,37 @@ fn append_under_lock(inputs: &AppendInputs<'_>) -> Result<(), JournalError> {
         verdict,
         body,
     })?;
+
+    // For an `implementer` block, every CHK its roll call labels `demonstrated`
+    // must be backed by the canonical evidence file carrying a `### Scenario`
+    // heading. Running this after rendering and before the round-trip/write
+    // preserves the byte-identical-on-failure contract.
+    if matches!(block, TaskBlockKind::Implementer) {
+        let demonstrated = demonstrated_chk_ids(body);
+        if !demonstrated.is_empty() {
+            let evidence_path = spec_dir.join("evidence").join(format!("{task_id}.md"));
+            let reason = match fs_err::read_to_string(evidence_path.as_std_path()) {
+                Ok(evidence) if scenario_heading_count(&evidence) > 0 => None,
+                Ok(_) => Some("the evidence file is present but carries no `### Scenario` heading"),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    Some("the evidence file is missing")
+                }
+                Err(source) => {
+                    return Err(JournalError::Io {
+                        path: evidence_path,
+                        source,
+                    });
+                }
+            };
+            if let Some(reason) = reason {
+                return Err(JournalError::MissingDemonstratedEvidence {
+                    chk_ids: demonstrated.join(", "),
+                    evidence_path,
+                    reason,
+                });
+            }
+        }
+    }
 
     // Existing files already end in a newline (the parser-accepted shape and
     // the renderer's own output), so a fresh block appends directly. A new

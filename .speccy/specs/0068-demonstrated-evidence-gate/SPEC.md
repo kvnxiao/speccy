@@ -151,6 +151,7 @@ when a `demonstrated`-claiming block is appended,
 then the command exits non-zero and stderr distinguishes the
 present-but-no-scenario case from the missing-file case.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-002">
@@ -202,6 +203,7 @@ when the block is appended,
 then the command exits zero — the incidental token does not over-trigger the
 gate.
 </scenario>
+
 </requirement>
 
 <requirement id="REQ-003">
@@ -255,6 +257,7 @@ when it runs over the edited `phases/` recipe body,
 then it passes — only generic placeholders appear and no lint code is cited by
 number.
 </scenario>
+
 </requirement>
 
 ## Decisions

@@ -31,6 +31,8 @@ pub use cross_ref::CrossRef;
 pub use cross_ref::cross_ref;
 pub use journal_xml::JournalDoc;
 pub use journal_xml::JournalEntry;
+pub use journal_xml::evidence::demonstrated_chk_ids;
+pub use journal_xml::evidence::scenario_heading_count;
 pub use journal_xml::latest_round;
 pub use journal_xml::parse as parse_journal_xml;
 pub use journal_xml::serialize::BlockInputs;
