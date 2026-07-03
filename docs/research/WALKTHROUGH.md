@@ -1,0 +1,756 @@
+# Speccy Walkthrough: End to End in Claude Code
+
+Status: illustration (mocked outputs)
+Date: 2026-07-02
+
+One complete scenario, from installing the harness pack into an existing repository through archiving the shipped spec. Every controller operation and human command appears at least once, with mocked inputs and outputs. This document is illustrative: `DESIGN.md` and `TERMINOLOGY.md` are authoritative, and if anything here conflicts with them, they win.
+
+## Scenario
+
+- Repository: `acme-app`, a TypeScript web app (Express API + React), on `main`, clean worktree.
+- Existing auth: password + session cookies under `src/server/auth/`. Email sending exists under `src/server/email/`.
+- Harness: Claude Code. The developer already uses `.claude/` for team config.
+- Goal: passwordless login via emailed magic links.
+- A prior spec exists in this workspace: `SPEC-20260401-9C21` "Session hardening" (accepted).
+
+## Seats
+
+| Seat | Who | Calls |
+| --- | --- | --- |
+| Human | the developer | `speccy` human CLI, slash commands, prose approvals |
+| Orchestrating skill | the Claude Code session running a `/speccy-*` skill; holds the run lease | `spec *`, `run *`, `task *`, `packet *`, `requirement set-status` |
+| Worker subagent | fresh-context implementer spawned per task round | none — receives a task packet, returns a handoff |
+| Verifier personas | fresh-context reviewers spawned per verification | `evidence collect`, `evidence record`, `finding record` (lease-free) |
+| Controller | the `speccy` binary | executes `kind: command` evidence; applies derived transitions and git snapshots inside `run next` |
+
+All `ctl` outputs use the envelope `{ok, data}` on success and `{ok: false, error: {code, message, details?}}` on refusal.
+
+---
+
+## Phase 0 — Install the harness pack
+
+```console
+$ cd ~/code/acme-app
+$ speccy install
+Detected harnesses: claude (.claude/ exists)
+Rendering pack: claude @ pack 0.1.0
+
+  created  .speccy/project.yaml
+  created  .speccy/pack-lock.yaml
+  created  .claude/commands/speccy-brainstorm.md
+  created  .claude/commands/speccy-plan.md
+  created  .claude/commands/speccy-implement.md
+  created  .claude/commands/speccy-ship.md
+  created  .claude/agents/speccy-planner.md
+  created  .claude/agents/speccy-worker.md
+  created  .claude/agents/speccy-reviewer.md
+  created  .claude/agents/speccy-validator.md
+  created  .claude/agents/speccy-repair.md
+  updated  .gitignore  (defensive .speccy/ block)
+
+Install OK. These are committed workflow artifacts; commit them to share
+the workflow with your team. Runtime state lives in ~/.speccy/ only.
+```
+
+`.speccy/project.yaml` (machine-readable policy the controller enforces):
+
+```yaml
+risk_default: standard
+caps:
+  task_repair_rounds: 3
+  run_review_rounds: 3
+  structured_output_retries: 3
+```
+
+`.gitignore` gains the defensive backstop (guards paths that should never exist, not a supported layout):
+
+```gitignore
+.speccy/*
+!.speccy/project.yaml
+!.speccy/pack-lock.yaml
+```
+
+Health check, then commit the pack:
+
+```console
+$ speccy doctor
+git    OK  (2.45.0)
+store  OK  (~/.speccy writable; workspace ws_a81f23)
+packs  OK  (claude @ 0.1.0; rendered files match pack-lock)
+
+$ git add .speccy .claude .gitignore && git commit -m "Install Speccy claude pack"
+```
+
+Re-running `speccy install` is idempotent: it repairs missing managed files and reports available updates, but never rewrites edited prose without `--update`.
+
+---
+
+## Phase 1 — Brainstorm (optional, ephemeral)
+
+In Claude Code:
+
+```text
+/speccy-brainstorm "let users log in without passwords"
+```
+
+The brainstorm skill makes **no controller calls**. It explores the repo read-only and produces a handoff in chat:
+
+```text
+Brainstorm handoff — passwordless login
+
+Observations:
+- Auth lives in src/server/auth/ (bcrypt passwords, session cookies)
+- Email delivery exists: src/server/email/ (SES wrapper, used for receipts)
+- Scripts: npm test, npm run lint, npm run dev
+- Prior spec SPEC-20260401-9C21 (session hardening, accepted):
+  tokens stored hashed, cookies httpOnly — carry forward
+
+Candidate approaches: emailed magic links, TOTP, WebAuthn
+Suggested scope: magic links only; WebAuthn is a separate spec later
+
+Open questions:
+- Expiry window for a link?
+- Single-use enforcement: DB row or cache?
+
+Scope rating:
+  size: large
+  evidence_ability: high      # unit tests + browser flow are articulable
+  risk_domains: [auth]
+  estimated_tasks: 2
+  recommended_route: speccy_spec
+  confidence: high
+
+Recommended next action:
+  /speccy-plan Continue from the Speccy brainstorm handoff above.
+Alternatives: direct edit · /plan (regular Claude plan) · split into multiple specs
+```
+
+The handoff is chat context only. It is persisted exactly once, in the next step, if the user promotes it.
+
+---
+
+## Phase 2 — Plan
+
+```text
+/speccy-plan Continue from the Speccy brainstorm handoff above.
+```
+
+### 2.1 Create the spec
+
+The skill writes `request.json` and creates the spec. The `brainstorm_handoff` field is the only persistence point for the handoff:
+
+```json
+{
+  "request": "Let users log in without passwords via emailed magic links",
+  "source": "claude:/speccy-plan",
+  "title": "Passwordless login",
+  "brainstorm_handoff": "Brainstorm handoff — passwordless login\nObservations:\n- Auth lives in src/server/auth/ ..."
+}
+```
+
+```console
+$ speccy ctl spec start --input request.json --json
+```
+```json
+{ "ok": true, "data": {
+    "spec_ref": "SPEC-20260630-A7F4",
+    "spec_id": "spec_01j1bxgvk3e6q8r2n5tcvh7pyd",
+    "status": "draft",
+    "workspace_id": "ws_a81f23" } }
+```
+
+### 2.2 Fetch the planning packet
+
+Deterministic work order — everything below comes from the store, git, and parsed manifests. No LLM call.
+
+```console
+$ speccy ctl packet planning --spec SPEC-20260630-A7F4 --json
+```
+```json
+{ "ok": true, "data": {
+    "request": "Let users log in without passwords via emailed magic links",
+    "brainstorm_handoff": "Brainstorm handoff — passwordless login\n...",
+    "draft_state": "empty",
+    "workspace": {
+      "git": { "head": "f3d9e21", "branch": "main", "dirty": false },
+      "signals": { "scripts": ["npm test", "npm run lint", "npm run dev"],
+                   "language": "typescript" } },
+    "prior_context_candidates": [
+      { "spec_ref": "SPEC-20260401-9C21", "title": "Session hardening",
+        "status": "accepted",
+        "hint": "dec_20260401_003: tokens/credentials stored hashed" } ],
+    "policy": { "risk_default": "standard",
+                "task_repair_cap": 3, "run_review_cap": 3 },
+    "output_contract": { "submit_with": "spec record-draft",
+                         "required": ["goal", "scope", "risk",
+                                      "requirements", "tasks"] } } }
+```
+
+### 2.3 Draft, lint, patch
+
+The planner inspects the codebase read-only, reconciles the prior spec against current code, and submits one complete candidate (`spec-draft.json`, abbreviated):
+
+```json
+{
+  "goal": "Users can sign in through single-use emailed magic links",
+  "scope": { "in": ["request link by email", "token expiry and replay protection",
+                    "expired-link UI state"],
+             "out": ["OAuth", "admin session revocation", "email vendor migration"] },
+  "risk": "medium",
+  "observations": ["auth code under src/server/auth/", "SES wrapper reusable",
+                   "prior hashed-token decision carried forward"],
+  "requirements": [
+    { "id": "R-AUTH-001", "statement": "A user can request a magic link by email.",
+      "evidence": { "kind": "command", "command": "npm test -- auth/magic-link" } },
+    { "id": "R-AUTH-002", "statement": "A magic-link token is single-use." },
+    { "id": "R-AUTH-003", "statement": "Tokens expire after 15 minutes.",
+      "evidence": { "kind": "command", "command": "npm test -- auth/expiry" } },
+    { "id": "R-AUTH-004", "statement": "An expired link shows the expired state and creates no session.",
+      "evidence": { "kind": "browser" } } ],
+  "tasks": [
+    { "id": "T1", "title": "Token model, expiry, request/consume endpoints",
+      "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
+    { "id": "T2", "title": "Expired-link UI state",
+      "requirements": ["R-AUTH-004"] } ]
+}
+```
+
+```console
+$ speccy ctl spec record-draft --spec SPEC-20260630-A7F4 --input spec-draft.json --json
+```
+```json
+{ "ok": true, "data": {
+    "draft": "spec_rev_001-draft",
+    "lint": { "clean": false, "findings": [
+      { "code": "missing_evidence_request", "path": "requirements[R-AUTH-002]",
+        "message": "R-AUTH-002 has no evidence request" },
+      { "code": "invalid_risk_tier", "path": "risk",
+        "message": "\"medium\" is not one of minimal|standard|high|critical" } ] } } }
+```
+
+Lint findings come back in the write response — no separate lint call. The skill repairs with a focused patch:
+
+```console
+$ speccy ctl spec patch-draft --spec SPEC-20260630-A7F4 --input spec-patch.json --json
+```
+```json
+{ "ok": true, "data": { "draft": "spec_rev_001-draft",
+    "lint": { "clean": true, "findings": [] } } }
+```
+
+### 2.4 Spec card and prose approval
+
+The skill renders the spec card from the draft:
+
+```text
+Spec: SPEC-20260630-A7F4  Passwordless login
+Risk: high
+Decision needed: approve this spec, or revise scope
+Approve by replying in prose, e.g. "approve" or "looks good, go"
+Then, in a fresh session: /speccy-implement SPEC-20260630-A7F4
+
+Goal: users sign in through single-use emailed magic links.
+In scope: request link by email · token expiry + replay protection · expired-link UI
+Out of scope: OAuth · admin session revocation · email vendor migration
+Plan: T1 token model + endpoints → T2 expired-link UI
+Acceptance: R-AUTH-001 requestable · R-AUTH-002 single-use ·
+            R-AUTH-003 15-minute expiry · R-AUTH-004 expired link rejected
+Prior context: tokens stored hashed (SPEC-20260401-9C21)
+Main risk: email delivery may need staging validation
+```
+
+Human: `looks good, go`
+
+```console
+$ speccy ctl spec record-decision --spec SPEC-20260630-A7F4 --input decision.json --json
+```
+```json
+{ "ok": true, "data": {
+    "approved_revision": "spec_rev_001",
+    "spec_status": "approved",
+    "requirements_frozen": true,
+    "next": "Run /speccy-implement SPEC-20260630-A7F4 in a fresh session." } }
+```
+
+The revision is now immutable in place. Patching it again returns `{"ok": false, "error": {"code": "invalid_transition", ...}}`; changes require a new draft revision and a new approval.
+
+---
+
+## Phase 3 — Implement (fresh session, autonomous)
+
+The human clears the session and runs:
+
+```text
+/speccy-implement SPEC-20260630-A7F4
+```
+
+### 3.1 Gate check and run creation
+
+Approval is controller state, not chat memory:
+
+```console
+$ speccy ctl spec status --spec SPEC-20260630-A7F4 --json
+```
+```json
+{ "ok": true, "data": { "spec_ref": "SPEC-20260630-A7F4",
+    "title": "Passwordless login", "status": "approved",
+    "active_revision": "spec_rev_001", "risk": "high", "runs": [] } }
+```
+
+```console
+$ speccy ctl run start --spec SPEC-20260630-A7F4 --revision spec_rev_001 --json
+```
+```json
+{ "ok": true, "data": {
+    "run_id": "run_01j1bxgvk3tf4qs6mv9zpxwe8d",
+    "run_state": "created",
+    "branch": "speccy/passwordless-login",
+    "tasks": [
+      { "id": "T1", "status": "queued",
+        "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
+      { "id": "T2", "status": "queued", "requirements": ["R-AUTH-004"] } ] } }
+```
+
+Had the worktree been dirty, no run state would exist at all:
+
+```json
+{ "ok": false, "error": { "code": "dirty_worktree",
+    "message": "run start refused: 2 uncommitted files",
+    "details": ["src/auth/session.ts", "package-lock.json"] } }
+```
+
+### 3.2 The loop: task T1, round 1
+
+From here the skill is a thin cycle: call `run next`, do what the directive says (`packet_with` → action → `record_with`), ask again.
+
+```console
+$ speccy ctl run next --run run_01j1bxgvk3tf4qs6mv9zpxwe8d --agent claude:sess_8842 --json
+```
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "claim_task",
+    "subject": { "task": "T1" },
+    "round": null,
+    "packet_with": null,
+    "record_with": "task claim",
+    "reason": "T1 is the first queued task; worktree clean at f3d9e21",
+    "lease": { "token": "lease_01j1c0k8", "agent": "claude:sess_8842",
+               "expires_at": "2026-07-02T14:07:00Z" } } }
+```
+
+A second session asking for the same run stops immediately:
+
+```json
+{ "ok": false, "error": { "code": "lease_held",
+    "message": "run lease held by claude:sess_8842 until 2026-07-02T14:07:00Z" } }
+```
+
+Claim the task (baseline pinned for every later diff and resume):
+
+```console
+$ speccy ctl task claim --run run_01j1... --task T1 --agent claude:sess_8842 --lease lease_01j1c0k8 --json
+```
+```json
+{ "ok": true, "data": { "task": "T1", "status": "building",
+    "round": 1, "baseline_commit": "f3d9e21" } }
+```
+
+Next directive — note `packet_with` tells the skill which packet to build first:
+
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "dispatch_worker",
+    "subject": { "task": "T1" },
+    "round": { "current": 1, "max": 3, "scope": "task" },
+    "packet_with": "packet task",
+    "record_with": "task record-handoff",
+    "reason": "T1 is building with no recorded handoff for round 1" } }
+```
+
+```console
+$ speccy ctl packet task --run run_01j1... --task T1 --json
+```
+```json
+{ "ok": true, "data": {
+    "task": "T1", "round": 1, "baseline_commit": "f3d9e21",
+    "requirements": [
+      { "id": "R-AUTH-001", "statement": "A user can request a magic link by email.",
+        "evidence": { "kind": "command", "command": "npm test -- auth/magic-link" } },
+      { "id": "R-AUTH-002", "statement": "A magic-link token is single-use.",
+        "evidence": { "kind": "browser" } },
+      { "id": "R-AUTH-003", "statement": "Tokens expire after 15 minutes.",
+        "evidence": { "kind": "command", "command": "npm test -- auth/expiry" } } ],
+    "constraints": ["store tokens hashed (dec_20260401_003)", "no schema migrations"],
+    "prior_findings": [],
+    "handoff_contract": { "record_with": "task record-handoff" } } }
+```
+
+The skill spawns a fresh **worker subagent** (`speccy-worker` from the pack) with this packet. The worker implements the token model, endpoints, and tests, then returns its report, which the orchestrator records:
+
+```console
+$ speccy ctl task record-handoff --run run_01j1... --lease lease_01j1c0k8 --input handoff.json --json
+```
+```json
+{ "ok": true, "data": { "task": "T1", "status": "reviewable", "handoff_id": "ho_9bc2" } }
+```
+
+### 3.3 Verification, round 1
+
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "dispatch_task_verifier",
+    "subject": { "task": "T1" },
+    "round": { "current": 1, "max": 3, "scope": "task" },
+    "packet_with": "packet verification",
+    "record_with": "requirement set-status",
+    "reason": "handoff ho_9bc2 recorded; T1 moved to in_review" } }
+```
+
+The `reviewable → in_review` transition just happened inside `run next` — it is a derived transition with no recording op.
+
+```console
+$ speccy ctl packet verification --run run_01j1... --requirements R-AUTH-001,R-AUTH-002,R-AUTH-003 --json
+```
+```json
+{ "ok": true, "data": {
+    "scope": { "task": "T1",
+               "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
+    "round": 1, "handoff": "ho_9bc2",
+    "diff": { "baseline": "f3d9e21", "files": 7, "insertions": 348, "deletions": 12 },
+    "prior_findings": [],
+    "tools": ["evidence collect", "evidence record", "finding record"] } }
+```
+
+The skill fans out fresh **verifier personas** (correctness, security). They call the lease-free evidence ops concurrently.
+
+Command evidence is executed by the controller itself — the persona only chooses when:
+
+```console
+$ speccy ctl evidence collect --run run_01j1... --requirements R-AUTH-001,R-AUTH-003 --json
+```
+```json
+{ "ok": true, "data": { "evidence": [
+    { "id": "ev_12a4", "requirement": "R-AUTH-001", "kind": "command",
+      "command": "npm test -- auth/magic-link", "exit_code": 0,
+      "stdout_hash": "sha256:8c1e…", "artifact": "evidence/ev_12a4.txt",
+      "collected_by": "controller" },
+    { "id": "ev_12a5", "requirement": "R-AUTH-003", "kind": "command",
+      "command": "npm test -- auth/expiry", "exit_code": 1,
+      "stdout_hash": "sha256:2b77…", "artifact": "evidence/ev_12a5.txt",
+      "collected_by": "controller" } ] } }
+```
+
+Pasting command output through `evidence record` is refused:
+
+```json
+{ "ok": false, "error": { "code": "validation_failed",
+    "message": "evidence record refuses agent-supplied output for kind: command; use evidence collect" } }
+```
+
+Browser evidence is agent-collected and accepted (the risk tier treats it as weaker):
+
+```console
+$ speccy ctl evidence record --run run_01j1... --input evidence.json --json
+```
+```json
+{ "ok": true, "data": { "id": "ev_12a6", "requirement": "R-AUTH-002",
+    "kind": "browser", "collected_by": "claude:verifier_T1",
+    "note": "second open of same link → 'link already used'; no session cookie set" } }
+```
+
+A persona records the blocking finding on the failed expiry test:
+
+```console
+$ speccy ctl finding record --run run_01j1... --input finding.json --json
+```
+```json
+{ "ok": true, "data": { "id": "fd_77e1", "requirement": "R-AUTH-003",
+    "severity": "blocking",
+    "note": "token accepted at 16m; expiry window compared in ms vs seconds" } }
+```
+
+The orchestrator (lease holder) aggregates the personas' judgments:
+
+```console
+$ speccy ctl requirement set-status --run run_01j1... --lease lease_01j1c0k8 --input status.json --json
+```
+```json
+{ "ok": true, "data": { "updated": [
+    { "requirement": "R-AUTH-001", "status": "passed", "evidence": ["ev_12a4"] },
+    { "requirement": "R-AUTH-002", "status": "review_passed", "evidence": ["ev_12a6"],
+      "residual_risk": "single-use proven in browser only; no unit test" },
+    { "requirement": "R-AUTH-003", "status": "failed",
+      "evidence": ["ev_12a5"], "findings": ["fd_77e1"] } ] } }
+```
+
+`passed` without recorded evidence is refused:
+
+```json
+{ "ok": false, "error": { "code": "validation_failed",
+    "message": "passed requires at least one recorded evidence artifact for R-AUTH-003" } }
+```
+
+### 3.4 Repair round
+
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "spawn_repair_round",
+    "subject": { "task": "T1", "requirements": ["R-AUTH-003"] },
+    "round": { "current": 2, "max": 3, "scope": "task" },
+    "packet_with": "packet task",
+    "record_with": "task record-handoff",
+    "reason": "R-AUTH-003 failed in round 1; task repair cap not exhausted" } }
+```
+
+The controller counted the round and moved T1 `needs_repair → building` itself; the skill only reports "starting repair round 2 of 3". Round 2's `packet task` now carries `"prior_findings": [{"id": "fd_77e1", ...}]`, so the repair worker starts from the ms/seconds diagnosis instead of rediscovering it. The worker fixes the comparison, the verifier re-collects (`npm test -- auth/expiry` → `exit_code: 0`), and R-AUTH-003 is set `passed`.
+
+Calling `run next` twice without recording anything returns the byte-identical directive — that idempotency is the whole crash-recovery story (see Appendix C).
+
+### 3.5 T1 integrates, T2 runs
+
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "claim_task",
+    "subject": { "task": "T2" },
+    "packet_with": null,
+    "record_with": "task claim",
+    "reason": "T1 integrated at snapshot 9c2f1ab; T2 is the next queued task" } }
+```
+
+T1's `in_review → integrated` transition and its snapshot commit happened inside `run next` when every linked requirement resolved. T2 (expired-link UI) runs the same claim → dispatch → handoff → verify cycle and passes in one round; R-AUTH-004 is `passed` on browser evidence plus a UI test collected by the controller. Snapshot `c4d81e0`.
+
+### 3.6 Final validation and the verified gate
+
+```json
+{ "ok": true, "data": {
+    "run_state": "verifying",
+    "action": "run_final_validation",
+    "subject": { "requirements": ["R-AUTH-001", "R-AUTH-002",
+                                   "R-AUTH-003", "R-AUTH-004"] },
+    "round": { "current": 1, "max": 3, "scope": "run" },
+    "packet_with": "packet verification",
+    "record_with": "requirement set-status",
+    "reason": "all tasks integrated; run-level integration and drift review required" } }
+```
+
+A final fresh verifier reads the run-scoped verification packet, re-runs the full suite through `evidence collect`, reviews cross-task drift against the approved revision, and confirms the statuses. Then:
+
+```json
+{ "ok": true, "data": {
+    "run_state": "verified",
+    "action": "await_human_gate",
+    "subject": { "gate": "ship_decision" },
+    "packet_with": "packet review",
+    "record_with": "run record-ship",
+    "reason": "all requirements resolved (3 passed, 1 review_passed); ship or send back" } }
+```
+
+The skill builds the review packet and presents it. The autonomous session is done.
+
+```console
+$ speccy ctl packet review --run run_01j1... --json
+```
+
+```text
+Spec   SPEC-20260630-A7F4  Passwordless login      Risk: high
+Result verified — ready to ship
+Recommended next action: /speccy-ship SPEC-20260630-A7F4
+
+Requirements (4)
+  Proven          3
+  Accepted risk   1   review-passed with residual risk
+
+Accepted risk
+  R-AUTH-002  review_passed  Single-use proven in browser only; no unit test
+
+Changed  11 files  +463 -41     2 tasks · 1 repair round
+Evidence + full diff:  speccy review --evidence
+```
+
+---
+
+## Phase 4 — Ship
+
+Human, any session, possibly days later:
+
+```text
+/speccy-ship SPEC-20260630-A7F4
+```
+
+The ship skill re-enters through the controller like every other transition. Its `run next` call clears the old session's expired lease, issues a fresh one, and returns the same ship gate — invoking `/speccy-ship` is the human's answer to it:
+
+```console
+$ speccy ctl run next --run run_01j1... --agent claude:sess_9105 --json
+```
+```json
+{ "ok": true, "data": {
+    "run_state": "verified",
+    "action": "await_human_gate",
+    "subject": { "gate": "ship_decision" },
+    "packet_with": "packet review",
+    "record_with": "run record-ship",
+    "reason": "all requirements resolved; ship or send back",
+    "lease": { "token": "lease_01j1f2mq", "agent": "claude:sess_9105",
+               "expires_at": "2026-07-02T18:31:00Z" } } }
+```
+
+PR opening is harness-side prose — Speccy makes no outbound calls:
+
+```console
+$ gh pr create --title "Passwordless login (SPEC-20260630-A7F4)" \
+    --body-file review-packet.md --base main --head speccy/passwordless-login
+https://github.com/acme/acme-app/pull/123
+```
+
+The skill records the result:
+
+```console
+$ speccy ctl run record-ship --run run_01j1... --lease lease_01j1f2mq --input change-ref.json --json
+```
+```json
+{ "ok": true, "data": { "run_state": "submitted",
+    "change_ref": { "kind": "pull_request",
+      "url": "https://github.com/acme/acme-app/pull/123",
+      "branch": "speccy/passwordless-login",
+      "head_sha": "a7f4c2e", "base": "main" } } }
+```
+
+The skill closes with the boundary statement:
+
+```text
+PR merge is the source of truth.
+After it merges, record it with: speccy accept
+```
+
+---
+
+## Phase 5 — Merge, accept, archive
+
+The team reviews PR #123 (the review packet is its description) and merges it on GitHub. Speccy does no merge detection in MVP — the human records it:
+
+```console
+$ speccy accept --pr https://github.com/acme/acme-app/pull/123
+Recorded: SPEC-20260630-A7F4  Passwordless login
+  run  submitted -> landed
+  spec approved  -> accepted
+Archive it when you're done: speccy archive SPEC-20260630-A7F4
+```
+
+Human commands return human-readable text, not JSON. The accepted spec surfaces once more, then leaves the active list on archive:
+
+```console
+$ speccy status
+No active runs.
+1 accepted spec awaiting archive:
+  SPEC-20260630-A7F4  Passwordless login   landed 2026-07-02 (PR #123)
+
+$ speccy archive SPEC-20260630-A7F4
+Archived SPEC-20260630-A7F4. It no longer appears in active lists
+and is excluded from default planning context.
+
+$ speccy list
+No active specs.
+
+$ speccy list --archived
+1  SPEC-20260630-A7F4  Passwordless login   archived (landed via PR #123)
+```
+
+Archiving is a spec visibility action; the run stays `landed` in run history under `~/.speccy/workspaces/ws_a81f23/`.
+
+---
+
+## Appendix A — The branch not taken: escalation
+
+If round 3 had also failed R-AUTH-003:
+
+```json
+{ "ok": true, "data": {
+    "run_state": "escalated",
+    "action": "emit_escalation_packet",
+    "subject": { "requirements": ["R-AUTH-003"] },
+    "round": { "current": 3, "max": 3, "scope": "task" },
+    "packet_with": "packet escalation",
+    "record_with": "run record-decision",
+    "reason": "task repair cap exhausted with R-AUTH-003 still failed" } }
+```
+
+```console
+$ speccy ctl packet escalation --run run_01j1... --json
+```
+
+```text
+Speccy stopped because R-AUTH-003 could not be proven.
+
+Tried:
+  round 1 — expiry compared in ms vs seconds     (rejected: 16m token still accepted)
+  round 2 — clamped window at token creation      (rejected: replay path bypasses check)
+  round 3 — moved check into token verification   (rejected: flaky under CI clock skew)
+
+Partial work applied: escalation snapshot 4e8d0aa on speccy/passwordless-login.
+
+Recommended: amend the spec
+Alternatives: provide setup, waive this requirement, cancel the run
+
+Should expiry be enforced at verification time with a tolerance,
+or is the 15-minute window itself the wrong requirement?
+```
+
+The human answers in prose. A waiver stays on the same run:
+
+```console
+$ speccy ctl run record-decision --run run_01j1... --lease lease_01j1c0k8 --input decision.json --json
+```
+```json
+{ "ok": true, "data": { "decision_id": "dec_20260702_004", "type": "waiver",
+    "requirement": "R-AUTH-003", "requirement_status": "waived",
+    "run_state": "implementing", "resume": "call run next" } }
+```
+
+An amendment instead goes back through `spec patch-draft` → amended spec card → `spec record-decision`, which closes this run as `cancelled` with a linking decision record and starts a new run on the same branch, seeded with the escalation snapshot.
+
+## Appendix B — Crash resume
+
+Kill the session mid-round-2 of T1 (worker had edited files, handoff never recorded). Later, in a brand-new session:
+
+```text
+/speccy-implement SPEC-20260630-A7F4
+```
+
+```console
+$ speccy ctl run next --run run_01j1... --agent claude:sess_9330 --json
+```
+```json
+{ "ok": true, "data": {
+    "run_state": "implementing",
+    "action": "dispatch_worker",
+    "subject": { "task": "T1" },
+    "round": { "current": 2, "max": 3, "scope": "task" },
+    "packet_with": "packet task",
+    "record_with": "task record-handoff",
+    "reason": "T1 building in round 2 with no recorded handoff; dirty worktree diff vs baseline f3d9e21 attributed to T1 and included as context",
+    "lease": { "token": "lease_01j1g8xw", "agent": "claude:sess_9330",
+               "expires_at": "2026-07-02T15:02:00Z" } } }
+```
+
+Nothing replays. The dead session's lease was cleared, the round counter and task status say exactly where the loop stopped, and the uncommitted diff belongs to T1 by the resume invariant. There is no `speccy resume` command — this is it.
+
+## Appendix C — Coverage
+
+All 21 controller operations and the human CLI, by first appearance:
+
+| Operation | Step |
+| --- | --- |
+| `spec start` / `spec status` | 2.1 / 3.1 |
+| `spec record-draft` / `spec patch-draft` / `spec record-decision` | 2.3 / 2.3 / 2.4 |
+| `run start` / `run status` / `run next` | 3.1 / (debugging any time) / 3.2 |
+| `run record-decision` / `run record-ship` | Appendix A / Phase 4 |
+| `task claim` / `task record-handoff` | 3.2 / 3.2 |
+| `packet planning` / `packet task` / `packet verification` / `packet review` / `packet escalation` | 2.2 / 3.2 / 3.3 / 3.6 / Appendix A |
+| `evidence collect` / `evidence record` / `finding record` | 3.3 |
+| `requirement set-status` | 3.3 |
+| `speccy install` / `doctor` / `accept` / `archive` / `status` / `list` | Phase 0 / Phase 0 / Phase 5 / Phase 5 / Phase 5 / Phase 5 |
