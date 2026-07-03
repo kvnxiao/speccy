@@ -1,15 +1,36 @@
 # Open Items: Doc Review Backlog
 
 Status: all items resolved
-Date: 2026-07-02 (backlog cleared)
+Date: 2026-07-03 (backlog cleared)
 
-Findings from the 2026-07-01 consistency review of `DESIGN.md`, `TERMINOLOGY.md`, and `RESEARCH.md`. All items are decided and applied.
+Findings from doc consistency reviews. All items are decided and applied.
 
 This file is a historical decision log. `DESIGN.md` and `TERMINOLOGY.md` are authoritative for current behavior and vocabulary; if an entry here conflicts with them, the design docs win.
 
 ## Backlog
 
 Empty.
+
+## Resolved 2026-07-03 (pre-M0 cross-review: Claude + Codex)
+
+Full-project review before M0, folding in an independent Codex review. All decisions applied to `DESIGN.md`, `TERMINOLOGY.md`, `SCHEMAS.md` (new), `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`, and `README.md`; the plan gained an "M0 readiness checklist".
+
+- **Project home** — this repo; M0 runs `cargo init` at the root. `PROPOSED-DESIGN.md` renamed to `DESIGN.md`; README doc map rebuilt (missing `RESEARCH.md`/survey/source files marked external); license recorded as MIT (Open Question 23 updated; distribution still open).
+- **Amendment mechanics** — approved revisions are never patched; `record-draft`/`patch-draft` against a spec whose latest revision is approved opens draft N+1 seeded from it. `invalid_transition` reserved for mutating the approved revision itself.
+- **Requirement resolution made deterministic** — new "Requirement Resolution Rules" section: resolved = `passed`/`review_passed`/`waived`; tier table (high requires `residual_risk` notes on accepted-risk statuses; critical adds an accepted-risk confirmation gate before `verified`); per-status evidence prerequisites; transition matrix (`pending` initial-only, `waived` terminal and gate-only, other transitions legal with new evidence).
+- **Human gates enumerated** — exactly five: spec-card approval, escalation, critical-tier accepted-risk confirmation, ship, merge acknowledgement. Risk-table cells reworded; sandbox permission prompts belong to the harness. Resolves the "single gate" vs "policy gates" wording conflict.
+- **Waiver atomicity** — gate decisions that resolve requirements (waive, defer) set the linked requirement status atomically inside `run record-decision`; the only status-mutation path outside `requirement set-status`.
+- **Spec status enum** — `obsolete` dropped (unreachable: no command sets it; `archived` already excludes from planning context), `cancelled` added for human abandonment. Enum: `draft/approved/cancelled/accepted/superseded/archived`.
+- **Directive vocabulary closed** — `claim_task`, `dispatch_worker`, `dispatch_task_verifier`, `spawn_repair_round`, `run_final_validation`, `await_human_gate`, `emit_escalation_packet`, `halt` (`halt` = cancelled/landed/submitted-awaiting-merge). Derived-transition list now includes run-state transitions (`created→implementing`, `implementing→verifying`, `verifying→verified`, `→escalated`). Run-level repair = dynamic `RT<n>` tasks counted against `run_review_rounds`. Blocked/unproven requirements skip repair rounds and escalate directly.
+- **Branch and snapshot policy** (new DESIGN section) — first `run start` creates `speccy/<spec-ref>-<slug>` from checked-out HEAD (recorded as base), reused across runs of the same spec; snapshot commits use `Speccy <noreply@speccy.local>` and `speccy: <spec-ref> …` messages; no controller squash; out-of-band commits (HEAD ≠ last snapshot/base) park the run at an `escalated` policy gate.
+- **Concurrency corrections** (Codex catch) — `evidence collect` for `kind: command` executes real commands that can mutate the worktree, so it is no longer lease-free: it takes a workspace command lock (separate from the run lease, so personas need no lease, but commands serialize). Lease-free set narrowed to `finding record` + non-command `evidence record`. Event appends from concurrent processes serialize on a per-workspace store lock. Stray SQLite reference removed from the concurrent-writers section.
+- **Idempotency contract** (Codex catch) — `run next` idempotency is semantic: all directive fields identical, `lease` block excluded (renewal changes `expires_at`). Walkthrough's "byte-identical" corrected.
+- **Workspace identity** — `workspace_id` = hash(canonical workspace root + canonical git root), both stored in `workspace.json`; monorepo subtrees get distinct workspaces; moves/re-clones yield new IDs (`doctor` reports orphans). `SPECCY_HOME` overrides `~/.speccy` for tests/CI.
+- **Pinned defaults** — lease TTL 10 minutes; agent IDs opaque `<harness>:<session>` strings; full `project.yaml` schema in DESIGN (caps + evidence execution limits; the undefined "human-gate rules" phrase removed); command evidence runs via platform shell with timeout/output-byte caps and pre/post dirty-state recording; `--input` accepts `-` (stdin); `packet review`/`packet escalation` return rendered text in `data.markdown` inside the JSON envelope; `jiff` pinned over `chrono`.
+- **Storage tree relabeled** — JSONL-first made concrete: spec-scoped + run-scoped `events.jsonl` are canonical, `run.yaml`/`acceptance-ledger.yaml`/`task-graph.yaml`/`spec.yaml` marked derived projections, `review-packet.md` a generated snapshot; `lessons/` and spec markdown revision files removed (lessons stays Open Question 12).
+- **Exports trimmed** — `export review`, `export spec`, `export run-bundle --redact` only; lessons/acceptance-snapshot/result-summary/run-log moved to Later Capabilities pending dogfood need.
+- **`SCHEMAS.md` added** — envelope, directive, and all `--input` payload shapes; doubles as the M2 lint spec. README doc map and editing rules updated to include it.
+- **Windows first-class** — M0 CI matrix covers Windows + macOS + Linux; M1 verify includes a cross-process append test on both platform families.
 
 ## Resolved 2026-07-02
 

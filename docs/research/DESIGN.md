@@ -1,7 +1,7 @@
 # Design: Spec-Driven Multi-Agent Orchestration Tool
 
 Status: authoritative
-Date: 2026-07-02
+Date: 2026-07-03
 
 This document proposes a design for a modular spec-driven orchestration tool that coordinates existing coding-agent harnesses. The design is intentionally open-ended and includes unresolved questions.
 
@@ -151,12 +151,14 @@ Baseline rules:
 - Every approved spec has an acceptance ledger before implementation starts.
 - Every requirement has a stable local ID, a plain-English statement, and one or more evidence requests: command/test output, browser/API observation, file/diff review, harness review, manual evidence, explicit waiver, or blocked/unproven status.
 - For `kind: command` evidence, the controller executes the command: `speccy ctl evidence collect` runs it and records exit code, stdout, stderr, and a content hash. `evidence record` refuses agent-pasted output for that kind, so `passed` on command evidence never rests on a transcript claim. Trust narrows to review, browser, and manual kinds, which the risk tiers already treat as weaker.
+- Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Open Question 18). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), and the controller records worktree dirty-state before and after the run so command-induced changes stay attributable.
 - An approved revision's ledger is immutable in place: requirement statements and evidence requests are frozen at approval. Agents may only propose draft patches; a human prose approval creates a new revision and a new run. Verifiers change requirement status only, through evidence operations.
 - The final review packet includes the ledger, status, commands run, evidence links, and residual risk.
-- A task cannot reach `integrated` while any linked requirement is still
-  `pending`.
+- A task cannot reach `integrated` while any linked requirement is unresolved
+  (see "Requirement Resolution Rules").
 - A run can become `verified` only when every requirement is resolved as
-  `passed`, `review_passed`, or `waived`. Raw `blocked` and `unproven` statuses
+  `passed`, `review_passed`, or `waived`, subject to the tier constraints in
+  "Requirement Resolution Rules". Raw `blocked` and `unproven` statuses
   remain **Needs you**; they force an escalation or policy gate unless a human
   decision records an explicit `review_passed` judgment or waiver with residual
   risk.
@@ -167,8 +169,8 @@ Risk still matters, but it changes the burden of evidence inside the same ledger
 | --- | --- | --- | --- |
 | Minimal | Formatting, docs, typo fixes, obvious one-line repairs, dependency metadata with no behavioral impact. | One to three requirements, evidence can be command output or focused review. | Existing relevant checks plus final packet. |
 | Standard | Normal bug fixes and small features with localized blast radius. | Requirements mapped to declared evidence requests. | Verifier gathers command/test/diff/review evidence and does lightweight evidence-adequacy review for new tests. |
-| High | Auth, billing, data loss, migrations, security, broad refactors, concurrency, public APIs, compliance-sensitive behavior. | Same ledger, but important requirements need stronger evidence such as negative cases, positive cases, pre-fix failure, or explicit human waiver. | Fresh-context verifier, evidence-adequacy review, and human approval gates where policy requires them. |
-| Critical | Production safety, regulated domains, irreversible migrations, incident repair, or explicit audit needs. | Same ledger plus retained evidence, decision log, and optional redacted run bundle. | Human gate before risky writes, stronger evidence retention, and optional external review. |
+| High | Auth, billing, data loss, migrations, security, broad refactors, concurrency, public APIs, compliance-sensitive behavior. | Same ledger, but important requirements need stronger evidence such as negative cases, positive cases, pre-fix failure, or explicit human waiver. | Fresh-context verifier, evidence-adequacy review, and residual-risk notes on accepted-risk requirements. |
+| Critical | Production safety, regulated domains, irreversible migrations, incident repair, or explicit audit needs. | Same ledger plus retained evidence, decision log, and optional redacted run bundle. | Accepted-risk confirmation gate before `verified`, stronger evidence retention, and optional external review. |
 
 Scenario prose is allowed when useful, but it should remain in the ledger as clarification, not become a new mandatory artifact. A `given/when/then` scenario should map to one or more evidence requests:
 
@@ -180,6 +182,47 @@ Scenario prose is allowed when useful, but it should remain in the ledger as cla
 - Blocked/unproven: the requirement cannot currently be verified.
 
 The verifier agent should collect evidence for all of these. Speccy provides evidence tools that make some collection reproducible, such as running a command and storing exit code/stdout/stderr, but it should not force users to think in separate deterministic versus LLM-verification phases. The ledger records evidence type, collector, raw artifact reference, reviewer judgment, and residual risk.
+
+### Requirement Resolution Rules
+
+"Resolved" is a deterministic controller judgment. A requirement is resolved
+when its status is `passed`, `review_passed`, or `waived`. The task
+`integrated` gate requires every linked requirement resolved; the run
+`verified` gate requires every requirement resolved. The risk tier adds
+constraints inside that rule rather than changing its shape:
+
+| Tier | `passed` | `review_passed` | `waived` |
+| --- | --- | --- | --- |
+| minimal | resolves | resolves | resolves |
+| standard | resolves | resolves | resolves |
+| high | resolves | resolves, requires a recorded `residual_risk` note | resolves, requires a recorded `residual_risk` note |
+| critical | resolves | requires human confirmation at a gate | requires human confirmation at a gate |
+
+On a `critical` spec, any requirement resolved by `review_passed` or `waived`
+parks the run at an `await_human_gate` directive ("confirm accepted risk")
+before `verifying` can complete; the confirmation is recorded through
+`run record-decision`. This is the only tier-added gate (see "Human Gates").
+
+Status prerequisites, enforced by `requirement set-status`:
+
+- `passed` requires at least one recorded evidence artifact.
+- `failed` and `vacuous` require at least one recorded evidence artifact or
+  finding.
+- `review_passed` requires at least one recorded evidence artifact and, at
+  `high` and `critical`, a `residual_risk` note.
+- `blocked` and `unproven` require a note naming what is missing.
+- `waived` is set only through a gate decision (`run record-decision`), never
+  through `requirement set-status`.
+
+Status transitions:
+
+- `pending` is the initial status and is never re-entered.
+- Any transition out of `pending` is legal, subject to the prerequisites
+  above.
+- Transitions between `passed`, `review_passed`, `failed`, `vacuous`,
+  `blocked`, and `unproven` are legal when justified by new evidence or
+  findings; final validation may demote a task-level `passed`.
+- `waived` is terminal for the run. A later revision starts a fresh ledger.
 
 ### Verification Ownership
 
@@ -431,9 +474,13 @@ decisions.
 A directive includes at least:
 
 - `run_state`: the current run state.
-- `action`: one directive, such as `dispatch_worker`,
-  `dispatch_task_verifier`, `spawn_repair_round`, `run_final_validation`,
-  `await_human_gate`, `emit_escalation_packet`, or `halt`.
+- `action`: one of the closed directive vocabulary: `claim_task`,
+  `dispatch_worker`, `dispatch_task_verifier`, `spawn_repair_round`,
+  `run_final_validation`, `await_human_gate`, `emit_escalation_packet`, or
+  `halt`. `halt` means no autonomous action exists for this run — it is
+  `cancelled`, `landed`, or `submitted` awaiting an external merge — and
+  `reason` says which. The vocabulary is versioned with the controller
+  protocol; a skill that sees an unknown action stops and surfaces it.
 - `subject`: the task, requirement, or gate the directive applies to.
 - `packet_with`: the packet operation to run before performing the action —
   `packet task` for `dispatch_worker`, `packet verification` for
@@ -452,7 +499,9 @@ A directive includes at least:
 Rules:
 
 - `run next` is idempotent. Calling it again without recording a result
-  returns the same directive.
+  returns the same directive. Idempotency is semantic: every directive field
+  is identical, while the `lease` block may differ because each call renews
+  the lease expiry.
 - The harness must not infer the next step from transcript memory. After every
   recorded result, it asks the controller again.
 - `await_human_gate` and `emit_escalation_packet` stop scheduling and surface
@@ -460,13 +509,19 @@ Rules:
   stops the loop and surfaces the error; the prose never guesses.
 
 `run next` is also the single mutation point for derived state. Before
-returning a directive it clears expired leases and applies the task
-transitions that have no recording operation: `reviewable -> in_review` when
-verification dispatches, `needs_repair -> building` when a repair round
+returning a directive it clears expired leases and applies every transition
+that has no recording operation. Task transitions: `reviewable -> in_review`
+when verification dispatches, `needs_repair -> building` when a repair round
 starts, and `in_review -> integrated` — including the task's snapshot commit —
-once every linked requirement is resolved for the risk tier. Idempotency is
-over settled state: once derived transitions apply, repeated calls return the
-same directive without re-applying them.
+once every linked requirement is resolved (see "Requirement Resolution
+Rules"). Run transitions: `created -> implementing` on the first directive,
+`implementing -> verifying` when every task is `integrated` or `deferred`,
+`verifying -> verified` when every requirement is resolved and any
+critical-tier confirmation gate is answered, and `-> escalated` — including
+the labeled escalation snapshot — on cap exhaustion, blocked/unproven
+requirements, resource caps, or out-of-band commits (see "Run Branch and
+Snapshot Policy"). Idempotency is over settled state: once derived transitions
+apply, repeated calls return the same directive without re-applying them.
 
 ### Run Lease and Concurrent Writers
 
@@ -475,9 +530,10 @@ the same run must not interleave `ctl` calls and corrupt round counting, so the
 controller contract includes a run-level lease:
 
 - `run next --agent <id>` issues or renews a lease token bound to that agent
-  ID, with an expiry on the order of minutes, renewed on every controller
+  ID, with a 10-minute expiry (MVP default), renewed on every controller
   call. The token returns with the directive and is passed back as
-  `--lease <token>` on state-mutating operations.
+  `--lease <token>` on state-mutating operations. Agent IDs are opaque
+  caller-chosen strings; the packs use a `<harness>:<session>` convention.
 - State-mutating operations — `task claim`, `task record-handoff`,
   `requirement set-status`, `run record-decision`, `run record-ship`, and any
   operation a `run next` directive names in `record_with` — require the live
@@ -493,12 +549,17 @@ fan out several fresh-context reviewer personas — security, business-logic
 correctness, code style — that can complete at the same moment. Their
 operations are additive, not state-mutating, so they do not take the lease:
 
-- `finding record`, `evidence record`, and `evidence collect` are lease-free
+- `finding record` and `evidence record` for non-command kinds are lease-free
   additive operations. Each finding and
   evidence artifact is written as its own file keyed by its ID (plus an
   append-only event), never appended to a shared per-task journal, so
-  simultaneous completions cannot contend. The SQLite projection serializes
-  index updates transactionally.
+  simultaneous completions cannot contend. Concurrent event appends serialize
+  on the per-workspace store lock (see "Storage Model").
+- `evidence collect` for `kind: command` executes a real command that can
+  mutate caches, lockfiles, or generated files, so it is not free to
+  interleave. It takes the workspace command lock — separate from the run
+  lease, so verifier personas can collect without holding the lease, but only
+  one command runs at a time.
 - Aggregation stays with the lease holder: after all reviewer personas report,
   the orchestrating session (holding the lease) records the resulting task
   status transition.
@@ -536,6 +597,32 @@ session, invoke `/speccy-implement <spec>`, and the skill calls
 from stored state. Mid-directive interruptions are safe because `run next`
 is idempotent: a directive whose result was never recorded is simply returned
 again.
+
+### Run Branch and Snapshot Policy
+
+The first `run start` for a spec creates the spec's run branch,
+`speccy/<spec-ref-lowercased>-<slug>` (for example
+`speccy/spec-20260630-a7f4-passwordless-login`), from the currently
+checked-out HEAD, and records that HEAD as the run's base. Later runs of the
+same spec — after an amendment or a cancelled run — reuse the same branch,
+which is how a superseding run reconciles the escalation snapshot instead of
+redoing work. `run start` never chooses a base branch itself: whatever the
+user has checked out is the base, and the clean-worktree refusal is the only
+precondition.
+
+Controller-created commits — task snapshots and escalation snapshots — use
+the committer identity `Speccy <noreply@speccy.local>` and the message
+formats `speccy: <spec-ref> <task-id> integrated (round <n>)` and
+`speccy: <spec-ref> escalation snapshot`. The controller never squashes; if a
+team wants a clean history, `/speccy-ship` prose may offer a squash before
+opening the PR.
+
+The resume invariant assumes HEAD only moves through controller snapshots
+while a run is active. `run next` verifies that HEAD matches the last
+recorded snapshot (or the recorded base before any snapshot exists); if a
+human or another tool committed out-of-band, the run parks at an `escalated`
+policy gate naming the unexpected commits, and the human decides whether to
+fold them in, reset, or cancel.
 
 ### Harness-Aware Template Rendering
 
@@ -646,12 +733,28 @@ Recommended repo-local shape:
 ```
 
 Repo-local `.speccy/` holds exactly two files. `project.yaml` carries project
-configuration and machine-readable policy values (risk defaults, repair-round
-caps, human-gate rules); `pack-lock.yaml` pins pack versions and render
-metadata. There are no `policies/`, `roles/`, or `evidence-presets/` folders:
-that prose is harness-facing, so it is template-rendered into the selected
-harness pack (`.claude/`, `.codex/`, `.agents/`) where the agent actually reads
-it, and edited there. Runtime run state never lives in the repo.
+configuration and machine-readable policy values (risk defaults, repair and
+retry caps, evidence execution limits); `pack-lock.yaml` pins pack versions
+and render metadata. There are no `policies/`, `roles/`, or
+`evidence-presets/` folders: that prose is harness-facing, so it is
+template-rendered into the selected harness pack (`.claude/`, `.codex/`,
+`.agents/`) where the agent actually reads it, and edited there. Runtime run
+state never lives in the repo.
+
+The full `project.yaml` schema:
+
+```yaml
+risk_default: standard
+caps:
+  task_repair_rounds: 3
+  run_review_rounds: 3
+  structured_output_retries: 3
+  max_tasks: null                   # optional; null = uncapped
+  max_run_wall_clock_minutes: null  # optional; null = uncapped
+evidence:
+  command_timeout_seconds: 600
+  command_output_max_bytes: 1048576
+```
 
 ### Controller API Surface
 
@@ -700,6 +803,13 @@ speccy ctl finding record --run <id> --input finding.json --json
 speccy ctl requirement set-status --run <id> --lease <token> --input status.json --json
 ```
 
+Every operation returns the JSON envelope `{ok, data}` or
+`{ok: false, error: {code, message, details?}}`. Packet operations return
+structured JSON; the human-formatted packets (`packet review`,
+`packet escalation`) carry their rendered form in a `markdown` field inside
+`data`. Every `--input` flag accepts a file path or `-` to read the payload
+from stdin. Payload shapes are specified in `SCHEMAS.md`.
+
 Naming convention (decided 2026-07-02): operations are noun-first — `spec`, `run`, `task`, `packet`, `evidence`, `finding`, `requirement`, mirroring the nouns in `TERMINOLOGY.md` — with a small verb vocabulary: `start`/`status` for lifecycle, `next` for the loop directive, `claim` and `collect` for actions the controller performs, `record-*` for append-style writes, `patch-*` for partial edits, and `set-status` for status transitions. `speccy ctl <noun> --help` lists that noun's operations.
 
 These commands are implementation details for the installed skills/agents; routine use never requires typing them. They are still designed to be steppable by hand: a human debugging a run can walk `spec status` → `run status` → `run next` and read each directive as a sentence.
@@ -730,8 +840,8 @@ on transcript memory for the original ask.
 - Current spec draft state.
 - Workspace path, git state, dirty files, and selected file-tree/manifests.
 - Deterministically parsed project signals, such as package scripts, dependencies, language manifests, and configured harness packs.
-- Relevant prior spec, decision, and review summaries that are not archived, obsolete, or superseded.
-- Policy constraints, risk guidance, and human-gate rules.
+- Relevant prior spec, decision, and review summaries that are not cancelled, superseded, or archived.
+- Policy constraints, risk guidance, and the applicable human gates.
 - A harness work order telling the planner what to inspect read-only.
 - The output contract for the candidate spec draft.
 
@@ -753,6 +863,13 @@ packet planning
 ```
 
 The initial candidate spec should be submitted all at once instead of appending one section per controller call. This prevents the controller store from accumulating many half-valid intermediate states. Piecewise refinement should happen through patch-style draft updates, such as replacing `scope`, `requirements`, `evidence_requests`, `open_questions`, or `tasks`.
+
+An approved revision is never patched in place. When the spec's latest
+revision is approved, `spec record-draft` or `spec patch-draft` opens draft
+revision N+1 seeded from the approved revision; the draft then follows the
+same lint-and-approve cycle, and a new prose approval produces the new
+revision (and, later, a new run). `invalid_transition` is reserved for
+operations that would mutate the approved revision itself.
 
 The planner must draft from the current codebase first, then reconcile relevant prior specs and decisions. Prior specs are context, not truth. If current code contradicts a prior accepted spec, the planner should flag drift or staleness rather than silently carrying the old requirement forward.
 
@@ -852,6 +969,8 @@ Important rules:
 - Tasks execute serially by default, and each task can repeat implement-review-repair rounds before the scheduler moves to the next task.
 - Higher-risk work increases the evidence requirements inside the same ledger.
 - A failed task reviewer creates a task-scoped repair round. A failed final validator creates a run-level repair task, a waiver request, or an escalated state.
+- A run-level repair task is created dynamically: the controller appends task `RT<n>` to the runtime task graph, linked to the failing requirement IDs, and it runs the same claim → dispatch → handoff → verify cycle. Run-level rounds are counted per run against `run_review_rounds`, independent of any task's counter.
+- Blocked or unproven task-linked requirements do not consume repair rounds: repair cannot manufacture missing environment or evidence, so the run moves straight to `escalated` as a human/policy gate.
 - Each repair loop is capped by policy, defaulting to 3 rounds. The task repair loop and the run-level repair loop each keep an independent count and an independent cap.
 - When a loop exhausts its cap and a linked requirement is still `failed` or `vacuous`, the run gives up, transitions to `escalated`, and emits an escalation packet. Blocked or unproven requirements that prevent verification also transition to `escalated`, but as a human/policy gate rather than a capability-escalation event. See "Capability Escalation and Give-Up Policy."
 - After verifying passes, the run enters `verified`: the work is done and awaiting the human's ship decision. `/speccy-ship` opens the PR and moves the run to `submitted`.
@@ -940,11 +1059,11 @@ It includes:
 - What partial work is already applied to the workspace.
 - Suggested amendments, when the planner has any.
 
-At the escalation gate the human responds in prose, and the harness records the right decision through `run record-decision` rather than offering a menu of process verbs:
+At the escalation gate the human responds in prose, and the harness records the right decision through `run record-decision` rather than offering a menu of process verbs. Gate decisions that resolve requirements — waivers, defers — set the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
 
 - **Amend the spec.** The usual outcome. Creates a new approved spec revision and a new run, with a decision record explaining why the definition of done changed. The escalated run is closed as `cancelled` with a decision record naming the superseding revision and run. Any guidance the human gives is folded into the amendment.
 - **Provide missing setup or evidence.** Keeps the spec revision, records the gate decision, and resumes the same run in `implementing` or `verifying` when the environment is ready.
-- **Waive the requirement.** Accept the residual risk; the same run resumes from where it stopped.
+- **Waive the requirement.** Accept the residual risk; the decision sets the requirement to `waived` atomically, and the same run resumes from where it stopped.
 - **Cancel the run.**
 
 #### Amendment at the Escalation Gate
@@ -972,7 +1091,7 @@ The run store persists a small change reference for what was proposed, as proven
 change_ref:
   kind: pull_request        # pull_request | branch | patch | none
   url: https://github.com/org/repo/pull/123
-  branch: speccy/passwordless-login
+  branch: speccy/spec-20260630-a7f4-passwordless-login
   head_sha: a7f4c2e
   base: main
 ```
@@ -1019,42 +1138,45 @@ Decision (2026-07-01, closes former Open Question 1): runtime state lives in
 `pack-lock.yaml`; all policy, role, and evidence prose is rendered into the
 harness packs, and exports are opt-in snapshots written to explicit
 destinations such as `docs/specs/`. There is no repo-local runtime mode. A
-survey of how prior tools store runtime state, which validates this split, is
-in `runtime-state-storage-survey.md`.
+survey of how prior tools store runtime state, which validates this split,
+was captured in `runtime-state-storage-survey.md` (external research note,
+not in this repo).
+
+Workspace identity: `workspace_id` is a hash of the canonicalized workspace
+root plus the canonicalized git repository root, both stored in
+`workspace.json`. A monorepo subtree therefore gets its own workspace,
+distinct from the repo root's. Moving or re-cloning a repository yields a new
+workspace ID; `speccy doctor` reports store entries whose recorded paths no
+longer exist. The store root defaults to `~/.speccy` and can be overridden
+with the `SPECCY_HOME` environment variable, which tests and CI use for
+isolation.
 
 Runtime storage is external:
 
 ```text
-~/.speccy/
+~/.speccy/                        # override with SPECCY_HOME
   config.toml
   workspaces/
     <workspace-id>/
       workspace.json
-      lessons/
       specs/
         <internal-spec-id>/
           spec-ref.txt
-          request.md
-          assumptions.md
-          decisions.jsonl
-          spec/
-            current.md
-            revisions/
-              spec-rev-001.md
-              spec-rev-002.md
+          events.jsonl            # canonical: spec-scoped log (request, drafts,
+                                  # revisions, approvals, spec decisions)
+          spec.yaml               # derived projection of the current revision
           runs/
             <run-id>/
-              run.yaml
-              design.md
-              acceptance-ledger.yaml
-              task-graph.yaml
-              events.jsonl
-              decisions.jsonl
-              handoffs/
+              events.jsonl        # canonical: run-scoped log (state, tasks,
+                                  # rounds, statuses, run decisions)
+              handoffs/           # canonical artifacts, one file per ID
               evidence/
               findings/
-              review-packet.md
               artifacts/
+              run.yaml            # derived projections, rebuilt by replay
+              acceptance-ledger.yaml
+              task-graph.yaml
+              review-packet.md    # generated snapshot
 ```
 
 The state model (JSONL-first, decided 2026-07-02):
@@ -1069,6 +1191,11 @@ rename over the target. JSONL event appends use verified read-back — the
 appended record is re-read and checked before the operation reports success —
 so a crash never leaves a half-written transition. Resume from the store is
 only trustworthy if every write follows this discipline.
+
+Concurrent `speccy` processes — the orchestrating skill plus lease-free
+reviewer personas — may append events at the same time. Event-log appends
+therefore serialize on a per-workspace store lock file, held only for the
+duration of the append; artifact files are written per-ID and never contend.
 
 SQLite should not be committed to git. It is binary, noisy, and poor for review. JSONL event logs are text and portable, but they are still operational run history and should not be committed by default either.
 
@@ -1089,7 +1216,7 @@ Commit by default:
 .agents/speccy-*.md
 ```
 
-Commit or attach selectively, via explicit `speccy export` commands: compact review packets, acceptance snapshots, and result summaries, written to explicit destinations such as `docs/specs/<spec-ref>/` or attached to the PR. These are useful when the team wants PR-visible evidence. They should be generated intentionally and kept compact. `.speccy/` itself holds no export folders.
+Commit or attach selectively, via explicit `speccy export` commands: compact review packets and spec exports, written to explicit destinations such as `docs/specs/<spec-ref>/` or attached to the PR. These are useful when the team wants PR-visible evidence. They should be generated intentionally and kept compact. `.speccy/` itself holds no export folders.
 
 Never committed, because it never exists in the repo: run state, event logs, transcripts, caches, evidence artifacts, and databases. These live in `~/.speccy/`.
 
@@ -1130,7 +1257,7 @@ speccy:
 No-server sharing options:
 
 - Paste or attach the review packet to the PR.
-- Commit or attach only compact snapshots when useful: acceptance snapshot, result summary, decision log, and command summary.
+- Commit or attach only compact snapshots when useful: the review packet or a spec export.
 - Let other engineers rerun verification against the shared acceptance snapshot; this reuses the verifier role and the local controller tools rather than adding a separate skill, and is a later/team capability.
 - Export a redacted run bundle only when debugging or audit needs it: `speccy export run-bundle --redact`.
 - Attach that bundle to an issue, PR, CI artifact, or file share outside git rather than committing it.
@@ -1144,10 +1271,7 @@ Repo writes remain opt-in:
 
 - `speccy export spec`
 - `speccy export review`
-- `speccy export lessons`
-- `speccy export acceptance-snapshot`
-- `speccy export result-summary`
-- `speccy export run-log` for debugging, compliance, or reproducibility only
+- `speccy export run-bundle --redact` for debugging, compliance, or reproducibility only
 
 This reconciles shared lifecycle prose with zero product-code footprint.
 
@@ -1487,6 +1611,27 @@ The spec card should make the approval boundary unmistakable: the human approves
 
 The spec-card approval is mandatory for every spec, regardless of risk. It is the single pre-implementation gate. Higher risk raises the evidence bar inside the same card and ledger rather than adding another approval step; the card simply carries more detail, such as the full task list and flagged destructive steps, so the human approves with the right information.
 
+### Human Gates
+
+Speccy has exactly five human gates, and no additional approval steps hide
+inside phases:
+
+1. **Spec-card approval** — prose approval recorded by `/speccy-plan`; the
+   single pre-implementation gate for every spec, regardless of risk.
+2. **Escalation gate** — the run parked at `escalated`: repair-cap
+   exhaustion, blocked/unproven requirements, resource caps,
+   structured-output retry exhaustion, or out-of-band commits.
+3. **Critical-tier accepted-risk confirmation** — on `critical` specs only,
+   before `verified`, covering every `review_passed`/`waived` requirement
+   (see "Requirement Resolution Rules").
+4. **Ship decision** — `verified`, answered by `/speccy-ship`.
+5. **Merge acknowledgement** — `submitted`, answered by `speccy accept`.
+
+Higher risk raises the evidence bar inside the same ledger and, at
+`critical`, adds gate 3. Sandbox permission prompts — destructive commands,
+network access, dependency installs — belong to the harness, not Speccy; the
+packs must not suppress them.
+
 ### Harness Skills
 
 Speccy installs the harness entry skills below. Each is invocable as an explicit slash command and by natural-language fallback. Brainstorm is optional; planning, implementation, and shipping are the load-bearing handoffs. Spec-card approval is an explicit prose act recorded through the controller, not a side effect of invoking the next skill. Every other checkpoint copy must still state its effect explicitly.
@@ -1580,7 +1725,7 @@ Command semantics:
 
 Internal controller operations still exist, but they are tool calls used by the harness pack, not ordinary human-facing workflow commands.
 
-`speccy list` should default to active specs in the current workspace: drafts, approved specs, specs with active runs, escalated specs, specs awaiting review, or repairable validation failures. Accepted, superseded, obsolete, and archived specs should be hidden unless the user passes an explicit flag such as `--all`, `--status accepted`, or `--archived`.
+`speccy list` should default to active specs in the current workspace: drafts, approved specs, specs with active runs, escalated specs, specs awaiting review, or repairable validation failures. Accepted, superseded, cancelled, and archived specs should be hidden unless the user passes an explicit flag such as `--all`, `--status accepted`, or `--archived`.
 
 `--query` should apply the same selector matching used by commands such as `speccy review passwordless`, but without taking an action. This lets users preview which specs would match a natural selector:
 
@@ -1886,7 +2031,8 @@ Avoid in MVP:
 - Deterministic CI checks for specs, ledgers, review packets, and pack freshness.
 - Policy packs for regulated environments.
 - Optional team-shared run store for enterprise/audit use, only after no-server review packets and run bundles prove insufficient.
-- If any mutable state ever becomes git-visible (for example, a team-shared mode committing state snapshots), it must be append-only with a union-by-event-id git merge driver; replace-style merges of state files silently lose data (see `runtime-state-storage-survey.md` on OpenSpec vs Spec Kitty).
+- If any mutable state ever becomes git-visible (for example, a team-shared mode committing state snapshots), it must be append-only with a union-by-event-id git merge driver; replace-style merges of state files silently lose data (per the external runtime-state storage survey, OpenSpec vs Spec Kitty).
+- Additional exports — lessons learned, acceptance snapshots, result summaries, raw run logs — if dogfooding proves the review packet and spec export are not enough.
 - Model routing and budget optimizer.
 - Inbound Agent2Agent-compatible bridge owned by an external harness, if a team proves it adds value without moving orchestration state out of Speccy.
 - Reusable evidence templates, if real usage proves they reduce friction.
@@ -1916,7 +2062,7 @@ Avoid in MVP:
 20. **Spec mutation — resolved 2026-07-02.** Nobody mutates an approved revision's ledger in place. Requirement statements and evidence requests are frozen at approval; agents may only propose draft patches; human prose approval creates a new revision and a new run; verifiers change requirement status only, through evidence operations.
 21. **Long-term storage:** How long should transcripts/evidence be retained?
 22. **Team mode:** When multiple humans review gates, what is the approval policy?
-23. **License/package strategy — resolved 2026-07-02 (language and engine).** Rust, shipped as a single static `speccy` binary. Templating: `minijinja` (Jinja2 syntax) is the intended engine, pending verification against the renderer requirements. Distribution channels and license remain open.
+23. **License/package strategy — language, engine, and license resolved.** Rust, shipped as a single static `speccy` binary (2026-07-02). Templating: `minijinja` (Jinja2 syntax) is the intended engine, pending verification against the renderer requirements. License: MIT, committed at repo init (recorded 2026-07-03). Distribution channels remain open.
 24. **Name:** Is `speccy` the right name, or should the tool use a more explicit name around specs/evidence?
 25. **Escalated-run reconciliation — resolved 2026-07-02.** Snapshot and reconcile: at escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, and the superseding run starts on the same branch seeded with the prior run's summary, reconciling rather than redoing. Rolling back to the run baseline remains the human's explicit fallback at the gate.
 

@@ -1,7 +1,7 @@
 # Speccy Domain Terminology
 
 Status: authoritative
-Date: 2026-07-02
+Date: 2026-07-03
 
 This document defines the Speccy vocabulary used by product docs, CLI commands,
 controller APIs, install packs, exported artifacts, and review packets.
@@ -79,7 +79,8 @@ A workspace is the target directory or repository a spec/run operates against.
 A workspace is a git repository or a subtree of one, such as a monorepo
 package. Non-git directories are not supported: resume and evidence baselines
 depend on git snapshots and `baseline_commit`. Speccy runtime state always
-lives outside the workspace, in `~/.speccy/`.
+lives outside the workspace, in `~/.speccy/`. Workspace identity derives from
+the workspace root and git root paths; see "Storage Model" in `DESIGN.md`.
 
 ### Initiative
 
@@ -227,20 +228,22 @@ spec_rev_002
 Spec status controls whether old specs are considered by default during future
 planning.
 
-Recommended statuses:
+Canonical statuses:
 
 - `draft`: not yet approved.
 - `approved`: accepted as the binding definition of done for a run.
+- `cancelled`: abandoned by a human decision before completion.
 - `accepted`: completed and accepted by the human, with any residual risk called
   out.
 - `superseded`: replaced by a later spec or decision.
-- `obsolete`: known no longer to describe the current codebase or desired
-  behavior.
 - `archived`: retained for history, but excluded from default planning context.
+  Archiving also covers accepted specs that no longer describe the current
+  codebase; the planner flags staleness during reconciliation rather than
+  relying on a dedicated status.
 
-Only relevant, non-archived, non-obsolete specs should be candidates for
-carry-forward context. The planner must still reconcile them against the current
-codebase before treating them as constraints.
+Only relevant specs that are not cancelled, superseded, or archived should be
+candidates for carry-forward context. The planner must still reconcile them
+against the current codebase before treating them as constraints.
 
 ### Active Spec
 
@@ -256,7 +259,7 @@ Default active specs include:
 - Specs awaiting final review.
 - Specs with validation failures that can be repaired.
 
-Accepted, superseded, obsolete, and archived specs should not appear in the
+Accepted, superseded, cancelled, and archived specs should not appear in the
 default active list. They can still be shown through explicit flags such as
 `--all`, `--status accepted`, or `--archived`.
 
@@ -444,6 +447,9 @@ Canonical statuses:
 - `waived`: a human explicitly accepted the risk.
 
 Avoid using task completion as a proxy for requirement status.
+
+Legal transitions, evidence prerequisites, and tier resolution rules are
+defined in "Requirement Resolution Rules" in `DESIGN.md`.
 
 ### Human Status Bucket
 
@@ -709,7 +715,10 @@ Waivers should include:
 - Timestamp
 - Residual risk
 
-Waived is a resolved status, but not a passed status.
+Waived is a resolved status, but not a passed status. A waiver recorded at a
+gate sets the requirement status to `waived` atomically inside
+`run record-decision`; this is the one status-mutation path outside
+`requirement set-status`.
 
 ### Drift
 
@@ -793,9 +802,10 @@ defined in "Deterministic Loop Driving: run next" in `DESIGN.md`.
 
 A run lease is the controller's enforcement of "one writer at a time" for a
 run: an agent-bound, expiring token required by state-mutating controller
-operations. Additive operations — `finding record`, `evidence record`, and
-`evidence collect` — are lease-free so concurrent reviewer personas can
-complete simultaneously. Token
+operations. Additive operations — `finding record` and non-command
+`evidence record` — are lease-free so concurrent reviewer personas can
+complete simultaneously; `evidence collect` for `kind: command` takes the
+workspace command lock instead of the lease. Token
 issue/renewal, `lease_held` errors, expired-lease repair, the per-file write
 layout, and finding carry-over are defined in "Run Lease and Concurrent
 Writers" in `DESIGN.md`.
@@ -925,7 +935,7 @@ supervised or step-steered mode.
 Autonomy is not permission to ignore gates. A run must pause for policy or
 environment checkpoints such as:
 
-- Required human approval for high or critical risk.
+- Critical-tier accepted-risk confirmation before `verified`.
 - Destructive filesystem actions.
 - Dependency installation or network access approvals.
 - Production or deployment actions.

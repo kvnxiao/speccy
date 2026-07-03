@@ -1,7 +1,7 @@
 # Speccy Walkthrough: End to End in Claude Code
 
 Status: illustration (mocked outputs)
-Date: 2026-07-02
+Date: 2026-07-03
 
 One complete scenario, from installing the harness pack into an existing repository through archiving the shipped spec. Every controller operation and human command appears at least once, with mocked inputs and outputs. This document is illustrative: `DESIGN.md` and `TERMINOLOGY.md` are authoritative, and if anything here conflicts with them, they win.
 
@@ -272,7 +272,7 @@ $ speccy ctl spec record-decision --spec SPEC-20260630-A7F4 --input decision.jso
     "next": "Run /speccy-implement SPEC-20260630-A7F4 in a fresh session." } }
 ```
 
-The revision is now immutable in place. Patching it again returns `{"ok": false, "error": {"code": "invalid_transition", ...}}`; changes require a new draft revision and a new approval.
+The revision is now immutable in place. A later `spec patch-draft` opens draft `spec_rev_002` seeded from it; only a new prose approval makes that draft binding, and any operation that would mutate the approved revision itself returns `{"ok": false, "error": {"code": "invalid_transition", ...}}`.
 
 ---
 
@@ -304,7 +304,7 @@ $ speccy ctl run start --spec SPEC-20260630-A7F4 --revision spec_rev_001 --json
 { "ok": true, "data": {
     "run_id": "run_01j1bxgvk3tf4qs6mv9zpxwe8d",
     "run_state": "created",
-    "branch": "speccy/passwordless-login",
+    "branch": "speccy/spec-20260630-a7f4-passwordless-login",
     "tasks": [
       { "id": "T1", "status": "queued",
         "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
@@ -443,6 +443,8 @@ $ speccy ctl evidence collect --run run_01j1... --requirements R-AUTH-001,R-AUTH
       "collected_by": "controller" } ] } }
 ```
 
+Command executions serialize on the workspace command lock, so two personas collecting command evidence never interleave test runs.
+
 Pasting command output through `evidence record` is refused:
 
 ```json
@@ -508,7 +510,7 @@ $ speccy ctl requirement set-status --run run_01j1... --lease lease_01j1c0k8 --i
 
 The controller counted the round and moved T1 `needs_repair → building` itself; the skill only reports "starting repair round 2 of 3". Round 2's `packet task` now carries `"prior_findings": [{"id": "fd_77e1", ...}]`, so the repair worker starts from the ms/seconds diagnosis instead of rediscovering it. The worker fixes the comparison, the verifier re-collects (`npm test -- auth/expiry` → `exit_code: 0`), and R-AUTH-003 is set `passed`.
 
-Calling `run next` twice without recording anything returns the byte-identical directive — that idempotency is the whole crash-recovery story (see Appendix C).
+Calling `run next` twice without recording anything returns the same directive — identical apart from lease renewal metadata — and that idempotency is the whole crash-recovery story (see Appendix B).
 
 ### 3.5 T1 integrates, T2 runs
 
@@ -555,6 +557,8 @@ The skill builds the review packet and presents it. The autonomous session is do
 ```console
 $ speccy ctl packet review --run run_01j1... --json
 ```
+
+The `data.markdown` field of the envelope, rendered:
 
 ```text
 Spec   SPEC-20260630-A7F4  Passwordless login      Risk: high
@@ -603,7 +607,8 @@ PR opening is harness-side prose — Speccy makes no outbound calls:
 
 ```console
 $ gh pr create --title "Passwordless login (SPEC-20260630-A7F4)" \
-    --body-file review-packet.md --base main --head speccy/passwordless-login
+    --body-file review-packet.md --base main \
+    --head speccy/spec-20260630-a7f4-passwordless-login
 https://github.com/acme/acme-app/pull/123
 ```
 
@@ -616,7 +621,7 @@ $ speccy ctl run record-ship --run run_01j1... --lease lease_01j1f2mq --input ch
 { "ok": true, "data": { "run_state": "submitted",
     "change_ref": { "kind": "pull_request",
       "url": "https://github.com/acme/acme-app/pull/123",
-      "branch": "speccy/passwordless-login",
+      "branch": "speccy/spec-20260630-a7f4-passwordless-login",
       "head_sha": "a7f4c2e", "base": "main" } } }
 ```
 
@@ -691,7 +696,7 @@ Tried:
   round 2 — clamped window at token creation      (rejected: replay path bypasses check)
   round 3 — moved check into token verification   (rejected: flaky under CI clock skew)
 
-Partial work applied: escalation snapshot 4e8d0aa on speccy/passwordless-login.
+Partial work applied: escalation snapshot 4e8d0aa on speccy/spec-20260630-a7f4-passwordless-login.
 
 Recommended: amend the spec
 Alternatives: provide setup, waive this requirement, cancel the run

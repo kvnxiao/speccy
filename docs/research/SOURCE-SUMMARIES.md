@@ -6,12 +6,10 @@ This document is a faithful digest of the three foundational source documents be
 research. Its purpose is convenience: one file to consult for the key takeaways of all three
 sources, instead of re-reading each in full.
 
-- It summarizes; it does not interpret for the product. `RESEARCH.md` is the product-oriented
-  synthesis (which deliberately filters these sources for Speccy relevance), and `DESIGN.md` /
-  `TERMINOLOGY.md` are authoritative for any product, workflow, naming, or implementation
-  decision.
-- Where you need nuance, quotes, or citations, go to the original files listed below. This
-  digest is a map, not the territory.
+- It summarizes; it does not interpret for the product. `DESIGN.md` / `TERMINOLOGY.md` are
+  authoritative for any product, workflow, naming, or implementation decision.
+- Where you need nuance, quotes, or citations, go to the original documents (they live outside
+  this repo; only `PRINCIPLES.md` is committed here). This digest is a map, not the territory.
 
 ## Sources at a glance
 
