@@ -1,118 +1,90 @@
-# Open Items: Doc Review Backlog
+# Open Items
 
-Status: 2 open items
-Date: 2026-07-03 (second external UX review folded in)
+Status: 0 backlog items · 16 open questions · 5 watch items
+Date: 2026-07-04 (ceremony-reduction pass)
 
-Findings from doc consistency reviews. Backlog items are undecided; everything else is decided and applied.
-
-This file is a historical decision log. `DESIGN.md` and `TERMINOLOGY.md` are authoritative for current behavior and vocabulary; if an entry here conflicts with them, the design docs win.
+The live surface for undecided work. `DESIGN.md` and `TERMINOLOGY.md` are
+authoritative for current behavior; resolved decision history is archived in
+`DECISION-LOG.md`.
 
 ## Backlog
 
-- **Planning memory vs archive** (external UX review 2026-07-03) — archived specs are excluded from default planning context (`TERMINOLOGY.md` "archived"; DESIGN planning-packet inputs), yet the lifecycle nudges archiving every landed spec ("Archive it when you're done"), so durable decisions such as `dec_20260401_003` (tokens stored hashed) eventually leave planning context entirely. Proposed direction: decisions outlive spec archiving — planning packets include a compact decision index drawn from all non-cancelled/non-superseded specs, archived included; archiving stays a list-visibility action only. Needs design: index shape and size cap, staleness/reconcile rules against current code, whether the index is a projection or a first-class store file. Independently re-raised by the second external UX review (2026-07-03).
-- **Command-evidence dedup** (external UX review 2026-07-03) — reviewer personas that request the same command evidence rerun identical commands serially under the workspace command lock. Proposed direction: cache command evidence keyed on `(round_snapshot, command)` — the round snapshot commit pins worktree state — and return the already-recorded artifact for repeat `evidence collect` calls within a round. Needs design: interaction with pre/post dirty-state recording (a command that mutates the worktree invalidates the key), whether dedup crosses persona boundaries only or also repair-round re-collection, and how the returned evidence records attribution. Independently re-raised by the second external UX review (2026-07-03).
+Empty. The decision index — the last backlog item — is deferred to Later
+Capabilities ("Carry-Forward Decisions" and "Later Capabilities" in
+`DESIGN.md`); the cheap `carry_forward` flag it needs is recorded from M6, so
+the projection can be built without a data migration when multi-spec use
+proves it necessary.
 
-## Resolved 2026-07-03 (second external UX review)
+## Open questions
 
-A second outside reviewer read the post-fold `WALKTHROUGH.md`, `PRINCIPLES.md`, and `README.md`. Seven findings triaged: three produced changes (applied to `DESIGN.md`, `TERMINOLOGY.md`, `SCHEMAS.md`, `WALKTHROUGH.md`), two confirmed existing Backlog items, and two re-raised settled decisions that were kept by user decision.
+Deferred until MVP usage provides evidence. Numbering is historical (Q1–Q25);
+retired numbers were resolved and their decisions live in the design docs,
+with rationale in `DECISION-LOG.md`.
 
-- **Resume attribution made visible; adopt gate rejected** (user decision) — crash resume silently attributed any dirty worktree diff to the in-flight task. Now: `run next` reports lease repair in a `resume` directive field (`cleared_lease` plus a `dirty_diff` summary vs the task baseline; per-call like `applied_transitions` and excluded from idempotency); the skill echoes it before dispatching (approval-echo pattern); `speccy status` shows the attribution on interrupted-run cards. A blocking adopt/stash/cancel gate rejected: human-edits-while-dead is undetectable (no recorded diff exists at crash time), so a gate would tax every routine crash resume as a false positive. The escape hatch stays git-native — stash removes edits from attribution; a commit parks the run at the existing out-of-band-commit gate.
-- **Browser/API evidence requires stored artifacts at high/critical** — `evidence record` for `kind: browser`/`api` on `high`/`critical` specs refuses prose-only records; a non-empty `artifact` reference (screenshot, trace, DOM capture, HTTP transcript) is required and hashed. The controller enforces presence, not authenticity — a stored artifact is inspectable at review where a transcript claim is not. Optional at `minimal`/`standard`. The walkthrough's high-risk browser example now shows the refusal and the artifact-bearing record.
-- **Mid-run `speccy status` card defined; run status labels added** — the reviewer's "make `speccy status` the central UX" collapsed to the one missing piece: status output for an active run was undefined. New `TERMINOLOGY.md` "Run Status Label" (Implementing / Verifying / Ready to ship / Needs you / Awaiting merge / Interrupted — a rendering rule, run state stays canonical, sibling of the human status bucket) and a "CLI/Admin Flow" card spec: one card per active run, next human action with the exact command, no directives, leases, run IDs, or ctl machinery. The rest of the machinery-exposure finding was already designed: status buckets, two-endpoint review UX, human commands returning prose not JSON, `ctl` agent-facing only.
-- **Approval binding re-raised; kept echo-only** (user decision) — the reviewer read the version with the echo rule applied and still wanted the binding reply to carry spec ref+revision, or a generated `speccy approve` command. Kept as is: the recorded decision is already bound to ref and revision by the controller, the echo makes that visible, and ref-bearing replies or approval commands re-add the ceremony the prose-approval decision rejected. Second independent raise — watch during dogfooding.
-- **High-tier accepted-risk gate re-raised; kept critical-only** (user decision) — second reviewer wanted accepted risk gated on `high` too. Kept: the ship gate presents accepted-risk lines and count on the first screen; a high-tier gate double-gates the most common serious tier. Watch during dogfooding for rubber-stamped accepted risks. The "hide `review_passed` from humans, call it Accepted risk" half was already the design (human status buckets; the precise status is a drill-down tag).
-- **Install footprint, archive-as-visibility, evidence caching** — already handled or already Backlog: `--dry-run` on plain install documented and a `--local`/`--team` split rejected in the first fold; archive/planning-memory and command-evidence dedup are the two Backlog items above, both independently confirmed by this review.
+- **Q2 Repo artifact export:** which artifacts should be easiest to export:
+  spec, acceptance ledger, review packet, lessons learned, or all of them?
+- **Q3 Artifact shape:** the smallest useful spec draft and acceptance ledger
+  shape; no public format compatibility promise until MVP usage proves it.
+- **Q4 No-server sharing:** are review packets, compact snapshots, rerun
+  commands, and optional redacted run bundles enough for team use before
+  considering any shared run store?
+- **Q5 Spec interop:** which external spec formats should be first-class
+  import targets: OpenSpec, Spec Kit, Kiro, GSD Core, Spec Kitty, or a
+  generic markdown mapper?
+- **Q7 Vacuity threshold:** what minimum anti-vacuity evidence is required
+  before the verifier can mark a high-priority requirement as `passed`?
+  (M5 ships only the adversarial-review prose.)
+- **Q8 Scenario evidence:** how much should Speccy help convert
+  `given/when/then` prose into evidence requests versus delegating that to
+  harness agents?
+- **Q9 Custom harness integration:** are `speccy ctl ... --json` calls enough
+  for custom harnesses, or should `speccy rpc`/`speccy mcp` be supported
+  earlier?
+- **Q10 Gate editing:** how much editing should happen inside `speccy` versus
+  opening `$EDITOR`?
+- **Q11 Review packet format:** markdown only, JSON plus markdown, or an HTML
+  report? (MVP: markdown only.)
+- **Q12 Lessons learned:** how can the system accumulate project learning
+  without leaking operational state or affecting product-code/build/runtime
+  footprint?
+- **Q18 Security model:** how should secret redaction and deny-read rules
+  work across harnesses with different sandbox systems? (MVP ships an
+  env-scrubbing stub.)
+- **Q19 Production validation:** how should the tool prove behavior that only
+  exists in deployed environments?
+- **Q21 Long-term storage:** how long should transcripts/evidence be
+  retained?
+- **Q22 Team mode:** when multiple humans review gates, what is the approval
+  policy?
+- **Q23 Distribution:** channels for the `speccy` binary (language, engine,
+  and license are decided: Rust, `minijinja`, MIT).
+- **Q24 Name:** is `speccy` the right name, or should the tool use a more
+  explicit name around specs/evidence?
 
-## Resolved 2026-07-03 (external walkthrough UX review)
+## Dogfood watch list
 
-An outside reviewer read `WALKTHROUGH.md`, `PRINCIPLES.md`, and `README.md` only. Seven concerns triaged; applied to `DESIGN.md`, `SCHEMAS.md`, `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`. Two design questions moved to Backlog (above).
+Behaviors to measure during M8 dogfooding. Each names its candidate change if
+the friction proves real; the rejection rationale behind each candidate is in
+`DECISION-LOG.md`.
 
-- **`run next` reports derived transitions** — directive gains `applied_transitions`: the transitions that call applied, `{subject, from, to}` plus `snapshot` SHA when one was created; empty on repeated calls and excluded from the idempotency comparison alongside `lease`. Rename to `run advance` rejected — the op is agent-facing, not human-facing; transparency, not naming, was the gap. Gap found while illustrating: `in_review -> needs_repair` was missing from the derived-transition list; added, because it is the failure half of the same review aggregation that derives `in_review -> integrated`, and `requirement set-status` stays a pure recording op that never moves the task.
-- **Fresh-session wording corrected to "recommended"** — a functional fresh-session requirement never existed (approval and run state are controller-backed; Appendix B resumes from any session), but spec-card and walkthrough copy read as mandatory. Copy now says "fresh session recommended" everywhere; DESIGN states it is never required.
-- **Accepted risk surfaces on the result line** — review-packet result line carries the count when non-zero (`verified — ready to ship · N accepted risks`); a bare "ready to ship" must not hide residual risk below the fold. A high-tier accepted-risk gate rejected: the five-gate contract stands, `high` already requires recorded `residual_risk` notes, and the ship gate is the decision point.
-- **Approval echo rule** — before recording an approval or gate decision, the skill echoes spec ref, revision, and decision (`Recording approval: SPEC-… rev … -> approved`) so stale prose in a long chat cannot bind to the wrong spec. Confirmation copy, not a sixth gate. A mandatory approval phrase rejected as ceremony against the prose-approval decision.
-- **Install preview documented** — `--dry-run` composes with plain `speccy install` (M7 already planned it; DESIGN only documented it under `--update`). `--local` vs `--team` install split rejected for MVP: the `.gitignore` backstop already separates runtime state from committed workflow files.
-- **Repair-review cost concern re-affirmed as designed** — full-roster reruns with delta scoping already are the targeted form (see "Repeat-round token scoping" entry below); per-persona `model` tunes cost. No change.
-
-## Resolved 2026-07-03 (reviewer personas + provenance, user decisions)
-
-Three requirements added before implementation start, decided via structured questions. Applied to `DESIGN.md`, `TERMINOLOGY.md`, `SCHEMAS.md`, `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`.
-
-- **Reviewer personas made first-class** — new "Reviewer Personas" DESIGN section: configurable roster in `.speccy/project.yaml` (`review.personas`, optional per-persona `model` string-or-target-map and `min_risk`), rendered as one subagent file per persona per target (`speccy-reviewer-<persona>`); roster echoed in `dispatch_task_verifier`/`run_final_validation` directives (`subject.personas`); findings carry `persona`; personas fan out at both task review rounds and run-gate review rounds. "Correctness" split into `spec-fidelity` (requirements/drift/vacuity) and `defects` (logic bugs, edge cases, error handling): the two fail independently and a combined prompt anchors on the ledger. Default roster `spec-fidelity, defects, security, style`; `minimal` risk collapses to one combined reviewer. Open Question 14 (validator diversity) closed by per-persona/per-role model selection; defaults stay harness-inherited.
-- **Repeat-round token scoping; persona-skipping rejected** — every round re-runs the full roster (output correctness outranks token savings; a repair diff is new code no skipped persona would see). Savings come from delta scoping: a round snapshot (dangling commit, HEAD untouched) recorded at each `task record-handoff`; round-N+1 verification packets carry `delta` since the last reviewed snapshot plus prior findings and repair resolution claims; persona prose verifies its own prior blockers and reviews the delta without re-litigating passed unchanged code, full diff still available. New DESIGN section "Repeat Review Rounds and Token Scoping".
-- **Provenance hygiene** (new DESIGN section) — shipped file contents must carry no Speccy terminology or identifiers; end state indistinguishable from manual implementation. Enforced by (1) a deterministic controller deny-list scan over task and integrated diffs (blocking findings into normal repair rounds; `provenance.extra_terms` configurable), (2) a standing rule in worker/repair prompts, (3) a `style`-persona checklist item for semantic leakage. Dedicated provenance persona rejected (identifiers are mechanical to catch; a run-gate-only auditor catches task-level leaks late). Requirement-to-test traceability moved out of test names into store-side evidence records, fixing a direct conflict with the old vacuity bullet. Boundary: rendered packs, `.speccy/`, and explicit exports exempt; git history and PR metadata are team policy — `/speccy-ship` offers squash by default.
-
-## Resolved 2026-07-03 (harness reality check)
-
-Three parallel research agents verified the pack-layout assumptions against current harness docs (July 2026). Findings applied to `DESIGN.md`, `TERMINOLOGY.md`, `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`.
-
-- **`.codex/skills/` does not exist** — Codex reads repo-local skills from `.agents/skills/<name>/SKILL.md` (Agent Skills standard, agentskills.io, Dec 2025, AAIF/Linux Foundation governed; also read by Amp and OpenHands). Codex pack entry skills now render there.
-- **Codex subagents are repo-local TOML** — `.codex/agents/<name>.toml` (`name`, `description`, `developer_instructions`, optional `model`/`model_reasoning_effort`/`sandbox_mode`). Renderer gains a TOML escaping filter (M7). Codex custom prompts (`~/.codex/prompts/`) are user-global and deprecated; not rendered.
-- **Claude entry surface switched from commands to skills** — `.claude/skills/<name>/SKILL.md` gives both explicit `/name` and natural-language auto-invocation via `description`; `.claude/commands/` is legacy and never auto-invokes. Subagents stay `.claude/agents/*.md` with `model` frontmatter (confirms per-role model selection).
-- **Generic `agents` install target cut** — no cross-harness convention exists for role/agent definition files; `.agents/` is Agent-Skills-only territory. Targets are now `auto | codex | claude | all`; detection maps `.codex` or `.agents` → codex, `.claude` → claude. A core-fields-only generic skills pack + root `AGENTS.md` pointer moved to Later Capabilities.
-- **Both harnesses expose a literal `/plan`** — Codex Plan Mode and Claude plan mode; brainstorm handoff wording updated for both targets.
-- **Structured-question tools confirmed** — `AskUserQuestion` (Claude), `request_user_input` (Codex; exact schema community-verified only). New pack-prose rule: only entry skills (main session) may reference the tool; availability in subagents is unverified.
-- Codex plugin manifest (`.codex-plugin/plugin.json`) and Claude plugin `--scope project` both exist; plain repo-local files stay the MVP default (plugin subagents lose `hooks`/`mcpServers`/`permissionMode` in Claude).
-
-## Resolved 2026-07-03 (pre-M0 cross-review: Claude + Codex)
-
-Full-project review before M0, folding in an independent Codex review. All decisions applied to `DESIGN.md`, `TERMINOLOGY.md`, `SCHEMAS.md` (new), `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`, and `README.md`; the plan gained an "M0 readiness checklist".
-
-- **Project home** — this repo; M0 runs `cargo init` at the root. `PROPOSED-DESIGN.md` renamed to `DESIGN.md`; README doc map rebuilt (missing `RESEARCH.md`/survey/source files marked external); license recorded as MIT (Open Question 23 updated; distribution still open).
-- **Amendment mechanics** — approved revisions are never patched; `record-draft`/`patch-draft` against a spec whose latest revision is approved opens draft N+1 seeded from it. `invalid_transition` reserved for mutating the approved revision itself.
-- **Requirement resolution made deterministic** — new "Requirement Resolution Rules" section: resolved = `passed`/`review_passed`/`waived`; tier table (high requires `residual_risk` notes on accepted-risk statuses; critical adds an accepted-risk confirmation gate before `verified`); per-status evidence prerequisites; transition matrix (`pending` initial-only, `waived` terminal and gate-only, other transitions legal with new evidence).
-- **Human gates enumerated** — exactly five: spec-card approval, escalation, critical-tier accepted-risk confirmation, ship, merge acknowledgement. Risk-table cells reworded; sandbox permission prompts belong to the harness. Resolves the "single gate" vs "policy gates" wording conflict.
-- **Waiver atomicity** — gate decisions that resolve requirements (waive, defer) set the linked requirement status atomically inside `run record-decision`; the only status-mutation path outside `requirement set-status`.
-- **Spec status enum** — `obsolete` dropped (unreachable: no command sets it; `archived` already excludes from planning context), `cancelled` added for human abandonment. Enum: `draft/approved/cancelled/accepted/superseded/archived`.
-- **Directive vocabulary closed** — `claim_task`, `dispatch_worker`, `dispatch_task_verifier`, `spawn_repair_round`, `run_final_validation`, `await_human_gate`, `emit_escalation_packet`, `halt` (`halt` = cancelled/landed/submitted-awaiting-merge). Derived-transition list now includes run-state transitions (`created→implementing`, `implementing→verifying`, `verifying→verified`, `→escalated`). Run-level repair = dynamic `RT<n>` tasks counted against `run_review_rounds`. Blocked/unproven requirements skip repair rounds and escalate directly.
-- **Branch and snapshot policy** (new DESIGN section) — first `run start` creates `speccy/<spec-ref>-<slug>` from checked-out HEAD (recorded as base), reused across runs of the same spec; snapshot commits use `Speccy <noreply@speccy.local>` and `speccy: <spec-ref> …` messages; no controller squash; out-of-band commits (HEAD ≠ last snapshot/base) park the run at an `escalated` policy gate.
-- **Concurrency corrections** (Codex catch) — `evidence collect` for `kind: command` executes real commands that can mutate the worktree, so it is no longer lease-free: it takes a workspace command lock (separate from the run lease, so personas need no lease, but commands serialize). Lease-free set narrowed to `finding record` + non-command `evidence record`. Event appends from concurrent processes serialize on a per-workspace store lock. Stray SQLite reference removed from the concurrent-writers section.
-- **Idempotency contract** (Codex catch) — `run next` idempotency is semantic: all directive fields identical, `lease` block excluded (renewal changes `expires_at`). Walkthrough's "byte-identical" corrected.
-- **Workspace identity** — `workspace_id` = hash(canonical workspace root + canonical git root), both stored in `workspace.json`; monorepo subtrees get distinct workspaces; moves/re-clones yield new IDs (`doctor` reports orphans). `SPECCY_HOME` overrides `~/.speccy` for tests/CI.
-- **Pinned defaults** — lease TTL 10 minutes; agent IDs opaque `<harness>:<session>` strings; full `project.yaml` schema in DESIGN (caps + evidence execution limits; the undefined "human-gate rules" phrase removed); command evidence runs via platform shell with timeout/output-byte caps and pre/post dirty-state recording; `--input` accepts `-` (stdin); `packet review`/`packet escalation` return rendered text in `data.markdown` inside the JSON envelope; `jiff` pinned over `chrono`.
-- **Storage tree relabeled** — JSONL-first made concrete: spec-scoped + run-scoped `events.jsonl` are canonical, `run.yaml`/`acceptance-ledger.yaml`/`task-graph.yaml`/`spec.yaml` marked derived projections, `review-packet.md` a generated snapshot; `lessons/` and spec markdown revision files removed (lessons stays Open Question 12).
-- **Exports trimmed** — `export review`, `export spec`, `export run-bundle --redact` only; lessons/acceptance-snapshot/result-summary/run-log moved to Later Capabilities pending dogfood need.
-- **`SCHEMAS.md` added** — envelope, directive, and all `--input` payload shapes; doubles as the M2 lint spec. README doc map and editing rules updated to include it.
-- **Windows first-class** — M0 CI matrix covers Windows + macOS + Linux; M1 verify includes a cross-process append test on both platform families.
-
-## Resolved 2026-07-02
-
-- **Loop-contract gaps closed** (walkthrough review): lease transport specified — `run next --agent <id>` issues the token, state-mutating ops pass `--lease <token>`, and the lease is run-scoped so spec-phase ops are not gated; `verified` surfaces as an `await_human_gate` directive with `record_with: run record-ship`, and `/speccy-ship` takes the lease via `run next` before recording; directives gain a `packet_with` field naming the packet op to build before acting; controller-derived task transitions (`reviewable → in_review`, `needs_repair → building`, `in_review → integrated` + snapshot commit) documented as `run next` side effects, idempotent over settled state; `spec start` input documented (`request` required; optional `source`, `title`, `brainstorm_handoff` — the only persistence point for promoted brainstorms); `evidence collect` classified lease-free; `speccy list --json` is the skills' selector-resolution path. Illustrated end to end in `WALKTHROUGH.md`.
-
-- **`ctl` surface regrouped noun-first** (user decision): operations are `speccy ctl <noun> <verb>`, nouns mirroring `TERMINOLOGY.md` (`spec`, `run`, `task`, `packet`, `evidence`, `finding`, `requirement`) — `run next` (was `next-action`), `spec patch-draft` (was `update-spec-draft`), `requirement set-status` (was `update-requirement-status`), `packet review` (was `build-review-packet`), and so on. Convention recorded in "Controller API Surface" in `DESIGN.md`. Older entries in this log use pre-rename names.
-
-- **Controller surface trimmed to 21 ops** (ctl op review): `run-resume` cut — `next-action` alone clears expired leases and re-derives the directive, giving the loop exactly one entry point; `lint-spec-draft` and `lint-acceptance` cut — write ops return structural lint findings per Q6, `record-spec-decision` refuses approval on a lint-dirty draft, and the `verified` gate enforces status completeness; `record-intake-observations` cut — observations are an optional field on the spec draft; `build-escalation-packet` added; `spec-start` takes `--input request.json`.
-
-- **Pre-implementation consistency fixes** (2026-07-02 doc review before M0): ship transition named `ctl record-ship` (`verified` → `submitted`, records `change_ref`); run-scoped decisions get `ctl record-run-decision`, with spec-level `decisions.jsonl` added to the storage tree; `record-intake-observations` assigned to M2, `build-task-packet` to M3, `record-run-decision`/`record-ship`/`export review` to M6; other exports deferred to dogfooding; `record-evidence` documented lease-free alongside `record-finding` in M5; `run_id`/`spec_id` examples switched to ULID shape; YAML crate switched from archived `serde_yaml` to `serde-saphyr`; DESIGN/TERMINOLOGY headers updated to authoritative/2026-07-02.
-
-- **Design Open Questions 6/15/20/25 closed** (user decisions via structured questions): Q6 strict schema validation with bounded repair (structured lint errors, retry cap default 3, then fail closed to `escalated`); Q15 resource caps fail closed to an `escalated` policy gate (rounds plus optional task-count/wall-clock caps in `project.yaml`; speccy cannot meter tokens); Q20 approved revisions are immutable in place — statements and evidence requests frozen, agents propose, humans approve new revisions, verifiers touch status only; Q25 snapshot + reconcile — escalation commits the in-flight diff as a labeled snapshot, the superseding run reconciles on the same branch, rollback stays the explicit human fallback.
-
-- **Design Open Questions 13/16/17/23 closed** (user decisions): parallel writes explicitly out of MVP scope (serial only, lease-enforced; worktree parallelism stays post-MVP); `run-start` refuses dirty worktrees before any run state exists; non-git workspaces unsupported outright (git required for snapshots/`baseline_commit`; added to Non-Goals); implementation language is Rust as a single static binary with `minijinja` as the intended template engine (distribution/license still open).
-
-- **Survey follow-ups folded into `DESIGN.md`** (from `runtime-state-storage-survey.md`): explicit `baseline_commit` recorded per task at claim time; atomic-write discipline (temp → fsync → rename, verified read-back for JSONL appends) stated as a controller requirement in the Storage Model; Later Capabilities note requiring append-only + union-by-event-id merge driver if mutable state ever becomes git-visible. Storage decision itself unchanged: runtime state stays out of the repo.
-
-6. **Controller-executed command evidence** — split kept, per user decision. For `kind: command`, `speccy ctl collect-evidence` executes the command itself and records exit code/stdout/stderr/hash; `record-evidence` refuses agent-pasted output for that kind. Trust narrows to review/browser/manual kinds, which the risk tiers already treat as weaker. The interface stays uniform: one `collect-evidence` operation, controller decides per kind whether to execute or accept supplied content. Applied to `DESIGN.md` (Acceptance Ledger baseline rules, Verification Ownership) and `TERMINOLOGY.md` (Evidence Artifact).
-
-## Resolved 2026-07-01 (decision pass)
-
-1. **`tiny` name collision** — risk tier renamed to `minimal` (`minimal/standard/high/critical`); scope ladder keeps `tiny -> initiative`. Risk table, vacuity tiers, and naming-pairs table updated.
-2. **`speccy resume` semantics** — `speccy resume` cut entirely. Resume is a controller capability: `next-action`/`run-resume` deterministically derive the next step for any fresh session. Mechanisms: task statuses (`queued/building/reviewable/in_review/needs_repair/integrated/deferred`) plus controller-owned round counter, git snapshot commits at each task `integrated` boundary (uncommitted diff = in-flight task work), and expired-lease repair inside `run-resume`/`next-action`. Use Case 7 rewritten; new "Resume and Crash Recovery" section in `DESIGN.md`.
-3. **Storage dual-story** — decided: runtime state lives in `~/.speccy/` only. Repo `.speccy/` holds exactly `project.yaml` (config + machine-readable policy values such as repair caps) and `pack-lock.yaml`. No `policies/`, `roles/`, or `evidence-presets/` folders — that prose template-renders into the harness packs. `.gitignore` block kept as a labeled defensive backstop. Open Question 1 closed with a decision record. A survey of how BMAD/Spec Kit/GSD/etc. store runtime state is captured in `runtime-state-storage-survey.md`.
-4. **Merge detection** — cut from MVP entirely, including the git-native ancestry heuristics. `speccy accept` is a manual human assertion (optional `--pr`/`--note` provenance). Automatic detection moved to Later Capabilities.
-5. **"Accept" overload** — statuses made unique: run state `accepted` renamed `landed`; task terminal state is `integrated` (replacing "accepted for integration"); `accepted` now uniquely means the spec status; "acceptance ledger" stays a noun. Naming-pairs table mandates qualified forms.
-7. **Run lease / single-writer enforcement** — specified in `DESIGN.md` ("Run Lease and Concurrent Writers") and `TERMINOLOGY.md` ("Run Lease"): `next-action` issues/renews an agent-bound expiring lease; state-mutating ops require the live token; second session gets `lease_held` naming the holder; expired leases cleared by `run-resume`/`next-action`. `record-finding`/`record-evidence` are lease-free — one file per finding/evidence ID, never a shared journal — so concurrent reviewer personas can complete simultaneously. Prior-round findings carry into subsequent round packets.
-8. **MVP scope trim** — trim rejected for harnesses: Claude Code AND Codex stay first-class in MVP, deliberately forcing the template renderer's conditional exports to be real from day one. Recorded in "MVP Proposal."
-9. **Non-goal phrasing** — reworded: the non-goal is persisting run state/transcripts/per-spec process artifacts; committed harness packs and `.speccy/` project config are deliberate workflow artifacts.
-10. **Factory skill-evolution dependency** — conditional added at both deferral sites: horizons beyond hours make per-repo skill self-evolution a prerequisite, not an enhancement.
-11. **Evidence-ability routing** — `evidence_ability` is now the first scope-rating factor; low evidence-ability routes away from `speccy_spec` toward harness planning even for large work, and the handoff must say why. Both docs updated.
-
-## Resolved earlier (2026-07-01 consistency review — do not redo)
-
-- `speccy ctl next-action` deterministic loop-driving operation, with controller-owned round counters.
-- Entry-skill lists de-counted and pointed at the canonical "Harness Skills" list.
-- `RESEARCH.md` Design Status stripped to an informational deferral; stale differentiator fixed.
-- Escalation gate: `escalated -> implementing | verifying | cancelled` edges, "Amendment at the Escalation Gate" flow, amendment supersedes the run via new revision + new run.
-- Task graph ownership: planned tasks live on the spec revision; the run instantiates its runtime task graph.
-- "Hands-Free Run" removed; every run is fully autonomous by design ("Autonomous Execution" in `TERMINOLOGY.md`).
-- Explicit acknowledgement that harness packs are the only available integration level, not just the preferred one.
-- Repair-round caps are two policy values (per-task, run-level review) enforced by the controller and surfaced through `next-action`.
+- **Reviewer roster cost** — measure what the four-persona roster costs on
+  ordinary `standard` specs, now that delta-scoped re-review is deferred and
+  every round re-reads the full diff. Candidates: a smaller `standard` default
+  with the full roster starting at `high` (a config-default change); building
+  the deferred delta-scoped re-review if full-diff re-review cost proves high.
+- **Accepted-risk rubber-stamping** — the ship confirmation echoes accepted
+  risks before opening the PR; watch whether they get waved through anyway.
+  First decision to revisit if so.
+- **Approval binding** — `go` and `approve only` are bound only by the approval
+  echo; the controller-side `draft_version`/`stale_draft` enforcement was
+  removed as ceremony. Watch for approvals binding to the wrong spec or a stale
+  card in long chats. Candidates: reinstating a `draft_version` refusal, or
+  ref-bearing replies (both previously rejected as ceremony).
+- **First-install ceremony** — watch first-run reactions to the preview and
+  the multi-file footprint. Candidates (previously rejected): single-target
+  default in dual-harness repos, a `--user` trial install.
+- **Manual accept forgetting** — `/speccy-ship` prints the `speccy accept`
+  command, the Awaiting-merge card carries it, PR metadata includes
+  `accept_with`, and `accept` reuses the recorded `change_ref`; watch whether
+  accepts still get forgotten. Candidate: a local ancestry-check prompt on
+  status cards (silent on squash merges, hence not MVP).

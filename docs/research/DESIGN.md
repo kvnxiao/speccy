@@ -131,14 +131,16 @@ requirements:
   - id: R1
     statement: "Existing exports keep the same columns."
     evidence:
-      kind: review
-      note: "Diff only changes timestamp formatting path."
+      - id: E1
+        kind: review
+        note: "Diff only changes timestamp formatting path."
     status: pending
   - id: R2
     statement: "Timestamps are formatted as ISO-8601 UTC values."
     evidence:
-      kind: command
-      command: "npm test -- csv-export"
+      - id: E1
+        kind: command
+        command: "npm test -- csv-export"
     status: pending
 ```
 
@@ -149,18 +151,19 @@ This shape is intentionally provisional for the MVP. Speccy should not promise a
 Baseline rules:
 
 - Every approved spec has an acceptance ledger before implementation starts.
-- Every requirement has a stable local ID, a plain-English statement, and one or more evidence requests: command/test output, browser/API observation, file/diff review, harness review, manual evidence, explicit waiver, or blocked/unproven status.
+- Every requirement has a stable local ID, a plain-English statement, and one or more evidence requests: command/test output, browser/API observation, file/diff review, harness review, manual evidence, explicit waiver, or blocked status. Evidence requests are an array, each with a stable ID unique within its requirement (`E1`, `E2`; qualified as `R-AUTH-001.E1`); collected evidence records reference the request they satisfy, so a requirement with several declared proofs stays auditable per proof rather than per requirement (shapes in `SCHEMAS.md`).
 - For `kind: command` evidence, the controller executes the command: `speccy ctl evidence collect` runs it and records exit code, stdout, stderr, and a content hash. `evidence record` refuses agent-pasted output for that kind, so `passed` on command evidence never rests on a transcript claim. Trust narrows to review, browser, and manual kinds, which the risk tiers already treat as weaker.
-- Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Open Question 18). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), and the controller records worktree dirty-state before and after the run so command-induced changes stay attributable.
-- On `high` and `critical` specs, `evidence record` for `kind: browser` and `kind: api` requires a non-empty `artifact` reference — a screenshot, trace, DOM capture, or HTTP transcript stored under the run's evidence tree — and refuses prose-only records. The controller enforces presence and hashes the artifact; it cannot vouch for authenticity, but a stored artifact is inspectable at review where a transcript claim is not. At `minimal` and `standard` the artifact stays optional. (Decision 2026-07-03, second external UX review.)
+- Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Q18 in `OPEN-ITEMS.md`). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), and the controller records worktree dirty-state before and after the run so command-induced changes stay attributable.
+- Command allow policy: when `evidence.command_policy.allow` is set in `.speccy/project.yaml`, a declared `kind: command` string that matches no pattern is flagged by structural lint at `record-draft`/`patch-draft` — so the mismatch surfaces at spec time, where the human can fix or approve around it — and refused at `evidence collect` (`validation_failed`). Patterns match the whole declared command string (glob), never a prefix: commands execute through a shell, so `npm test && curl …` is a different whole string from `npm test` and matches nothing unless a pattern explicitly allows it. The policy is a drift guardrail — lint plus refusal against commands nobody meant to declare — not an authorization boundary; the harness sandbox remains the security boundary for whatever an approved command spawns (see "Human Gates"). Unset means any approved command may run; the spec card always shows the command strings either way (see "Spec Card UX").
+- On `high` and `critical` specs, `evidence record` for `kind: browser` and `kind: api` requires a non-empty `artifact` reference — a screenshot, trace, DOM capture, or HTTP transcript stored under the run's evidence tree — and refuses prose-only records. The controller enforces presence and hashes the artifact; it cannot vouch for authenticity, but a stored artifact is inspectable at review where a transcript claim is not. At `minimal` and `standard` the artifact stays optional.
 - An approved revision's ledger is immutable in place: requirement statements and evidence requests are frozen at approval. Agents may only propose draft patches; a human prose approval creates a new revision and a new run. Verifiers change requirement status only, through evidence operations.
 - The final review packet includes the ledger, status, commands run, evidence links, and residual risk.
 - A task cannot reach `integrated` while any linked requirement is unresolved
   (see "Requirement Resolution Rules").
 - A run can become `verified` only when every requirement is resolved as
   `passed`, `review_passed`, or `waived`, subject to the tier constraints in
-  "Requirement Resolution Rules". Raw `blocked` and `unproven` statuses
-  remain **Needs you**; they force an escalation or policy gate unless a human
+  "Requirement Resolution Rules". A raw `blocked` status
+  remains **Needs you**; it forces an escalation or policy gate unless a human
   decision records an explicit `review_passed` judgment or waiver with residual
   risk.
 
@@ -180,7 +183,7 @@ Scenario prose is allowed when useful, but it should remain in the ledger as cla
 - File/diff evidence: review of changed files, selectors, routes, migrations, or configuration.
 - Harness review evidence: fresh-context harness review with structured findings.
 - Manual evidence: explicit human decision.
-- Blocked/unproven: the requirement cannot currently be verified.
+- Blocked: the requirement cannot currently be verified.
 
 The verifier agent should collect evidence for all of these. Speccy provides evidence tools that make some collection reproducible, such as running a command and storing exit code/stdout/stderr, but it should not force users to think in separate deterministic versus LLM-verification phases. The ledger records evidence type, collector, raw artifact reference, reviewer judgment, and residual risk.
 
@@ -189,8 +192,22 @@ The verifier agent should collect evidence for all of these. Speccy provides evi
 "Resolved" is a deterministic controller judgment. A requirement is resolved
 when its status is `passed`, `review_passed`, or `waived`. The task
 `integrated` gate requires every linked requirement resolved; the run
-`verified` gate requires every requirement resolved. The risk tier adds
-constraints inside that rule rather than changing its shape:
+`verified` gate requires every requirement resolved.
+
+The six requirement statuses (canonical; TERMINOLOGY names them, this section
+owns them):
+
+- `pending`: evidence not collected yet (initial status).
+- `passed`: collected evidence satisfies it at the required risk depth.
+- `review_passed`: review-only evidence satisfies it, residual risk recorded.
+- `failed`: evidence or a finding contradicts it — including a vacuity finding,
+  which is a finding reason, not its own status.
+- `blocked`: no acceptable evidence can currently be collected — a missing
+  environment, tool, credential, access, or dependency.
+- `waived`: a human explicitly accepted the risk at a gate.
+
+The risk tier adds constraints inside the resolution rule rather than changing
+its shape:
 
 | Tier | `passed` | `review_passed` | `waived` |
 | --- | --- | --- | --- |
@@ -207,11 +224,12 @@ before `verifying` can complete; the confirmation is recorded through
 Status prerequisites, enforced by `requirement set-status`:
 
 - `passed` requires at least one recorded evidence artifact.
-- `failed` and `vacuous` require at least one recorded evidence artifact or
-  finding.
+- `failed` requires at least one recorded evidence artifact or finding. A
+  vacuity finding — evidence that does not exercise the requirement — is a
+  legitimate basis for `failed`.
 - `review_passed` requires at least one recorded evidence artifact and, at
   `high` and `critical`, a `residual_risk` note.
-- `blocked` and `unproven` require a note naming what is missing.
+- `blocked` requires a note naming what is missing.
 - `waived` is set only through a gate decision (`run record-decision`), never
   through `requirement set-status`.
 
@@ -220,10 +238,21 @@ Status transitions:
 - `pending` is the initial status and is never re-entered.
 - Any transition out of `pending` is legal, subject to the prerequisites
   above.
-- Transitions between `passed`, `review_passed`, `failed`, `vacuous`,
-  `blocked`, and `unproven` are legal when justified by new evidence or
-  findings; final validation may demote a task-level `passed`.
+- Transitions between `passed`, `review_passed`, `failed`, and `blocked` are
+  legal when justified by new evidence or findings; final validation may
+  demote a task-level `passed`.
 - `waived` is terminal for the run. A later revision starts a fresh ledger.
+
+`deferred` is a task status, never a requirement resolution. A `defer` gate
+decision (`run record-decision`) sets a task aside; any linked requirement
+not covered by another live task is waived atomically inside the same
+decision — the same one-path-outside-`requirement set-status` rule as
+waivers — under the same tier constraints (`residual_risk` note at `high`,
+confirmation gate at `critical`). Requirements also covered by a live task
+stay unresolved and must still be proven. The `verified` gate therefore
+never sees an unresolved requirement hiding behind a deferred task: a defer
+is visible in the review packet as its waived requirements, in the accepted
+risk bucket.
 
 ### Verification Ownership
 
@@ -285,16 +314,17 @@ requirements:
       when: "the user opens the magic-link URL"
       then: "the login attempt is rejected and the user remains unauthenticated"
     evidence:
-      kind: browser
-      setup:
-        command: "npm run dev"
-        wait_for: "http://localhost:3000"
-      steps:
-        - seed_fixture: "expired_magic_link"
-        - goto: "http://localhost:3000/auth/magic?token=expired-test-token"
-        - expect_text: "This login link has expired"
-        - expect_session_absent: true
-        - expect_no_exported_cookie: "session"
+      - id: E1
+        kind: browser
+        setup:
+          command: "npm run dev"
+          wait_for: "http://localhost:3000"
+        steps:
+          - seed_fixture: "expired_magic_link"
+          - goto: "http://localhost:3000/auth/magic?token=expired-test-token"
+          - expect_text: "This login link has expired"
+          - expect_session_absent: true
+          - expect_no_exported_cookie: "session"
     vacuity:
       controls:
         positive:
@@ -329,7 +359,18 @@ task packet
   -> task integrated
 ```
 
-Each runtime task carries a task status — `queued | building | reviewable | in_review | needs_repair | integrated | deferred`, defined in `TERMINOLOGY.md` ("Task Status") — and a controller-owned round counter, so an interrupted session can resume mid-task.
+Each runtime task carries a task status and a controller-owned round counter,
+so an interrupted session can resume mid-task. The five statuses:
+
+- `queued`: not started.
+- `building`: an implementer owns the task; a repair round re-enters here with
+  the round counter incremented.
+- `in_review`: a handoff is recorded and fresh-context reviewers check the
+  linked requirements.
+- `integrated`: linked requirements resolved for the tier; the controller
+  records a git snapshot commit for the task.
+- `deferred`: set aside by a recorded `defer` gate decision, which atomically
+  waives the task's not-otherwise-covered requirements.
 
 When a task enters `building`, the controller records `baseline_commit` — the workspace git HEAD at claim time — on the task and preserves it across resume, so every diff, review, and evidence check has a stable baseline even after a crash mid-round.
 
@@ -476,24 +517,32 @@ A directive includes at least:
 
 - `run_state`: the current run state.
 - `action`: one of the closed directive vocabulary: `claim_task`,
-  `dispatch_worker`, `dispatch_task_verifier`, `spawn_repair_round`,
-  `run_final_validation`, `await_human_gate`, `emit_escalation_packet`, or
-  `halt`. `halt` means no autonomous action exists for this run — it is
-  `cancelled`, `landed`, or `submitted` awaiting an external merge — and
-  `reason` says which. The vocabulary is versioned with the controller
-  protocol; a skill that sees an unknown action stops and surfaces it.
+  `dispatch_worker`, `dispatch_verifier`, `await_human_gate`, or `halt`. A
+  repair round is `dispatch_worker` with `round.current > 1`; run-level
+  validation is `dispatch_verifier` with `round.scope: run`; an escalation is
+  `await_human_gate` with `subject.gate: escalation`. `halt` means no
+  autonomous action exists for this run — it is `cancelled`, `landed`, or
+  `submitted` awaiting an external merge — and `reason` says which. The
+  vocabulary is versioned with the controller protocol; a skill that sees an
+  unknown action stops and surfaces it.
 - `subject`: the task, requirement, or gate the directive applies to.
 - `packet_with`: the packet operation to run before performing the action —
   `packet task` for `dispatch_worker`, `packet verification` for
-  `dispatch_task_verifier` and `run_final_validation`, `packet escalation`
-  for `emit_escalation_packet` — or null when no packet is needed.
+  `dispatch_verifier`, `packet review` or `packet escalation` for
+  `await_human_gate` (by gate) — or null when no packet is needed.
 - `round`: for repair directives, the controller-owned counter and its
   policy-configured cap, such as `{ "current": 2, "max": 3, "scope": "task" }`.
   Per-task repair rounds and run-level review rounds have separate policy
   values. The orchestrating agent reports what the controller said — "starting
   repair round 2 of 3" — and never counts rounds itself.
 - `record_with`: the controller operation that must record the outcome, so the
-  loop closes deterministically.
+  loop closes deterministically. Human decision points have more than one
+  legal outcome by design, so on `await_human_gate` directives `record_with`
+  is only the gate's default recorder, and a `gate_answers` field is the
+  authoritative map: every legal answer with its recording operation
+  (`{type, record_with}`, shape in `SCHEMAS.md`). The skill routes the human's
+  prose to a listed answer and never guesses which operation records which
+  decision.
 - `reason`: a compact explanation the skill can surface verbatim in status
   updates.
 
@@ -505,28 +554,30 @@ Rules:
   the lease expiry.
 - The harness must not infer the next step from transcript memory. After every
   recorded result, it asks the controller again.
-- `await_human_gate` and `emit_escalation_packet` stop scheduling and surface
-  the gate or packet. An unrecognized directive or a controller error also
-  stops the loop and surfaces the error; the prose never guesses.
+- `await_human_gate` stops scheduling and surfaces the gate's packet. An
+  unrecognized directive or a controller error also stops the loop and
+  surfaces the error; the prose never guesses.
 
 `run next` is also the single mutation point for derived state. Before
 returning a directive it clears expired leases and applies every transition
-that has no recording operation. Task transitions: `reviewable -> in_review`
-when verification dispatches, `in_review -> needs_repair` when the recorded
-review leaves a linked requirement failed or a blocking finding unresolved
-with repair rounds remaining, `needs_repair -> building` when the repair round
-starts, and `in_review -> integrated` — including the task's snapshot commit —
-once every linked requirement is resolved (see "Requirement Resolution
-Rules"). The failure and success halves of review aggregation are the same
-judgment, so both derive here: `requirement set-status` records requirement
-statuses and never moves the task. Run transitions: `created -> implementing` on the first directive,
+that has no recording operation. Task transitions: `in_review -> building`
+when the recorded review leaves a linked requirement failed or a blocking
+finding unresolved with repair rounds remaining (the round counter
+increments), and `in_review -> integrated` — including the task's snapshot
+commit — once every linked requirement is resolved (see "Requirement
+Resolution Rules"). The failure and success halves of review aggregation are
+the same judgment, so both derive here: `requirement set-status` records
+requirement statuses and never moves the task. `task record-handoff` records
+the task straight to `in_review`; there is no separate reviewable or
+needs_repair holding state. Run transitions:
 `implementing -> verifying` when every task is `integrated` or `deferred`,
 `verifying -> verified` when every requirement is resolved and any
 critical-tier confirmation gate is answered, and `-> escalated` — including
-the labeled escalation snapshot — on cap exhaustion, blocked/unproven
-requirements, resource caps, or out-of-band commits (see "Run Branch and
-Snapshot Policy"). Idempotency is over settled state: once derived transitions
-apply, repeated calls return the same directive without re-applying them.
+the labeled escalation snapshot — on cap exhaustion, a blocked requirement,
+resource caps, or out-of-band commits (see "Run Branch and Snapshot Policy").
+`run start` opens the run directly in `implementing`. Idempotency is over
+settled state: once derived transitions apply, repeated calls return the same
+directive without re-applying them.
 
 Derived transitions are reported, not silent: every `run next` response
 carries an `applied_transitions` array listing exactly the transitions that
@@ -580,7 +631,10 @@ operations are additive, not state-mutating, so they do not take the lease:
   mutate caches, lockfiles, or generated files, so it is not free to
   interleave. It takes the workspace command lock — separate from the run
   lease, so verifier personas can collect without holding the lease, but only
-  one command runs at a time.
+  one command runs at a time. `--requirements` collects every `kind: command`
+  request under the named requirements; optional `--requests R-AUTH-001.E1,…`
+  narrows collection to specific evidence requests, so a persona can re-prove
+  one artifact without re-collecting a whole requirement's evidence.
 - Aggregation stays with the lease holder: after all reviewer personas report,
   the orchestrating session (holding the lease) records the resulting task
   status transition.
@@ -601,14 +655,16 @@ configuration, not prose convention.
 
 Personas review at both loop scopes:
 
-- **Task review rounds.** Every `dispatch_task_verifier` directive names the
-  roster; the orchestrating skill fans the personas out over the task diff and
-  linked requirements. Rounds are capped by `caps.task_repair_rounds`.
-- **Run-gate review rounds.** `run_final_validation` fans the same roster out
-  over the integrated whole-run diff, alongside the drift and
-  requirement-coverage review. Rounds are capped by `caps.run_review_rounds`.
+- **Task review rounds.** Every `dispatch_verifier` directive with
+  `round.scope: task` names the roster; the orchestrating skill fans the
+  personas out over the task diff and linked requirements. Rounds are capped
+  by `caps.task_repair_rounds`.
+- **Run-gate review rounds.** `dispatch_verifier` with `round.scope: run` fans
+  the same roster out over the integrated whole-run diff, alongside the drift
+  and requirement-coverage review. Rounds are capped by
+  `caps.run_review_rounds`.
 
-Default roster (decided 2026-07-03):
+Default roster:
 
 | Persona | Charter |
 | --- | --- |
@@ -617,8 +673,8 @@ Default roster (decided 2026-07-03):
 | `security` | Injection, authn/authz, secret handling, unsafe defaults, dependency risk. |
 | `style` | Documented conventions (`CLAUDE.md`/`AGENTS.md`, lint configs), idioms and known gotchas for the languages and frameworks in use, and comment quality — including process-provenance leakage (see "Provenance Hygiene"). |
 
-"Correctness" is deliberately split into `spec-fidelity` and `defects`
-(decision record 2026-07-03): the two fail independently — a change can
+"Correctness" is deliberately split into `spec-fidelity` and `defects`:
+the two fail independently — a change can
 satisfy every requirement and still break on an untested path — and a single
 combined prompt anchors on the ledger and under-hunts latent bugs. The split
 also lets the two lenses use different models. Further default splits
@@ -649,39 +705,28 @@ be heavier than the change; `standard` and above run the full configured
 roster. An optional persona can carry a `min_risk` tier so it joins only
 `high` or `critical` reviews.
 
-### Repeat Review Rounds and Token Scoping
+### Repeat Review Rounds
 
 Every review round runs the full persona roster. Skipping personas that
-raised no blocking findings in the prior round was considered and rejected
-(decision record 2026-07-03): a repair diff is new code, and any scheme where
+raised no blocking findings in the prior round was considered and rejected:
+a repair diff is new code, and any scheme where
 some persona never sees some shipped line trades correctness for tokens in
 the wrong direction — a security regression introduced while fixing a style
 finding must not survive to a later round. Output correctness outranks token
 savings.
 
-Token savings come from scoping what a re-review reads, not from skipping
-reviewers:
+Findings and claims carry forward. Each round's verification packet includes
+prior rounds' findings, the verifier's rejection reasons, and the repair
+handoff's resolution claims, so no persona rediscovers a known failure. Each
+round reviews the full task diff against `baseline_commit`, and persona prose
+instructs each reviewer to confirm its own prior blocking findings are
+actually resolved.
 
-- **Round deltas are deterministic.** At every `task record-handoff` the
-  controller records a round snapshot — a dangling commit object created from
-  the worktree without moving HEAD or touching the index — on the handoff.
-  The round-N+1 verification packet carries `delta`, the diff between the
-  previous reviewed round's snapshot and the current worktree, alongside the
-  full task diff reference against `baseline_commit`. On a task's first
-  review round there is no prior reviewed snapshot and `delta` is null.
-- **Findings and claims carry forward.** The packet includes prior rounds'
-  findings, the verifier's rejection reasons, and the repair handoff's
-  resolution claims, so no persona rediscovers a known failure.
-- **Personas re-review the delta, not the world.** Persona prose instructs
-  each reviewer to verify that its own prior blocking findings are actually
-  resolved, review the delta fresh, and not re-litigate unchanged code it
-  already passed. The full diff stays available to pull in — the delta
-  focuses attention, it does not truncate access — because a repair can
-  interact with unchanged code across files.
-
-Run-gate review rounds get their deltas for free: tasks integrate as real
-snapshot commits and run-level repair tasks (`RT<n>`) record handoffs the
-same way, so the round delta is a diff between recorded snapshots.
+Scoping a re-review to only the changed slice of a repair diff — a token
+optimization — is deferred to Later Capabilities. It is unproven against real
+reviewer cost, full-diff re-review is correct and simple, and the roster cost
+measured during dogfooding decides whether the optimization earns its
+machinery (round snapshots, per-round deltas). See "Later Capabilities."
 
 ### Resume and Crash Recovery
 
@@ -693,9 +738,9 @@ a killed session, context compaction, or a rate-limit abort.
 Three mechanisms make that answer deterministic:
 
 - **Task statuses and the round counter.** The runtime task graph records
-  `queued | building | reviewable | in_review | needs_repair | integrated |
-  deferred` per task plus the controller-owned round counter, so the controller
-  knows exactly which phase of which round was interrupted (see "Task").
+  `queued | building | in_review | integrated | deferred` per task plus the
+  controller-owned round counter, so the controller knows exactly which phase
+  of which round was interrupted (see "Task").
 - **Git snapshots at task boundaries.** Every task records `baseline_commit`
   at claim time, and every `integrated` task ends in a snapshot commit recorded
   on the task. Uncommitted workspace changes therefore belong to the current
@@ -706,7 +751,7 @@ Three mechanisms make that answer deterministic:
   dead session's lease never blocks the successor.
 
 The flow after any interruption is always the same: start a fresh harness
-session, invoke `/speccy-implement <spec>`, and the skill calls
+session, invoke `/speccy-implement` (or add a selector when needed), and the skill calls
 `run next`, which replays nothing and re-derives the directive
 from stored state. Mid-directive interruptions are safe because `run next`
 is idempotent: a directive whose result was never recorded is simply returned
@@ -723,8 +768,8 @@ before dispatching — the same pattern as the approval echo — and
 "CLI/Admin Flow"). A human who edited during the gap stashes or commits
 first: a stash removes the edits from attribution, and a commit becomes an
 out-of-band commit that parks the run at the existing escalated policy gate.
-A blocking adopt/stash/cancel gate on every dirty resume was rejected
-(2026-07-03, second external UX review): the condition it guards against is
+A blocking adopt/stash/cancel gate on every dirty resume was rejected:
+the condition it guards against is
 undetectable, so it would tax the overwhelmingly common case — the worker's
 own partial diff — as a permanent false positive.
 
@@ -762,8 +807,7 @@ Product file contents — source, comments, tests, docs, config, migrations —
 must never reference Speccy terminology or identifiers: no `speccy`, no
 `SPEC-...` references, no requirement/run/task IDs, no ledger or round
 vocabulary. The end state of the code must read as if it were implemented by
-hand or through the harness's ordinary plan-and-implement flow (decision
-record 2026-07-03).
+hand or through the harness's ordinary plan-and-implement flow.
 
 The rule scopes to file contents. Deliberate workflow artifacts are exempt:
 the rendered harness packs, `.speccy/`, and anything the user explicitly
@@ -778,10 +822,16 @@ Enforcement is three cheap layers, none of them a dedicated agent:
 
 1. **Deterministic provenance scan.** The controller scans the diff — each
    task diff at verification, the integrated diff at final validation —
-   against a deny-list: `speccy` (case-insensitive), spec references, the
-   run's requirement/task/run IDs, and any extra terms configured under
-   `provenance.extra_terms` in `project.yaml`. Exempt paths are excluded. A
-   hit records a blocking finding and feeds the normal repair round. String
+   against a deny-list: `speccy` (case-insensitive), spec references
+   (`SPEC-YYYYMMDD-XXXX`), the run's ULID-based run and spec IDs, its
+   requirement IDs (strongly delimited forms like `R-AUTH-003`), and any
+   extra terms configured under `provenance.extra_terms` in `project.yaml`.
+   Bare task IDs (`T1`, `RT2`) are deliberately excluded: they are too short
+   and too common in ordinary code — type parameters, test fixtures, CSS —
+   to scan without false positives, and task-ID leakage reads as process
+   language, which the `style` persona's semantic backstop covers. Exempt
+   paths are excluded.
+   A hit records a blocking finding and feeds the normal repair round. String
    matching is exactly deterministic-core work: zero tokens, no judgment
    calls, runs every round.
 2. **Prevention in role prose.** Worker and repair prompts carry a standing
@@ -813,7 +863,7 @@ ad hoc string replacement. The renderer must support partials/includes,
 conditionals, loops, strict missing-variable errors, deterministic output, and
 safe escaping for markdown/YAML frontmatter and TOML where needed (the Codex
 target renders agent definitions as TOML). The implementation
-language is Rust (decided 2026-07-02), and the intended engine is `minijinja`
+language is Rust, and the intended engine is `minijinja`
 (Jinja2 syntax): includes/macros cover partials, it supports strict
 undefined-variable errors, and markdown/YAML/TOML escaping can be handled
 through custom filters. The choice stands unless implementation proves it cannot meet
@@ -952,6 +1002,10 @@ caps:
 evidence:
   command_timeout_seconds: 600
   command_output_max_bytes: 1048576
+  command_policy:
+    allow: []                       # optional whole-command glob patterns;
+                                    # empty = any approved command may run.
+                                    # A drift guardrail, not a sandbox.
 review:
   personas:                         # roster; render input for reviewer subagents
     - name: spec-fidelity
@@ -1006,7 +1060,7 @@ speccy ctl packet verification --run <id> --requirements R1,R2 --json
 speccy ctl packet review --run <id> --json
 speccy ctl packet escalation --run <id> --json
 
-speccy ctl evidence collect --run <id> --requirements R1,R2 --json
+speccy ctl evidence collect --run <id> --requirements R1,R2 [--requests R1.E1,R2.E1] --json
 speccy ctl evidence record --run <id> --input evidence.json --json
 speccy ctl finding record --run <id> --input finding.json --json
 speccy ctl requirement set-status --run <id> --lease <token> --input status.json --json
@@ -1019,7 +1073,7 @@ structured JSON; the human-formatted packets (`packet review`,
 `data`. Every `--input` flag accepts a file path or `-` to read the payload
 from stdin. Payload shapes are specified in `SCHEMAS.md`.
 
-Naming convention (decided 2026-07-02): operations are noun-first — `spec`, `run`, `task`, `packet`, `evidence`, `finding`, `requirement`, mirroring the nouns in `TERMINOLOGY.md` — with a small verb vocabulary: `start`/`status` for lifecycle, `next` for the loop directive, `claim` and `collect` for actions the controller performs, `record-*` for append-style writes, `patch-*` for partial edits, and `set-status` for status transitions. `speccy ctl <noun> --help` lists that noun's operations.
+Naming convention: operations are noun-first — `spec`, `run`, `task`, `packet`, `evidence`, `finding`, `requirement`, mirroring the nouns in `TERMINOLOGY.md` — with a small verb vocabulary: `start`/`status` for lifecycle, `next` for the loop directive, `claim` and `collect` for actions the controller performs, `record-*` for append-style writes, `patch-*` for partial edits, and `set-status` for status transitions. `speccy ctl <noun> --help` lists that noun's operations.
 
 These commands are implementation details for the installed skills/agents; routine use never requires typing them. They are still designed to be steppable by hand: a human debugging a run can walk `spec status` → `run status` → `run next` and read each directive as a sentence.
 
@@ -1049,7 +1103,7 @@ on transcript memory for the original ask.
 - Current spec draft state.
 - Workspace path, git state, dirty files, and selected file-tree/manifests.
 - Deterministically parsed project signals, such as package scripts, dependencies, language manifests, and configured harness packs.
-- Relevant prior spec, decision, and review summaries that are not cancelled, superseded, or archived.
+- Relevant prior spec, decision, and review summaries that are not cancelled, superseded, or archived, including their carry-forward decisions (see "Carry-Forward Decisions").
 - Policy constraints, risk guidance, and the applicable human gates.
 - A harness work order telling the planner what to inspect read-only.
 - The output contract for the candidate spec draft.
@@ -1083,6 +1137,32 @@ operations that would mutate the approved revision itself.
 The planner must draft from the current codebase first, then reconcile relevant prior specs and decisions. Prior specs are context, not truth. If current code contradicts a prior accepted spec, the planner should flag drift or staleness rather than silently carrying the old requirement forward.
 
 Relevant prior context should be candidate-scoped. The controller can retrieve candidates by status, tags, touched paths, requirement topics, and decision summaries; the harness classifies each as relevant, stale, obsolete, superseded, or ignored. The human checkpoint should summarize only the carried-forward constraints and notable drift, with links or commands to open the full prior spec when needed.
+
+### Carry-Forward Decisions
+
+A decision record may carry `carry_forward: true`, set at recording time when
+the decision constrains future work — an architecture choice, a durable
+security posture — rather than run mechanics. The skill sets the flag as part
+of the recording echo; the controller treats it as data and never judges it
+(shapes in `SCHEMAS.md`). The planning phase's prior-context reconcile pass
+verifies each carried-forward decision against the current codebase and flags
+contradictions on the spec card; the controller performs no staleness
+detection.
+
+In MVP, planning context comes from active-spec prior-context candidates: the
+planning packet surfaces carry-forward decisions from every non-cancelled,
+non-superseded, non-archived spec, and the planner reconciles them against the
+current codebase. Archiving a spec therefore removes its decisions from
+planning context.
+
+Surfacing carry-forward decisions from *archived* specs — a derived decision
+index (a projection over the whole store, with a rendered cap and overflow
+drill-down) so a constraint recorded long ago still reaches the planner after
+its spec leaves the active list — is deferred to Later Capabilities. It
+matters only once a workspace archives specs, which the single-spec MVP does
+not exercise. The `carry_forward` flag is recorded from day one, so the
+projection can be built without a data migration when multi-spec use proves it
+necessary. See "Later Capabilities."
 
 ### Inbound Harness Integration
 
@@ -1123,50 +1203,68 @@ For a Pi-based or internal harness, write a Speccy client inside that harness. T
 ## Spec Draft and Run State
 
 Spec drafting is separate from run execution. A brainstorm handoff or draft spec
-can exist before any run exists. `/speccy-plan` decomposes intent into a draft
-spec and acceptance ledger and presents the spec card. The human approves the
-card in prose, which the plan skill records through the controller, moving the
-spec revision to `approved`. `/speccy-implement <spec>` then runs against that
-approved revision: it exits early if the revision is not approved, otherwise it
-creates a run and starts implementation. Approval is persisted controller state,
-not chat state, so `/speccy-implement` can run in a fresh, cleared session.
+can exist before any run exists. `/speccy-plan` first route-checks the request;
+only the Speccy-spec route decomposes intent into a draft spec and acceptance
+ledger and presents the spec card. The human approves the card in prose, which
+the plan skill records through the controller, moving the spec revision to
+`approved`. `/speccy-implement` then runs against that approved revision,
+inferring it when unambiguous: it exits early if the revision is not approved,
+otherwise it creates a run and starts implementation. Approval is persisted
+controller state, not chat state, so `/speccy-implement` can run in a fresh,
+cleared session.
 
 Spec draft lifecycle:
 
 ```text
 brainstorm handoff (optional)
-  -> /speccy-plan: draft spec + acceptance ledger + spec card
-       -> revise
-       -> approved revision      prose approval recorded by /speccy-plan
-            -> /speccy-implement creates a run
-       -> cancelled
-       -> split/superseded
+  -> /speccy-plan route preflight
+       -> route away: direct edit / regular harness plan / split
+       -> Speccy spec
+            -> draft spec + acceptance ledger + spec card
+            -> revise
+            -> approved revision      prose approval recorded by /speccy-plan
+                 -> /speccy-implement creates a run
+            -> cancelled
+            -> split/superseded
 ```
+
+The run state is a single flat enum (canonical; TERMINOLOGY names it, this
+section owns it). `run start` opens the run in `implementing`; there is no
+separate `created` holding state.
+
+- `implementing`: the serial task loop is running.
+- `verifying`: final validation, drift review, and run-level repair.
+- `verified`: verification passed; awaiting the human's ship decision.
+- `submitted`: change proposed, awaiting review and merge.
+- `landed`: change merged, recorded by `speccy accept`.
+- `escalated`: autonomous progress stopped; needs a human decision.
+- `cancelled`: a human stopped the run.
 
 Run state machine:
 
 ```text
-created
-  -> implementing
-       -> implementing       next task (rounds tracked in task graph)
-       -> escalated          task repair cap exhausted or human/policy gate
-       -> verifying          all tasks integrated
-  -> verifying
-       -> verifying          run-repair rounds (tracked in ledger)
-       -> escalated          run repair cap exhausted or human/policy gate
-       -> verified           all requirements resolved
-  -> verified
-       -> submitted          /speccy-ship opens the PR
-       -> cancelled
-  -> submitted
-       -> landed             speccy accept records that the change merged
-       -> cancelled          PR closed unmerged, you stop it
-  -> escalated
-       -> implementing       setup provided or requirement waived, tasks remain
-       -> verifying          setup provided or requirement waived during final validation
-       -> cancelled          human stops it, or an approved spec amendment
-                             supersedes this run with a new run (decision record links them)
-  (any active state) -> cancelled
+implementing              run start opens the run here
+  -> implementing       next task (rounds tracked in task graph)
+  -> verifying          all tasks integrated
+  -> escalated          task repair cap exhausted or human/policy gate
+verifying
+  -> verifying          run-repair rounds (tracked in ledger)
+  -> verified           all requirements resolved
+  -> escalated          run repair cap exhausted or human/policy gate
+verified
+  -> submitted          /speccy-ship opens the PR
+  -> implementing       rework: human sends the work back with prose
+                        feedback (run record-decision, type rework)
+  -> cancelled
+submitted
+  -> landed             speccy accept records that the change merged
+  -> cancelled          PR closed unmerged, you stop it
+escalated
+  -> implementing       setup provided or requirement waived, tasks remain
+  -> verifying          setup provided or requirement waived during final validation
+  -> cancelled          human stops it, or an approved spec amendment
+                        supersedes this run with a new run (decision record links them)
+(any active state) -> cancelled
 ```
 
 Important rules:
@@ -1174,16 +1272,16 @@ Important rules:
 - No run before the approved spec has goal, scope, risk tier, and acceptance criteria.
 - No run starts on a dirty worktree: `run start` refuses uncommitted changes before any run state exists, so for the run's lifetime every dirty diff is attributable to the in-flight task.
 - The workspace must be a git repository or a subtree of one. Non-git directories are refused; resume and evidence baselines depend on git snapshots and `baseline_commit`.
-- No task reaches `integrated` until linked acceptance requirements are resolved for the selected risk tier or explicitly deferred by a recorded human/policy decision.
+- No task reaches `integrated` until linked acceptance requirements are resolved for the selected risk tier. A task set aside by a `defer` gate decision exits as `deferred` instead — never `integrated` — and the decision atomically waives its not-otherwise-covered requirements (see "Requirement Resolution Rules").
 - Tasks execute serially by default, and each task can repeat implement-review-repair rounds before the scheduler moves to the next task.
 - Higher-risk work increases the evidence requirements inside the same ledger.
 - A failed task reviewer creates a task-scoped repair round. A failed final validator creates a run-level repair task, a waiver request, or an escalated state.
 - A run-level repair task is created dynamically: the controller appends task `RT<n>` to the runtime task graph, linked to the failing requirement IDs, and it runs the same claim → dispatch → handoff → verify cycle. Run-level rounds are counted per run against `run_review_rounds`, independent of any task's counter.
-- Blocked or unproven task-linked requirements do not consume repair rounds: repair cannot manufacture missing environment or evidence, so the run moves straight to `escalated` as a human/policy gate.
+- Blocked task-linked requirements do not consume repair rounds: repair cannot manufacture missing environment or evidence, so the run moves straight to `escalated` as a human/policy gate.
 - Each repair loop is capped by policy, defaulting to 3 rounds. The task repair loop and the run-level repair loop each keep an independent count and an independent cap.
-- When a loop exhausts its cap and a linked requirement is still `failed` or `vacuous`, the run gives up, transitions to `escalated`, and emits an escalation packet. Blocked or unproven requirements that prevent verification also transition to `escalated`, but as a human/policy gate rather than a capability-escalation event. See "Capability Escalation and Give-Up Policy."
-- After verifying passes, the run enters `verified`: the work is done and awaiting the human's ship decision. `/speccy-ship` opens the PR and moves the run to `submitted`.
-- `submitted` advances to `landed` when the human runs `speccy accept` after the change merges. The spec then becomes `accepted` and can be archived. See "Acceptance."
+- When a loop exhausts its cap and a linked requirement is still `failed`, the run gives up, transitions to `escalated`, and emits an escalation packet. A blocked requirement that prevents verification also transitions to `escalated`, but as a human/policy gate rather than a capability-escalation event. See "Capability Escalation and Give-Up Policy."
+- After verifying passes, the run enters `verified`: the work is done and awaiting the human's ship decision. `/speccy-ship` opens the PR and moves the run to `submitted`. Minor implementation feedback at this gate is recorded as a `rework` decision (`run record-decision`, feedback prose required): the run returns to `implementing` and the controller appends a dynamic `RT<n>` task seeded with that feedback, counted against `run_review_rounds` like any run-level round, so send-backs are bounded by the same cap and re-verify through the normal cycle back to the same gate. Feedback that changes scope, requirements, or risk is a spec amendment instead — the definition of done changed (see "Review UX").
+- `submitted` advances to `landed` when the human runs `speccy accept` after the change merges. The spec then becomes `accepted`; archive later only when the accepted spec no longer describes the codebase. See "Acceptance."
 - Human waivers are recorded in the review packet.
 - The run state is a single flat enum. Progress within `implementing` and
   `verifying` is read from the task graph and acceptance ledger, not a second
@@ -1196,18 +1294,18 @@ Autonomous repair must terminate. Without a cap, a run can loop on an unsatisfia
 
 Not every escalation is a repair-cap failure. A missing credential, unavailable
 local environment, production-only behavior, or subjective requirement can also
-stop verification. Those cases keep the relevant requirement `blocked` or
-`unproven` and move the run to `escalated` as a human/policy gate rather than a
+stop verification. Those cases keep the relevant requirement `blocked` and move
+the run to `escalated` as a human/policy gate rather than a
 capability-escalation event.
 
 The counting model uses two nouns for two jobs:
 
 - **Task is the unit that is retried.** A repair round re-runs a task, because the implementer edits a task, not one requirement in isolation. The round counter lives on the task.
-- **Requirement is the unit that is judged.** A round fails when a linked requirement is `failed` or `vacuous` after the attempt. The give-up decision and the escalation packet are scoped to the requirement, not the task.
+- **Requirement is the unit that is judged.** A round fails when a linked requirement is `failed` after the attempt, including a `failed` on a vacuity finding. The give-up decision and the escalation packet are scoped to the requirement, not the task.
 
 The rule:
 
-> A task runs at most the policy-configured number of repair rounds. When the cap is exhausted and any linked requirement is still `failed` or `vacuous`, the run gives up, transitions to `escalated`, and emits an escalation packet naming those requirements.
+> A task runs at most the policy-configured number of repair rounds. When the cap is exhausted and any linked requirement is still `failed`, the run gives up, transitions to `escalated`, and emits an escalation packet naming those requirements.
 
 The same rule applies to the run-level repair loop inside `verifying`. Final validation can fail a requirement that every task passed in isolation. The run-level loop keeps its own independent count, its own policy-configured cap, and the same requirement-scoped give-up.
 
@@ -1240,7 +1338,7 @@ Task T3 is linked to R5, R6, R7.
 
 Round 1: R5 passed, R6 failed, R7 passed  -> repair
 Round 2: R6 failed                         -> repair
-Round 3: R6 vacuous                         -> cap hit
+Round 3: R6 failed (vacuity finding)       -> cap hit
 
 Run -> escalated
 Escalation packet scoped to R6.
@@ -1249,7 +1347,7 @@ Tasks after T3 are not scheduled.
 
 #### Escalation Packet
 
-The escalation packet is a distinct artifact from the run's review packet. It is scoped to the requirement that could not be satisfied or proven, not the whole run. It is assembled deterministically by `packet escalation` from recorded rounds, findings, and decisions. Exhausting the repair cap is Speccy's signal that the approach or the requirement itself is wrong, not that one more implementation attempt is needed. Blocked or unproven requirements are a signal that the environment, policy, or evidence strategy needs a human decision. The natural resolution is usually a spec amendment, environment fix, waiver, or review-passed judgment with residual risk, not another blind repair.
+The escalation packet is a distinct artifact from the run's review packet. It is scoped to the requirement that could not be satisfied or proven, not the whole run. It is assembled deterministically by `packet escalation` from recorded rounds, findings, and decisions. Exhausting the repair cap is Speccy's signal that the approach or the requirement itself is wrong, not that one more implementation attempt is needed. A blocked requirement is a signal that the environment, policy, or evidence strategy needs a human decision. The natural resolution is usually a spec amendment, environment fix, waiver, or review-passed judgment with residual risk, not another blind repair.
 
 The user-facing copy should frame escalation around the stuck requirement, not around an agent failure:
 
@@ -1268,9 +1366,9 @@ It includes:
 - What partial work is already applied to the workspace.
 - Suggested amendments, when the planner has any.
 
-At the escalation gate the human responds in prose, and the harness records the right decision through `run record-decision` rather than offering a menu of process verbs. Gate decisions that resolve requirements — waivers, defers — set the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
+At the escalation gate the human responds in prose, and the harness records the right decision through the operation `gate_answers` names for that answer rather than offering a menu of process verbs. Gate decisions that resolve requirements — waivers, defers — set the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
 
-- **Amend the spec.** The usual outcome. Creates a new approved spec revision and a new run, with a decision record explaining why the definition of done changed. The escalated run is closed as `cancelled` with a decision record naming the superseding revision and run. Any guidance the human gives is folded into the amendment.
+- **Amend the spec.** The usual outcome. Creates a new approved spec revision and a new run, with a decision record explaining why the definition of done changed. The escalated run is closed as `cancelled` atomically inside the superseding approval, with a decision record naming the superseding revision and run (see "Amendment at the Escalation Gate"). Any guidance the human gives is folded into the amendment.
 - **Provide missing setup or evidence.** Keeps the spec revision, records the gate decision, and resumes the same run in `implementing` or `verifying` when the environment is ready.
 - **Waive the requirement.** Accept the residual risk; the decision sets the requirement to `waived` atomically, and the same run resumes from where it stopped.
 - **Cancel the run.**
@@ -1282,9 +1380,11 @@ The escalation gate is a conversation, not a form. The escalation packet ends wi
 The amendment path reuses the planning machinery instead of adding a new surface:
 
 1. The human describes the change in prose, such as "expiry should be 30 minutes, drop R6" or "verify this via the API instead of the browser."
-2. The harness records the gate decision, then runs the same draft-revision loop `/speccy-plan` uses: patch the spec draft, lint it, and present an amended spec card that shows the diff against the prior approved revision and names the escalation that motivated it.
-3. The human approves the amended card in prose; the harness records the approval through the controller, producing a new approved spec revision.
-4. The controller closes the escalated run as `cancelled` with a decision record linking the superseding revision, and the checkpoint copy tells the user to run `/speccy-implement <spec>` (fresh session recommended).
+2. The harness runs the same draft-revision loop `/speccy-plan` uses: patch the spec draft, lint it, and present an amended spec card that shows the diff against the prior approved revision and names the escalation that motivated it. Nothing is recorded yet — amend is a deferred gate answer, and the run stays parked at its gate while the draft loop runs.
+3. The human approves the amended card in prose; the harness records the approval through `spec record-decision` (type `approve`, with `supersedes.run_id` naming the parked run), producing a new approved spec revision.
+4. Inside that same operation the controller atomically closes the parked run as `cancelled`, writing its run-scoped decision record linking the superseding revision and run — the same atomicity rule as gate waivers. The checkpoint copy tells the user to run `/speccy-implement` (fresh session recommended, selector only when ambiguous).
+
+An abandoned amendment records nothing: if the amended card is never approved, the run is still parked at its gate and every other gate answer remains available. This is why `gate_answers` names `spec record-decision` as the amend recorder — `spec patch-draft` is only the working step and records no decision.
 
 At escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, so the parked worktree is clean and the superseding run's clean-worktree rule holds. The new run starts on the same branch, seeded with the prior run's summary and the escalation snapshot reference, so it reconciles rather than redoes. Rolling back to the run baseline remains the human's explicit fallback at the gate.
 
@@ -1327,22 +1427,28 @@ Commands:
 
 ```bash
 speccy accept [<selector>]                       # record that the change landed
-speccy accept --pr <url> --note "<text>"         # optional provenance
-speccy archive [<selector>]                      # mark an accepted spec archived
+speccy accept --pr <url> --note "<text>"         # recovery/manual association
+speccy archive [<selector>]                      # hide stale historical context from active views
 ```
 
-- `speccy accept` is a human assertion. Speccy does not verify the merge in MVP; the human is telling Speccy what already happened.
+- `speccy accept` is a human assertion. Speccy does not verify the merge in MVP; the human is telling Speccy what already happened. The command uses the `change_ref` recorded at ship time, so the routine path never repeats `--pr`.
+- Before recording a submitted run as landed, `speccy accept` displays the recorded `change_ref` (PR URL, branch/patch, head SHA, and base when present) so the human can catch a wrong selector. If the run is already `landed`, it prints "already recorded" and exits successfully. If more than one submitted run matches, selector resolution asks the human to disambiguate instead of guessing.
+- The assertion is order-independent with respect to teammates and remote review. A teammate may merge the PR, close the local branch, squash the commits, or advance the base branch before the original author returns; `speccy accept` still closes out the submitted run because the recorded `change_ref` identifies what was proposed and the human assertion identifies that it landed. `--pr` and `--note` exist for recovery, local-only changes, or manual association when no useful `change_ref` was recorded.
+- Because the step is manual, it must be impossible to lose: `/speccy-ship` ends by printing the shortest unambiguous command (`speccy accept` in the common single-submitted-run case, or `speccy accept <selector>` when needed), the Awaiting-merge status card carries it as the next action (see "CLI/Admin Flow"), and the default PR metadata block includes a full-reference `accept_with` command for durable PR context (see "Lightweight Team Sharing"), so the reminder survives in whichever surface the human returns to.
 - A PR closed without merging is a flag on `submitted`, not a separate state. The human starts a new run or cancels.
 
 Automatic merge detection — git-native ancestry checks, squash-merge heuristics, or a configurable host probe — is deliberately cut from MVP. It is an external-integration convenience outside core Speccy's goals, and manual acceptance is enough to dogfood the loop. See "Later Capabilities."
 
-When a run reaches `landed`, `speccy status` and `speccy list` surface the
-accepted spec once and offer to archive it. Archiving is a spec visibility
-action; the landed run remains `landed` in run history.
+When a run reaches `landed`, the spec becomes `accepted` and leaves default
+`speccy status`/`speccy list` output; show it with `speccy list --accepted`,
+`--status accepted`, or `--all`. Archiving is a later list-visibility action
+for accepted specs that no longer describe the codebase: the landed run remains
+`landed` in run history, and the spec's `carry_forward` decisions stay recorded
+for a future decision index (see "Carry-Forward Decisions").
 
 ## Storage Model
 
-Decision (2026-07-01, closes former Open Question 1): runtime state lives in
+Runtime state lives in
 `~/.speccy/` only. Repo-local `.speccy/` holds exactly `project.yaml` and
 `pack-lock.yaml`; all policy, role, and evidence prose is rendered into the
 harness packs, and exports are opt-in snapshots written to explicit
@@ -1388,7 +1494,7 @@ Runtime storage is external:
               review-packet.md    # generated snapshot
 ```
 
-The state model (JSONL-first, decided 2026-07-02):
+The state model (JSONL-first):
 
 - Portable canonical log: append-only JSONL events, the source of truth from day one; state is rebuilt by replay.
 - Runtime query store: an optional SQLite projection rebuilt from the JSONL log, deferred until queries or scale demand it. The walking skeleton uses an in-memory projection.
@@ -1456,6 +1562,7 @@ speccy:
   spec_ref: SPEC-20260630-A7F4
   spec_title: Passwordless login
   run_id: run_01j1bxgvk3tf4qs6mv9zpxwe8d
+  accept_with: speccy accept SPEC-20260630-A7F4
   acceptance_hash: sha256:...
   review_packet_hash: sha256:...
   result_summary_hash: sha256:...
@@ -1497,22 +1604,27 @@ Operational run state, transcripts, raw evidence, screenshots, command logs, and
 
 ### Planning Phase
 
-Planning is the `/speccy-plan` skill. It runs after an optional `/speccy-brainstorm` or directly from intent.
+Planning is the `/speccy-plan` skill. It runs after an optional `/speccy-brainstorm` or directly from intent. It owns route selection as well as Speccy drafting: invoking `/speccy-plan` does not mean the user has already chosen the full Speccy workflow.
 
-1. Intake prompt asks clarifying questions only when necessary.
-2. The controller builds a deterministic planning packet with current workspace state, policy, output contract, and relevant prior context candidates.
-3. The harness planner inspects the current codebase read-only and includes intake observations in the draft submission when they are useful for resumability or later review.
-4. The planner reconciles relevant prior specs and decisions against the current codebase, carrying forward only constraints that still appear valid and flagging stale, obsolete, contradicted, or superseded context.
-5. The planner classifies task risk and creates a complete candidate spec draft with goal, non-goals, scope, assumptions, acceptance requirements, expected evidence, and open questions.
-6. Speccy structurally lints the draft. The harness repairs missing or invalid sections through focused draft patches rather than section-by-section append commands.
-7. Human approval is requested through a compact spec card: goal, scope, non-goals, plan summary, key requirements, prior context carried forward, open questions, and main risks. The full spec and ledger are available on request.
-8. The planner creates only as much design/task detail as the request needs.
-9. Each acceptance requirement gets at least one evidence request or an explicit
-   `unproven` or `waived` status. Manual human judgment is recorded as evidence
-   or as a waiver/review-passed decision, not as its own requirement status.
-10. Higher-risk work stays in the same ledger but requires stronger evidence, such as negative cases, positive cases, pre-fix failure, fresh-context review, or human approval.
-11. Fresh-context adversarial review is required when new tests or review-only evidence carry an important acceptance decision.
-12. The human approves the spec card in prose for every spec; `/speccy-plan` records the approval through the controller, moving the revision to `approved`. `/speccy-implement` exits early until that approval exists.
+1. Intake asks clarifying questions only when necessary.
+2. The skill performs a read-only route preflight using the scope-rating rules below: direct edit, regular harness plan, Speccy spec, or split into multiple specs.
+3. If the recommended route is `direct_edit`, `harness_plan`, or `split_specs`, the skill returns a compact route card with the exact next action and creates no spec, task graph, acceptance ledger, or run. The user can still explicitly reply "use Speccy anyway" to override.
+4. Only when the preflight recommends `speccy_spec` — or the user explicitly overrides — does `/speccy-plan` create Speccy spec state.
+5. The controller builds a deterministic planning packet with current workspace state, policy, output contract, and relevant prior context candidates.
+6. The harness planner inspects the current codebase read-only and includes intake observations in the draft submission when they are useful for resumability or later review.
+7. The planner reconciles relevant prior specs and decisions against the current codebase, carrying forward only constraints that still appear valid and flagging stale, obsolete, contradicted, or superseded context.
+8. The planner classifies task risk and creates a complete candidate spec draft with goal, non-goals, scope, assumptions, acceptance requirements, expected evidence, and open questions.
+9. Speccy structurally lints the draft. The harness repairs missing or invalid sections through focused draft patches rather than section-by-section append commands.
+10. Human approval is requested through a compact spec card: goal, scope, non-goals, plan summary, key requirements, prior context carried forward, open questions, and main risks. The full spec and ledger are available on request.
+11. The planner creates only as much design/task detail as the request needs.
+12. Each acceptance requirement gets at least one evidence request; structural
+   lint flags any requirement without one and approval is refused while the
+   draft is lint-dirty. `blocked` and `waived` are runtime outcomes, never
+   planned statuses. Manual human judgment is recorded as evidence or as a
+   waiver/review-passed decision, not as its own requirement status.
+13. Higher-risk work stays in the same ledger but requires stronger evidence, such as negative cases, positive cases, pre-fix failure, fresh-context review, or human approval.
+14. Fresh-context adversarial review is required when new tests or review-only evidence carry an important acceptance decision.
+15. The human approves the spec card in prose for every spec; `/speccy-plan` records the approval through the controller, moving the revision to `approved`. `/speccy-implement` exits early until that approval exists.
 
 ### Implementation Phase
 
@@ -1526,8 +1638,8 @@ Implementation is a serial task execution loop. Each task gets its own implement
 6. The task verifier collects evidence for linked requirements, using Speccy evidence tools when useful.
 7. The verifier handles semantic review and evidence adequacy review at the depth required by the risk tier.
 8. Acceptance statuses update from collected evidence plus structured verifier findings.
-9. Failed, vacuous, or unproven task-linked items create task-scoped repair rounds when the tier requires repair instead of waiver or escalation.
-10. The scheduler advances only after the task is `integrated` or explicitly deferred by a recorded human/policy decision.
+9. Failed task-linked items create task-scoped repair rounds up to the tier's cap. Blocked items never enter repair — rounds cannot manufacture missing environment or evidence — and escalate directly as a human/policy gate.
+10. The scheduler advances only after the task is `integrated`, or exits `deferred` by a recorded `defer` gate decision.
 
 ### Validation Phase
 
@@ -1535,7 +1647,7 @@ Final validation is a run-level evidence and drift review after task execution. 
 
 1. Final validation fans out the reviewer persona roster over the integrated whole-run diff (see "Reviewer Personas"); the final verifier reads the acceptance ledger, task handoffs, validator findings, and integrated diff.
 2. Verifier gathers baseline integration evidence: format, lint, typecheck, targeted project commands, relevant existing tests, or browser/API checks.
-3. Verifier checks requirement coverage across all tasks and identifies requirements that remain failed, vacuous, blocked, unproven, waived, or only review-passed.
+3. Verifier checks requirement coverage across all tasks and identifies requirements that remain failed, blocked, waived, or only review-passed.
 4. Verifier performs drift review: compare approved spec/plan/task scopes against the final diff, handoffs, and decisions.
 5. Verifier reviews whether the evidence set actually supports the spec at the selected risk depth.
 6. The controller runs the deterministic provenance scan over the integrated diff; hits record blocking findings (see "Provenance Hygiene").
@@ -1543,7 +1655,7 @@ Final validation is a run-level evidence and drift review after task execution. 
 8. Failed integration checks, cross-task regressions, drift, or provenance hits create run-level repair tasks, waiver requests, scope-change decisions, or escalated states.
 9. Human final review happens when policy requires it.
 
-Acceptance status uses the eight canonical requirement statuses defined in `TERMINOLOGY.md` ("Requirement Status"). `pending` marks an item whose evidence has not been collected yet; validation resolves each remaining item to `passed`, `review_passed`, `failed`, `vacuous`, `blocked`, `unproven`, or `waived`.
+Acceptance status uses the six canonical requirement statuses defined in "Requirement Resolution Rules". `pending` marks an item whose evidence has not been collected yet; validation resolves each remaining item to `passed`, `review_passed`, `failed`, `blocked`, or `waived`.
 
 ### Parallelism Policy
 
@@ -1601,15 +1713,17 @@ Target values:
 - `claude`: repo-local Claude pack (`.claude/skills/` + `.claude/agents/`).
 - `all`: all supported harness packs.
 
-There is no generic `agents` target. The harness reality check (2026-07-03)
-found no cross-harness convention for role/agent definition files:
+There is no generic `agents` target: no cross-harness convention exists for
+role/agent definition files (verified against harness docs, 2026-07-03).
 `.agents/` is standardized territory for Agent Skills only (agentskills.io;
 read by Codex, Amp, and OpenHands). A core-fields-only generic skills pack
 plus a root `AGENTS.md` pointer is a later capability.
 
 Install should be idempotent. A plain `speccy install` may create missing packs, repair missing managed files, update lock metadata, and report outdated packs. It must not apply upstream changes to existing managed prose unless `--update` is passed.
 
-`--dry-run` composes with any install invocation, not just `--update`: it prints the exact creations, repairs, and `.gitignore` edits the command would make — the same created/updated listing a real install prints — without writing anything. Install touches a dozen-plus repo files on first run, so the preview is how a user inspects the footprint before committing to it.
+Install touches a dozen-plus repo files on first run, so an install that would write anything previews first: it prints the exact creations, repairs, and `.gitignore` edits — grouped by target when more than one harness is detected, naming `--target codex|claude` as the way to narrow — then asks to proceed before writing. `--yes` skips the prompt; in noninteractive mode, writing requires `--yes`, mirroring the `--update` policy below. An install with nothing to do prints its status and never prompts. (`--dry-run` alone only helps users who already know to ask.)
+
+`--dry-run` composes with any install invocation, not just `--update`: it prints the same would-write listing and stops, for scripts and users who want the preview without the prompt.
 
 Update behavior:
 
@@ -1668,7 +1782,7 @@ If a request is too small, the harness skill should recommend direct agent work.
 
 ### Brainstorm and Route Flow
 
-`/speccy-brainstorm` is the optional exploration skill. It is not required — a user who already knows the scope can invoke `/speccy-plan` directly — but it is encouraged when scope or route is uncertain, and it activates by slash command or natural language. It stays exploratory and read-only while it inspects the codebase, sketches options, lists open questions, identifies possible splits, and produces a brainstorm handoff. It does not draft a spec. The handoff is not a spec, not an approved plan, and not an acceptance ledger. By default it is ephemeral chat context; Speccy persists it only if `/speccy-plan` promotes it into a spec or the user explicitly exports it.
+`/speccy-brainstorm` is the optional exploration skill. It is not required — a user can invoke `/speccy-plan` directly — but it is encouraged when scope or route is uncertain, and it activates by slash command or natural language. It stays exploratory and read-only while it inspects the codebase, sketches options, lists open questions, identifies possible splits, and produces a brainstorm handoff. It does not draft a spec. The handoff is not a spec, not an approved plan, and not an acceptance ledger. By default it is ephemeral chat context; Speccy persists it only if `/speccy-plan` promotes it into a spec or the user explicitly exports it.
 
 ```text
 /speccy-brainstorm "add passwordless login"
@@ -1682,10 +1796,10 @@ Where it can land:
 
 - **Direct agent edit** - for small, obvious work where Speccy overhead is larger than the risk.
 - **Regular harness plan** - for medium work that benefits from clarification and a plan artifact, but does not need a Speccy acceptance ledger, fresh validators, or autonomous repair loops. This uses the harness's own plan mode, not `/speccy-plan`.
-- **Plan a Speccy spec** - for larger, riskier, multi-task, user-visible, or evidence-sensitive work. Invoking `/speccy-plan` creates the draft spec and acceptance ledger, then stops at the spec card.
+- **Plan a Speccy spec** - for larger, riskier, multi-task, user-visible, or evidence-sensitive work. `/speccy-plan` creates the draft spec and acceptance ledger only after its route preflight recommends a Speccy spec, or after the user explicitly overrides a route-away recommendation.
 - **Split into multiple specs** - when the request is too broad, propose an initiative with multiple specs.
 
-The brainstorm handoff should show one recommended route, with alternatives secondary. It should also include a scope rating so the user understands why Speccy is recommending direct work, a regular plan, one spec, or multiple specs. Example:
+Both `/speccy-brainstorm` and `/speccy-plan` use the same route vocabulary. The difference is commitment: brainstorm always returns an ephemeral handoff; `/speccy-plan` first returns a route-away card when the request is too small, too broad, or better handled by normal harness planning, and only proceeds to controller-backed spec drafting on the `speccy_spec` route or an explicit override. A route-away card should show one recommended route, with alternatives secondary, plus a scope rating so the user understands why Speccy is recommending direct work, a regular plan, one spec, or multiple specs. Example:
 
 ```text
 Scope: medium
@@ -1697,27 +1811,18 @@ Next action: Continue from the Speccy brainstorm handoff above in the active har
 Alternatives: direct edit, plan a Speccy spec (/speccy-plan), split into multiple specs
 ```
 
-Each route recommendation should include an exact next action phrase or command. Route selection can stay conversational inside the harness; Speccy should not add per-route commands such as `/speccy-promote` unless a harness cannot support the interaction cleanly.
+Each route recommendation should include an exact next action phrase or command. Route selection can stay conversational inside the harness; Speccy should not add per-route commands such as `/speccy-promote` unless a harness cannot support the interaction cleanly. When `/speccy-plan` routes away, the response creates no controller state and ends there unless the user explicitly says to use Speccy anyway.
 
 #### Scope Rating
 
-The brainstorm skill should rate the request before recommending a route:
-
-```yaml
-scope_rating:
-  size: tiny | small | medium | large | initiative
-  recommended_route: direct_edit | harness_plan | speccy_spec | split_specs
-  confidence: low | medium | high
-  factors:
-    evidence_ability: low | medium | high   # first question: can we articulate how this work will be validated?
-    touched_areas: []
-    estimated_tasks: 1
-    risk_domains: []
-    unknowns: []
-    evidence_need: low | medium | high
-    autonomy_value: low | medium | high
-    split_candidates: []
-```
+The brainstorm skill and `/speccy-plan` preflight rate the request before
+recommending a route. The rating is prose guidance the skill reasons through,
+not a structured artifact the controller stores or validates: a size
+(`tiny | small | medium | large | initiative`), a recommended route
+(`direct_edit | harness_plan | speccy_spec | split_specs`), and a short reason.
+Whether the work can be evidenced is always the first question the skill asks,
+and low evidence-ability is what most often routes large work away from
+`speccy_spec`.
 
 "Can this work be evidenced?" is the first routing question, per the Factory
 diagnostic: when nobody can articulate how the result will be validated, an
@@ -1743,7 +1848,7 @@ The scope rating is advisory, not identity. The user can override it, and the ha
 
 #### Regular Planning Handoff
 
-When the recommended route is regular harness planning, Speccy should not create a spec, task graph, acceptance ledger, or run. This route uses the harness's own plan mode, not `/speccy-plan`. It should return an ephemeral handoff that the user can feed into the active harness's normal planning mode.
+When the recommended route is regular harness planning, Speccy should not create a spec, task graph, acceptance ledger, or run. This route uses the harness's own plan mode, not the Speccy drafting path. It should return an ephemeral handoff that the user can feed into the active harness's normal planning mode.
 
 Codex handoff:
 
@@ -1775,7 +1880,7 @@ brainstorm skill useful even when the user does not want a Speccy-driven SDLC.
 The handoff should be copyable, but it remains chat context unless the user asks
 to export it or pass it to `/speccy-plan`.
 
-When the user chooses to plan a Speccy spec, `/speccy-plan` treats the brainstorm handoff, prior specs, decisions, and the current user request as context, and reconciles them against the current codebase rather than carrying them forward blindly. It creates a draft, never an approved spec. Approval happens only when the human approves the spec card in prose, which `/speccy-plan` records through the controller; `/speccy-implement` later refuses to run until that approval exists.
+When the route is a Speccy spec, `/speccy-plan` treats the brainstorm handoff, prior specs, decisions, and the current user request as context, and reconciles them against the current codebase rather than carrying them forward blindly. It creates a draft, never an approved spec. Approval happens only when the human approves the spec card in prose, which `/speccy-plan` records through the controller; `/speccy-implement` later refuses to run until that approval exists.
 
 Every run is fully autonomous by design: after spec-card approval there is no step-by-step implementation steering, and no step-steered mode exists. Autonomy does not bypass policy, permission, environment, budget, production/deployment, critical-waiver, missing-credential, or spec-gap checkpoints.
 
@@ -1784,12 +1889,15 @@ Every run is fully autonomous by design: after spec-card approval there is no st
 Human planning checkpoints should default to a compact spec card instead of the full technical spec or ledger. The card should answer four user questions: what will change, what will not change, how Speccy will know it worked, and what could go wrong. It should contain enough information to approve intent, scope, risk, and proof strategy:
 
 ```text
-Spec: SPEC-20260630-A7F4 Passwordless login
+Spec: SPEC-20260630-A7F4  Passwordless login
 Risk: high
 Decision needed: approve this spec, or revise scope
-On approval: spec revision -> approved  (recorded by /speccy-plan)
-Approve by replying in prose, e.g. "approve" or "looks good, go"
-Then: /speccy-implement SPEC-20260630-A7F4  (fresh session recommended)
+Reply:
+  go                 approve and start now
+  approve only       approve, but do not start
+  revise: <changes>  update the spec card
+  split: <guidance>  split into multiple specs
+  cancel             stop this draft
 
 Goal:
 Let users sign in through single-use magic links.
@@ -1811,10 +1919,15 @@ Plan:
 4. Add tests and fresh-context verification.
 
 Acceptance:
-R-AUTH-001 Magic link can be requested.
-R-AUTH-002 Token is single-use.
-R-AUTH-003 Token expires after 15 minutes.
-R-AUTH-004 Expired token does not create session.
+- A magic link can be requested by email.
+- A link is single-use.
+- Links expire after 15 minutes.
+- An expired link is rejected and creates no session.
+
+Will run (evidence commands):
+- npm test -- auth/magic-link
+- npm test -- auth/expiry
+- npm test -- ui/expired-link
 
 Prior context:
 - Carry forward prior decision to store magic-link tokens hashed.
@@ -1822,9 +1935,17 @@ Prior context:
 
 Main risks:
 - Email delivery may need staging or production validation.
+
+— rev spec_rev_001-draft · requirements R-AUTH-001…004 · ledger/evidence: speccy review --evidence
 ```
 
-The spec card should make the approval boundary unmistakable: the human approves the card in prose, and `/speccy-plan` records that approval through the controller, moving the spec revision to `approved`. Approval is required and always explicit; there is no auto-approve. `/speccy-implement` then runs against the approved revision and exits early if the revision is not approved. Because approval and run state are controller-backed, it is safe to run from any session; a fresh, cleared session is recommended for clean implementation context, never required. The card should show one recommended next action first, with alternatives secondary: approve, revise spec, split into multiple specs, use the harness's regular plan mode, cancel, or open the full spec/ledger. The full ledger remains available for power users and high-risk review, but it should not be the default checkpoint surface.
+The card lists the distinct `kind: command` strings the controller will execute as evidence, because approval is what authorizes them to run: the human must see what will run, not just which requirements it proves (see the command allow policy under "Acceptance Ledger").
+
+The card reads as a human decision surface, not a controller artifact: acceptance appears as plain statements the human evaluates, and the process identifiers a human rarely needs at approval — the draft revision and the requirement IDs — collapse into a single footer line. The footer keeps them visible for reference; the full ledger with per-requirement IDs is one drill-down away (`speccy review --evidence`). The spec reference and the evidence commands stay in the body: the ref is how a human names the spec across sessions, and the commands are what approval authorizes.
+
+The approval echo is the binding surface. Before recording, the skill echoes the spec ref, the revision, and the decision (`Recording approval: SPEC-… rev spec_rev_001 -> approved`), so a prose reply in a long chat cannot silently bind to the wrong spec or a card the human never saw — with nothing extra to type (see "Harness Skills").
+
+The spec card should make the approval boundary unmistakable: the human approves the card in prose, and `/speccy-plan` records that approval through the controller, moving the spec revision to `approved`. Approval is required and always explicit; there is no auto-approve. `/speccy-implement` then runs against the approved revision and exits early if the revision is not approved. Because approval and run state are controller-backed, it is safe to run from any session; a fresh, cleared session is recommended for clean implementation context, never required. The canonical replies are explicit: `go` records approval and starts the implement loop in the same session after the binding echo and fresh-session note; `approve only` records approval and prints the `/speccy-implement` handoff. Natural variants may map to those commands when unambiguous, but the card should teach the exact words above, and ambiguous approval prose defaults to `approve only`. The card should show one recommended next action first, with alternatives secondary: `go`, `approve only`, `revise: ...`, `split: ...`, `cancel`, or open the ledger/evidence drill-down. The full ledger remains available for power users and high-risk review, but it should not be the default checkpoint surface.
 
 The spec-card approval is mandatory for every spec, regardless of risk. It is the single pre-implementation gate. Higher risk raises the evidence bar inside the same card and ledger rather than adding another approval step; the card simply carries more detail, such as the full task list and flagged destructive steps, so the human approves with the right information.
 
@@ -1836,12 +1957,13 @@ inside phases:
 1. **Spec-card approval** — prose approval recorded by `/speccy-plan`; the
    single pre-implementation gate for every spec, regardless of risk.
 2. **Escalation gate** — the run parked at `escalated`: repair-cap
-   exhaustion, blocked/unproven requirements, resource caps,
+   exhaustion, a blocked requirement, resource caps,
    structured-output retry exhaustion, or out-of-band commits.
 3. **Critical-tier accepted-risk confirmation** — on `critical` specs only,
    before `verified`, covering every `review_passed`/`waived` requirement
    (see "Requirement Resolution Rules").
-4. **Ship decision** — `verified`, answered by `/speccy-ship`.
+4. **Ship decision** — `verified`, answered by `/speccy-ship`, a `rework`
+   decision (send it back), an amendment, or cancel.
 5. **Merge acknowledgement** — `submitted`, answered by `speccy accept`.
 
 Higher risk raises the evidence bar inside the same ledger and, at
@@ -1854,16 +1976,18 @@ packs must not suppress them.
 Speccy installs the harness entry skills below. Each is invocable as an explicit slash command and by natural-language fallback. Brainstorm is optional; planning, implementation, and shipping are the load-bearing handoffs. Spec-card approval is an explicit prose act recorded through the controller, not a side effect of invoking the next skill. Every other checkpoint copy must still state its effect explicitly.
 
 - **`/speccy-brainstorm <intent>`** - optional exploration: inspect the repo read-only, clarify open questions, rate scope, identify scale, and produce a brainstorm handoff with a recommended route. It does not draft a spec, and it is skippable when scope is already clear. Natural language: "brainstorm passwordless login."
-- **`/speccy-plan <intent | handoff>`** - decompose intent into a draft spec, task graph, and acceptance ledger, run a one-time pass to resolve contradictions and reconcile prior context, then present the spec card. On the human's prose approval it records the approval through the controller, moving the spec revision to `approved`. It creates a draft, never an approved spec, until that prose approval. Distinct from the harness's own plan mode. Natural language: "plan passwordless login as a Speccy spec."
-- **`/speccy-implement <spec>`** - run against an approved spec revision: serial task implement-and-review rounds, then the holistic run-gate validation and drift-correction loop. Ends in `verified` on success or `escalated` on a spec/evidence/policy gap. It exits early if the spec revision is not `approved`, and should usually be run in a fresh, cleared session for clean implementation context. Natural language: "implement SPEC-20260630-A7F4."
-- **`/speccy-ship <spec>`** — open the pull request and move the run to `submitted`. Natural language: "ship the passwordless login spec."
+- **`/speccy-plan <intent | handoff>`** - route-check the request first. If it is too small for Speccy, better handled by normal harness planning, or too broad for one spec, it returns a route-away card and creates no controller state. If the route is `speccy_spec` or the user explicitly overrides, it decomposes intent into a draft spec, task graph, and acceptance ledger, runs a one-time pass to resolve contradictions and reconcile prior context, then presents the spec card. On the human's prose approval it records the approval through the controller, moving the spec revision to `approved`; the canonical `go` reply also hands straight into the implement loop in-session (see Rules). It creates a draft, never an approved spec, until that prose approval. Distinct from the harness's own plan mode. Natural language: "plan passwordless login as a Speccy spec."
+- **`/speccy-implement [<selector>]`** - run against an approved spec revision, inferring the current approved spec when unambiguous: serial task implement-and-review rounds, then the holistic run-gate validation and drift-correction loop. Ends in `verified` on success or `escalated` on a spec/evidence/policy gap. It exits early if the spec revision is not `approved`, and should usually be run in a fresh, cleared session for clean implementation context. Natural language: "implement the passwordless login spec."
+- **`/speccy-ship [<selector>]`** — open the pull request and move the run to `submitted`, inferring the current verified run when unambiguous. When the run's accepted-risk bucket is non-empty, the skill echoes the accepted-risk lines and asks one explicit confirmation ("Open the PR anyway?") before creating anything external — the ship may happen days later in a fresh session where the review packet is not on screen, and the PR is the last moment before the work leaves the repo. The confirmation is part of answering the ship gate, not a sixth gate, and it fires only when accepted risks exist; with an empty bucket the ship proceeds without it. A tier-conditional gate is rejected: the trigger is residual risk, not tier. Natural language: "ship the passwordless login spec."
 
 Rules:
 
 - The slash command is the documented, deterministic entry; natural language is a convenience, not the contract.
 - The spec argument accepts a full `SPEC-...` reference or a search selector, and is inferred when the current spec is unambiguous.
+- `/speccy-plan` performs route preflight before `spec start`; route-away responses are ephemeral and create no spec state. The override phrase is conversational and explicit, such as "use Speccy anyway."
 - Spec-card approval is a prose act recorded by `/speccy-plan` through the controller; it is required and always explicit.
-- Before recording an approval or gate decision, the skill echoes exactly what it is about to record — spec ref, revision, and decision, e.g. `Recording approval: SPEC-20260630-A7F4 rev spec_rev_001 -> approved` — so a prose reply in a long chat cannot silently bind to the wrong spec or a stale card. The echo is confirmation copy, not a sixth gate; it requires no further reply.
+- Before recording an approval or gate decision, the skill echoes exactly what it is about to record — spec ref, revision, and decision, e.g. `Recording approval: SPEC-20260630-A7F4 rev spec_rev_001 -> approved` — so a prose reply in a long chat cannot silently bind to the wrong spec or a stale card. The echo is confirmation copy, not a sixth gate; it requires no further reply. It is the only binding guard: the controller does not track a per-write draft version (see "Spec Card UX").
+- `go` records the approval and starts the implement loop in the same session, after the echo and a printed fresh-session note. `approve only` records the approval and prints the `/speccy-implement` handoff instead. Natural variants may map to those commands when unambiguous; ambiguous prose defaults to `approve only`. Run-start rides on explicit prose intent — approval itself never auto-starts anything.
 - `/speccy-implement` is gated on the approved revision and exits early otherwise, so approval survives across sessions and implementation can start cold.
 - Do not add per-control skills such as `/speccy-approve`, `/speccy-repair`, or `/speccy-waive`. Approval is recorded prose inside `/speccy-plan`, repair is autonomous, and amendment and waivers are conversational.
 - Acceptance has no skill: `submitted -> landed` happens through the `speccy accept` CLI command.
@@ -1878,13 +2002,17 @@ Work moves through the skills, pausing at each human handoff:
   -> human chooses direct edit, regular harness plan, Speccy spec, or split
 
 /speccy-plan "add passwordless login"          (or continues from the handoff)
+  -> route preflight
+     -> direct edit / regular harness plan / split: stop with an exact next action
+     -> Speccy spec: continue
   -> draft spec + task graph + acceptance ledger
   -> one-time contradiction + prior-context reconcile pass
   -> compact spec card
   -> human reviews and approves in prose
        -> /speccy-plan records approval -> spec revision = approved
+       -> approval said "go" -> the run starts in this session; otherwise:
 
-/speccy-implement SPEC-20260630-A7F4          (fresh session recommended)
+/speccy-implement                             (fresh session recommended)
   -> exits early unless the revision is approved
   -> creates run against approved revision
   -> serial task implement-and-review rounds
@@ -1892,7 +2020,7 @@ Work moves through the skills, pausing at each human handoff:
   -> ends verified, or escalated on a spec/evidence/policy gap
   -> human reviews the verified summary, or amends the gap and re-runs `/speccy-implement`
 
-/speccy-ship SPEC-20260630-A7F4               (invocation = ship approval)
+/speccy-ship                                  (invocation = ship approval)
   -> opens the PR, run -> submitted
   -> PR merged normally -> human runs speccy accept -> landed
 ```
@@ -1903,7 +2031,22 @@ Throughout, each skill calls the local Speccy controller for state, packets, and
 
 The CLI remains useful for installation, status, export, and deterministic controller integration. It should not expose the internal SDLC as a sequence of public commands. Humans should not have to run acceptance/evidence/repair phases by hand, and no CLI command should call an LLM or launch an AI harness.
 
-Common human commands:
+`speccy status` is the everyday hub; routine use needs four commands, and
+everything else is setup, occasional lifecycle, or admin.
+
+```bash
+speccy status
+speccy list --query passwordless
+speccy review
+speccy accept
+```
+
+Those examples intentionally omit spec references. Human commands and harness
+skills infer the current or only unambiguous spec/run; a selector is required
+only when there is more than one plausible target, and scripts should still use
+the full `SPEC-...` reference.
+
+Setup and diagnostics:
 
 ```bash
 speccy install
@@ -1911,14 +2054,14 @@ speccy install --dry-run
 speccy install --target codex
 speccy install --update --dry-run
 speccy doctor
+```
+
+Occasional lifecycle commands:
+
+```bash
 speccy new "Add passwordless login"
-speccy list
-speccy list --query passwordless
-speccy status
-speccy review
-speccy accept
-speccy archive
 speccy cancel
+speccy archive
 speccy export review
 ```
 
@@ -1935,32 +2078,52 @@ Command semantics:
 - `doctor` checks the local controller, harness install, and optional MCP wiring if enabled.
 - `new` records plain engineering intent and creates deterministic draft-spec state when the user is outside an installed harness. It may print the next in-harness instruction or a controller packet reference, but it must not create a run, draft the complete spec by calling an LLM, or launch a harness.
 - `list` shows active specs in the current workspace and can filter them with `--query`; it is the human discovery path for choosing a spec without typing an opaque reference. With `--json` it is also the selector-resolution path for installed skills: they resolve a user's free text to a full `SPEC-...` reference before calling `ctl` operations, which take exact references only.
-- `status`, `review`, and `cancel` manage the current spec/run when the user is outside the harness. Resuming is not a CLI action; a fresh harness session re-enters via `/speccy-implement <spec>`.
-- `accept` closes out a `submitted` run as a human assertion that the change landed, with optional `--pr <url>` and `--note "<text>"` provenance. MVP does no merge detection.
-- `archive` marks an `accepted` spec archived so it leaves the active list. The landed run remains `landed` in run history.
+- `status` and `cancel` manage the current spec/run when the user is outside the harness. Resuming is not a CLI action; a fresh harness session re-enters via `/speccy-implement`, with a selector only when ambiguous.
+- `review` shows the current human packet for a selected spec, choosing the packet by state: draft or approved specs show the spec card/approved summary; implementing or verifying runs show the current status card plus last activity; verified runs show the review packet; escalated runs show the escalation packet; submitted runs show the recorded change reference and close-out instruction; landed/accepted specs show the final accepted summary. `--evidence` drills into the ledger, command logs, evidence artifacts, findings, decisions, and full diff where available; `--json` returns the same state-aware view structurally.
+- `accept` closes out a `submitted` run as a human assertion that the recorded change landed. It uses the `change_ref` saved by `run record-ship` by default, displays that reference before recording, is idempotent for already-landed runs, and accepts optional `--pr <url>`/`--note "<text>"` only for recovery or manual association. MVP does no merge detection.
+- `archive` marks an accepted spec archived when it no longer describes the codebase. Accepted specs are already hidden from default `status`/`list`; archive is not part of routine close-out. The landed run remains `landed` in run history, and archiving removes the spec's decisions from planning context in MVP; its `carry_forward` decisions stay recorded for a future decision index (see "Carry-Forward Decisions").
 - `export review` produces the normal human review artifact.
 - `export spec` and `export run-bundle` are advanced paths for audits, diagnostics, and custom harness integrations.
 - Full planning, repair, and verification happen through the installed Speccy skills/agents inside Codex or Claude Code.
 
 `speccy status` is the human's one glance at a workspace. It prints one card
-per active run, rolling run state up into the run status labels defined in
-`TERMINOLOGY.md` ("Run Status Label") the same way review packets roll
-requirement statuses into human status buckets — a rendering rule, not new
-stored state. The card names the next human action with the exact command
+per active run, rolling run state up into run status labels — Implementing,
+Verifying, Ready to ship, Needs you (`escalated`), Awaiting merge, Interrupted
+— the same way review packets roll requirement statuses into human status
+buckets. Both are a rendering rule, not new stored state. The card names the next human action with the exact command
 when one exists, and shows no controller machinery: no directives, leases,
-run IDs, or ctl operations. An autonomous run says so:
+run IDs, or ctl operations. Tasks appear by title, never bare task IDs —
+`T1` is controller vocabulary, kept to drill-down and debug output.
+An autonomous run says so:
 
 ```text
 SPEC-20260630-A7F4  Passwordless login          Risk: high
-  Implementing — task T1, repair round 2 of 3 · autonomous, nothing needed
+  Implementing — token model + endpoints · repair round 2 of 3
+  · autonomous, nothing needed
+  Last activity 2m ago — running npm test -- auth/expiry
 ```
+
+The last-activity line is derived from the run's event log — the timestamp
+of the most recent recorded event plus a human rendering of it — so a long
+autonomous run is visibly alive rather than indistinguishable from wedged.
+No new state is stored, and a stale timestamp is itself the signal to look
+closer. (A `speccy status --watch` polling mode is a later capability.)
 
 A run waiting on a human leads with the action:
 
 ```text
 SPEC-20260630-A7F4  Passwordless login          Risk: high
   Ready to ship · 1 accepted risk
-  Next: /speccy-ship SPEC-20260630-A7F4
+  Next: /speccy-ship
+```
+
+A submitted run keeps the manual acceptance step visible until the human
+records the merge:
+
+```text
+SPEC-20260630-A7F4  Passwordless login          Risk: high
+  Awaiting merge — PR #123 open
+  Next: speccy accept   (after the PR merges)
 ```
 
 An interrupted run — expired lease, no active session — surfaces resume
@@ -1968,15 +2131,15 @@ attribution before the human re-enters (see "Resume and Crash Recovery"):
 
 ```text
 SPEC-20260630-A7F4  Passwordless login          Risk: high
-  Interrupted — lease expired mid task T1 (round 2)
-  Uncommitted diff (3 files, +58 −4 vs f3d9e21) is attributed to T1 on resume
-  Next: /speccy-implement SPEC-20260630-A7F4
+  Interrupted — session died mid "token model + endpoints" (repair round 2)
+  Uncommitted diff (3 files, +58 −4 vs f3d9e21) belongs to that task on resume
+  Next: /speccy-implement
         (stash or commit first if these edits are not the worker's)
 ```
 
 Internal controller operations still exist, but they are tool calls used by the harness pack, not ordinary human-facing workflow commands.
 
-`speccy list` should default to active specs in the current workspace: drafts, approved specs, specs with active runs, escalated specs, specs awaiting review, or repairable validation failures. Accepted, superseded, cancelled, and archived specs should be hidden unless the user passes an explicit flag such as `--all`, `--status accepted`, or `--archived`.
+`speccy list` should default to active specs in the current workspace: drafts, approved specs, specs with active runs, escalated specs, specs awaiting review, or repairable validation failures. Accepted, superseded, cancelled, and archived specs should be hidden unless the user passes an explicit flag such as `--all`, `--accepted`, `--status accepted`, or `--archived`.
 
 `--query` should apply the same selector matching used by commands such as `speccy review passwordless`, but without taking an action. This lets users preview which specs would match a natural selector:
 
@@ -1984,6 +2147,7 @@ Internal controller operations still exist, but they are tool calls used by the 
 speccy list --query passwordless
 speccy list --query "auth expiry"
 speccy list --all --query login
+speccy list --accepted
 speccy list --status escalated
 ```
 
@@ -2007,15 +2171,15 @@ A **verified** run produces a compact summary the human reviews before shipping,
 ```text
 Spec   SPEC-20260630-A7F4  Passwordless login      Risk: high
 Result verified — ready to ship · 2 accepted risks
-Recommended next action: /speccy-ship SPEC-20260630-A7F4
+Recommended next action: /speccy-ship
 
 Requirements (11)
   Proven          9
-  Accepted risk   2   1 waived · 1 review-passed with residual risk
+  Accepted risk   2   1 waived · 1 on review-only evidence
 
 Accepted risk
-  R-SEC-002    waived    Email enumeration mitigated   — "constant-time deferred, tracked in follow-up"
-  R-EMAIL-001  review_passed   Email delivery integration reviewed — staging send not run locally
+  R-SEC-002    waived                Email enumeration mitigated   — "constant-time deferred, tracked in follow-up"
+  R-EMAIL-001  review-only evidence  Email delivery integration reviewed — staging send not run locally
 
 Changed  9 files  +412 -38     3 tasks · 2 repair rounds
 Evidence + full diff:  speccy review --evidence
@@ -2030,7 +2194,7 @@ The first screen should stay compact and decision-oriented:
 - Drift from the approved spec
 - Recommended next action
 
-Requirement statuses collapse into the three human status buckets defined in `TERMINOLOGY.md` ("Human Status Bucket") — **Proven**, **Accepted risk**, and **Needs you** — with the precise status kept as an inline tag on drill-down. Proven is collapsed to a count and never enumerated. When the accepted-risk bucket is non-empty, its count appears on the result line itself (`verified — ready to ship · N accepted risks`): a bare "ready to ship" must never hide residual risk below the fold.
+Requirement statuses collapse into three human status buckets — **Proven** (`passed`), **Accepted risk** (`review_passed`, `waived`), and **Needs you** (`failed`, `blocked`, `pending`) — a rendering rule, with the precise status kept as an inline tag on drill-down. The first screen never prints requirement-status enum values: `review_passed` renders as "review-only evidence" and `waived` as "waived"; the raw enum lives in JSON and `--evidence` drill-down. Proven is collapsed to a count and never enumerated. When the accepted-risk bucket is non-empty, its count appears on the result line itself (`verified — ready to ship · N accepted risks`): a bare "ready to ship" must never hide residual risk below the fold. `/speccy-ship` re-echoes those lines and asks one explicit confirmation before opening the PR (see "Harness Skills"), so a ship recorded days later in a fresh session still puts the risks in front of the human and gets a deliberate yes.
 
 A verified run has an empty **Needs you** bucket by construction. A fixable failure never waits behind a button; it loops autonomously until it is proven or the run escalates. So the summary is a result, not a menu, and it carries no approve/reject/repair/waive controls.
 
@@ -2039,12 +2203,12 @@ An **escalated** run produces the escalation packet instead: scoped to the one r
 The two decisions a human actually makes:
 
 - **Ship it.** Invoke `/speccy-ship` to open the PR and move the run to `submitted`. The PR is merged normally, and the human records the merge with `speccy accept`, moving the run to `landed`.
-- **Send it back.** Describe what is wrong in prose. The harness folds it into a spec amendment and re-runs `/speccy-implement`. There is no `speccy reject`; feedback is conversational.
+- **Send it back.** Describe what is wrong in prose. There is no `speccy reject`; feedback is conversational, and the skill routes it down one of the two paths below — echoing what it is about to record first, like any other gate decision.
 
-Post-verification feedback has two routes:
+Post-verification feedback has two routes, both controller-recorded:
 
-- **Minor implementation feedback** stays in the same run or PR when it does not change scope, requirements, or risk.
-- **Scope or requirement feedback** creates a spec amendment and a new run, because the definition of done changed.
+- **Minor implementation feedback** — no change to scope, requirements, or risk — stays in the same run as a `rework` decision: `run record-decision` (type `rework`, feedback prose required) moves the run `verified -> implementing` and appends a dynamic `RT<n>` task seeded with the feedback, counted against `run_review_rounds`. The rework round runs the normal claim → dispatch → handoff → verify cycle and returns to the same ship gate.
+- **Scope or requirement feedback** creates a spec amendment and a new run, because the definition of done changed: `spec patch-draft` → amended spec card → prose approval recorded by `spec record-decision` (`supersedes.run_id`), which atomically closes this run as `cancelled` with a linking decision record. Until that approval lands, nothing is recorded and the run stays at the ship gate (see "Amendment at the Escalation Gate" — the same transaction).
 
 The full evidence, ledger, command logs, validator findings, and decision records remain available through `speccy review --evidence`, one drill-down deeper. The first screen summarizes; the human opens evidence only to audit a requirement or a high-risk waiver.
 
@@ -2138,7 +2302,7 @@ The process dies midway through validation.
 
 Expected behavior:
 
-- The user starts a fresh harness session and invokes `/speccy-implement <spec>`. Speccy makes no outbound calls, so it never reattaches to or relaunches a harness session itself.
+- The user starts a fresh harness session and invokes `/speccy-implement`, adding a selector only when there is more than one plausible run. Speccy makes no outbound calls, so it never reattaches to or relaunches a harness session itself.
 - The skill calls `run next`; the controller clears the dead session's expired lease, reads task statuses, round counters, and the last git snapshot, and returns the exact next directive.
 - Uncommitted workspace changes are attributed to the interrupted in-flight task and surfaced as context, not silently discarded.
 - Verification work restarts as fresh-context validators from stored state; no transcript memory is assumed.
@@ -2222,8 +2386,7 @@ Track:
 - Tokens/cost by role and harness.
 - Task success/failure.
 - Task review round count.
-- Requirements passed, review-passed, failed, vacuous, blocked, unproven, and
-  waived.
+- Requirements passed, review-passed, failed, blocked, and waived.
 - Task-scoped repair round count.
 - Run-level repair loop count.
 - Capability-escalation give-up events, with the requirement IDs that triggered them.
@@ -2239,7 +2402,7 @@ These metrics should feed both local improvement and product evaluation.
 
 ## MVP Proposal
 
-MVP should be intentionally narrow. One scope decision is deliberately not narrow (2026-07-01): Claude Code and Codex are both first-class MVP harnesses. Shipping two targets forces the template renderer's conditional exports to be real from day one rather than speculative single-target code. Brainstorm remains optional by design.
+MVP should be intentionally narrow. One scope decision is deliberately not narrow: Claude Code and Codex are both first-class MVP harnesses. Shipping two targets forces the template renderer's conditional exports to be real from day one rather than speculative single-target code. Brainstorm remains optional by design.
 
 The MVP list:
 
@@ -2274,12 +2437,16 @@ Avoid in MVP:
 
 ## Later Capabilities
 
+- Delta-scoped re-review — round snapshots (dangling commits at each handoff) and per-round `delta` diffs so a repair-round reviewer reads only the changed slice. Deferred from MVP: it is a token optimization unproven against real reviewer cost, and full-diff re-review is correct and simple. Dogfood roster-cost measurement decides whether it earns its machinery (see "Repeat Review Rounds").
+- Command-evidence dedup — a per-round cache keyed on the command string so repeated `evidence collect` of an unchanged command returns the recorded artifact instead of re-executing. Deferred from MVP: at serial-write scale the workspace command lock already serializes runs, and the cache is unproven optimization.
+- Decision index — a derived projection surfacing carry-forward decisions from archived specs into planning packets, with a rendered cap and overflow drill-down. Deferred from MVP: it matters only once a workspace archives specs, which the single-spec MVP does not exercise. The `carry_forward` flag is recorded from day one so the projection needs no data migration (see "Carry-Forward Decisions").
 - Automatic merge detection — git-native ancestry checks, squash-merge heuristics, and an optional configurable host probe — so `submitted -> landed` can be recorded without a manual `speccy accept`. Cut from MVP because it is an external-integration convenience, not core to the loop.
 - Optional MCP server exposing `speccy` to clients where MCP is worth the token overhead.
 - User-level skills/commands for Codex and Claude Code through `speccy install --user`.
 - Importers for OpenSpec, Spec Kit, Kiro-style specs, GSD Core, and other repo-local spec formats.
 - Exporters that write `speccy` specs and acceptance ledgers into those formats when a team explicitly wants repo-local artifacts.
 - Web dashboard for long-running runs.
+- `speccy status --watch`: live-refreshing status cards for long autonomous runs (the static card's last-activity line covers MVP).
 - Worktree-based parallel experiments.
 - Browser validator integration.
 - GitHub issue/PR integration.
@@ -2288,7 +2455,7 @@ Avoid in MVP:
 - Optional team-shared run store for enterprise/audit use, only after no-server review packets and run bundles prove insufficient.
 - If any mutable state ever becomes git-visible (for example, a team-shared mode committing state snapshots), it must be append-only with a union-by-event-id git merge driver; replace-style merges of state files silently lose data (per the external runtime-state storage survey, OpenSpec vs Spec Kitty).
 - Additional exports — lessons learned, acceptance snapshots, result summaries, raw run logs — if dogfooding proves the review packet and spec export are not enough.
-- Generic Agent Skills fallback pack: core-fields-only `SKILL.md` files for other `.agents/skills/` readers (Amp, OpenHands), plus a root `AGENTS.md` pointer — the maximally compatible cross-harness shape per the 2026-07-03 harness survey.
+- Generic Agent Skills fallback pack: core-fields-only `SKILL.md` files for other `.agents/skills/` readers (Amp, OpenHands), plus a root `AGENTS.md` pointer — the maximally compatible cross-harness shape.
 - Model routing and budget optimizer.
 - Inbound Agent2Agent-compatible bridge owned by an external harness, if a team proves it adds value without moving orchestration state out of Speccy.
 - Reusable evidence templates, if real usage proves they reduce friction.
@@ -2296,46 +2463,7 @@ Avoid in MVP:
 
 ## Open Questions
 
-1. **State location — resolved 2026-07-01.** Runtime state lives in `~/.speccy/` only. Repo `.speccy/` holds exactly `project.yaml` and `pack-lock.yaml`; policy/role/evidence prose renders into harness packs. See "Storage Model."
-2. **Repo artifact export:** Which artifacts should be easiest to export: spec, acceptance ledger, review packet, lessons learned, or all of them?
-3. **Artifact shape:** What is the smallest useful spec draft and acceptance ledger shape? Do not lock public format compatibility until MVP usage proves it.
-4. **No-server sharing:** Are review packets, compact snapshots, rerun commands, and optional redacted run bundles enough for team use before considering any shared run store?
-5. **Spec interop:** Which external spec formats should be first-class import targets: OpenSpec, Spec Kit, Kiro, GSD Core, Spec Kitty, or a generic markdown mapper?
-6. **Harness output reliability — resolved 2026-07-02.** Strict schema validation on every record operation, with bounded repair: the controller rejects the payload and returns structured lint errors, the skill retries with a focused fix up to a policy cap (default 3), then the run fails closed to `escalated`. No lenient coercion.
-7. **Vacuity threshold:** What minimum anti-vacuity evidence is required before the verifier can mark a high-priority requirement as `passed`?
-8. **Scenario evidence:** How much should Speccy help convert `given/when/then` prose into evidence requests versus delegating that to harness agents?
-9. **Custom harness integration:** Are `speccy ctl ... --json` calls enough for custom harnesses, or should `speccy rpc`/`speccy mcp` be supported earlier?
-10. **Human gates:** How much editing should happen inside `speccy` versus opening `$EDITOR`?
-11. **Review packet format:** Markdown only, JSON plus Markdown, or an HTML report?
-12. **Lessons learned:** How can the system accumulate project learning without leaking operational state or affecting product-code/build/runtime footprint?
-13. **Parallel writes — resolved 2026-07-02.** Explicitly out of scope for MVP: writes are serial, enforced by the run lease. Worktree-based parallel writes remain a later capability; the enabling threshold will be revisited with real usage data.
-14. **Validator diversity — resolved 2026-07-03.** Per-persona and per-role model selection is a first-class render input (`review.personas[].model` in `project.yaml`, per-role frontmatter in the packs), so reviewer models can differ from each other and from the implementation seat. The default stays harness-inherited models with no forced diversity; cross-harness diversity remains manual configuration.
-15. **Cost controls — resolved 2026-07-02.** Fail closed at the cap. Resource caps — repair rounds, plus optional task-count and wall-clock caps in `.speccy/project.yaml` — park the run at an `escalated` policy gate; the human raises the cap or cancels, and the same run resumes. Speccy makes no LLM calls and cannot meter tokens; token budgets belong to the harness.
-16. **Dirty worktrees — resolved 2026-07-02.** `run start` refuses a dirty worktree; no run is created until the workspace is clean. This keeps the resume invariant sound: once a run exists, any uncommitted diff is attributable to the run's in-flight task.
-17. **No-git projects — resolved 2026-07-02.** Not supported, in MVP or later. Resume and evidence baselines depend on git snapshots and `baseline_commit`; a workspace must be a git repository or a subtree of one. Speccy refuses non-git directories with a clear error.
-18. **Security model:** How should secret redaction and deny-read rules work across harnesses with different sandbox systems?
-19. **Production validation:** How should the tool prove behavior that only exists in deployed environments?
-20. **Spec mutation — resolved 2026-07-02.** Nobody mutates an approved revision's ledger in place. Requirement statements and evidence requests are frozen at approval; agents may only propose draft patches; human prose approval creates a new revision and a new run; verifiers change requirement status only, through evidence operations.
-21. **Long-term storage:** How long should transcripts/evidence be retained?
-22. **Team mode:** When multiple humans review gates, what is the approval policy?
-23. **License/package strategy — language, engine, and license resolved.** Rust, shipped as a single static `speccy` binary (2026-07-02). Templating: `minijinja` (Jinja2 syntax) is the intended engine, pending verification against the renderer requirements. License: MIT, committed at repo init (recorded 2026-07-03). Distribution channels remain open.
-24. **Name:** Is `speccy` the right name, or should the tool use a more explicit name around specs/evidence?
-25. **Escalated-run reconciliation — resolved 2026-07-02.** Snapshot and reconcile: at escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, and the superseding run starts on the same branch seeded with the prior run's summary, reconciling rather than redoing. Rolling back to the run baseline remains the human's explicit fallback at the gate.
-
-## Recommended Next Step
-
-Build a walking skeleton:
-
-1. `speccy install` creates or repairs repo-local harness packs by auto-detecting `.codex`, `.claude`, and `.agents`; `--target` overrides detection.
-2. Local run store external to the target repo.
-3. `speccy ctl ... --json` exposes controller operations to those packs, including `run next` loop driving; `speccy rpc` remains optional for custom harness tests.
-4. A minimal built-in template renderer with shared role partials and target
-   conditionals for Codex and Claude Code.
-5. Acceptance ledger generation.
-6. One serial task.
-7. One verifier evidence-collection pass.
-8. One anti-vacuity reviewer question for generated tests or review-only evidence.
-9. One in-harness Speccy verifier role call for semantic scenario/evidence review.
-10. Review packet output.
-
-Once that loop works end to end inside Codex and Claude Code, add only deterministic integration surfaces such as `speccy rpc` or `speccy mcp` if custom harnesses need them. Do not add Speccy-launched agent runners.
+Live open questions (Q2–Q24 numbering) and dogfood watch items are tracked
+in `OPEN-ITEMS.md`; resolved decision history is archived in
+`DECISION-LOG.md`. Build order and the walking-skeleton milestones live in
+`IMPLEMENTATION-PLAN.md`.
