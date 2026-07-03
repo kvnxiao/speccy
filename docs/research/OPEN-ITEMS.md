@@ -11,6 +11,18 @@ This file is a historical decision log. `DESIGN.md` and `TERMINOLOGY.md` are aut
 
 Empty.
 
+## Resolved 2026-07-03 (harness reality check)
+
+Three parallel research agents verified the pack-layout assumptions against current harness docs (July 2026). Findings applied to `DESIGN.md`, `TERMINOLOGY.md`, `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`.
+
+- **`.codex/skills/` does not exist** — Codex reads repo-local skills from `.agents/skills/<name>/SKILL.md` (Agent Skills standard, agentskills.io, Dec 2025, AAIF/Linux Foundation governed; also read by Amp and OpenHands). Codex pack entry skills now render there.
+- **Codex subagents are repo-local TOML** — `.codex/agents/<name>.toml` (`name`, `description`, `developer_instructions`, optional `model`/`model_reasoning_effort`/`sandbox_mode`). Renderer gains a TOML escaping filter (M7). Codex custom prompts (`~/.codex/prompts/`) are user-global and deprecated; not rendered.
+- **Claude entry surface switched from commands to skills** — `.claude/skills/<name>/SKILL.md` gives both explicit `/name` and natural-language auto-invocation via `description`; `.claude/commands/` is legacy and never auto-invokes. Subagents stay `.claude/agents/*.md` with `model` frontmatter (confirms per-role model selection).
+- **Generic `agents` install target cut** — no cross-harness convention exists for role/agent definition files; `.agents/` is Agent-Skills-only territory. Targets are now `auto | codex | claude | all`; detection maps `.codex` or `.agents` → codex, `.claude` → claude. A core-fields-only generic skills pack + root `AGENTS.md` pointer moved to Later Capabilities.
+- **Both harnesses expose a literal `/plan`** — Codex Plan Mode and Claude plan mode; brainstorm handoff wording updated for both targets.
+- **Structured-question tools confirmed** — `AskUserQuestion` (Claude), `request_user_input` (Codex; exact schema community-verified only). New pack-prose rule: only entry skills (main session) may reference the tool; availability in subagents is unverified.
+- Codex plugin manifest (`.codex-plugin/plugin.json`) and Claude plugin `--scope project` both exist; plain repo-local files stay the MVP default (plugin subagents lose `hooks`/`mcpServers`/`permissionMode` in Claude).
+
 ## Resolved 2026-07-03 (pre-M0 cross-review: Claude + Codex)
 
 Full-project review before M0, folding in an independent Codex review. All decisions applied to `DESIGN.md`, `TERMINOLOGY.md`, `SCHEMAS.md` (new), `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`, and `README.md`; the plan gained an "M0 readiness checklist".

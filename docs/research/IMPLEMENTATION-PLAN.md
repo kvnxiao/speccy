@@ -127,10 +127,10 @@ Verify: golden-file tests for both packets; `run record-ship` persists `change_r
 
 Goal: the two-harness forcing function (Claude Code + Codex both first-class).
 
-- [ ] `minijinja` environment: strict undefined, deterministic output, custom filters for markdown/YAML-frontmatter escaping
+- [ ] `minijinja` environment: strict undefined, deterministic output, custom filters for markdown/YAML-frontmatter and TOML escaping (Codex agent defs are TOML)
 - [ ] Template bundle embedded in the binary; shared partials + Claude/Codex overlays; conditional exports; template context per DESIGN (`target`, `capabilities`, `names`, `paths`, `controller`, `pack`)
-- [ ] Entry-skill templates (brainstorm, plan, implement, ship) + role/subagent prompts — thin prose driving the `next-action` cycle with the defensive rules from DESIGN
-- [ ] `speccy install`: harness auto-detect (`.claude`/`.codex`/`.agents`), idempotent create/repair, `--target`, `--check`, `--dry-run`; writes `.speccy/project.yaml`, `pack-lock.yaml` (pack version + source template IDs + source/rendered SHA-256 + capability flags), defensive `.gitignore` block
+- [ ] Entry-skill templates (brainstorm, plan, implement, ship) + role/subagent prompts — thin prose driving the `next-action` cycle with the defensive rules from DESIGN; rendered to `.claude/skills/` + `.claude/agents/*.md` (Claude) and `.agents/skills/` + `.codex/agents/*.toml` (Codex); structured-question tool referenced only in entry skills, never subagent prompts
+- [ ] `speccy install`: harness auto-detect (`.claude` → claude; `.codex` or `.agents` → codex), idempotent create/repair, `--target`, `--check`, `--dry-run`; writes `.speccy/project.yaml`, `pack-lock.yaml` (pack version + source template IDs + source/rendered SHA-256 + capability flags), defensive `.gitignore` block
 - [ ] `speccy install --update`: three-way merge over rendered outputs; conflicts written to `.speccy/pack-updates/<timestamp>/` (may slip to M8)
 
 Verify: golden render tests for every managed file × both targets (`insta` snapshots); install-twice idempotency; hash drift caught by `--check`.

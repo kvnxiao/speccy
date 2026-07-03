@@ -637,18 +637,19 @@ The template bundle ships inside the Speccy tool's own source, not the target re
 Speccy should use a real implementation-native templating library rather than
 ad hoc string replacement. The renderer must support partials/includes,
 conditionals, loops, strict missing-variable errors, deterministic output, and
-safe escaping for markdown/YAML frontmatter where needed. The implementation
+safe escaping for markdown/YAML frontmatter and TOML where needed (the Codex
+target renders agent definitions as TOML). The implementation
 language is Rust (decided 2026-07-02), and the intended engine is `minijinja`
 (Jinja2 syntax): includes/macros cover partials, it supports strict
-undefined-variable errors, and markdown/YAML escaping can be handled through
-custom filters. The choice stands unless implementation proves it cannot meet
+undefined-variable errors, and markdown/YAML/TOML escaping can be handled
+through custom filters. The choice stands unless implementation proves it cannot meet
 a requirement above; the design requirement remains a structured template
 engine with testable render inputs and outputs, not loyalty to any particular
 engine.
 
 The template context should include at least:
 
-- `target.harness`: `codex`, `claude`, `agents`, or a future harness key.
+- `target.harness`: `codex`, `claude`, or a future harness key.
 - `target.scope`: `repo` or `user`.
 - `capabilities`: supported primitives such as slash commands, skills,
   subagents, MCP, hooks, structured user questions, and plan mode.
@@ -665,8 +666,9 @@ repair guidance. Target overlays should provide harness-specific prose,
 invocation syntax, direct tool names, frontmatter, file layout, and conditional
 exports. For example, a Claude Code brainstorm handoff can reference the
 `/plan` command directly and can name `AskUserQuestion` when a structured
-question prompt is needed. A Codex handoff should use Codex's planning-mode
-wording and should name `request_user_input` for the corresponding structured
+question prompt is needed. A Codex handoff can likewise reference Codex's
+`/plan` Plan Mode command (both harnesses expose one, verified 2026-07-03)
+and should name `request_user_input` for the corresponding structured
 question tool. These differences belong in the rendered pack, not in the
 deterministic controller.
 
@@ -703,19 +705,38 @@ The install command should be idempotent:
 
 Both packs ship the same entry skills, listed in "Harness Skills", plus internal role prompts. The entry skills are the primary human-invoked surface; the role prompts and subagent definitions are dispatched by the `/speccy-plan` and `/speccy-implement` loops, not invoked directly.
 
-Codex install pack:
+Codex install pack (paths verified against Codex docs, 2026-07-03):
 
-- Entry skills: the `speccy-*` entry skills defined in "Harness Skills".
-- Internal role prompts / subagent definitions for planning, implementation, review/verification, and repair.
-- Optional Codex plugin manifest that bundles skills and MCP configuration.
-- Repo-local `.codex` writes are acceptable when installing the Codex target. In this design, "agents" means role/subagent definitions in the harness install pack, not mandatory repo instruction files.
+- Entry skills at `.agents/skills/speccy-*/SKILL.md` — the Agent Skills
+  standard location Codex scans from the working directory up to the repo
+  root. Implicit natural-language invocation comes from the skill
+  `description`; explicit invocation is the slash form. (`.codex/skills/`
+  does not exist; Codex custom prompts are user-global and deprecated in
+  favor of skills, so Speccy renders neither.)
+- Role/subagent definitions at `.codex/agents/speccy-*.toml` — Codex custom
+  agents are TOML files with `name`, `description`,
+  `developer_instructions`, and optional `model`, `model_reasoning_effort`,
+  and `sandbox_mode`.
+- Optional Codex plugin manifest (`.codex-plugin/plugin.json`) bundling
+  skills and MCP configuration — a later packaging convenience, not the MVP
+  default.
 
-Claude Code install pack:
+Claude Code install pack (paths verified against Claude Code docs,
+2026-07-03):
 
-- Entry skills / commands: the `speccy-*` entry skills defined in "Harness Skills".
-- Claude subagent definitions for the planner, researcher, worker, reviewer, validator, and repair roles.
+- Entry skills at `.claude/skills/speccy-*/SKILL.md` — invocable as
+  `/speccy-*` and auto-invocable by `description` matching.
+  (`.claude/commands/*.md` still works but is legacy and never
+  auto-invokes; Speccy renders skills.)
+- Claude subagent definitions at `.claude/agents/speccy-*.md` for the
+  planner, worker, reviewer, validator, and repair roles, with per-role
+  `model` frontmatter.
 - Optional MCP configuration only for workflows that explicitly need MCP.
-- Repo-local `.claude` writes are acceptable when installing the Claude target.
+
+One pack-prose rule from the same verification: only entry skills, which run
+in the main session, may reference the harness's structured-question tool
+(`AskUserQuestion`, `request_user_input`); its availability inside subagents
+is unverified, so subagent prompts must not depend on it.
 
 The installed skills/agents should be thin. They should guide the harness, call the deterministic Speccy controller for spec/run state, and return compact checkpoints. They should not attempt to keep the full spec ledger inside the model context.
 
@@ -726,10 +747,10 @@ Recommended repo-local shape:
   project.yaml
   pack-lock.yaml
 
-.codex/skills/speccy-*/
-.claude/commands/speccy-*.md
-.claude/agents/speccy-*.md
-.agents/speccy-*.md
+.agents/skills/speccy-*/SKILL.md   # entry skills, Agent Skills standard (Codex)
+.codex/agents/speccy-*.toml        # Codex role/subagent definitions
+.claude/skills/speccy-*/SKILL.md   # entry skills (Claude Code)
+.claude/agents/speccy-*.md         # Claude subagent definitions
 ```
 
 Repo-local `.speccy/` holds exactly two files. `project.yaml` carries project
@@ -1210,10 +1231,10 @@ Commit by default:
   project.yaml
   pack-lock.yaml
 
-.codex/skills/speccy-*/
-.claude/commands/speccy-*.md
+.agents/skills/speccy-*/SKILL.md
+.codex/agents/speccy-*.toml
+.claude/skills/speccy-*/SKILL.md
 .claude/agents/speccy-*.md
-.agents/speccy-*.md
 ```
 
 Commit or attach selectively, via explicit `speccy export` commands: compact review packets and spec exports, written to explicit destinations such as `docs/specs/<spec-ref>/` or attached to the PR. These are useful when the team wants PR-visible evidence. They should be generated intentionally and kept compact. `.speccy/` itself holds no export folders.
@@ -1379,19 +1400,23 @@ language.
 
 Default target detection:
 
-1. If `.codex` exists, include `codex`.
+1. If `.codex` or `.agents` exists, include `codex` (Codex reads skills from `.agents/skills/` and agents from `.codex/agents/`).
 2. If `.claude` exists, include `claude`.
-3. If `.agents` exists, include `agents`.
-4. If multiple supported harnesses exist, install all detected targets unless `--target` narrows them.
-5. If no harness directory exists, no target can be auto-detected. Explain that no supported harness was detected and ask the user to choose `--target codex`, `--target claude`, `--target agents`, or `--target all`. In noninteractive mode, fail unless `--target` is provided.
+3. If multiple supported harnesses exist, install all detected targets unless `--target` narrows them.
+4. If no harness directory exists, no target can be auto-detected. Explain that no supported harness was detected and ask the user to choose `--target codex`, `--target claude`, or `--target all`. In noninteractive mode, fail unless `--target` is provided.
 
 Target values:
 
 - `auto`: default detection, and the behavior when no `--target` is given. Renders every detected harness, so a repo with both `.codex` and `.claude` gets both.
-- `codex`: repo-local Codex skills.
-- `claude`: repo-local Claude commands/agents.
-- `agents`: generic `.agents` pack.
+- `codex`: repo-local Codex pack (`.agents/skills/` + `.codex/agents/`).
+- `claude`: repo-local Claude pack (`.claude/skills/` + `.claude/agents/`).
 - `all`: all supported harness packs.
+
+There is no generic `agents` target. The harness reality check (2026-07-03)
+found no cross-harness convention for role/agent definition files:
+`.agents/` is standardized territory for Agent Skills only (agentskills.io;
+read by Codex, Amp, and OpenHands). A core-fields-only generic skills pack
+plus a root `AGENTS.md` pointer is a later capability.
 
 Install should be idempotent. A plain `speccy install` may create missing packs, repair missing managed files, update lock metadata, and report outdated packs. It must not apply upstream changes to existing managed prose unless `--update` is passed.
 
@@ -1532,9 +1557,10 @@ When the recommended route is regular harness planning, Speccy should not create
 Codex handoff:
 
 ```text
-Recommended route: Codex planning mode
-Next action: Switch Codex into its normal planning mode, then continue from the Speccy brainstorm handoff above. Produce a normal Codex plan only; do not create a Speccy spec or acceptance ledger yet.
+Recommended route: Codex Plan Mode
+Next action: /plan Continue from the Speccy brainstorm handoff above. Produce a normal Codex plan only; do not create a Speccy spec or acceptance ledger yet.
 Structured-question tool name for rendered Codex prose: request_user_input
+Alternative: cycle to Plan Mode with Shift+Tab, then paste the handoff.
 ```
 
 Claude Code handoff:
@@ -1993,8 +2019,8 @@ The MVP list:
 1. Local Speccy controller with run store external to the target repo.
 2. Built-in harness-aware template renderer with shared partials, Codex/Claude
    conditional exports, strict variables, and golden render tests.
-3. Repo-local Codex install pack with the entry skills (brainstorm, plan, implement, ship) plus internal role prompts for planning, implementation, review/verification, and repair.
-4. Repo-local Claude Code install pack with the same entry skills plus subagent definitions for the planner, worker, reviewer, validator, and repair roles.
+3. Repo-local Codex install pack: entry skills (brainstorm, plan, implement, ship) at `.agents/skills/`, role/subagent definitions at `.codex/agents/*.toml`.
+4. Repo-local Claude Code install pack: the same entry skills at `.claude/skills/`, subagent definitions at `.claude/agents/*.md`.
 5. Machine-oriented `speccy ctl ... --json` CLI surface that installed skills call for state transitions, evidence tools, and `run next` loop driving.
 6. Deterministic inbound custom-harness contract through `speccy ctl ... --json`; no Speccy-launched harness adapters.
 7. Deterministic planning packet generation plus harness-authored intake observations and candidate spec drafts.
@@ -2033,6 +2059,7 @@ Avoid in MVP:
 - Optional team-shared run store for enterprise/audit use, only after no-server review packets and run bundles prove insufficient.
 - If any mutable state ever becomes git-visible (for example, a team-shared mode committing state snapshots), it must be append-only with a union-by-event-id git merge driver; replace-style merges of state files silently lose data (per the external runtime-state storage survey, OpenSpec vs Spec Kitty).
 - Additional exports — lessons learned, acceptance snapshots, result summaries, raw run logs — if dogfooding proves the review packet and spec export are not enough.
+- Generic Agent Skills fallback pack: core-fields-only `SKILL.md` files for other `.agents/skills/` readers (Amp, OpenHands), plus a root `AGENTS.md` pointer — the maximally compatible cross-harness shape per the 2026-07-03 harness survey.
 - Model routing and budget optimizer.
 - Inbound Agent2Agent-compatible bridge owned by an external harness, if a team proves it adds value without moving orchestration state out of Speccy.
 - Reusable evidence templates, if real usage proves they reduce friction.

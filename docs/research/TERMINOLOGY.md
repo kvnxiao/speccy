@@ -915,8 +915,8 @@ It should be shown with a human label, a short reason, confidence, alternatives,
 and an exact next action phrase or command rendered for the active harness. For
 example, a Claude Code handoff can say `/plan Continue from the Speccy brainstorm
 handoff above...` or tell the user to switch to plan mode with `Shift+Tab`; a
-Codex handoff should use Codex planning-mode wording rather than assuming the
-same slash command exists.
+Codex handoff uses Codex's own `/plan` Plan Mode command (both harnesses expose
+one, verified 2026-07-03).
 
 The `speccy_spec` route's next action is `/speccy-plan`. The `harness_plan`
 route points to the harness's own plan mode, not `/speccy-plan`.
@@ -1212,9 +1212,10 @@ owned by "Storage Model" and "Git Policy" in `DESIGN.md`; the definitions:
 
 The default committed workflow shape: `.speccy/project.yaml` (project config
 plus machine-readable policy values) and `.speccy/pack-lock.yaml` (pack version
-pins plus render metadata), alongside rendered pack files under `.codex/`,
-`.claude/`, and `.agents/`. Policy, role, and evidence prose has no `.speccy/`
-folder of its own; it renders into the harness packs. Rendered files are
+pins plus render metadata), alongside rendered pack files under
+`.agents/skills/`, `.codex/agents/`, and `.claude/`. Policy, role, and
+evidence prose has no `.speccy/` folder of its own; it renders into the
+harness packs. Rendered files are
 reviewable, editable workflow artifacts with no product-source, build, runtime,
 or production footprint.
 

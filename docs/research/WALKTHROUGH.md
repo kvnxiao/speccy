@@ -37,10 +37,10 @@ Rendering pack: claude @ pack 0.1.0
 
   created  .speccy/project.yaml
   created  .speccy/pack-lock.yaml
-  created  .claude/commands/speccy-brainstorm.md
-  created  .claude/commands/speccy-plan.md
-  created  .claude/commands/speccy-implement.md
-  created  .claude/commands/speccy-ship.md
+  created  .claude/skills/speccy-brainstorm/SKILL.md
+  created  .claude/skills/speccy-plan/SKILL.md
+  created  .claude/skills/speccy-implement/SKILL.md
+  created  .claude/skills/speccy-ship/SKILL.md
   created  .claude/agents/speccy-planner.md
   created  .claude/agents/speccy-worker.md
   created  .claude/agents/speccy-reviewer.md
