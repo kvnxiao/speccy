@@ -563,6 +563,23 @@ Validator types can include:
 - Vacuity validator
 - Human validator
 
+Fresh-context code-review validation fans out as reviewer personas; see
+"Reviewer Persona".
+
+### Reviewer Persona
+
+A reviewer persona is a named review lens dispatched as a fresh-context
+subagent during task review rounds and run-gate review rounds.
+
+The default roster is `spec-fidelity`, `defects`, `security`, and `style`.
+The roster, per-persona model selection, pack rendering, and round scoping
+are defined in "Reviewer Personas" and "Repeat Review Rounds and Token
+Scoping" in `DESIGN.md`.
+
+Personas record findings and non-command evidence lease-free; the lease
+holder aggregates. "Persona" always means a reviewer lens, never a worker or
+planner role.
+
 ### Handoff
 
 A handoff is the worker's structured report after attempting a task.
@@ -587,7 +604,19 @@ succeeded.
 A finding is a structured validator observation.
 
 Findings can be positive, negative, uncertain, blocked, or advisory. Negative
-findings should name the affected requirement IDs where possible.
+findings should name the affected requirement IDs where possible. A finding
+records which reviewer persona produced it, when one did.
+
+### Provenance Scan
+
+The provenance scan is the deterministic controller check that product file
+contents carry no Speccy terminology or identifiers — no `speccy`, spec
+references, or requirement/run/task IDs in shipped source, comments, tests,
+docs, or config.
+
+It runs over each task diff at verification and over the integrated diff at
+final validation; a hit records a blocking finding. Scope, exemptions, and
+the deny-list live in "Provenance Hygiene" in `DESIGN.md`.
 
 ### Review Packet
 

@@ -1,9 +1,9 @@
 # Speccy Walkthrough: End to End in Claude Code
 
 Status: illustration (mocked outputs)
-Date: 2026-07-03
+Date: 2026-07-03 (regenerated after the reviewer-persona and provenance decisions)
 
-One complete scenario, from installing the harness pack into an existing repository through archiving the shipped spec. Every controller operation and human command appears at least once, with mocked inputs and outputs. This document is illustrative: `DESIGN.md` and `TERMINOLOGY.md` are authoritative, and if anything here conflicts with them, they win.
+One complete scenario, from installing the harness pack into an existing repository through archiving the shipped spec. Every controller operation and human command appears at least once, with mocked inputs and outputs. This document is illustrative: `DESIGN.md`, `TERMINOLOGY.md`, and `SCHEMAS.md` are authoritative, and if anything here conflicts with them, they win.
 
 ## Scenario
 
@@ -19,9 +19,9 @@ One complete scenario, from installing the harness pack into an existing reposit
 | --- | --- | --- |
 | Human | the developer | `speccy` human CLI, slash commands, prose approvals |
 | Orchestrating skill | the Claude Code session running a `/speccy-*` skill; holds the run lease | `spec *`, `run *`, `task *`, `packet *`, `requirement set-status` |
-| Worker subagent | fresh-context implementer spawned per task round | none — receives a task packet, returns a handoff |
-| Verifier personas | fresh-context reviewers spawned per verification | `evidence collect`, `evidence record`, `finding record` (lease-free) |
-| Controller | the `speccy` binary | executes `kind: command` evidence; applies derived transitions and git snapshots inside `run next` |
+| Worker subagent | fresh-context implementer spawned per task round; its prompt carries the provenance rule (no Speccy identifiers in product files) | none — receives a task packet, returns a handoff |
+| Reviewer personas | fresh-context reviewers spawned per verification, one per roster entry (`spec-fidelity`, `defects`, `security`, `style`), each with its own `model` frontmatter | `evidence collect`, `evidence record`, `finding record` (lease-free) |
+| Controller | the `speccy` binary | executes `kind: command` evidence; runs the provenance scan; applies derived transitions, round snapshots, and git snapshots inside `run next` |
 
 All `ctl` outputs use the envelope `{ok, data}` on success and `{ok: false, error: {code, message, details?}}` on refusal.
 
@@ -43,16 +43,21 @@ Rendering pack: claude @ pack 0.1.0
   created  .claude/skills/speccy-ship/SKILL.md
   created  .claude/agents/speccy-planner.md
   created  .claude/agents/speccy-worker.md
-  created  .claude/agents/speccy-reviewer.md
-  created  .claude/agents/speccy-validator.md
+  created  .claude/agents/speccy-verifier.md
   created  .claude/agents/speccy-repair.md
+  created  .claude/agents/speccy-reviewer-spec-fidelity.md
+  created  .claude/agents/speccy-reviewer-defects.md
+  created  .claude/agents/speccy-reviewer-security.md
+  created  .claude/agents/speccy-reviewer-style.md
   updated  .gitignore  (defensive .speccy/ block)
 
 Install OK. These are committed workflow artifacts; commit them to share
 the workflow with your team. Runtime state lives in ~/.speccy/ only.
 ```
 
-`.speccy/project.yaml` (machine-readable policy the controller enforces):
+The four `speccy-reviewer-*` files are rendered from the persona roster in `project.yaml` — one subagent per entry, per-persona `model` in the frontmatter. Editing the roster and re-running `speccy install` adds or removes persona files.
+
+`.speccy/project.yaml` (machine-readable policy the controller enforces; full schema in `DESIGN.md`):
 
 ```yaml
 risk_default: standard
@@ -60,6 +65,21 @@ caps:
   task_repair_rounds: 3
   run_review_rounds: 3
   structured_output_retries: 3
+  max_tasks: null
+  max_run_wall_clock_minutes: null
+evidence:
+  command_timeout_seconds: 600
+  command_output_max_bytes: 1048576
+review:
+  personas:
+    - name: spec-fidelity
+    - name: defects
+      model: opus
+    - name: security
+    - name: style
+      model: haiku
+provenance:
+  extra_terms: []
 ```
 
 `.gitignore` gains the defensive backstop (guards paths that should never exist, not a supported layout):
@@ -228,7 +248,7 @@ $ speccy ctl spec record-draft --spec SPEC-20260630-A7F4 --input spec-draft.json
         "message": "\"medium\" is not one of minimal|standard|high|critical" } ] } } }
 ```
 
-Lint findings come back in the write response — no separate lint call. The skill repairs with a focused patch:
+Lint findings come back in the write response — no separate lint call. The skill repairs with a focused patch (risk becomes `high`, an auth domain; R-AUTH-002 gets a browser evidence request):
 
 ```console
 $ speccy ctl spec patch-draft --spec SPEC-20260630-A7F4 --input spec-patch.json --json
@@ -387,14 +407,28 @@ $ speccy ctl packet task --run run_01j1... --task T1 --json
     "handoff_contract": { "record_with": "task record-handoff" } } }
 ```
 
-The skill spawns a fresh **worker subagent** (`speccy-worker` from the pack) with this packet. The worker implements the token model, endpoints, and tests, then returns its report, which the orchestrator records:
+The skill spawns a fresh **worker subagent** (`speccy-worker` from the pack) with this packet. The worker implements the token model, endpoints, and tests, then returns its report.
+
+The worker's first report omits a required field. Record operations are schema-validated with bounded repair (`structured_output_retries: 3`, then the run fails closed to `escalated`):
 
 ```console
 $ speccy ctl task record-handoff --run run_01j1... --lease lease_01j1c0k8 --input handoff.json --json
 ```
 ```json
-{ "ok": true, "data": { "task": "T1", "status": "reviewable", "handoff_id": "ho_9bc2" } }
+{ "ok": false, "error": { "code": "validation_failed",
+    "message": "handoff.json failed schema validation",
+    "details": [ { "code": "missing_field", "path": "files_touched",
+                   "message": "files_touched is required" } ] } }
 ```
+
+The skill retries with the field filled (attempt 2 of 3):
+
+```json
+{ "ok": true, "data": { "task": "T1", "status": "reviewable",
+    "handoff_id": "ho_9bc2", "round_snapshot": "b7e31d9" } }
+```
+
+`round_snapshot` is the round's dangling commit object, captured from the worktree without moving HEAD. It exists so later rounds get a deterministic `delta`.
 
 ### 3.3 Verification, round 1
 
@@ -402,14 +436,15 @@ $ speccy ctl task record-handoff --run run_01j1... --lease lease_01j1c0k8 --inpu
 { "ok": true, "data": {
     "run_state": "implementing",
     "action": "dispatch_task_verifier",
-    "subject": { "task": "T1" },
+    "subject": { "task": "T1",
+                 "personas": ["spec-fidelity", "defects", "security", "style"] },
     "round": { "current": 1, "max": 3, "scope": "task" },
     "packet_with": "packet verification",
     "record_with": "requirement set-status",
     "reason": "handoff ho_9bc2 recorded; T1 moved to in_review" } }
 ```
 
-The `reviewable → in_review` transition just happened inside `run next` — it is a derived transition with no recording op.
+The `reviewable → in_review` transition just happened inside `run next` — it is a derived transition with no recording op. `subject.personas` is the roster from `project.yaml` with tier scaling applied: this spec is `high`, so the full roster runs (a `minimal`-risk spec would collapse to one combined reviewer).
 
 ```console
 $ speccy ctl packet verification --run run_01j1... --requirements R-AUTH-001,R-AUTH-002,R-AUTH-003 --json
@@ -419,12 +454,23 @@ $ speccy ctl packet verification --run run_01j1... --requirements R-AUTH-001,R-A
     "scope": { "task": "T1",
                "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
     "round": 1, "handoff": "ho_9bc2",
+    "personas": ["spec-fidelity", "defects", "security", "style"],
     "diff": { "baseline": "f3d9e21", "files": 7, "insertions": 348, "deletions": 12 },
+    "delta": null,
     "prior_findings": [],
+    "provenance_scan": { "hits": 1, "findings": ["fd_77e0"] },
     "tools": ["evidence collect", "evidence record", "finding record"] } }
 ```
 
-The skill fans out fresh **verifier personas** (correctness, security). They call the lease-free evidence ops concurrently.
+`delta` is null on round 1 — there is no prior reviewed snapshot yet. The controller already ran the deterministic provenance scan over the task diff while assembling the packet; the worker left a process-language comment, and the deny-list caught the requirement ID:
+
+```json
+{ "id": "fd_77e0", "task": "T1", "persona": null,
+  "severity": "blocking", "recorded_by": "controller:provenance-scan",
+  "note": "src/server/auth/magic-link.ts:41 comment references \"R-AUTH-003\" — provenance deny-list hit" }
+```
+
+The skill fans out the four fresh **reviewer personas** named in `subject.personas`. They call the lease-free evidence ops concurrently.
 
 Command evidence is executed by the controller itself — the persona only chooses when:
 
@@ -459,22 +505,22 @@ $ speccy ctl evidence record --run run_01j1... --input evidence.json --json
 ```
 ```json
 { "ok": true, "data": { "id": "ev_12a6", "requirement": "R-AUTH-002",
-    "kind": "browser", "collected_by": "claude:verifier_T1",
+    "kind": "browser", "collected_by": "claude:reviewer_spec-fidelity_T1",
     "note": "second open of same link → 'link already used'; no session cookie set" } }
 ```
 
-A persona records the blocking finding on the failed expiry test:
+The `defects` persona records the blocking finding on the failed expiry test:
 
 ```console
 $ speccy ctl finding record --run run_01j1... --input finding.json --json
 ```
 ```json
 { "ok": true, "data": { "id": "fd_77e1", "requirement": "R-AUTH-003",
-    "severity": "blocking",
+    "persona": "defects", "severity": "blocking",
     "note": "token accepted at 16m; expiry window compared in ms vs seconds" } }
 ```
 
-The orchestrator (lease holder) aggregates the personas' judgments:
+The `security` and `style` personas come back clean (the `style` persona's checklist includes semantic provenance leakage; it confirms the scan's hit and finds no other process-language comments). The orchestrator (lease holder) aggregates:
 
 ```console
 $ speccy ctl requirement set-status --run run_01j1... --lease lease_01j1c0k8 --input status.json --json
@@ -505,10 +551,29 @@ $ speccy ctl requirement set-status --run run_01j1... --lease lease_01j1c0k8 --i
     "round": { "current": 2, "max": 3, "scope": "task" },
     "packet_with": "packet task",
     "record_with": "task record-handoff",
-    "reason": "R-AUTH-003 failed in round 1; task repair cap not exhausted" } }
+    "reason": "R-AUTH-003 failed and blocking finding fd_77e0 unresolved after round 1; task repair cap not exhausted" } }
 ```
 
-The controller counted the round and moved T1 `needs_repair → building` itself; the skill only reports "starting repair round 2 of 3". Round 2's `packet task` now carries `"prior_findings": [{"id": "fd_77e1", ...}]`, so the repair worker starts from the ms/seconds diagnosis instead of rediscovering it. The worker fixes the comparison, the verifier re-collects (`npm test -- auth/expiry` → `exit_code: 0`), and R-AUTH-003 is set `passed`.
+The controller counted the round and moved T1 `needs_repair → building` itself; the skill only reports "starting repair round 2 of 3". Round 2's `packet task` carries `"prior_findings": [{"id": "fd_77e0", ...}, {"id": "fd_77e1", ...}]`, so the repair worker starts from the ms/seconds diagnosis and the flagged comment instead of rediscovering them. The worker fixes the comparison and deletes the `R-AUTH-003` comment.
+
+Round 2's verification packet shows the token-scoping mechanics — full roster, smaller read:
+
+```json
+{ "ok": true, "data": {
+    "scope": { "task": "T1",
+               "requirements": ["R-AUTH-001", "R-AUTH-002", "R-AUTH-003"] },
+    "round": 2, "handoff": "ho_a103",
+    "personas": ["spec-fidelity", "defects", "security", "style"],
+    "diff": { "baseline": "f3d9e21", "files": 7, "insertions": 351, "deletions": 15 },
+    "delta": { "since": "b7e31d9", "files": 2, "insertions": 9, "deletions": 6 },
+    "prior_findings": [
+      { "id": "fd_77e0", "severity": "blocking", "resolution_claim": "comment removed" },
+      { "id": "fd_77e1", "severity": "blocking", "resolution_claim": "expiry compared in seconds" } ],
+    "provenance_scan": { "hits": 0, "findings": [] },
+    "tools": ["evidence collect", "evidence record", "finding record"] } }
+```
+
+Every persona re-runs — skipping clean personas is rejected by design, because a repair diff is new code — but each reviews the two-file `delta` and verifies its own prior blockers rather than re-reading the whole diff. The full diff stays available to pull in. `evidence collect` re-runs `npm test -- auth/expiry` → `exit_code: 0`, and R-AUTH-003 is set `passed`.
 
 Calling `run next` twice without recording anything returns the same directive — identical apart from lease renewal metadata — and that idempotency is the whole crash-recovery story (see Appendix B).
 
@@ -524,7 +589,7 @@ Calling `run next` twice without recording anything returns the same directive �
     "reason": "T1 integrated at snapshot 9c2f1ab; T2 is the next queued task" } }
 ```
 
-T1's `in_review → integrated` transition and its snapshot commit happened inside `run next` when every linked requirement resolved. T2 (expired-link UI) runs the same claim → dispatch → handoff → verify cycle and passes in one round; R-AUTH-004 is `passed` on browser evidence plus a UI test collected by the controller. Snapshot `c4d81e0`.
+T1's `in_review → integrated` transition and its snapshot commit — `speccy: SPEC-20260630-A7F4 T1 integrated (round 2)`, committed as `Speccy <noreply@speccy.local>` — happened inside `run next` when every linked requirement resolved and no blocking finding remained. T2 (expired-link UI) runs the same claim → dispatch → handoff → verify cycle and passes in one round; R-AUTH-004 is `passed` on browser evidence plus a UI test collected by the controller. Snapshot `c4d81e0`.
 
 ### 3.6 Final validation and the verified gate
 
@@ -533,14 +598,15 @@ T1's `in_review → integrated` transition and its snapshot commit happened insi
     "run_state": "verifying",
     "action": "run_final_validation",
     "subject": { "requirements": ["R-AUTH-001", "R-AUTH-002",
-                                   "R-AUTH-003", "R-AUTH-004"] },
+                                   "R-AUTH-003", "R-AUTH-004"],
+                 "personas": ["spec-fidelity", "defects", "security", "style"] },
     "round": { "current": 1, "max": 3, "scope": "run" },
     "packet_with": "packet verification",
     "record_with": "requirement set-status",
     "reason": "all tasks integrated; run-level integration and drift review required" } }
 ```
 
-A final fresh verifier reads the run-scoped verification packet, re-runs the full suite through `evidence collect`, reviews cross-task drift against the approved revision, and confirms the statuses. Then:
+The same roster fans out over the integrated whole-run diff while a final fresh verifier reads the run-scoped verification packet, re-runs the full suite through `evidence collect`, reviews cross-task drift against the approved revision, and confirms the statuses. The controller's provenance scan of the integrated diff comes back clean. Had anything failed here, the controller would have appended a run-level repair task `RT1` counted against `run_review_rounds` — same claim → dispatch → handoff → verify cycle, with run-scope deltas computed between the recorded snapshot commits. Nothing did:
 
 ```json
 { "ok": true, "data": {
@@ -551,6 +617,8 @@ A final fresh verifier reads the run-scoped verification packet, re-runs the ful
     "record_with": "run record-ship",
     "reason": "all requirements resolved (3 passed, 1 review_passed); ship or send back" } }
 ```
+
+This spec is `high`, so `review_passed` required a recorded `residual_risk` note. On a `critical` spec the same directive would first park at the accepted-risk confirmation gate.
 
 The skill builds the review packet and presents it. The autonomous session is done.
 
@@ -603,10 +671,17 @@ $ speccy ctl run next --run run_01j1... --agent claude:sess_9105 --json
                "expires_at": "2026-07-02T18:31:00Z" } } }
 ```
 
-PR opening is harness-side prose — Speccy makes no outbound calls:
+The ship prose offers a squash by default, so Speccy-labeled snapshot messages stay off the mainline (see "Provenance Hygiene" in `DESIGN.md`):
+
+```text
+This branch has 3 speccy-labeled snapshot commits.
+Squash them into one commit before opening the PR? (recommended)
+```
+
+Human: `yes` — the skill squashes harness-side, then opens the PR. PR opening is harness-side prose too; Speccy makes no outbound calls:
 
 ```console
-$ gh pr create --title "Passwordless login (SPEC-20260630-A7F4)" \
+$ gh pr create --title "Passwordless login" \
     --body-file review-packet.md --base main \
     --head speccy/spec-20260630-a7f4-passwordless-login
 https://github.com/acme/acme-app/pull/123
@@ -623,6 +698,17 @@ $ speccy ctl run record-ship --run run_01j1... --lease lease_01j1f2mq --input ch
       "url": "https://github.com/acme/acme-app/pull/123",
       "branch": "speccy/spec-20260630-a7f4-passwordless-login",
       "head_sha": "a7f4c2e", "base": "main" } } }
+```
+
+Any later `run next` before the merge is recorded returns `halt` — no autonomous action exists:
+
+```json
+{ "ok": true, "data": {
+    "run_state": "submitted",
+    "action": "halt",
+    "subject": null, "round": null,
+    "packet_with": null, "record_with": null,
+    "reason": "submitted awaiting external merge; record it with speccy accept" } }
 ```
 
 The skill closes with the boundary statement:
@@ -744,7 +830,37 @@ $ speccy ctl run next --run run_01j1... --agent claude:sess_9330 --json
 
 Nothing replays. The dead session's lease was cleared, the round counter and task status say exactly where the loop stopped, and the uncommitted diff belongs to T1 by the resume invariant. There is no `speccy resume` command — this is it.
 
-## Appendix C — Coverage
+## Appendix C — Human CLI odds and ends
+
+Commands not exercised by the happy path above:
+
+```console
+$ speccy new "Rate-limit magic link requests"
+Created draft spec SPEC-20260702-D3E8 "Rate-limit magic link requests".
+Next: open your harness and run /speccy-plan SPEC-20260702-D3E8
+
+$ speccy list --query magic
+Active specs matching "magic":
+
+1  SPEC-20260702-D3E8  Rate-limit magic link requests   draft
+
+Use: speccy review SPEC-20260702-D3E8
+
+$ speccy review SPEC-20260630-A7F4
+(prints the same review-packet first screen as packet review;
+ add --evidence to drill into the ledger, evidence, and findings)
+
+$ speccy export review SPEC-20260630-A7F4 --dest docs/specs/SPEC-20260630-A7F4/
+Wrote docs/specs/SPEC-20260630-A7F4/review-packet.md
+(explicit export destinations are exempt from provenance scanning)
+
+$ speccy cancel SPEC-20260702-D3E8
+Cancelled SPEC-20260702-D3E8 (draft, no runs). Recorded as spec decision.
+```
+
+`speccy new` records intent from outside a harness; it never drafts the spec or launches anything. `speccy cancel` on a spec with an active run cancels the run first (any active state → `cancelled`).
+
+## Appendix D — Coverage
 
 All 21 controller operations and the human CLI, by first appearance:
 
@@ -758,4 +874,8 @@ All 21 controller operations and the human CLI, by first appearance:
 | `packet planning` / `packet task` / `packet verification` / `packet review` / `packet escalation` | 2.2 / 3.2 / 3.3 / 3.6 / Appendix A |
 | `evidence collect` / `evidence record` / `finding record` | 3.3 |
 | `requirement set-status` | 3.3 |
-| `speccy install` / `doctor` / `accept` / `archive` / `status` / `list` | Phase 0 / Phase 0 / Phase 5 / Phase 5 / Phase 5 / Phase 5 |
+| `speccy install` / `doctor` | Phase 0 |
+| `speccy accept` / `archive` / `status` / `list` | Phase 5 |
+| `speccy new` / `list --query` / `review` / `export review` / `cancel` | Appendix C |
+
+Directive actions covered: `claim_task` (3.2), `dispatch_worker` (3.2), `dispatch_task_verifier` (3.3), `spawn_repair_round` (3.4), `run_final_validation` (3.6), `await_human_gate` (3.6, Phase 4), `halt` (Phase 4), `emit_escalation_packet` (Appendix A).

@@ -20,7 +20,7 @@ The core product promise:
 ## Design Principles
 
 1. **Harness-neutral by construction.** The run controller exposes stable controller operations and install packs, not vendor-specific execution paths.
-2. **Zero product-code footprint.** Speccy must not affect product source, the build graph, deployed artifacts, runtime dependencies, or production behavior. Repo-local harness packs are workflow artifacts and may be committed; runtime run state remains external or ignored by default.
+2. **Zero product-code footprint.** Speccy must not affect product source, the build graph, deployed artifacts, runtime dependencies, or production behavior. Repo-local harness packs are workflow artifacts and may be committed; runtime run state remains external or ignored by default. Shipped file contents must also carry no Speccy provenance (see "Provenance Hygiene").
 3. **Acceptance ledger, not process ceremony.** Every approved spec captures requirements, evidence, and status in one small ledger. Higher risk changes evidence strictness, not the workflow shape.
 4. **Shared state, not agent chat.** The run store is authoritative. Agent transcripts are evidence, not state.
 5. **Serial writes, parallel reads.** One writer at a time by default, enforced by a run-level lease. Parallelize research, review, and validation, including concurrent reviewer personas whose findings record without contention.
@@ -269,7 +269,7 @@ Vacuity checks can include:
 - Positive controls: run the scenario with valid inputs and confirm the success path.
 - Coverage anchors: require evidence that the test exercised specific files, endpoints, selectors, functions, or branches.
 - Diff relevance checks: confirm evidence references files changed by the task or known dependencies.
-- Requirement-to-test traceability: every generated test should name the requirement ID it proves.
+- Requirement-to-test traceability: the run store maps every generated test to the requirement it proves through the evidence artifacts recorded against that requirement. Traceability never goes into test names, comments, or any product file; that would ship process provenance (see "Provenance Hygiene").
 - Pre-fix failure, when possible: for bug fixes, the evidence path should fail against the baseline branch and pass after the fix.
 - Fresh-context adversarial review: a validator agent reviews the evidence path for vacuity, shallow checks, mocked-away behavior, overbroad snapshots, or tests that only assert implementation details.
 
@@ -454,7 +454,7 @@ This places part of the loop's reliability in prose the harness executes. To kee
 
 The controller backstops a misbehaving loop-driver with deterministic gates: it rejects invalid state transitions, refuses `verified` while any requirement is unresolved, refuses `passed` without recorded evidence, and enforces the repair cap. It cannot detect whether a verifier was genuinely fresh-context or whether recorded evidence is honest. That independence is arranged by the pack and made auditable by the evidence trail, not enforced at runtime.
 
-Per-role model selection lives in the skill/subagent frontmatter of the install pack, so the implementation seat and the verification seat can use different models or providers where the harness supports it.
+Per-role model selection lives in the skill/subagent frontmatter of the install pack, so the implementation seat and the verification seat can use different models or providers where the harness supports it. Reviewer personas add per-persona model selection through the roster config (see "Reviewer Personas").
 
 ### Deterministic Loop Driving: run next
 
@@ -544,9 +544,9 @@ controller contract includes a run-level lease:
 - Expired leases are cleared deterministically by the following `run next`
   call; a crashed session never wedges the run.
 
-Concurrent reviewers are the deliberate exception. A task's review phase may
-fan out several fresh-context reviewer personas — security, business-logic
-correctness, code style — that can complete at the same moment. Their
+Concurrent reviewers are the deliberate exception. A task's review phase fans
+out the configured fresh-context reviewer personas (see "Reviewer Personas"),
+which can complete at the same moment. Their
 operations are additive, not state-mutating, so they do not take the lease:
 
 - `finding record` and `evidence record` for non-command kinds are lease-free
@@ -568,6 +568,99 @@ Findings must carry forward. When a round fails, the next round's task packet
 and verification packet include the prior rounds' findings and the verifier's
 rejection reasons, so a repair round starts from what was learned instead of
 re-discovering the same failure.
+
+### Reviewer Personas
+
+A reviewer persona is a named review lens — a fresh-context subagent with its
+own charter prompt and its own model selection — dispatched during review.
+Personas are first-class pack citizens: each renders as a harness-native
+subagent file (`.claude/agents/speccy-reviewer-<persona>.md`,
+`.codex/agents/speccy-reviewer-<persona>.toml`), and the roster is
+configuration, not prose convention.
+
+Personas review at both loop scopes:
+
+- **Task review rounds.** Every `dispatch_task_verifier` directive names the
+  roster; the orchestrating skill fans the personas out over the task diff and
+  linked requirements. Rounds are capped by `caps.task_repair_rounds`.
+- **Run-gate review rounds.** `run_final_validation` fans the same roster out
+  over the integrated whole-run diff, alongside the drift and
+  requirement-coverage review. Rounds are capped by `caps.run_review_rounds`.
+
+Default roster (decided 2026-07-03):
+
+| Persona | Charter |
+| --- | --- |
+| `spec-fidelity` | Do the changes satisfy the linked requirements? Any scope drift? Is the evidence non-vacuous and adequate for the risk tier? |
+| `defects` | Implementation correctness independent of the spec text: logic errors, edge cases, error handling, concurrency, silent failures. |
+| `security` | Injection, authn/authz, secret handling, unsafe defaults, dependency risk. |
+| `style` | Documented conventions (`CLAUDE.md`/`AGENTS.md`, lint configs), idioms and known gotchas for the languages and frameworks in use, and comment quality — including process-provenance leakage (see "Provenance Hygiene"). |
+
+"Correctness" is deliberately split into `spec-fidelity` and `defects`
+(decision record 2026-07-03): the two fail independently — a change can
+satisfy every requirement and still break on an untested path — and a single
+combined prompt anchors on the ledger and under-hunts latent bugs. The split
+also lets the two lenses use different models. Further default splits
+(performance, test quality, docs) were rejected as roster bloat; teams add
+them as custom personas where the repo warrants it.
+
+The roster lives in `.speccy/project.yaml` (schema in "Harness-Native Install
+Packs") and is a render input: `speccy install` renders one subagent file per
+persona per target, with the persona's `model` — a plain string, or a map
+keyed by target when a repo renders multiple harnesses — in the rendered
+frontmatter. A persona with no `model` inherits the harness default. This is
+how reviewer models differ from each other and from the implementation seat:
+the worker, planner, verifier, and repair roles keep their own frontmatter
+`model` fields, and each persona carries its own. The rendered frontmatter
+stays the harness-authoritative surface; hand edits survive `--update`
+through the normal three-way merge.
+
+Controller involvement is deterministic and minimal: the roster is echoed in
+verification directives and packets so fan-out is controller-stated rather
+than prose-remembered, and each recorded finding carries the persona that
+produced it. The controller never judges persona prose. Persona findings and
+non-command evidence record lease-free, per "Run Lease and Concurrent
+Writers"; aggregation stays with the lease holder.
+
+Risk tiers scale the roster instead of adding process: `minimal`-risk specs
+collapse review to a single combined reviewer, because the full fan-out would
+be heavier than the change; `standard` and above run the full configured
+roster. An optional persona can carry a `min_risk` tier so it joins only
+`high` or `critical` reviews.
+
+### Repeat Review Rounds and Token Scoping
+
+Every review round runs the full persona roster. Skipping personas that
+raised no blocking findings in the prior round was considered and rejected
+(decision record 2026-07-03): a repair diff is new code, and any scheme where
+some persona never sees some shipped line trades correctness for tokens in
+the wrong direction — a security regression introduced while fixing a style
+finding must not survive to a later round. Output correctness outranks token
+savings.
+
+Token savings come from scoping what a re-review reads, not from skipping
+reviewers:
+
+- **Round deltas are deterministic.** At every `task record-handoff` the
+  controller records a round snapshot — a dangling commit object created from
+  the worktree without moving HEAD or touching the index — on the handoff.
+  The round-N+1 verification packet carries `delta`, the diff between the
+  previous reviewed round's snapshot and the current worktree, alongside the
+  full task diff reference against `baseline_commit`. On a task's first
+  review round there is no prior reviewed snapshot and `delta` is null.
+- **Findings and claims carry forward.** The packet includes prior rounds'
+  findings, the verifier's rejection reasons, and the repair handoff's
+  resolution claims, so no persona rediscovers a known failure.
+- **Personas re-review the delta, not the world.** Persona prose instructs
+  each reviewer to verify that its own prior blocking findings are actually
+  resolved, review the delta fresh, and not re-litigate unchanged code it
+  already passed. The full diff stays available to pull in — the delta
+  focuses attention, it does not truncate access — because a repair can
+  interact with unchanged code across files.
+
+Run-gate review rounds get their deltas for free: tasks integrate as real
+snapshot commits and run-level repair tasks (`RT<n>`) record handoffs the
+same way, so the round delta is a diff between recorded snapshots.
 
 ### Resume and Crash Recovery
 
@@ -613,9 +706,10 @@ precondition.
 Controller-created commits — task snapshots and escalation snapshots — use
 the committer identity `Speccy <noreply@speccy.local>` and the message
 formats `speccy: <spec-ref> <task-id> integrated (round <n>)` and
-`speccy: <spec-ref> escalation snapshot`. The controller never squashes; if a
-team wants a clean history, `/speccy-ship` prose may offer a squash before
-opening the PR.
+`speccy: <spec-ref> escalation snapshot`. The controller never squashes;
+`/speccy-ship` prose offers a squash by default before opening the PR, so
+Speccy-labeled messages stay off the mainline unless the team wants them
+(see "Provenance Hygiene").
 
 The resume invariant assumes HEAD only moves through controller snapshots
 while a run is active. `run next` verifies that HEAD matches the last
@@ -623,6 +717,49 @@ recorded snapshot (or the recorded base before any snapshot exists); if a
 human or another tool committed out-of-band, the run parks at an `escalated`
 policy gate naming the unexpected commits, and the human decides whether to
 fold them in, reset, or cancel.
+
+### Provenance Hygiene
+
+Speccy is an ephemeral layer, and the shipped artifact must not betray it.
+Product file contents — source, comments, tests, docs, config, migrations —
+must never reference Speccy terminology or identifiers: no `speccy`, no
+`SPEC-...` references, no requirement/run/task IDs, no ledger or round
+vocabulary. The end state of the code must read as if it were implemented by
+hand or through the harness's ordinary plan-and-implement flow (decision
+record 2026-07-03).
+
+The rule scopes to file contents. Deliberate workflow artifacts are exempt:
+the rendered harness packs, `.speccy/`, and anything the user explicitly
+exports (`speccy export` destinations such as `docs/specs/`).
+Change-management metadata is a policy boundary, not a violation: run-branch
+snapshot commits are Speccy-labeled by design, and the PR metadata block in
+"Lightweight Team Sharing" is intentionally Speccy-labeled. Teams that do not
+want `speccy:` messages in mainline history squash on merge; `/speccy-ship`
+offers the squash by default before opening the PR.
+
+Enforcement is three cheap layers, none of them a dedicated agent:
+
+1. **Deterministic provenance scan.** The controller scans the diff — each
+   task diff at verification, the integrated diff at final validation —
+   against a deny-list: `speccy` (case-insensitive), spec references, the
+   run's requirement/task/run IDs, and any extra terms configured under
+   `provenance.extra_terms` in `project.yaml`. Exempt paths are excluded. A
+   hit records a blocking finding and feeds the normal repair round. String
+   matching is exactly deterministic-core work: zero tokens, no judgment
+   calls, runs every round.
+2. **Prevention in role prose.** Worker and repair prompts carry a standing
+   rule: never write Speccy identifiers or process language into product
+   files, including test names — requirement-to-test traceability lives in
+   the run store's evidence records, never in the test itself.
+3. **Semantic backstop in review.** The `style` persona's checklist covers
+   leakage a regex cannot catch: comments or docs written in process language
+   ("this satisfies the requirement that...", "round 2 fix"), or narrative
+   that explains the change to a reviewer instead of the next reader.
+
+A dedicated provenance reviewer persona was considered and rejected:
+identifiers are mechanical to catch, and a run-gate-only auditor would let a
+task-level leak survive every task round before costing a run-level repair
+round to fix.
 
 ### Harness-Aware Template Rendering
 
@@ -716,7 +853,8 @@ Codex install pack (paths verified against Codex docs, 2026-07-03):
 - Role/subagent definitions at `.codex/agents/speccy-*.toml` — Codex custom
   agents are TOML files with `name`, `description`,
   `developer_instructions`, and optional `model`, `model_reasoning_effort`,
-  and `sandbox_mode`.
+  and `sandbox_mode`. This includes one reviewer subagent per configured
+  persona (`speccy-reviewer-<persona>.toml`; see "Reviewer Personas").
 - Optional Codex plugin manifest (`.codex-plugin/plugin.json`) bundling
   skills and MCP configuration — a later packaging convenience, not the MVP
   default.
@@ -729,7 +867,8 @@ Claude Code install pack (paths verified against Claude Code docs,
   (`.claude/commands/*.md` still works but is legacy and never
   auto-invokes; Speccy renders skills.)
 - Claude subagent definitions at `.claude/agents/speccy-*.md` for the
-  planner, worker, reviewer, validator, and repair roles, with per-role
+  planner, worker, verifier, and repair roles, plus one reviewer subagent per
+  configured persona (see "Reviewer Personas"), with per-role and per-persona
   `model` frontmatter.
 - Optional MCP configuration only for workflows that explicitly need MCP.
 
@@ -755,8 +894,9 @@ Recommended repo-local shape:
 
 Repo-local `.speccy/` holds exactly two files. `project.yaml` carries project
 configuration and machine-readable policy values (risk defaults, repair and
-retry caps, evidence execution limits); `pack-lock.yaml` pins pack versions
-and render metadata. There are no `policies/`, `roles/`, or
+retry caps, evidence execution limits, the reviewer persona roster with
+per-persona models, provenance deny terms); `pack-lock.yaml` pins pack
+versions and render metadata. There are no `policies/`, `roles/`, or
 `evidence-presets/` folders: that prose is harness-facing, so it is
 template-rendered into the selected harness pack (`.claude/`, `.codex/`,
 `.agents/`) where the agent actually reads it, and edited there. Runtime run
@@ -775,6 +915,17 @@ caps:
 evidence:
   command_timeout_seconds: 600
   command_output_max_bytes: 1048576
+review:
+  personas:                         # roster; render input for reviewer subagents
+    - name: spec-fidelity
+    - name: defects
+      model: opus                   # optional; string, or map keyed by target
+    - name: security
+    - name: style
+      model: haiku
+      min_risk: null                # optional; persona joins only at this tier or above
+provenance:
+  extra_terms: []                   # extra deny-list terms for the provenance scan
 ```
 
 ### Controller API Surface
@@ -1334,7 +1485,7 @@ Implementation is a serial task execution loop. Each task gets its own implement
 2. Harness worker receives a task packet scoped to linked requirements, expected files/areas, evidence requests, and known constraints.
 3. Worker implements only that task.
 4. Worker returns a handoff.
-5. A fresh task reviewer/verifier reviews the handoff, diff, commands, and linked requirement evidence.
+5. The configured reviewer personas fan out fresh-context over the handoff, diff, commands, and linked requirement evidence (see "Reviewer Personas"); the orchestrating verifier aggregates their findings.
 6. The task verifier collects evidence for linked requirements, using Speccy evidence tools when useful.
 7. The verifier handles semantic review and evidence adequacy review at the depth required by the risk tier.
 8. Acceptance statuses update from collected evidence plus structured verifier findings.
@@ -1345,14 +1496,15 @@ Implementation is a serial task execution loop. Each task gets its own implement
 
 Final validation is a run-level evidence and drift review after task execution. It should not duplicate every task review by default; it checks whether the whole spec still holds after integration:
 
-1. Final verifier reads the acceptance ledger, task handoffs, validator findings, and integrated diff.
+1. Final validation fans out the reviewer persona roster over the integrated whole-run diff (see "Reviewer Personas"); the final verifier reads the acceptance ledger, task handoffs, validator findings, and integrated diff.
 2. Verifier gathers baseline integration evidence: format, lint, typecheck, targeted project commands, relevant existing tests, or browser/API checks.
 3. Verifier checks requirement coverage across all tasks and identifies requirements that remain failed, vacuous, blocked, unproven, waived, or only review-passed.
 4. Verifier performs drift review: compare approved spec/plan/task scopes against the final diff, handoffs, and decisions.
 5. Verifier reviews whether the evidence set actually supports the spec at the selected risk depth.
-6. Verifier records run-level findings, residual risk, and repair recommendations.
-7. Failed integration checks, cross-task regressions, or drift create run-level repair tasks, waiver requests, scope-change decisions, or escalated states.
-8. Human final review happens when policy requires it.
+6. The controller runs the deterministic provenance scan over the integrated diff; hits record blocking findings (see "Provenance Hygiene").
+7. Verifier records run-level findings, residual risk, and repair recommendations.
+8. Failed integration checks, cross-task regressions, drift, or provenance hits create run-level repair tasks, waiver requests, scope-change decisions, or escalated states.
+9. Human final review happens when policy requires it.
 
 Acceptance status uses the eight canonical requirement statuses defined in `TERMINOLOGY.md` ("Requirement Status"). `pending` marks an item whose evidence has not been collected yet; validation resolves each remaining item to `passed`, `review_passed`, `failed`, `vacuous`, `blocked`, `unproven`, or `waived`.
 
@@ -2007,6 +2159,8 @@ Track:
 - Drift events.
 - Human gate decisions.
 - Validator disagreement.
+- Findings by reviewer persona.
+- Provenance scan hits.
 
 These metrics should feed both local improvement and product evaluation.
 
@@ -2031,6 +2185,8 @@ The MVP list:
 12. Acceptance ledger completeness enforced structurally: the draft lint requires an evidence request per requirement before approval, and the `verified` gate requires every requirement resolved.
 13. Speccy verifier role/agent for semantic scenario review and adversarial evidence review, invoked inside `/speccy-implement`.
 14. Markdown review packet.
+15. Configurable reviewer persona roster (default: `spec-fidelity`, `defects`, `security`, `style`) rendered as per-persona subagent files with per-persona model selection, fanned out in task review and run-gate review.
+16. Deterministic provenance scan over task diffs and the integrated run diff.
 
 Avoid in MVP:
 
@@ -2080,7 +2236,7 @@ Avoid in MVP:
 11. **Review packet format:** Markdown only, JSON plus Markdown, or an HTML report?
 12. **Lessons learned:** How can the system accumulate project learning without leaking operational state or affecting product-code/build/runtime footprint?
 13. **Parallel writes — resolved 2026-07-02.** Explicitly out of scope for MVP: writes are serial, enforced by the run lease. Worktree-based parallel writes remain a later capability; the enabling threshold will be revisited with real usage data.
-14. **Validator diversity:** Should implementation and validation default to different harnesses/models when available?
+14. **Validator diversity — resolved 2026-07-03.** Per-persona and per-role model selection is a first-class render input (`review.personas[].model` in `project.yaml`, per-role frontmatter in the packs), so reviewer models can differ from each other and from the implementation seat. The default stays harness-inherited models with no forced diversity; cross-harness diversity remains manual configuration.
 15. **Cost controls — resolved 2026-07-02.** Fail closed at the cap. Resource caps — repair rounds, plus optional task-count and wall-clock caps in `.speccy/project.yaml` — park the run at an `escalated` policy gate; the human raises the cap or cancels, and the same run resumes. Speccy makes no LLM calls and cannot meter tokens; token budgets belong to the harness.
 16. **Dirty worktrees — resolved 2026-07-02.** `run start` refuses a dirty worktree; no run is created until the workspace is clean. This keeps the resume invariant sound: once a run exists, any uncommitted diff is attributable to the run's in-flight task.
 17. **No-git projects — resolved 2026-07-02.** Not supported, in MVP or later. Resume and evidence baselines depend on git snapshots and `baseline_commit`; a workspace must be a git repository or a subtree of one. Speccy refuses non-git directories with a clear error.

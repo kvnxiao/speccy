@@ -66,6 +66,9 @@ Write operations that lint return their findings inside `data`:
   `await_human_gate`, `emit_escalation_packet`, `halt`.
 - `subject` — the fields relevant to the action; unused fields are null.
   `gate` values: `ship_decision`, `escalation`, `accepted_risk_confirmation`.
+  For `dispatch_task_verifier` and `run_final_validation`, `subject.personas`
+  carries the reviewer persona roster to fan out (from `project.yaml`, tier
+  scaling applied).
 - `round` — null when no round applies. `scope`: `task` | `run`.
 - `packet_with` / `record_with` — controller operation names, or null.
 - `lease` — present on every `run next` response; renewal changes only
@@ -197,6 +200,7 @@ artifact: ""                          # optional; path/reference to a stored art
 ```yaml
 requirement: R-AUTH-003               # optional; findings may be run-scoped
 task: T1                              # optional
+persona: defects                      # optional; the reviewer persona that produced it
 severity: blocking                    # blocking | advisory | positive | uncertain
 note: "token accepted at 16m; expiry window compared in ms vs seconds"
 recorded_by: "claude:verifier_T1"
@@ -231,3 +235,8 @@ controller-assembled work orders; representative examples live in
 `WALKTHROUGH.md` (planning 2.2, task 3.2, verification 3.3). `packet review`
 and `packet escalation` carry the rendered human-facing text in a
 `data.markdown` field alongside the structured fields.
+
+Verification packets name the persona roster to fan out and, from round 2
+on, carry `delta` — the diff since the last reviewed round snapshot —
+alongside the full diff reference and `prior_findings` (mechanics in "Repeat
+Review Rounds and Token Scoping" in `DESIGN.md`).

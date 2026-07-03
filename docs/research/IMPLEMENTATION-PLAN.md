@@ -52,7 +52,7 @@ Goal: crash-safe JSONL store under `~/.speccy/`.
 - [ ] Atomic write helpers: temp → fsync → rename for whole files; append + fsync + verified read-back for JSONL
 - [ ] Per-workspace store lock serializing event appends across concurrent `speccy` processes
 - [ ] Event model: serde enum of controller events; spec-scoped and run-scoped `events.jsonl`; replay → in-memory projection; corrupt/truncated-tail detection that fails closed and names the byte offset
-- [ ] `.speccy/project.yaml` load with defaults (full schema in `DESIGN.md`: repair caps, structured-output retry cap, optional task-count/wall-clock caps, evidence execution limits)
+- [ ] `.speccy/project.yaml` load with defaults (full schema in `DESIGN.md`: repair caps, structured-output retry cap, optional task-count/wall-clock caps, evidence execution limits, reviewer persona roster with per-persona models, provenance extra terms)
 
 Verify: replay determinism (same events → same projection); truncated-tail rejection; atomic-write crash simulation (interrupt between temp and rename leaves prior state intact); multi-process append test (N processes × M events, all land, replay clean) on Windows and POSIX.
 
@@ -76,7 +76,7 @@ Goal: the deterministic loop heart.
 
 - [ ] `ctl run start` gates: revision approved, workspace is a git repo, clean worktree; instantiates the runtime task graph from the approved revision
 - [ ] Run states (`created` → `landed`), task statuses (`queued` → `deferred`), controller-owned round counters, caps read from `project.yaml`
-- [ ] `ctl run next`: idempotent directive engine emitting `{run_state, action, subject, round{current,max,scope}, packet_with, record_with, reason}` with the closed action vocabulary (`claim_task` … `halt`); applies all controller-derived transitions (task: `reviewable` → `in_review`, `needs_repair` → `building`, `in_review` → `integrated` + snapshot; run: `created` → `implementing`, `implementing` → `verifying`, `verifying` → `verified`, → `escalated`) before answering; escalation directive on cap exhaustion
+- [ ] `ctl run next`: idempotent directive engine emitting `{run_state, action, subject, round{current,max,scope}, packet_with, record_with, reason}` with the closed action vocabulary (`claim_task` … `halt`); applies all controller-derived transitions (task: `reviewable` → `in_review`, `needs_repair` → `building`, `in_review` → `integrated` + snapshot; run: `created` → `implementing`, `implementing` → `verifying`, `verifying` → `verified`, → `escalated`) before answering; escalation directive on cap exhaustion; `dispatch_task_verifier`/`run_final_validation` directives carry `subject.personas` (roster from `project.yaml`, tier scaling applied)
 - [ ] Run-level repair tasks: dynamic `RT<n>` appended to the task graph, linked to failing requirement IDs, counted against `run_review_rounds`
 - [ ] Run lease: issued/renewed by `run next --agent <id>`, agent-bound token with 10-minute default expiry (OS file lock + lease record); state-mutating ops require the live token via `--lease <token>`; `lease_held` error names the holder; `run next` clears expired leases
 - [ ] `ctl packet task`, `ctl task claim` (→ `building`), `ctl task record-handoff` (→ `reviewable`), `ctl run status`
@@ -91,6 +91,7 @@ Goal: snapshots and resume invariants.
 - [ ] Run branch: create `speccy/<spec-ref>-<slug>` from HEAD at first `run start`, record the base, reuse the branch across runs of the same spec
 - [ ] Snapshot commits with the `Speccy <noreply@speccy.local>` identity and `speccy: <spec-ref> …` message formats; no controller squash
 - [ ] `baseline_commit` recorded at `task claim`; snapshot commit at `integrated`; labeled escalation snapshot before parking
+- [ ] Round snapshots: dangling commit object captured from the worktree at each `task record-handoff` (HEAD and index untouched, `git stash create`-style plumbing), recorded on the handoff to enable round deltas
 - [ ] Out-of-band commit detection: HEAD ≠ last recorded snapshot/base → `escalated` policy gate naming the unexpected commits
 - [ ] Resume derivation: task status + round counter + worktree dirtiness vs last snapshot → "resume partial task, diffed against `baseline_commit`" or "dispatch fresh"
 - [ ] Refusals: `not_a_git_repo` and `dirty_worktree` at `run start`
@@ -104,12 +105,13 @@ Goal: the trust layer.
 - [ ] `ctl evidence collect`: for `kind: command` the controller spawns the command via the platform shell in the workspace root, under the `project.yaml` timeout and output byte caps, captures exit code/stdout/stderr, hashes and stores the artifact; worktree dirty-state recorded before/after
 - [ ] Workspace command lock: only one command evidence execution at a time; taken without the run lease
 - [ ] `ctl evidence record`: refuses agent-supplied output for `kind: command`; accepts review/browser/manual kinds
-- [ ] `ctl finding record`: lease-free like non-command `evidence record`, one file per finding/evidence ID (safe for concurrent reviewer personas)
+- [ ] `ctl finding record`: lease-free like non-command `evidence record`, one file per finding/evidence ID (safe for concurrent reviewer personas); carries optional `persona`
 - [ ] `ctl requirement set-status` with the transition matrix and evidence prerequisites from "Requirement Resolution Rules"; `verified` gate refuses while any requirement is unresolved; critical-tier accepted-risk confirmation gate
-- [ ] `ctl packet verification`; prior-round findings carried into next-round packets
+- [ ] `ctl packet verification`; prior-round findings carried into next-round packets; round-2+ packets carry `delta` computed from the round snapshots; `personas` named in the packet
+- [ ] Provenance scan: deny-list scan (`speccy` case-insensitive, spec refs, the run's requirement/run/task IDs, `provenance.extra_terms`) over task diffs at verification and the integrated diff at final validation, exempt paths (packs, `.speccy/`, export destinations) excluded; hits record blocking findings
 - [ ] Secret hygiene stub: env scrubbing for stored command output (full redaction model stays open, Q18)
 
-Verify: command evidence executes and hashes; timeout and byte caps enforced; pasted command output refused; N simultaneous `finding record`/`evidence record` writes all land; concurrent `evidence collect` calls serialize; `verified` refused while a requirement is `pending`; round-2 packet contains round-1 findings.
+Verify: command evidence executes and hashes; timeout and byte caps enforced; pasted command output refused; N simultaneous `finding record`/`evidence record` writes all land; concurrent `evidence collect` calls serialize; `verified` refused while a requirement is `pending`; round-2 packet contains round-1 findings and a non-null `delta`; provenance scan flags a seeded leak in a product file and ignores the same string in a pack file.
 
 ### M6 — Review/escalation packets + human CLI
 
@@ -130,10 +132,11 @@ Goal: the two-harness forcing function (Claude Code + Codex both first-class).
 - [ ] `minijinja` environment: strict undefined, deterministic output, custom filters for markdown/YAML-frontmatter and TOML escaping (Codex agent defs are TOML)
 - [ ] Template bundle embedded in the binary; shared partials + Claude/Codex overlays; conditional exports; template context per DESIGN (`target`, `capabilities`, `names`, `paths`, `controller`, `pack`)
 - [ ] Entry-skill templates (brainstorm, plan, implement, ship) + role/subagent prompts — thin prose driving the `next-action` cycle with the defensive rules from DESIGN; rendered to `.claude/skills/` + `.claude/agents/*.md` (Claude) and `.agents/skills/` + `.codex/agents/*.toml` (Codex); structured-question tool referenced only in entry skills, never subagent prompts
+- [ ] Reviewer persona rendering: one `speccy-reviewer-<persona>` subagent per `project.yaml` roster entry, per-persona `model` (string or per-target map) in rendered frontmatter; worker/repair prompts carry the provenance rule; `style` persona checklist carries the semantic-leakage item
 - [ ] `speccy install`: harness auto-detect (`.claude` → claude; `.codex` or `.agents` → codex), idempotent create/repair, `--target`, `--check`, `--dry-run`; writes `.speccy/project.yaml`, `pack-lock.yaml` (pack version + source template IDs + source/rendered SHA-256 + capability flags), defensive `.gitignore` block
 - [ ] `speccy install --update`: three-way merge over rendered outputs; conflicts written to `.speccy/pack-updates/<timestamp>/` (may slip to M8)
 
-Verify: golden render tests for every managed file × both targets (`insta` snapshots); install-twice idempotency; hash drift caught by `--check`.
+Verify: golden render tests for every managed file × both targets (`insta` snapshots); install-twice idempotency; hash drift caught by `--check`; roster change in `project.yaml` adds/removes persona files on re-install.
 
 ### M8 — End-to-end walking skeleton + dogfood
 
