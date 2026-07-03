@@ -426,7 +426,10 @@ For `kind: command` evidence, the collector is the controller itself:
 `speccy ctl evidence collect` executes the command and records exit code,
 stdout, stderr, and a content hash, and `evidence record` refuses agent-pasted
 output for that kind. Review, browser, and manual evidence remain agent- or
-human-collected and are treated as weaker by the risk tiers.
+human-collected and are treated as weaker by the risk tiers. On `high` and
+`critical` specs, browser and API evidence must reference a stored artifact
+(screenshot, trace, DOM capture, HTTP transcript), not prose alone; the rule
+lives in "Acceptance Ledger" in `DESIGN.md`.
 
 ### Requirement Status
 
@@ -469,6 +472,27 @@ The canonical status is always the requirement status. A verified run has an
 empty **Needs you** bucket. Blocked, unproven, failed, vacuous, or pending
 requirements stop at an escalation or policy gate until they are resolved,
 waived, or converted to review-passed with explicit residual risk.
+
+### Run Status Label
+
+A run status label is the coarse rollup of run state shown on `speccy status`
+cards, the sibling of the human status bucket: humans read phases, not the
+run-state enum.
+
+- **Implementing**: maps `created` and `implementing`; shown with the current
+  task and round.
+- **Verifying**: maps `verifying`.
+- **Ready to ship**: maps `verified`.
+- **Needs you**: maps `escalated`.
+- **Awaiting merge**: maps `submitted`.
+- **Interrupted**: any active state whose run lease has expired with no
+  session holding it; shown with resume attribution (see "Resume and Crash
+  Recovery" in `DESIGN.md`).
+
+Labels are a rendering rule for status cards, not a stored value. The
+canonical state is always the run state; `landed` and `cancelled` runs are
+not active and get no card. Card behavior lives in "CLI/Admin Flow" in
+`DESIGN.md`.
 
 ### Task
 
@@ -1283,6 +1307,7 @@ snapshots.
 | handoff | summary | Handoff is structured and tied to task/requirements. |
 | review packet | report, transcript | Packet is compact and decision-oriented. |
 | human status bucket | requirement status | Coarse checkpoint rollup; the requirement status stays canonical. |
+| run status label | run state, run phase | Coarse status-card rollup; the run state stays canonical. |
 | escalation packet | failure report | Scoped to the unsatisfiable requirement, not the whole run. |
 | capability escalation | timeout, crash | The run gave up after exhausting its repair cap, not an error. |
 | decision record | audit note | Decision records are structured history. |

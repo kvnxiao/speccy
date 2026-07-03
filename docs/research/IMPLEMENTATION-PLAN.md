@@ -81,7 +81,7 @@ Goal: the deterministic loop heart.
 - [ ] Run lease: issued/renewed by `run next --agent <id>`, agent-bound token with 10-minute default expiry (OS file lock + lease record); state-mutating ops require the live token via `--lease <token>`; `lease_held` error names the holder; `run next` clears expired leases
 - [ ] `ctl packet task`, `ctl task claim` (→ `building`), `ctl task record-handoff` (→ `reviewable`), `ctl run status`
 
-Verify: full happy-path state walk; two concurrent fake agents (second gets `lease_held`); expired-lease takeover; `run next` idempotency (call twice without recording → identical directive apart from lease metadata and `applied_transitions`, which empties on the repeat); repair-cap exhaustion → `escalated`; run-level repair task cycle.
+Verify: full happy-path state walk; two concurrent fake agents (second gets `lease_held`); expired-lease takeover (directive `resume` names the cleared lease); `run next` idempotency (call twice without recording → identical directive apart from lease metadata, `applied_transitions`, and `resume`, which empty on the repeat); repair-cap exhaustion → `escalated`; run-level repair task cycle.
 
 ### M4 — Git integration
 
@@ -93,7 +93,7 @@ Goal: snapshots and resume invariants.
 - [ ] `baseline_commit` recorded at `task claim`; snapshot commit at `integrated`; labeled escalation snapshot before parking
 - [ ] Round snapshots: dangling commit object captured from the worktree at each `task record-handoff` (HEAD and index untouched, `git stash create`-style plumbing), recorded on the handoff to enable round deltas
 - [ ] Out-of-band commit detection: HEAD ≠ last recorded snapshot/base → `escalated` policy gate naming the unexpected commits
-- [ ] Resume derivation: task status + round counter + worktree dirtiness vs last snapshot → "resume partial task, diffed against `baseline_commit`" or "dispatch fresh"
+- [ ] Resume derivation: task status + round counter + worktree dirtiness vs last snapshot → "resume partial task, diffed against `baseline_commit`" or "dispatch fresh"; expired-lease resumes fill the directive `resume.dirty_diff` summary (files, +/- counts, vs `baseline_commit`)
 - [ ] Refusals: `not_a_git_repo` and `dirty_worktree` at `run start`
 
 Verify: integration tests against temp git repos — both refusal paths; branch created then reused; baseline/snapshot SHAs recorded; out-of-band commit parks the run; kill mid-task then `run next` returns the correct directive with the partial diff attributed.
@@ -104,14 +104,14 @@ Goal: the trust layer.
 
 - [ ] `ctl evidence collect`: for `kind: command` the controller spawns the command via the platform shell in the workspace root, under the `project.yaml` timeout and output byte caps, captures exit code/stdout/stderr, hashes and stores the artifact; worktree dirty-state recorded before/after
 - [ ] Workspace command lock: only one command evidence execution at a time; taken without the run lease
-- [ ] `ctl evidence record`: refuses agent-supplied output for `kind: command`; accepts review/browser/manual kinds
+- [ ] `ctl evidence record`: refuses agent-supplied output for `kind: command`; accepts review/browser/api/manual kinds; refuses browser/api records without a stored `artifact` reference on `high`/`critical` specs
 - [ ] `ctl finding record`: lease-free like non-command `evidence record`, one file per finding/evidence ID (safe for concurrent reviewer personas); carries optional `persona`
 - [ ] `ctl requirement set-status` with the transition matrix and evidence prerequisites from "Requirement Resolution Rules"; `verified` gate refuses while any requirement is unresolved; critical-tier accepted-risk confirmation gate
 - [ ] `ctl packet verification`; prior-round findings carried into next-round packets; round-2+ packets carry `delta` computed from the round snapshots; `personas` named in the packet
 - [ ] Provenance scan: deny-list scan (`speccy` case-insensitive, spec refs, the run's requirement/run/task IDs, `provenance.extra_terms`) over task diffs at verification and the integrated diff at final validation, exempt paths (packs, `.speccy/`, export destinations) excluded; hits record blocking findings
 - [ ] Secret hygiene stub: env scrubbing for stored command output (full redaction model stays open, Q18)
 
-Verify: command evidence executes and hashes; timeout and byte caps enforced; pasted command output refused; N simultaneous `finding record`/`evidence record` writes all land; concurrent `evidence collect` calls serialize; `verified` refused while a requirement is `pending`; round-2 packet contains round-1 findings and a non-null `delta`; provenance scan flags a seeded leak in a product file and ignores the same string in a pack file.
+Verify: command evidence executes and hashes; timeout and byte caps enforced; pasted command output refused; artifact-less browser evidence refused at `high`, accepted at `standard`; N simultaneous `finding record`/`evidence record` writes all land; concurrent `evidence collect` calls serialize; `verified` refused while a requirement is `pending`; round-2 packet contains round-1 findings and a non-null `delta`; provenance scan flags a seeded leak in a product file and ignores the same string in a pack file.
 
 ### M6 — Review/escalation packets + human CLI
 
@@ -120,7 +120,7 @@ Goal: the human-facing endpoints.
 - [ ] `ctl packet review` (markdown; Proven / Accepted risk / Needs you buckets)
 - [ ] `ctl packet escalation`: requirement-scoped; approaches tried per round, partial work applied, one closing question
 - [ ] `ctl run record-decision` (run-scoped gate decisions and waivers), `ctl run record-ship` (`verified` → `submitted`, records `change_ref`)
-- [ ] Human CLI: `status`, `list` (+ `--query` selectors, `--json` for skill-side selector resolution), `review`, `accept` (`submitted` → `landed`, optional `--pr`/`--note`), `archive`, `cancel`, `new` (minimal), `export review` (writes the review packet to an explicit destination)
+- [ ] Human CLI: `status` (run status cards per "CLI/Admin Flow": run status labels, next human action with exact command, interrupted-run resume attribution, no ctl machinery), `list` (+ `--query` selectors, `--json` for skill-side selector resolution), `review`, `accept` (`submitted` → `landed`, optional `--pr`/`--note`), `archive`, `cancel`, `new` (minimal), `export review` (writes the review packet to an explicit destination)
 - [ ] Spec selector resolution: full ref resolves exactly; free text searches titles/slugs; ambiguity prints a numbered list
 
 Verify: golden-file tests for both packets; `run record-ship` persists `change_ref` and moves the run to `submitted`; `accept`/`archive` transitions; selector disambiguation.

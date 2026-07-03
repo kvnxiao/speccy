@@ -1,7 +1,7 @@
 # Speccy Walkthrough: End to End in Claude Code
 
 Status: illustration (mocked outputs)
-Date: 2026-07-03 (regenerated after the reviewer-persona and provenance decisions)
+Date: 2026-07-03 (updated after the second external UX review)
 
 One complete scenario, from installing the harness pack into an existing repository through archiving the shipped spec. Every controller operation and human command appears at least once, with mocked inputs and outputs. This document is illustrative: `DESIGN.md`, `TERMINOLOGY.md`, and `SCHEMAS.md` are authoritative, and if anything here conflicts with them, they win.
 
@@ -508,16 +508,23 @@ Pasting command output through `evidence record` is refused:
     "message": "evidence record refuses agent-supplied output for kind: command; use evidence collect" } }
 ```
 
-Browser evidence is agent-collected and accepted (the risk tier treats it as weaker):
+Browser evidence is agent-collected, and this spec is `high`, so a prose-only record is refused — the persona must reference a stored artifact (screenshot, trace, DOM capture):
 
 ```console
 $ speccy ctl evidence record --run run_01j1... --input evidence.json --json
 ```
 ```json
+{ "ok": false, "error": { "code": "validation_failed",
+    "message": "kind: browser requires an artifact reference at risk high; store a screenshot, trace, or DOM capture" } }
+```
+```json
 { "ok": true, "data": { "id": "ev_12a6", "requirement": "R-AUTH-002",
     "kind": "browser", "collected_by": "claude:reviewer_spec-fidelity_T1",
+    "artifact": "evidence/ev_12a6/replay.png",
     "note": "second open of same link → 'link already used'; no session cookie set" } }
 ```
+
+At `minimal` and `standard` the artifact stays optional and the first record would have been accepted.
 
 The `defects` persona records the blocking finding on the failed expiry test:
 
@@ -831,7 +838,18 @@ An amendment instead goes back through `spec patch-draft` → amended spec card 
 
 ## Appendix B — Crash resume
 
-Kill the session mid-round-2 of T1 (worker had edited files, handoff never recorded). Later, in a brand-new session:
+Kill the session mid-round-2 of T1 (worker had edited files, handoff never recorded). Before re-entering, `speccy status` already shows what resume will do with the dirty worktree:
+
+```console
+$ speccy status
+SPEC-20260630-A7F4  Passwordless login          Risk: high
+  Interrupted — lease expired mid task T1 (round 2)
+  Uncommitted diff (3 files, +58 −4 vs f3d9e21) is attributed to T1 on resume
+  Next: /speccy-implement SPEC-20260630-A7F4
+        (stash or commit first if these edits are not the worker's)
+```
+
+The edits are the worker's, so resume directly. Later, in a brand-new session:
 
 ```text
 /speccy-implement SPEC-20260630-A7F4
@@ -848,12 +866,22 @@ $ speccy ctl run next --run run_01j1... --agent claude:sess_9330 --json
     "round": { "current": 2, "max": 3, "scope": "task" },
     "packet_with": "packet task",
     "record_with": "task record-handoff",
-    "reason": "T1 building in round 2 with no recorded handoff; dirty worktree diff vs baseline f3d9e21 attributed to T1 and included as context",
+    "reason": "T1 building in round 2 with no recorded handoff; dirty worktree diff included as context",
+    "resume": { "cleared_lease": "claude:sess_8842",
+                "dirty_diff": { "files": 3, "insertions": 58, "deletions": 4,
+                                "vs": "f3d9e21", "attributed_to": "T1" } },
     "lease": { "token": "lease_01j1g8xw", "agent": "claude:sess_9330",
                "expires_at": "2026-07-02T15:02:00Z" } } }
 ```
 
-Nothing replays. The dead session's lease was cleared, the round counter and task status say exactly where the loop stopped, and the uncommitted diff belongs to T1 by the resume invariant. There is no `speccy resume` command — this is it.
+The skill echoes the `resume` block before dispatching — the same pattern as the approval echo, so attribution is never silent:
+
+```text
+Resuming: cleared expired lease (claude:sess_8842).
+Uncommitted diff (3 files, +58 −4 vs f3d9e21) attributed to T1.
+```
+
+Nothing replays. The dead session's lease was cleared, the round counter and task status say exactly where the loop stopped, and the uncommitted diff belongs to T1 by the resume invariant. The controller cannot tell the worker's partial diff from edits made while the session was dead, so it reports the attribution instead of gating on it; a human who did edit stashes or commits first (a commit parks the run at the out-of-band-commit gate). There is no `speccy resume` command — this is it.
 
 ## Appendix C — Human CLI odds and ends
 

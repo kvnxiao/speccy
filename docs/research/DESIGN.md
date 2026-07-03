@@ -152,6 +152,7 @@ Baseline rules:
 - Every requirement has a stable local ID, a plain-English statement, and one or more evidence requests: command/test output, browser/API observation, file/diff review, harness review, manual evidence, explicit waiver, or blocked/unproven status.
 - For `kind: command` evidence, the controller executes the command: `speccy ctl evidence collect` runs it and records exit code, stdout, stderr, and a content hash. `evidence record` refuses agent-pasted output for that kind, so `passed` on command evidence never rests on a transcript claim. Trust narrows to review, browser, and manual kinds, which the risk tiers already treat as weaker.
 - Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Open Question 18). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), and the controller records worktree dirty-state before and after the run so command-induced changes stay attributable.
+- On `high` and `critical` specs, `evidence record` for `kind: browser` and `kind: api` requires a non-empty `artifact` reference — a screenshot, trace, DOM capture, or HTTP transcript stored under the run's evidence tree — and refuses prose-only records. The controller enforces presence and hashes the artifact; it cannot vouch for authenticity, but a stored artifact is inspectable at review where a transcript claim is not. At `minimal` and `standard` the artifact stays optional. (Decision 2026-07-03, second external UX review.)
 - An approved revision's ledger is immutable in place: requirement statements and evidence requests are frozen at approval. Agents may only propose draft patches; a human prose approval creates a new revision and a new run. Verifiers change requirement status only, through evidence operations.
 - The final review packet includes the ledger, status, commands run, evidence links, and residual risk.
 - A task cannot reach `integrated` while any linked requirement is unresolved
@@ -536,6 +537,13 @@ gains nothing new — the field echoes what was already applied. Like `lease`,
 `applied_transitions` is excluded from the idempotency comparison: repeated
 calls over settled state return the same directive with an empty array.
 
+Lease repair gets the same transparency: a call that clears an expired lease
+reports it in the directive's `resume` field, with a summary of any dirty
+worktree diff that resume attribution will fold into the in-flight task
+(shape in `SCHEMAS.md`; behavior in "Resume and Crash Recovery"). `resume`
+is per-call work like `applied_transitions` and is likewise excluded from
+the idempotency comparison.
+
 ### Run Lease and Concurrent Writers
 
 "Serial writes" is enforced, not asserted. Two `/speccy-implement` sessions on
@@ -703,6 +711,22 @@ session, invoke `/speccy-implement <spec>`, and the skill calls
 from stored state. Mid-directive interruptions are safe because `run next`
 is idempotent: a directive whose result was never recorded is simply returned
 again.
+
+Resume attribution is visible, not silent. The controller cannot tell an
+agent's partial diff from edits a human made while the session was dead —
+there is no recorded diff at crash time — so instead of guessing it reports:
+a `run next` call that clears an expired lease carries a `resume` field
+naming the cleared lease and summarizing the dirty diff against the task's
+`baseline_commit` (shape in `SCHEMAS.md`), the skill echoes that summary
+before dispatching — the same pattern as the approval echo — and
+`speccy status` shows the same attribution for an interrupted run (see
+"CLI/Admin Flow"). A human who edited during the gap stashes or commits
+first: a stash removes the edits from attribution, and a commit becomes an
+out-of-band commit that parks the run at the existing escalated policy gate.
+A blocking adopt/stash/cancel gate on every dirty resume was rejected
+(2026-07-03, second external UX review): the condition it guards against is
+undetectable, so it would tax the overwhelmingly common case — the worker's
+own partial diff — as a permanent false positive.
 
 ### Run Branch and Snapshot Policy
 
@@ -1917,6 +1941,38 @@ Command semantics:
 - `export review` produces the normal human review artifact.
 - `export spec` and `export run-bundle` are advanced paths for audits, diagnostics, and custom harness integrations.
 - Full planning, repair, and verification happen through the installed Speccy skills/agents inside Codex or Claude Code.
+
+`speccy status` is the human's one glance at a workspace. It prints one card
+per active run, rolling run state up into the run status labels defined in
+`TERMINOLOGY.md` ("Run Status Label") the same way review packets roll
+requirement statuses into human status buckets — a rendering rule, not new
+stored state. The card names the next human action with the exact command
+when one exists, and shows no controller machinery: no directives, leases,
+run IDs, or ctl operations. An autonomous run says so:
+
+```text
+SPEC-20260630-A7F4  Passwordless login          Risk: high
+  Implementing — task T1, repair round 2 of 3 · autonomous, nothing needed
+```
+
+A run waiting on a human leads with the action:
+
+```text
+SPEC-20260630-A7F4  Passwordless login          Risk: high
+  Ready to ship · 1 accepted risk
+  Next: /speccy-ship SPEC-20260630-A7F4
+```
+
+An interrupted run — expired lease, no active session — surfaces resume
+attribution before the human re-enters (see "Resume and Crash Recovery"):
+
+```text
+SPEC-20260630-A7F4  Passwordless login          Risk: high
+  Interrupted — lease expired mid task T1 (round 2)
+  Uncommitted diff (3 files, +58 −4 vs f3d9e21) is attributed to T1 on resume
+  Next: /speccy-implement SPEC-20260630-A7F4
+        (stash or commit first if these edits are not the worker's)
+```
 
 Internal controller operations still exist, but they are tool calls used by the harness pack, not ordinary human-facing workflow commands.
 

@@ -60,6 +60,7 @@ Write operations that lint return their findings inside `data`:
   "applied_transitions": [
     { "subject": "task:T1", "from": "in_review", "to": "needs_repair" },
     { "subject": "task:T1", "from": "needs_repair", "to": "building" } ],
+  "resume": null,
   "lease": { "token": "lease_01j1c0k8", "agent": "claude:sess_8842",
              "expires_at": "2026-07-02T14:07:00Z" } }
 ```
@@ -81,9 +82,22 @@ Write operations that lint return their findings inside `data`:
   plus `snapshot` (commit SHA) when the transition created a snapshot commit.
   Empty array when the call applied nothing; repeated calls over settled
   state return `[]`.
+- `resume` — null on ordinary calls. When this call cleared an expired lease
+  it reports the repair (see "Resume and Crash Recovery" in `DESIGN.md`):
+
+  ```json
+  "resume": { "cleared_lease": "claude:sess_8842",
+              "dirty_diff": { "files": 3, "insertions": 58, "deletions": 4,
+                              "vs": "f3d9e21", "attributed_to": "T1" } }
+  ```
+
+  `dirty_diff` is null when the worktree is clean; otherwise it summarizes
+  the uncommitted diff against the in-flight task's `baseline_commit` that
+  resume attribution will fold into that task.
 - `lease` — present on every `run next` response; renewal changes only
-  `expires_at`. Idempotency compares all fields except `lease` and
-  `applied_transitions`, which report per-call work, not directive state.
+  `expires_at`. Idempotency compares all fields except `lease`,
+  `applied_transitions`, and `resume`, which report per-call work, not
+  directive state.
 
 ## `spec start` — request.json
 
@@ -203,7 +217,8 @@ requirement: R-AUTH-002
 kind: browser                         # review | browser | api | manual — command is refused
 collected_by: "claude:verifier_T1"
 note: "second open of same link → 'link already used'; no session cookie set"
-artifact: ""                          # optional; path/reference to a stored artifact
+artifact: "evidence/ev_12a6/replay.png"  # stored artifact reference; required for
+                                         # browser/api at high and critical, else optional
 ```
 
 ## `finding record` — finding.json
