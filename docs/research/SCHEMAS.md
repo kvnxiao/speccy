@@ -57,6 +57,9 @@ Write operations that lint return their findings inside `data`:
   "packet_with": "packet task",
   "record_with": "task record-handoff",
   "reason": "R-AUTH-003 failed in round 1; task repair cap not exhausted",
+  "applied_transitions": [
+    { "subject": "task:T1", "from": "in_review", "to": "needs_repair" },
+    { "subject": "task:T1", "from": "needs_repair", "to": "building" } ],
   "lease": { "token": "lease_01j1c0k8", "agent": "claude:sess_8842",
              "expires_at": "2026-07-02T14:07:00Z" } }
 ```
@@ -71,8 +74,16 @@ Write operations that lint return their findings inside `data`:
   scaling applied).
 - `round` — null when no round applies. `scope`: `task` | `run`.
 - `packet_with` / `record_with` — controller operation names, or null.
+- `applied_transitions` — the derived transitions this call applied before
+  deriving the directive (see "Deterministic Loop Driving: run next" in
+  `DESIGN.md`).
+  Each entry is `{subject, from, to}` — `subject` is `task:<id>` or `run` —
+  plus `snapshot` (commit SHA) when the transition created a snapshot commit.
+  Empty array when the call applied nothing; repeated calls over settled
+  state return `[]`.
 - `lease` — present on every `run next` response; renewal changes only
-  `expires_at`. Idempotency compares all fields except `lease`.
+  `expires_at`. Idempotency compares all fields except `lease` and
+  `applied_transitions`, which report per-call work, not directive state.
 
 ## `spec start` — request.json
 

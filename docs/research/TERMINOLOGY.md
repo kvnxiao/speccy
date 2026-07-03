@@ -819,8 +819,9 @@ speccy ctl run next --run <id> --agent <id> --json
 
 The directive names the current run state, the single next action, the subject
 task or requirement, the repair-round counter with its policy-configured cap,
-the packet operation to build first, and the controller operation that must
-record the outcome. Installed skills
+the packet operation to build first, the controller operation that must
+record the outcome, and the derived transitions the call itself applied
+(`applied_transitions`, with snapshot SHAs where created). Installed skills
 drive the entire implement loop by repeating: call `run next`, perform the
 directive, record the result, ask again.
 

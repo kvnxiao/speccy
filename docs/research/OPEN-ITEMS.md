@@ -1,15 +1,27 @@
 # Open Items: Doc Review Backlog
 
-Status: all items resolved
-Date: 2026-07-03 (backlog cleared)
+Status: 2 open items
+Date: 2026-07-03 (external walkthrough UX review folded in)
 
-Findings from doc consistency reviews. All items are decided and applied.
+Findings from doc consistency reviews. Backlog items are undecided; everything else is decided and applied.
 
 This file is a historical decision log. `DESIGN.md` and `TERMINOLOGY.md` are authoritative for current behavior and vocabulary; if an entry here conflicts with them, the design docs win.
 
 ## Backlog
 
-Empty.
+- **Planning memory vs archive** (external UX review 2026-07-03) — archived specs are excluded from default planning context (`TERMINOLOGY.md` "archived"; DESIGN planning-packet inputs), yet the lifecycle nudges archiving every landed spec ("Archive it when you're done"), so durable decisions such as `dec_20260401_003` (tokens stored hashed) eventually leave planning context entirely. Proposed direction: decisions outlive spec archiving — planning packets include a compact decision index drawn from all non-cancelled/non-superseded specs, archived included; archiving stays a list-visibility action only. Needs design: index shape and size cap, staleness/reconcile rules against current code, whether the index is a projection or a first-class store file.
+- **Command-evidence dedup** (external UX review 2026-07-03) — reviewer personas that request the same command evidence rerun identical commands serially under the workspace command lock. Proposed direction: cache command evidence keyed on `(round_snapshot, command)` — the round snapshot commit pins worktree state — and return the already-recorded artifact for repeat `evidence collect` calls within a round. Needs design: interaction with pre/post dirty-state recording (a command that mutates the worktree invalidates the key), whether dedup crosses persona boundaries only or also repair-round re-collection, and how the returned evidence records attribution.
+
+## Resolved 2026-07-03 (external walkthrough UX review)
+
+An outside reviewer read `WALKTHROUGH.md`, `PRINCIPLES.md`, and `README.md` only. Seven concerns triaged; applied to `DESIGN.md`, `SCHEMAS.md`, `WALKTHROUGH.md`, `IMPLEMENTATION-PLAN.md`. Two design questions moved to Backlog (above).
+
+- **`run next` reports derived transitions** — directive gains `applied_transitions`: the transitions that call applied, `{subject, from, to}` plus `snapshot` SHA when one was created; empty on repeated calls and excluded from the idempotency comparison alongside `lease`. Rename to `run advance` rejected — the op is agent-facing, not human-facing; transparency, not naming, was the gap. Gap found while illustrating: `in_review -> needs_repair` was missing from the derived-transition list; added, because it is the failure half of the same review aggregation that derives `in_review -> integrated`, and `requirement set-status` stays a pure recording op that never moves the task.
+- **Fresh-session wording corrected to "recommended"** — a functional fresh-session requirement never existed (approval and run state are controller-backed; Appendix B resumes from any session), but spec-card and walkthrough copy read as mandatory. Copy now says "fresh session recommended" everywhere; DESIGN states it is never required.
+- **Accepted risk surfaces on the result line** — review-packet result line carries the count when non-zero (`verified — ready to ship · N accepted risks`); a bare "ready to ship" must not hide residual risk below the fold. A high-tier accepted-risk gate rejected: the five-gate contract stands, `high` already requires recorded `residual_risk` notes, and the ship gate is the decision point.
+- **Approval echo rule** — before recording an approval or gate decision, the skill echoes spec ref, revision, and decision (`Recording approval: SPEC-… rev … -> approved`) so stale prose in a long chat cannot bind to the wrong spec. Confirmation copy, not a sixth gate. A mandatory approval phrase rejected as ceremony against the prose-approval decision.
+- **Install preview documented** — `--dry-run` composes with plain `speccy install` (M7 already planned it; DESIGN only documented it under `--update`). `--local` vs `--team` install split rejected for MVP: the `.gitignore` backstop already separates runtime state from committed workflow files.
+- **Repair-review cost concern re-affirmed as designed** — full-roster reruns with delta scoping already are the targeted form (see "Repeat-round token scoping" entry below); per-persona `model` tunes cost. No change.
 
 ## Resolved 2026-07-03 (reviewer personas + provenance, user decisions)
 

@@ -511,10 +511,14 @@ Rules:
 `run next` is also the single mutation point for derived state. Before
 returning a directive it clears expired leases and applies every transition
 that has no recording operation. Task transitions: `reviewable -> in_review`
-when verification dispatches, `needs_repair -> building` when a repair round
+when verification dispatches, `in_review -> needs_repair` when the recorded
+review leaves a linked requirement failed or a blocking finding unresolved
+with repair rounds remaining, `needs_repair -> building` when the repair round
 starts, and `in_review -> integrated` — including the task's snapshot commit —
 once every linked requirement is resolved (see "Requirement Resolution
-Rules"). Run transitions: `created -> implementing` on the first directive,
+Rules"). The failure and success halves of review aggregation are the same
+judgment, so both derive here: `requirement set-status` records requirement
+statuses and never moves the task. Run transitions: `created -> implementing` on the first directive,
 `implementing -> verifying` when every task is `integrated` or `deferred`,
 `verifying -> verified` when every requirement is resolved and any
 critical-tier confirmation gate is answered, and `-> escalated` — including
@@ -522,6 +526,15 @@ the labeled escalation snapshot — on cap exhaustion, blocked/unproven
 requirements, resource caps, or out-of-band commits (see "Run Branch and
 Snapshot Policy"). Idempotency is over settled state: once derived transitions
 apply, repeated calls return the same directive without re-applying them.
+
+Derived transitions are reported, not silent: every `run next` response
+carries an `applied_transitions` array listing exactly the transitions that
+call applied, with the snapshot commit SHA on entries that created one (shape
+in `SCHEMAS.md`). The skill can narrate them ("T1 integrated at 9c2f1ab")
+without inferring state changes from the `reason` string, and the event log
+gains nothing new — the field echoes what was already applied. Like `lease`,
+`applied_transitions` is excluded from the idempotency comparison: repeated
+calls over settled state return the same directive with an empty array.
 
 ### Run Lease and Concurrent Writers
 
@@ -1247,7 +1260,7 @@ The amendment path reuses the planning machinery instead of adding a new surface
 1. The human describes the change in prose, such as "expiry should be 30 minutes, drop R6" or "verify this via the API instead of the browser."
 2. The harness records the gate decision, then runs the same draft-revision loop `/speccy-plan` uses: patch the spec draft, lint it, and present an amended spec card that shows the diff against the prior approved revision and names the escalation that motivated it.
 3. The human approves the amended card in prose; the harness records the approval through the controller, producing a new approved spec revision.
-4. The controller closes the escalated run as `cancelled` with a decision record linking the superseding revision, and the checkpoint copy tells the user to run `/speccy-implement <spec>` in a fresh session.
+4. The controller closes the escalated run as `cancelled` with a decision record linking the superseding revision, and the checkpoint copy tells the user to run `/speccy-implement <spec>` (fresh session recommended).
 
 At escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, so the parked worktree is clean and the superseding run's clean-worktree rule holds. The new run starts on the same branch, seeded with the prior run's summary and the escalation snapshot reference, so it reconciles rather than redoes. Rolling back to the run baseline remains the human's explicit fallback at the gate.
 
@@ -1572,6 +1585,8 @@ plus a root `AGENTS.md` pointer is a later capability.
 
 Install should be idempotent. A plain `speccy install` may create missing packs, repair missing managed files, update lock metadata, and report outdated packs. It must not apply upstream changes to existing managed prose unless `--update` is passed.
 
+`--dry-run` composes with any install invocation, not just `--update`: it prints the exact creations, repairs, and `.gitignore` edits the command would make — the same created/updated listing a real install prints — without writing anything. Install touches a dozen-plus repo files on first run, so the preview is how a user inspects the footprint before committing to it.
+
 Update behavior:
 
 ```bash
@@ -1750,7 +1765,7 @@ Risk: high
 Decision needed: approve this spec, or revise scope
 On approval: spec revision -> approved  (recorded by /speccy-plan)
 Approve by replying in prose, e.g. "approve" or "looks good, go"
-Then, in a fresh session: /speccy-implement SPEC-20260630-A7F4
+Then: /speccy-implement SPEC-20260630-A7F4  (fresh session recommended)
 
 Goal:
 Let users sign in through single-use magic links.
@@ -1785,7 +1800,7 @@ Main risks:
 - Email delivery may need staging or production validation.
 ```
 
-The spec card should make the approval boundary unmistakable: the human approves the card in prose, and `/speccy-plan` records that approval through the controller, moving the spec revision to `approved`. Approval is required and always explicit; there is no auto-approve. `/speccy-implement` then runs against the approved revision and exits early if the revision is not approved, so it is safe to run in a fresh, cleared session. The card should show one recommended next action first, with alternatives secondary: approve, revise spec, split into multiple specs, use the harness's regular plan mode, cancel, or open the full spec/ledger. The full ledger remains available for power users and high-risk review, but it should not be the default checkpoint surface.
+The spec card should make the approval boundary unmistakable: the human approves the card in prose, and `/speccy-plan` records that approval through the controller, moving the spec revision to `approved`. Approval is required and always explicit; there is no auto-approve. `/speccy-implement` then runs against the approved revision and exits early if the revision is not approved. Because approval and run state are controller-backed, it is safe to run from any session; a fresh, cleared session is recommended for clean implementation context, never required. The card should show one recommended next action first, with alternatives secondary: approve, revise spec, split into multiple specs, use the harness's regular plan mode, cancel, or open the full spec/ledger. The full ledger remains available for power users and high-risk review, but it should not be the default checkpoint surface.
 
 The spec-card approval is mandatory for every spec, regardless of risk. It is the single pre-implementation gate. Higher risk raises the evidence bar inside the same card and ledger rather than adding another approval step; the card simply carries more detail, such as the full task list and flagged destructive steps, so the human approves with the right information.
 
@@ -1824,6 +1839,7 @@ Rules:
 - The slash command is the documented, deterministic entry; natural language is a convenience, not the contract.
 - The spec argument accepts a full `SPEC-...` reference or a search selector, and is inferred when the current spec is unambiguous.
 - Spec-card approval is a prose act recorded by `/speccy-plan` through the controller; it is required and always explicit.
+- Before recording an approval or gate decision, the skill echoes exactly what it is about to record — spec ref, revision, and decision, e.g. `Recording approval: SPEC-20260630-A7F4 rev spec_rev_001 -> approved` — so a prose reply in a long chat cannot silently bind to the wrong spec or a stale card. The echo is confirmation copy, not a sixth gate; it requires no further reply.
 - `/speccy-implement` is gated on the approved revision and exits early otherwise, so approval survives across sessions and implementation can start cold.
 - Do not add per-control skills such as `/speccy-approve`, `/speccy-repair`, or `/speccy-waive`. Approval is recorded prose inside `/speccy-plan`, repair is autonomous, and amendment and waivers are conversational.
 - Acceptance has no skill: `submitted -> landed` happens through the `speccy accept` CLI command.
@@ -1867,6 +1883,7 @@ Common human commands:
 
 ```bash
 speccy install
+speccy install --dry-run
 speccy install --target codex
 speccy install --update --dry-run
 speccy doctor
@@ -1933,7 +1950,7 @@ A **verified** run produces a compact summary the human reviews before shipping,
 
 ```text
 Spec   SPEC-20260630-A7F4  Passwordless login      Risk: high
-Result verified — ready to ship
+Result verified — ready to ship · 2 accepted risks
 Recommended next action: /speccy-ship SPEC-20260630-A7F4
 
 Requirements (11)
@@ -1957,7 +1974,7 @@ The first screen should stay compact and decision-oriented:
 - Drift from the approved spec
 - Recommended next action
 
-Requirement statuses collapse into the three human status buckets defined in `TERMINOLOGY.md` ("Human Status Bucket") — **Proven**, **Accepted risk**, and **Needs you** — with the precise status kept as an inline tag on drill-down. Proven is collapsed to a count and never enumerated.
+Requirement statuses collapse into the three human status buckets defined in `TERMINOLOGY.md` ("Human Status Bucket") — **Proven**, **Accepted risk**, and **Needs you** — with the precise status kept as an inline tag on drill-down. Proven is collapsed to a count and never enumerated. When the accepted-risk bucket is non-empty, its count appears on the result line itself (`verified — ready to ship · N accepted risks`): a bare "ready to ship" must never hide residual risk below the fold.
 
 A verified run has an empty **Needs you** bucket by construction. A fixable failure never waits behind a button; it loops autonomously until it is proven or the run escalates. So the summary is a result, not a menu, and it carries no approve/reject/repair/waive controls.
 

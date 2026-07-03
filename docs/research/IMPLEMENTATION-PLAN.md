@@ -76,12 +76,12 @@ Goal: the deterministic loop heart.
 
 - [ ] `ctl run start` gates: revision approved, workspace is a git repo, clean worktree; instantiates the runtime task graph from the approved revision
 - [ ] Run states (`created` → `landed`), task statuses (`queued` → `deferred`), controller-owned round counters, caps read from `project.yaml`
-- [ ] `ctl run next`: idempotent directive engine emitting `{run_state, action, subject, round{current,max,scope}, packet_with, record_with, reason}` with the closed action vocabulary (`claim_task` … `halt`); applies all controller-derived transitions (task: `reviewable` → `in_review`, `needs_repair` → `building`, `in_review` → `integrated` + snapshot; run: `created` → `implementing`, `implementing` → `verifying`, `verifying` → `verified`, → `escalated`) before answering; escalation directive on cap exhaustion; `dispatch_task_verifier`/`run_final_validation` directives carry `subject.personas` (roster from `project.yaml`, tier scaling applied)
+- [ ] `ctl run next`: idempotent directive engine emitting `{run_state, action, subject, round{current,max,scope}, packet_with, record_with, reason, applied_transitions}` with the closed action vocabulary (`claim_task` … `halt`); applies all controller-derived transitions (task: `reviewable` → `in_review`, `in_review` → `needs_repair`, `needs_repair` → `building`, `in_review` → `integrated` + snapshot; run: `created` → `implementing`, `implementing` → `verifying`, `verifying` → `verified`, → `escalated`) before answering and reports them in `applied_transitions` (snapshot SHA on entries that created one); escalation directive on cap exhaustion; `dispatch_task_verifier`/`run_final_validation` directives carry `subject.personas` (roster from `project.yaml`, tier scaling applied)
 - [ ] Run-level repair tasks: dynamic `RT<n>` appended to the task graph, linked to failing requirement IDs, counted against `run_review_rounds`
 - [ ] Run lease: issued/renewed by `run next --agent <id>`, agent-bound token with 10-minute default expiry (OS file lock + lease record); state-mutating ops require the live token via `--lease <token>`; `lease_held` error names the holder; `run next` clears expired leases
 - [ ] `ctl packet task`, `ctl task claim` (→ `building`), `ctl task record-handoff` (→ `reviewable`), `ctl run status`
 
-Verify: full happy-path state walk; two concurrent fake agents (second gets `lease_held`); expired-lease takeover; `run next` idempotency (call twice without recording → identical directive apart from lease metadata); repair-cap exhaustion → `escalated`; run-level repair task cycle.
+Verify: full happy-path state walk; two concurrent fake agents (second gets `lease_held`); expired-lease takeover; `run next` idempotency (call twice without recording → identical directive apart from lease metadata and `applied_transitions`, which empties on the repeat); repair-cap exhaustion → `escalated`; run-level repair task cycle.
 
 ### M4 — Git integration
 

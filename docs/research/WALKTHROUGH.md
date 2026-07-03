@@ -101,7 +101,7 @@ packs  OK  (claude @ 0.1.0; rendered files match pack-lock)
 $ git add .speccy .claude .gitignore && git commit -m "Install Speccy claude pack"
 ```
 
-Re-running `speccy install` is idempotent: it repairs missing managed files and reports available updates, but never rewrites edited prose without `--update`.
+Re-running `speccy install` is idempotent: it repairs missing managed files and reports available updates, but never rewrites edited prose without `--update`. To inspect the footprint first, `speccy install --dry-run` prints the same created/updated listing without writing anything.
 
 ---
 
@@ -267,7 +267,7 @@ Spec: SPEC-20260630-A7F4  Passwordless login
 Risk: high
 Decision needed: approve this spec, or revise scope
 Approve by replying in prose, e.g. "approve" or "looks good, go"
-Then, in a fresh session: /speccy-implement SPEC-20260630-A7F4
+Then: /speccy-implement SPEC-20260630-A7F4  (fresh session recommended)
 
 Goal: users sign in through single-use emailed magic links.
 In scope: request link by email · token expiry + replay protection · expired-link UI
@@ -281,6 +281,12 @@ Main risk: email delivery may need staging validation
 
 Human: `looks good, go`
 
+The skill echoes the decision it is about to record, so prose in a long chat cannot silently bind to the wrong spec or a stale card (no further reply needed):
+
+```text
+Recording approval: SPEC-20260630-A7F4 rev spec_rev_001 -> approved
+```
+
 ```console
 $ speccy ctl spec record-decision --spec SPEC-20260630-A7F4 --input decision.json --json
 ```
@@ -289,16 +295,16 @@ $ speccy ctl spec record-decision --spec SPEC-20260630-A7F4 --input decision.jso
     "approved_revision": "spec_rev_001",
     "spec_status": "approved",
     "requirements_frozen": true,
-    "next": "Run /speccy-implement SPEC-20260630-A7F4 in a fresh session." } }
+    "next": "Run /speccy-implement SPEC-20260630-A7F4 (fresh session recommended)." } }
 ```
 
 The revision is now immutable in place. A later `spec patch-draft` opens draft `spec_rev_002` seeded from it; only a new prose approval makes that draft binding, and any operation that would mutate the approved revision itself returns `{"ok": false, "error": {"code": "invalid_transition", ...}}`.
 
 ---
 
-## Phase 3 — Implement (fresh session, autonomous)
+## Phase 3 — Implement (autonomous)
 
-The human clears the session and runs:
+The human starts a fresh session — recommended for clean implementation context, never required, since approval and run state are controller-backed — and runs:
 
 ```text
 /speccy-implement SPEC-20260630-A7F4
@@ -355,6 +361,8 @@ $ speccy ctl run next --run run_01j1bxgvk3tf4qs6mv9zpxwe8d --agent claude:sess_8
     "packet_with": null,
     "record_with": "task claim",
     "reason": "T1 is the first queued task; worktree clean at f3d9e21",
+    "applied_transitions": [
+      { "subject": "run", "from": "created", "to": "implementing" } ],
     "lease": { "token": "lease_01j1c0k8", "agent": "claude:sess_8842",
                "expires_at": "2026-07-02T14:07:00Z" } } }
 ```
@@ -441,10 +449,12 @@ The skill retries with the field filled (attempt 2 of 3):
     "round": { "current": 1, "max": 3, "scope": "task" },
     "packet_with": "packet verification",
     "record_with": "requirement set-status",
-    "reason": "handoff ho_9bc2 recorded; T1 moved to in_review" } }
+    "reason": "handoff ho_9bc2 recorded; T1 moved to in_review",
+    "applied_transitions": [
+      { "subject": "task:T1", "from": "reviewable", "to": "in_review" } ] } }
 ```
 
-The `reviewable → in_review` transition just happened inside `run next` — it is a derived transition with no recording op. `subject.personas` is the roster from `project.yaml` with tier scaling applied: this spec is `high`, so the full roster runs (a `minimal`-risk spec would collapse to one combined reviewer).
+The `reviewable → in_review` transition just happened inside `run next` — it is a derived transition with no recording op, and `applied_transitions` reports it explicitly rather than leaving it implied by the `reason` string. `subject.personas` is the roster from `project.yaml` with tier scaling applied: this spec is `high`, so the full roster runs (a `minimal`-risk spec would collapse to one combined reviewer).
 
 ```console
 $ speccy ctl packet verification --run run_01j1... --requirements R-AUTH-001,R-AUTH-002,R-AUTH-003 --json
@@ -551,7 +561,10 @@ $ speccy ctl requirement set-status --run run_01j1... --lease lease_01j1c0k8 --i
     "round": { "current": 2, "max": 3, "scope": "task" },
     "packet_with": "packet task",
     "record_with": "task record-handoff",
-    "reason": "R-AUTH-003 failed and blocking finding fd_77e0 unresolved after round 1; task repair cap not exhausted" } }
+    "reason": "R-AUTH-003 failed and blocking finding fd_77e0 unresolved after round 1; task repair cap not exhausted",
+    "applied_transitions": [
+      { "subject": "task:T1", "from": "in_review", "to": "needs_repair" },
+      { "subject": "task:T1", "from": "needs_repair", "to": "building" } ] } }
 ```
 
 The controller counted the round and moved T1 `needs_repair → building` itself; the skill only reports "starting repair round 2 of 3". Round 2's `packet task` carries `"prior_findings": [{"id": "fd_77e0", ...}, {"id": "fd_77e1", ...}]`, so the repair worker starts from the ms/seconds diagnosis and the flagged comment instead of rediscovering them. The worker fixes the comparison and deletes the `R-AUTH-003` comment.
@@ -575,7 +588,7 @@ Round 2's verification packet shows the token-scoping mechanics — full roster,
 
 Every persona re-runs — skipping clean personas is rejected by design, because a repair diff is new code — but each reviews the two-file `delta` and verifies its own prior blockers rather than re-reading the whole diff. The full diff stays available to pull in. `evidence collect` re-runs `npm test -- auth/expiry` → `exit_code: 0`, and R-AUTH-003 is set `passed`.
 
-Calling `run next` twice without recording anything returns the same directive — identical apart from lease renewal metadata — and that idempotency is the whole crash-recovery story (see Appendix B).
+Calling `run next` twice without recording anything returns the same directive — identical apart from lease renewal metadata and an emptied `applied_transitions` — and that idempotency is the whole crash-recovery story (see Appendix B).
 
 ### 3.5 T1 integrates, T2 runs
 
@@ -586,7 +599,10 @@ Calling `run next` twice without recording anything returns the same directive �
     "subject": { "task": "T2" },
     "packet_with": null,
     "record_with": "task claim",
-    "reason": "T1 integrated at snapshot 9c2f1ab; T2 is the next queued task" } }
+    "reason": "T1 integrated at snapshot 9c2f1ab; T2 is the next queued task",
+    "applied_transitions": [
+      { "subject": "task:T1", "from": "in_review", "to": "integrated",
+        "snapshot": "9c2f1ab" } ] } }
 ```
 
 T1's `in_review → integrated` transition and its snapshot commit — `speccy: SPEC-20260630-A7F4 T1 integrated (round 2)`, committed as `Speccy <noreply@speccy.local>` — happened inside `run next` when every linked requirement resolved and no blocking finding remained. T2 (expired-link UI) runs the same claim → dispatch → handoff → verify cycle and passes in one round; R-AUTH-004 is `passed` on browser evidence plus a UI test collected by the controller. Snapshot `c4d81e0`.
@@ -603,7 +619,11 @@ T1's `in_review → integrated` transition and its snapshot commit — `speccy: 
     "round": { "current": 1, "max": 3, "scope": "run" },
     "packet_with": "packet verification",
     "record_with": "requirement set-status",
-    "reason": "all tasks integrated; run-level integration and drift review required" } }
+    "reason": "all tasks integrated; run-level integration and drift review required",
+    "applied_transitions": [
+      { "subject": "task:T2", "from": "in_review", "to": "integrated",
+        "snapshot": "c4d81e0" },
+      { "subject": "run", "from": "implementing", "to": "verifying" } ] } }
 ```
 
 The same roster fans out over the integrated whole-run diff while a final fresh verifier reads the run-scoped verification packet, re-runs the full suite through `evidence collect`, reviews cross-task drift against the approved revision, and confirms the statuses. The controller's provenance scan of the integrated diff comes back clean. Had anything failed here, the controller would have appended a run-level repair task `RT1` counted against `run_review_rounds` — same claim → dispatch → handoff → verify cycle, with run-scope deltas computed between the recorded snapshot commits. Nothing did:
@@ -615,7 +635,9 @@ The same roster fans out over the integrated whole-run diff while a final fresh 
     "subject": { "gate": "ship_decision" },
     "packet_with": "packet review",
     "record_with": "run record-ship",
-    "reason": "all requirements resolved (3 passed, 1 review_passed); ship or send back" } }
+    "reason": "all requirements resolved (3 passed, 1 review_passed); ship or send back",
+    "applied_transitions": [
+      { "subject": "run", "from": "verifying", "to": "verified" } ] } }
 ```
 
 This spec is `high`, so `review_passed` required a recorded `residual_risk` note. On a `critical` spec the same directive would first park at the accepted-risk confirmation gate.
@@ -630,7 +652,7 @@ The `data.markdown` field of the envelope, rendered:
 
 ```text
 Spec   SPEC-20260630-A7F4  Passwordless login      Risk: high
-Result verified — ready to ship
+Result verified — ready to ship · 1 accepted risk
 Recommended next action: /speccy-ship SPEC-20260630-A7F4
 
 Requirements (4)
@@ -767,7 +789,10 @@ If round 3 had also failed R-AUTH-003:
     "round": { "current": 3, "max": 3, "scope": "task" },
     "packet_with": "packet escalation",
     "record_with": "run record-decision",
-    "reason": "task repair cap exhausted with R-AUTH-003 still failed" } }
+    "reason": "task repair cap exhausted with R-AUTH-003 still failed",
+    "applied_transitions": [
+      { "subject": "run", "from": "implementing", "to": "escalated",
+        "snapshot": "4e8d0aa" } ] } }
 ```
 
 ```console
