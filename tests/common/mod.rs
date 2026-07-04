@@ -13,6 +13,7 @@ use tempfile::TempDir;
 pub struct Harness {
     pub repo: TempDir,
     pub home: TempDir,
+    pub env: Vec<(String, String)>,
 }
 
 impl Harness {
@@ -20,7 +21,11 @@ impl Harness {
     pub fn new() -> Harness {
         let repo = TempDir::new().unwrap();
         let home = TempDir::new().unwrap();
-        let h = Harness { repo, home };
+        let h = Harness {
+            repo,
+            home,
+            env: Vec::new(),
+        };
         h.git(&["-c", "init.defaultBranch=main", "init"]);
         h.git(&["config", "user.email", "test@speccy.local"]);
         h.git(&["config", "user.name", "Test"]);
@@ -61,10 +66,18 @@ impl Harness {
         PathBuf::from(env!("CARGO_BIN_EXE_speccy"))
     }
 
+    /// Set an env var applied to every subsequent `speccy` invocation.
+    pub fn set_env(&mut self, key: &str, value: &str) {
+        self.env.push((key.to_string(), value.to_string()));
+    }
+
     fn base_command(&self) -> Command {
         let mut cmd = Command::new(Self::bin());
         cmd.current_dir(self.repo.path())
             .env("SPECCY_HOME", self.home.path());
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
         cmd
     }
 

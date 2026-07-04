@@ -7,16 +7,17 @@
 //! directive. Sequencing, round counting, and gate detection are controller
 //! decisions, never prose decisions.
 
-use jiff::ToSpan;
 use serde::Serialize;
 
 use crate::config::ProjectConfig;
-use crate::error::Result;
-use crate::event::Event;
+use crate::error::{Result, SpeccyError};
+use crate::event::{Event, FindingRecord};
 use crate::gitx;
 use crate::ids;
+use crate::lease::LeaseState;
 use crate::model::{DirectiveAction, Gate, RequirementStatus, RoundScope, RunState, TaskStatus};
 use crate::projection::{RunProjection, TaskState};
+use crate::provenance;
 use crate::store::Store;
 
 /// A derived transition applied by this `run next` call (SCHEMAS § Directive).
@@ -44,7 +45,7 @@ pub struct Directive {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gate_answers: Option<Vec<GateAnswer>>,
     pub resume: Option<serde_json::Value>,
-    pub lease: Lease,
+    pub lease: LeaseState,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -73,45 +74,197 @@ pub struct GateAnswer {
     pub record_with: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct Lease {
-    pub token: String,
-    pub agent: String,
-    pub expires_at: jiff::Timestamp,
-}
-
-/// MVP lease TTL (DESIGN § Run Lease and Concurrent Writers).
-pub const LEASE_TTL_MINUTES: i64 = 10;
-
-impl Lease {
-    /// Issue a fresh lease block. M1 does not persist or enforce it; that is
-    /// M2. The lease is excluded from directive idempotency comparison.
-    fn issue(agent: &str) -> Lease {
-        let expires_at = jiff::Timestamp::now()
-            .checked_add(LEASE_TTL_MINUTES.minutes())
-            .unwrap_or_else(|_| jiff::Timestamp::now());
-        Lease {
-            token: ids::short_id("lease"),
-            agent: agent.to_string(),
-            expires_at,
-        }
-    }
-}
-
-/// Run one `run next` cycle: apply derived transitions, then compute the
-/// directive from settled state.
+/// Run one `run next` cycle. In order: manage the run lease (contention,
+/// expiry-clearing with resume attribution, renewal); detect out-of-band
+/// commits; run the provenance scan; apply derived transitions; compute the
+/// single next directive from settled state.
 pub fn run_next(
     store: &Store,
     spec_id: &str,
     run_id: &str,
     agent: &str,
 ) -> Result<serde_json::Value> {
-    let applied = advance(store, spec_id, run_id)?;
+    let run0 = store.run_projection(spec_id, run_id)?;
+
+    // --- lease management ---
+    let (lease, resume) = manage_lease(store, spec_id, run_id, agent, &run0)?;
+
+    let mut applied = Vec::new();
+
+    // --- out-of-band commit detection (DESIGN § Run Branch and Snapshot Policy) ---
+    if let Some(t) = detect_out_of_band(store, spec_id, run_id, &run0)? {
+        applied.push(t);
+    } else {
+        // --- provenance scan over the current diff (records blocking findings) ---
+        run_provenance_scan(store, spec_id, run_id, &run0)?;
+        // --- derived transitions ---
+        applied.extend(advance(store, spec_id, run_id)?);
+    }
+
     let run = store.run_projection(spec_id, run_id)?;
     let config = ProjectConfig::load(&store.workspace_root)?;
-    let directive = compute_directive(&run, &config, applied, agent);
+    let directive = compute_directive(&run, &config, applied, lease, resume);
     serde_json::to_value(&directive)
-        .map_err(|e| crate::error::SpeccyError::io(format!("failed to serialize directive: {e}")))
+        .map_err(|e| SpeccyError::io(format!("failed to serialize directive: {e}")))
+}
+
+/// Handle lease contention, expiry-clearing, and renewal. Returns the live
+/// lease to embed plus an optional `resume` block when an expired lease was
+/// cleared.
+fn manage_lease(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    agent: &str,
+    run: &RunProjection,
+) -> Result<(LeaseState, Option<serde_json::Value>)> {
+    let now = jiff::Timestamp::now();
+    let current = store.read_lease(spec_id, run_id)?;
+    let (lease, resume) = match current {
+        Some(l) if !l.is_expired(now) => {
+            if l.agent == agent {
+                (l.renewed(), None)
+            } else {
+                return Err(SpeccyError::lease_held(format!(
+                    "run lease held by {} until {}",
+                    l.agent, l.expires_at
+                )));
+            }
+        }
+        Some(l) => {
+            // Expired: clear it and report resume attribution.
+            let resume = resume_attribution(store, run, &l.agent);
+            (LeaseState::issue(agent), Some(resume))
+        }
+        None => (LeaseState::issue(agent), None),
+    };
+    store.write_lease(spec_id, run_id, &lease)?;
+    Ok((lease, resume))
+}
+
+/// Summarize what resume will fold into the in-flight task after clearing a
+/// dead session's lease (SCHEMAS § Directive `resume`).
+fn resume_attribution(
+    store: &Store,
+    run: &RunProjection,
+    cleared_agent: &str,
+) -> serde_json::Value {
+    let dirty_diff = run
+        .active_task()
+        .and_then(|t| t.baseline_commit.as_ref())
+        .and_then(|base| {
+            gitx::worktree_stat(&store.git_root, base)
+                .ok()
+                .filter(|d| d.files > 0)
+                .map(|d| {
+                    serde_json::json!({
+                        "files": d.files,
+                        "insertions": d.insertions,
+                        "deletions": d.deletions,
+                        "vs": base,
+                        "attributed_to": run.active_task().map(|t| t.id.clone()),
+                    })
+                })
+        });
+    serde_json::json!({ "cleared_lease": cleared_agent, "dirty_diff": dirty_diff })
+}
+
+/// Detect an out-of-band commit: while a run is active, HEAD must match the
+/// last recorded snapshot (or the base before any snapshot). A mismatch means
+/// a human or another tool committed; park the run at an escalated policy gate.
+fn detect_out_of_band(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    run: &RunProjection,
+) -> Result<Option<AppliedTransition>> {
+    if !matches!(run.state, RunState::Implementing | RunState::Verifying) {
+        return Ok(None);
+    }
+    let head = gitx::head(&store.git_root)?;
+    let expected = run.head_expectation();
+    if head == expected {
+        return Ok(None);
+    }
+    store.append_run_event(
+        spec_id,
+        run_id,
+        Event::RunStateTransitioned {
+            to: RunState::Escalated,
+            snapshot: None,
+        },
+    )?;
+    Ok(Some(AppliedTransition {
+        subject: "run".into(),
+        from: run_state_str(run.state).into(),
+        to: "escalated".into(),
+        snapshot: None,
+    }))
+}
+
+/// Run the deterministic provenance scan over the current diff and record any
+/// hits as blocking findings (once per round, so repeated `run next` calls do
+/// not duplicate them). Findings feed the normal repair round.
+fn run_provenance_scan(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    run: &RunProjection,
+) -> Result<()> {
+    let config = ProjectConfig::load(&store.workspace_root)?;
+    // Choose the diff scope: an in-review task's diff, or the integrated
+    // run diff during verifying.
+    let (baseline, task_id, guard_seq) = if let Some(t) = run
+        .active_task()
+        .filter(|t| t.status == TaskStatus::InReview)
+    {
+        (
+            t.baseline_commit.clone(),
+            Some(t.id.clone()),
+            t.last_handoff_seq,
+        )
+    } else if run.state == RunState::Verifying && run.run_review_rounds_completed == 0 {
+        (
+            Some(run.base_commit.clone()),
+            None,
+            run.verifying_entered_seq(),
+        )
+    } else {
+        return Ok(());
+    };
+    let Some(baseline) = baseline else {
+        return Ok(());
+    };
+
+    // Already scanned this round? (a provenance finding recorded after the guard)
+    if run.provenance_scanned_after(guard_seq, task_id.as_deref()) {
+        return Ok(());
+    }
+
+    let diff = gitx::worktree_diff(&store.git_root, &baseline).unwrap_or_default();
+    let terms = provenance::deny_terms(
+        &run.spec_ref,
+        spec_id,
+        run_id,
+        run.requirements.keys().cloned(),
+        &config.provenance.extra_terms,
+    );
+    for hit in provenance::scan_diff(&diff, &terms) {
+        let finding = FindingRecord {
+            id: ids::short_id("fd"),
+            requirement: None,
+            task: task_id.clone(),
+            persona: None,
+            severity: "blocking".into(),
+            note: format!(
+                "{}:{} references \"{}\" — provenance deny-list hit",
+                hit.file, hit.line, hit.term
+            ),
+            recorded_by: "controller:provenance-scan".into(),
+        };
+        store.append_run_event(spec_id, run_id, Event::FindingRecorded { finding })?;
+    }
+    Ok(())
 }
 
 /// Apply derived transitions to a fixpoint, returning those applied this call.
@@ -221,7 +374,7 @@ fn step_verifying(
         // Run-level review not done yet; directive dispatches the verifier.
         return Ok(None);
     }
-    if run.all_requirements_resolved() {
+    if run.all_requirements_resolved() && run.run_blocking_findings().is_empty() {
         store.append_run_event(
             &run.spec_id,
             &run.run_id,
@@ -301,7 +454,8 @@ fn compute_directive(
     run: &RunProjection,
     config: &ProjectConfig,
     applied: Vec<AppliedTransition>,
-    agent: &str,
+    lease: LeaseState,
+    resume: Option<serde_json::Value>,
 ) -> Directive {
     let parts = match run.state {
         RunState::Implementing => implementing_parts(run, config),
@@ -373,8 +527,8 @@ fn compute_directive(
         reason: parts.reason,
         applied_transitions: applied,
         gate_answers: parts.gate_answers,
-        resume: None,
-        lease: Lease::issue(agent),
+        resume,
+        lease,
     }
 }
 

@@ -9,11 +9,13 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
+use fs4::FileExt;
 use sha2::{Digest, Sha256};
 
 use crate::error::{Result, SpeccyError};
 use crate::event::{Event, LoggedEvent};
 use crate::gitx;
+use crate::lease::LeaseState;
 use crate::projection::{RunProjection, SpecState};
 
 /// A resolved workspace bound to the current git repository.
@@ -164,13 +166,86 @@ impl Store {
     }
 
     pub fn append_spec_event(&self, spec_id: &str, event: Event) -> Result<()> {
-        append_event(&self.spec_events_path(spec_id), event)
+        let path = self.spec_events_path(spec_id);
+        self.with_store_lock(|| append_event(&path, event))
     }
 
     pub fn append_run_event(&self, spec_id: &str, run_id: &str, event: Event) -> Result<()> {
         let dir = self.run_dir(spec_id, run_id);
         fs::create_dir_all(&dir)?;
-        append_event(&self.run_events_path(spec_id, run_id), event)
+        let path = self.run_events_path(spec_id, run_id);
+        self.with_store_lock(|| append_event(&path, event))
+    }
+
+    // --- locks (DESIGN § Storage Model, § Run Lease and Concurrent Writers) ---
+
+    /// Serialize concurrent event appends on a per-workspace store lock, held
+    /// only for the duration of the append. Artifact files are per-ID and
+    /// never contend, so they are written outside this lock.
+    pub fn with_store_lock<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        self.with_lock(self.workspace_dir().join(".store.lock"), f)
+    }
+
+    /// The workspace command lock (separate from the run lease): only one
+    /// `kind: command` evidence execution runs at a time, even for lease-free
+    /// reviewer personas.
+    pub fn with_command_lock<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        self.with_lock(self.workspace_dir().join(".command.lock"), f)
+    }
+
+    fn with_lock<T>(&self, path: PathBuf, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        fs::create_dir_all(self.workspace_dir())?;
+        let file = File::create(&path)?;
+        FileExt::lock(&file)
+            .map_err(|e| SpeccyError::io(format!("failed to acquire {}: {e}", path.display())))?;
+        let result = f();
+        let _ = FileExt::unlock(&file);
+        result
+    }
+
+    // --- run lease ---
+
+    fn lease_path(&self, spec_id: &str, run_id: &str) -> PathBuf {
+        self.run_dir(spec_id, run_id).join("lease.json")
+    }
+
+    pub fn read_lease(&self, spec_id: &str, run_id: &str) -> Result<Option<LeaseState>> {
+        let path = self.lease_path(spec_id, run_id);
+        match fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text)
+                .map(Some)
+                .map_err(|e| SpeccyError::io(format!("corrupt lease {}: {e}", path.display()))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn write_lease(&self, spec_id: &str, run_id: &str, lease: &LeaseState) -> Result<()> {
+        let path = self.lease_path(spec_id, run_id);
+        let bytes = serde_json::to_vec(lease)
+            .map_err(|e| SpeccyError::io(format!("failed to serialize lease: {e}")))?;
+        write_atomic(&path, &bytes)
+    }
+
+    /// Confirm `token` matches the current live (non-expired) lease. Used to
+    /// gate state-mutating operations.
+    pub fn verify_lease(&self, spec_id: &str, run_id: &str, token: Option<&str>) -> Result<()> {
+        let lease = self.read_lease(spec_id, run_id)?.ok_or_else(|| {
+            SpeccyError::lease_held("no active lease on this run; call run next --agent first")
+        })?;
+        let now = jiff::Timestamp::now();
+        if lease.is_expired(now) {
+            return Err(SpeccyError::lease_held(
+                "the run lease has expired; call run next to reacquire it",
+            ));
+        }
+        match token {
+            Some(t) if t == lease.token => Ok(()),
+            _ => Err(SpeccyError::lease_held(format!(
+                "run lease held by {} until {}",
+                lease.agent, lease.expires_at
+            ))),
+        }
     }
 
     pub fn read_spec_events(&self, spec_id: &str) -> Result<Vec<LoggedEvent>> {
@@ -270,24 +345,43 @@ fn last_line(path: &Path) -> Result<Option<String>> {
     Ok(last)
 }
 
+/// Read and parse a JSONL event log, failing closed on a corrupt or truncated
+/// line and naming the byte offset (DESIGN § Storage Model: fail-closed
+/// truncated-tail detection).
 fn read_events(path: &Path) -> Result<Vec<LoggedEvent>> {
-    let file = match File::open(path) {
-        Ok(f) => f,
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e.into()),
     };
-    let reader = BufReader::new(file);
     let mut events = Vec::new();
-    for (idx, line) in reader.lines().enumerate() {
-        let line = line?;
-        if line.trim().is_empty() {
+    let mut offset = 0usize;
+    for raw in bytes.split_inclusive(|&b| b == b'\n') {
+        let line_start = offset;
+        offset += raw.len();
+        let text = std::str::from_utf8(raw)
+            .map_err(|_| {
+                SpeccyError::io(format!(
+                    "non-UTF8 bytes in {} at byte offset {line_start}",
+                    path.display()
+                ))
+            })?
+            .trim();
+        if text.is_empty() {
             continue;
         }
-        let logged: LoggedEvent = serde_json::from_str(&line).map_err(|e| {
+        // A well-formed record ends in a newline; a tail without one is a
+        // half-written (truncated) append.
+        if !raw.ends_with(b"\n") {
+            return Err(SpeccyError::io(format!(
+                "truncated final record in {} at byte offset {line_start}",
+                path.display()
+            )));
+        }
+        let logged: LoggedEvent = serde_json::from_str(text).map_err(|e| {
             SpeccyError::io(format!(
-                "corrupt event at {}:{}: {e}",
-                path.display(),
-                idx + 1
+                "corrupt event in {} at byte offset {line_start}: {e}",
+                path.display()
             ))
         })?;
         events.push(logged);
@@ -312,4 +406,57 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::SpecStatus;
+
+    fn valid_line() -> String {
+        let ev = LoggedEvent::now(Event::SpecStatusChanged {
+            to: SpecStatus::Accepted,
+        });
+        serde_json::to_string(&ev).unwrap()
+    }
+
+    #[test]
+    fn reads_valid_jsonl() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        let content = format!("{}\n{}\n", valid_line(), valid_line());
+        fs::write(&path, content).unwrap();
+        assert_eq!(read_events(&path).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn truncated_tail_fails_closed_with_offset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        let good = valid_line();
+        // Second record is half-written (no trailing newline).
+        let content = format!("{good}\n{}", &good[..good.len() / 2]);
+        fs::write(&path, &content).unwrap();
+        let err = read_events(&path).unwrap_err();
+        assert!(
+            err.message.contains("truncated final record"),
+            "{}",
+            err.message
+        );
+        assert!(
+            err.message
+                .contains(&format!("byte offset {}", good.len() + 1)),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn corrupt_line_fails_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        fs::write(&path, "{not valid json}\n").unwrap();
+        let err = read_events(&path).unwrap_err();
+        assert!(err.message.contains("corrupt event"), "{}", err.message);
+    }
 }

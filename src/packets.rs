@@ -112,11 +112,26 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
         ),
     };
 
-    let diff = gitx::diff_stat(&store.git_root, &baseline).unwrap_or(gitx::DiffStat {
+    let diff = gitx::worktree_stat(&store.git_root, &baseline).unwrap_or(gitx::DiffStat {
         files: 0,
         insertions: 0,
         deletions: 0,
     });
+
+    // The controller runs the provenance scan inside `run next` (the mutation
+    // point); the packet reports the findings that scan recorded this round.
+    let prov: Vec<&crate::event::FindingRecord> = run
+        .findings
+        .iter()
+        .map(|(_, f)| f)
+        .filter(|f| {
+            f.recorded_by == "controller:provenance-scan"
+                && match task {
+                    Some(t) => f.task.as_deref() == Some(&t.id),
+                    None => f.task.is_none(),
+                }
+        })
+        .collect();
 
     let _ = requirements; // requested scope is advisory; packet reports the active task/run scope
     Ok(json!({
@@ -131,8 +146,10 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
             "deletions": diff.deletions,
         },
         "prior_findings": task.map(|t| prior_findings(&run, &t.id)).unwrap_or_default(),
-        // Provenance scan over the diff arrives at M2.
-        "provenance_scan": { "hits": 0, "findings": [] },
+        "provenance_scan": {
+            "hits": prov.len(),
+            "findings": prov.iter().map(|f| f.id.clone()).collect::<Vec<_>>(),
+        },
         "tools": ["evidence collect", "evidence record", "finding record"],
     }))
 }

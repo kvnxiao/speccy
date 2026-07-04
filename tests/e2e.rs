@@ -357,9 +357,11 @@ fn resume_mid_build_returns_same_worker_directive() {
     assert_eq!(worker["action"], json!("dispatch_worker"));
     h.write_file("src/partial.txt", "half-done work\n");
 
-    // Fresh session (new process): run next resumes to the same directive.
+    // Fresh session (same agent reconnecting): run next resumes to the same
+    // directive. A *different* agent within the lease TTL is covered by the
+    // lease-contention test in trust.rs.
     let resumed = h.ctl(&[
-        "ctl", "run", "next", "--run", &run, "--agent", "b", "--json",
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
     ]);
     assert_eq!(resumed["action"], json!("dispatch_worker"));
     assert_eq!(resumed["subject"]["task"], json!(task));

@@ -153,6 +153,47 @@ pub fn diff_text(dir: &Path, base: &str) -> Result<String> {
     git(dir, &["diff", base])
 }
 
+/// Untracked file paths (respecting `.gitignore`).
+pub fn untracked_files(dir: &Path) -> Result<Vec<String>> {
+    let out = git(dir, &["ls-files", "--others", "--exclude-standard"])?;
+    Ok(out
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect())
+}
+
+/// A unified diff against `base` that *also* includes untracked new files as
+/// additions. `git diff` alone omits untracked files, but a worker's new files
+/// are part of its change and must be scanned and attributed.
+pub fn worktree_diff(dir: &Path, base: &str) -> Result<String> {
+    let mut out = diff_text(dir, base)?;
+    for file in untracked_files(dir)? {
+        let content = std::fs::read_to_string(dir.join(&file)).unwrap_or_default();
+        let count = content.lines().count();
+        out.push_str(&format!(
+            "\n--- /dev/null\n+++ b/{file}\n@@ -0,0 +1,{count} @@\n"
+        ));
+        for line in content.lines() {
+            out.push('+');
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    Ok(out)
+}
+
+/// Diff stat against `base` including untracked new files (see `worktree_diff`).
+pub fn worktree_stat(dir: &Path, base: &str) -> Result<DiffStat> {
+    let mut stat = diff_stat(dir, base)?;
+    for file in untracked_files(dir)? {
+        let content = std::fs::read_to_string(dir.join(&file)).unwrap_or_default();
+        stat.files += 1;
+        stat.insertions += content.lines().count();
+    }
+    Ok(stat)
+}
+
 fn parse_numstat(out: &str) -> DiffStat {
     let mut files = 0;
     let mut insertions = 0;

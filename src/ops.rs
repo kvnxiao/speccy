@@ -401,13 +401,16 @@ fn run_next(store: &Store, run_id: &str, agent: &str) -> Result<Value> {
 
 fn task(store: &Store, op: TaskOp) -> Result<Value> {
     match op {
-        TaskOp::Claim(args) => task_claim(store, &args.run, &args.task),
-        TaskOp::RecordHandoff(args) => task_record_handoff(store, &args.run, &args.input),
+        TaskOp::Claim(args) => task_claim(store, &args.run, &args.task, &args.lease),
+        TaskOp::RecordHandoff(args) => {
+            task_record_handoff(store, &args.run, args.lease.as_deref(), &args.input)
+        }
     }
 }
 
-fn task_claim(store: &Store, run_id: &str, task_id: &str) -> Result<Value> {
+fn task_claim(store: &Store, run_id: &str, task_id: &str, lease: &str) -> Result<Value> {
     let (spec_id, run) = store.run_by_id(run_id)?;
+    store.verify_lease(&spec_id, run_id, Some(lease))?;
     let task = run
         .task(task_id)
         .ok_or_else(|| SpeccyError::not_found(format!("no task {task_id} in run {run_id}")))?;
@@ -435,7 +438,12 @@ fn task_claim(store: &Store, run_id: &str, task_id: &str) -> Result<Value> {
     }))
 }
 
-fn task_record_handoff(store: &Store, run_id: &str, input: &str) -> Result<Value> {
+fn task_record_handoff(
+    store: &Store,
+    run_id: &str,
+    lease: Option<&str>,
+    input: &str,
+) -> Result<Value> {
     let handoff: Handoff = read_input(input)?;
     if handoff.summary.trim().is_empty() {
         return Err(
@@ -447,6 +455,7 @@ fn task_record_handoff(store: &Store, run_id: &str, input: &str) -> Result<Value
         );
     }
     let (spec_id, run) = store.run_by_id(run_id)?;
+    store.verify_lease(&spec_id, run_id, lease)?;
     let task = run.task(&handoff.task).ok_or_else(|| {
         SpeccyError::not_found(format!("no task {} in run {run_id}", handoff.task))
     })?;
@@ -478,7 +487,9 @@ fn task_record_handoff(store: &Store, run_id: &str, input: &str) -> Result<Value
 
 fn evidence(store: &Store, op: EvidenceOp) -> Result<Value> {
     match op {
-        EvidenceOp::Collect(_) => Err(SpeccyError::not_implemented("evidence collect (M2)")),
+        EvidenceOp::Collect(args) => {
+            crate::evidence::collect(store, &args.run, &args.requirements, &args.requests)
+        }
         EvidenceOp::Record(args) => evidence_record(store, &args.run, &args.input),
     }
 }
@@ -496,7 +507,7 @@ struct EvidenceInput {
 fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
     let ev: EvidenceInput = read_input(input)?;
     let (spec_id, run) = store.run_by_id(run_id)?;
-    match EvidenceKind::parse(&ev.kind) {
+    let kind = match EvidenceKind::parse(&ev.kind) {
         Some(EvidenceKind::Command) => {
             return Err(SpeccyError::validation(
                 "evidence record refuses agent-supplied output for kind: command; use evidence collect",
@@ -508,7 +519,23 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
                 ev.kind
             )));
         }
-        _ => {}
+        Some(k) => k,
+    };
+    // Browser/api evidence on high/critical requires a stored, hashed artifact
+    // (DESIGN § Acceptance Ledger); prose-only records are refused.
+    if matches!(kind, EvidenceKind::Browser | EvidenceKind::Api)
+        && matches!(run.risk, RiskTier::High | RiskTier::Critical)
+        && ev
+            .artifact
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+    {
+        return Err(SpeccyError::validation(format!(
+            "kind: {} requires an artifact reference at risk {:?}; store a screenshot, trace, or DOM capture",
+            ev.kind, run.risk
+        )));
     }
     let id = ids::short_id("ev");
     let record = EvidenceRecord {
@@ -530,7 +557,6 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
             evidence: record.clone(),
         },
     )?;
-    let _ = run;
     serde_json::to_value(&record)
         .map_err(|e| SpeccyError::io(format!("failed to serialize evidence: {e}")))
 }
@@ -581,7 +607,7 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
 
 fn requirement(store: &Store, op: RequirementOp) -> Result<Value> {
     let RequirementOp::SetStatus(args) = op;
-    requirement_set_status(store, &args.run, &args.input)
+    requirement_set_status(store, &args.run, args.lease.as_deref(), &args.input)
 }
 
 #[derive(Debug, Deserialize)]
@@ -589,9 +615,15 @@ struct StatusInput {
     updates: Vec<RequirementUpdate>,
 }
 
-fn requirement_set_status(store: &Store, run_id: &str, input: &str) -> Result<Value> {
+fn requirement_set_status(
+    store: &Store,
+    run_id: &str,
+    lease: Option<&str>,
+    input: &str,
+) -> Result<Value> {
     let payload: StatusInput = read_input(input)?;
     let (spec_id, run) = store.run_by_id(run_id)?;
+    store.verify_lease(&spec_id, run_id, lease)?;
 
     // Validate each update's prerequisites before recording anything.
     for u in &payload.updates {

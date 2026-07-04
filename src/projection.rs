@@ -404,6 +404,22 @@ impl RunProjection {
         self.last_snapshot.as_deref().unwrap_or(&self.base_commit)
     }
 
+    /// Sequence index at which the run entered `verifying`, if it has.
+    pub fn verifying_entered_seq(&self) -> Option<usize> {
+        self.verifying_entered_seq
+    }
+
+    /// Whether a controller provenance finding was already recorded this round
+    /// (after `guard_seq`) for the given task scope (`None` = run scope).
+    pub fn provenance_scanned_after(&self, guard_seq: Option<usize>, task: Option<&str>) -> bool {
+        let Some(guard) = guard_seq else { return false };
+        self.findings.iter().any(|(seq, f)| {
+            *seq > guard
+                && f.recorded_by == "controller:provenance-scan"
+                && f.task.as_deref() == task
+        })
+    }
+
     /// Did the verifier record statuses for this task's current review round?
     /// (Serial writes mean any set-status after the task's handoff is its own.)
     pub fn task_reviewed_this_round(&self, task: &TaskState) -> bool {
@@ -427,6 +443,17 @@ impl RunProjection {
                             .as_ref()
                             .is_some_and(|r| task.requirements.contains(r)))
             })
+            .map(|(_, f)| f)
+            .collect()
+    }
+
+    /// Unresolved run-level blocking findings (task-less, recorded during the
+    /// current verifying phase) — e.g. an integrated-diff provenance hit.
+    pub fn run_blocking_findings(&self) -> Vec<&FindingRecord> {
+        let after = self.verifying_entered_seq.unwrap_or(usize::MAX);
+        self.findings
+            .iter()
+            .filter(|(seq, f)| *seq > after && f.task.is_none() && f.severity == "blocking")
             .map(|(_, f)| f)
             .collect()
     }
