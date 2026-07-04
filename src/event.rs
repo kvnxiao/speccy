@@ -236,7 +236,10 @@ pub struct Supersedes {
 pub struct RunDecisionRecord {
     pub decision_id: String,
     #[serde(rename = "type")]
-    pub kind: String, // waive | defer | provide_setup | confirm_accepted_risk | rework | cancel
+    // Gate answers: waive | provide_setup | confirm_accepted_risk | rework | cancel.
+    // Plus the controller-generated `superseded`, written when an amendment's
+    // superseding approval closes this run (DESIGN § Amendment at the Escalation Gate).
+    pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requirement: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

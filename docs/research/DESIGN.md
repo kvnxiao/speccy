@@ -243,17 +243,6 @@ Status transitions:
   demote a task-level `passed`.
 - `waived` is terminal for the run. A later revision starts a fresh ledger.
 
-`deferred` is a task status, never a requirement resolution. A `defer` gate
-decision (`run record-decision`) sets a task aside; any linked requirement
-not covered by another live task is waived atomically inside the same
-decision — the same one-path-outside-`requirement set-status` rule as
-waivers — under the same tier constraints (`residual_risk` note at `high`,
-confirmation gate at `critical`). Requirements also covered by a live task
-stay unresolved and must still be proven. The `verified` gate therefore
-never sees an unresolved requirement hiding behind a deferred task: a defer
-is visible in the review packet as its waived requirements, in the accepted
-risk bucket.
-
 ### Verification Ownership
 
 The dependency should be inverted: a harness verification agent collects evidence for the acceptance ledger, and Speccy provides state, evidence capture tools, and evidence recording. The Speccy CLI is not an LLM and should not pretend to semantically judge scenario prose.
@@ -360,7 +349,7 @@ task packet
 ```
 
 Each runtime task carries a task status and a controller-owned round counter,
-so an interrupted session can resume mid-task. The five statuses:
+so an interrupted session can resume mid-task. The four statuses:
 
 - `queued`: not started.
 - `building`: an implementer owns the task; a repair round re-enters here with
@@ -369,8 +358,6 @@ so an interrupted session can resume mid-task. The five statuses:
   linked requirements.
 - `integrated`: linked requirements resolved for the tier; the controller
   records a git snapshot commit for the task.
-- `deferred`: set aside by a recorded `defer` gate decision, which atomically
-  waives the task's not-otherwise-covered requirements.
 
 When a task enters `building`, the controller records `baseline_commit` — the workspace git HEAD at claim time — on the task and preserves it across resume, so every diff, review, and evidence check has a stable baseline even after a crash mid-round.
 
@@ -570,7 +557,7 @@ the same judgment, so both derive here: `requirement set-status` records
 requirement statuses and never moves the task. `task record-handoff` records
 the task straight to `in_review`; there is no separate reviewable or
 needs_repair holding state. Run transitions:
-`implementing -> verifying` when every task is `integrated` or `deferred`,
+`implementing -> verifying` when every task is `integrated`,
 `verifying -> verified` when every requirement is resolved and any
 critical-tier confirmation gate is answered, and `-> escalated` — including
 the labeled escalation snapshot — on cap exhaustion, a blocked requirement,
@@ -738,7 +725,7 @@ a killed session, context compaction, or a rate-limit abort.
 Three mechanisms make that answer deterministic:
 
 - **Task statuses and the round counter.** The runtime task graph records
-  `queued | building | in_review | integrated | deferred` per task plus the
+  `queued | building | in_review | integrated` per task plus the
   controller-owned round counter, so the controller knows exactly which phase
   of which round was interrupted (see "Task").
 - **Git snapshots at task boundaries.** Every task records `baseline_commit`
@@ -1272,7 +1259,7 @@ Important rules:
 - No run before the approved spec has goal, scope, risk tier, and acceptance criteria.
 - No run starts on a dirty worktree: `run start` refuses uncommitted changes before any run state exists, so for the run's lifetime every dirty diff is attributable to the in-flight task.
 - The workspace must be a git repository or a subtree of one. Non-git directories are refused; resume and evidence baselines depend on git snapshots and `baseline_commit`.
-- No task reaches `integrated` until linked acceptance requirements are resolved for the selected risk tier. A task set aside by a `defer` gate decision exits as `deferred` instead — never `integrated` — and the decision atomically waives its not-otherwise-covered requirements (see "Requirement Resolution Rules").
+- No task reaches `integrated` until linked acceptance requirements are resolved for the selected risk tier.
 - Tasks execute serially by default, and each task can repeat implement-review-repair rounds before the scheduler moves to the next task.
 - Higher-risk work increases the evidence requirements inside the same ledger.
 - A failed task reviewer creates a task-scoped repair round. A failed final validator creates a run-level repair task, a waiver request, or an escalated state.
@@ -1366,7 +1353,7 @@ It includes:
 - What partial work is already applied to the workspace.
 - Suggested amendments, when the planner has any.
 
-At the escalation gate the human responds in prose, and the harness records the right decision through the operation `gate_answers` names for that answer rather than offering a menu of process verbs. Gate decisions that resolve requirements — waivers, defers — set the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
+At the escalation gate the human responds in prose, and the harness records the right decision through the operation `gate_answers` names for that answer rather than offering a menu of process verbs. A gate decision that resolves a requirement — a waiver — sets the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
 
 - **Amend the spec.** The usual outcome. Creates a new approved spec revision and a new run, with a decision record explaining why the definition of done changed. The escalated run is closed as `cancelled` atomically inside the superseding approval, with a decision record naming the superseding revision and run (see "Amendment at the Escalation Gate"). Any guidance the human gives is folded into the amendment.
 - **Provide missing setup or evidence.** Keeps the spec revision, records the gate decision, and resumes the same run in `implementing` or `verifying` when the environment is ready.
@@ -1639,7 +1626,7 @@ Implementation is a serial task execution loop. Each task gets its own implement
 7. The verifier handles semantic review and evidence adequacy review at the depth required by the risk tier.
 8. Acceptance statuses update from collected evidence plus structured verifier findings.
 9. Failed task-linked items create task-scoped repair rounds up to the tier's cap. Blocked items never enter repair — rounds cannot manufacture missing environment or evidence — and escalate directly as a human/policy gate.
-10. The scheduler advances only after the task is `integrated`, or exits `deferred` by a recorded `defer` gate decision.
+10. The scheduler advances only after the task is `integrated`.
 
 ### Validation Phase
 

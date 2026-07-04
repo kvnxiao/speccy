@@ -211,10 +211,9 @@ recorded (see "Amendment at the Escalation Gate" in `DESIGN.md`).
 ## `run record-decision` — decision.json (run-scoped, gate answers)
 
 ```yaml
-type: waive                           # waive | defer | provide_setup | confirm_accepted_risk | rework | cancel
+type: waive                           # waive | provide_setup | confirm_accepted_risk | rework | cancel
 requirement: R-AUTH-003               # required for waive; the status flips to
                                       # waived atomically inside this operation
-task: T3                              # required for defer
 actor: human
 reason: "constant-time comparison deferred; tracked in follow-up"
 residual_risk: "timing side channel remains measurable"   # required for waive
@@ -226,11 +225,6 @@ carry_forward: false                  # optional; true marks a durable constrain
 `verified -> implementing` and the controller appends a dynamic `RT<n>` task
 seeded with that feedback, counted against `run_review_rounds` (mechanics in
 "Review UX" in `DESIGN.md`).
-
-`defer` requires `task`. Requirements linked only to that task are waived
-atomically inside the decision, so `reason` is always required and
-`residual_risk` is required whenever the defer waives any requirement
-(mechanics in "Requirement Resolution Rules" in `DESIGN.md`).
 
 ## `task claim`
 

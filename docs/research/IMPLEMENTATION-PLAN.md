@@ -68,7 +68,7 @@ Goal: make `verified` mean something, and make concurrent and interrupted runs s
 Goal: the full human-facing endpoints, where ceremony is actually felt.
 
 - [ ] Packets: `packet escalation`; state-aware `packet review` buckets (Proven / Accepted risk / Needs you) — § Review Packet, § Escalation Packet
-- [ ] Run decisions: `run record-decision` (incl. `rework` → `implementing` + `RT<n>`, `defer`, `carry_forward`) and `run record-ship` (`verified` → `submitted`, records `change_ref`) — § Carry-Forward Decisions
+- [ ] Run decisions: `run record-decision` (incl. `rework` → `implementing` + `RT<n>`, `carry_forward`) and `run record-ship` (`verified` → `submitted`, records `change_ref`) — § Carry-Forward Decisions
 - [ ] Human CLI: `status`, `list` (+`--query`/`--json` selector resolution), `review` (+`--evidence`), `accept` (idempotent, uses recorded `change_ref`), `archive`, `cancel`, `new`, `export review`, with selector inference — § CLI/Admin Flow
 - [ ] Planning-packet prior-context candidates over active (non-archived) specs — § Carry-Forward Decisions
 

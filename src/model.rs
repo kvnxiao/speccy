@@ -54,7 +54,6 @@ pub enum TaskStatus {
     Building,
     InReview,
     Integrated,
-    Deferred,
 }
 
 /// Requirement status — six canonical values (DESIGN § Requirement Resolution Rules).

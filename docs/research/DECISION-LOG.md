@@ -29,7 +29,7 @@ Durable decisions and the alternatives they rejected, grouped by area. This exis
 - **Run opens directly in `implementing`.** Rejected a `created` state.
 - **Spec statuses:** rejected `obsolete` (unreachable — nothing sets it, and `archived` already excludes from planning); added `cancelled` for human abandonment.
 - **Naming disambiguation:** run terminal state is `landed`, task terminal state is `integrated`, and `accepted` is a spec status only. The risk tier is `minimal` (not `tiny`); the scope ladder keeps `tiny`.
-- **`deferred` is a task status, never a requirement resolution.** A `defer` gate decision atomically waives the task's not-otherwise-covered requirements under tier constraints; requirements covered by another live task stay unresolved, so `verified` never sees an unresolved requirement hiding behind a deferred task.
+- **`defer`/`deferred` cut entirely.** `waive` (accept a requirement's risk) and `cancel` (abandon the run) already cover the escalation resolutions; a task-scoped defer that cascade-waives orphaned requirements added state-machine surface without an MVP need. Task terminal state is `integrated` only.
 - **`waived` is gate-only and terminal for the run**, set atomically inside `run record-decision` — the only requirement-status mutation outside `requirement set-status`.
 - **`failed` may rest on a reviewer finding, not only recorded evidence.**
 

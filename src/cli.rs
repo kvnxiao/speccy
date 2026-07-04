@@ -106,7 +106,7 @@ pub enum RunOp {
     Status(RunRef),
     /// Return the single next directive; the loop's only entry point.
     Next(RunNextArgs),
-    /// Record a run-scoped gate decision (waive/defer/rework/…).
+    /// Record a run-scoped gate decision (waive/rework/…).
     RecordDecision(RunInput),
     /// Record a ship: `verified -> submitted` plus the change reference.
     RecordShip(RunInput),

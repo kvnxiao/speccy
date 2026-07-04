@@ -534,7 +534,7 @@ impl RunProjection {
     pub fn all_tasks_done(&self) -> bool {
         self.tasks
             .iter()
-            .all(|t| matches!(t.status, TaskStatus::Integrated | TaskStatus::Deferred))
+            .all(|t| t.status == TaskStatus::Integrated)
     }
 
     pub fn active_task(&self) -> Option<&TaskState> {
@@ -589,6 +589,5 @@ fn task_status_wire(s: TaskStatus) -> &'static str {
         TaskStatus::Building => "building",
         TaskStatus::InReview => "in_review",
         TaskStatus::Integrated => "integrated",
-        TaskStatus::Deferred => "deferred",
     }
 }

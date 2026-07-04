@@ -606,55 +606,6 @@ fn run_record_decision(
                 "resume": "call run next",
             }))
         }
-        "defer" => {
-            let task = d
-                .task
-                .clone()
-                .ok_or_else(|| SpeccyError::validation("defer requires a task"))?;
-            require_reason(&d, "defer")?;
-            let orphaned = orphaned_requirements(&run, &task);
-            if !orphaned.is_empty() {
-                require_residual_risk(&d, "defer")?;
-            }
-            append_decision("defer")?;
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::TaskTransitioned {
-                    task: task.clone(),
-                    to: TaskStatus::Deferred,
-                    round: run.task(&task).map(|t| t.round).unwrap_or(0),
-                    snapshot: None,
-                },
-            )?;
-            if !orphaned.is_empty() {
-                store.append_run_event(
-                    &spec_id,
-                    run_id,
-                    Event::RequirementStatusSet {
-                        updates: orphaned
-                            .iter()
-                            .map(|r| RequirementUpdate {
-                                requirement: r.clone(),
-                                status: RequirementStatus::Waived,
-                                evidence: Vec::new(),
-                                findings: Vec::new(),
-                                residual_risk: d.residual_risk.clone(),
-                                note: d.reason.clone(),
-                            })
-                            .collect(),
-                    },
-                )?;
-            }
-            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
-            Ok(json!({
-                "type": "defer",
-                "task": task,
-                "waived": orphaned,
-                "run_state": resumed,
-                "resume": "call run next",
-            }))
-        }
         "provide_setup" | "confirm_accepted_risk" => {
             require_reason(&d, &d.kind)?;
             append_decision(&d.kind)?;
@@ -689,22 +640,6 @@ fn require_residual_risk(d: &RunDecisionInput, kind: &str) -> Result<()> {
     }
 }
 
-/// Requirements linked only to `task` (not covered by any other non-deferred task).
-fn orphaned_requirements(run: &crate::projection::RunProjection, task_id: &str) -> Vec<String> {
-    let Some(task) = run.task(task_id) else {
-        return Vec::new();
-    };
-    task.requirements
-        .iter()
-        .filter(|r| {
-            !run.tasks.iter().any(|t| {
-                t.id != task_id && t.status != TaskStatus::Deferred && t.requirements.contains(r)
-            })
-        })
-        .cloned()
-        .collect()
-}
-
 /// After a gate decision that unblocks a parked run, move it back into the loop.
 fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&'static str> {
     let run = store.run_projection(spec_id, run_id)?;
@@ -733,14 +668,14 @@ fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&
 
 fn task(store: &Store, op: TaskOp) -> Result<Value> {
     match op {
-        TaskOp::Claim(args) => task_claim(store, &args.run, &args.task, &args.lease),
+        TaskOp::Claim(args) => task_claim(store, &args.run, &args.task, &args.agent, &args.lease),
         TaskOp::RecordHandoff(args) => {
             task_record_handoff(store, &args.run, args.lease.as_deref(), &args.input)
         }
     }
 }
 
-fn task_claim(store: &Store, run_id: &str, task_id: &str, lease: &str) -> Result<Value> {
+fn task_claim(store: &Store, run_id: &str, task_id: &str, agent: &str, lease: &str) -> Result<Value> {
     let (spec_id, run) = store.run_by_id(run_id)?;
     store.verify_lease(&spec_id, run_id, Some(lease))?;
     let task = run
@@ -758,7 +693,7 @@ fn task_claim(store: &Store, run_id: &str, task_id: &str, lease: &str) -> Result
         run_id,
         Event::TaskClaimed {
             task: task_id.to_string(),
-            agent: "claude".into(),
+            agent: agent.to_string(),
             baseline_commit: baseline_commit.clone(),
         },
     )?;

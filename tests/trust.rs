@@ -94,6 +94,34 @@ fn second_agent_gets_lease_held() {
 }
 
 #[test]
+fn task_claim_records_the_caller_chosen_agent() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(None));
+    // Claim T1 with a distinctive, non-default agent ID.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "codex:sess_probe", "--json",
+    ]);
+    let task = d["subject"]["task"].as_str().unwrap().to_string();
+    let lease = d["lease"]["token"].as_str().unwrap().to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", &task, "--agent", "codex:sess_probe",
+        "--lease", &lease, "--json",
+    ]);
+    // The claim is recorded against the caller's agent, not a hardcoded value.
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events log stored");
+    let claimed = log
+        .lines()
+        .find(|l| l.contains("\"type\":\"task_claimed\""))
+        .expect("a task_claimed event");
+    assert!(
+        claimed.contains("\"agent\":\"codex:sess_probe\""),
+        "claim must record the caller-chosen agent: {claimed}"
+    );
+}
+
+#[test]
 fn mutating_op_requires_the_live_lease() {
     let h = Harness::new();
     let run = start_run(&h, draft(None));
