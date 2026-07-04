@@ -159,6 +159,67 @@ fn review_is_state_aware_and_infers_current_spec() {
 }
 
 #[test]
+fn status_card_ready_to_ship() {
+    let h = Harness::new();
+    let (_spec_ref, _run) = verified_run(&h);
+    let status = h.human(&["status"]);
+    assert!(status.contains("Ready to ship"), "{status}");
+    assert!(status.contains("Next: /speccy-ship"), "{status}");
+    // No controller machinery leaks onto the card.
+    assert!(!status.contains("lease"), "{status}");
+    assert!(!status.contains("run_"), "{status}");
+}
+
+#[test]
+fn status_card_shows_interrupted_after_lease_expiry() {
+    let mut h = Harness::new();
+    h.set_env("SPECCY_LEASE_TTL_SECONDS", "1");
+    let (spec_ref, revision) = approve_minimal(&h, "Interrupted");
+    let run = h.ctl(&[
+        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &revision, "--json",
+    ])["run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Claim T1 and let the worker edit, then let the lease expire (session dies).
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "claude:A", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().unwrap().to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "claude:A", "--lease",
+        &lease, "--json",
+    ]);
+    h.write_file("src/partial.rs", "fn work() {}\n");
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+
+    let status = h.human(&["status"]);
+    assert!(status.contains("Interrupted"), "{status}");
+    assert!(status.contains("Uncommitted diff"), "{status}");
+    assert!(status.contains("Next: /speccy-implement"), "{status}");
+}
+
+#[test]
+fn review_json_is_state_aware() {
+    let h = Harness::new();
+    let (spec_ref, _revision) = approve_minimal(&h, "Json review");
+    // Approved, no run yet → the spec-card surface, structurally.
+    let out = h.human(&["review", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).expect("valid JSON");
+    assert_eq!(v["surface"], json!("spec_card"), "{v}");
+    assert_eq!(v["spec_ref"], json!(spec_ref));
+}
+
+#[test]
+fn archive_refuses_an_active_spec() {
+    let h = Harness::new();
+    let (spec_ref, _revision) = approve_minimal(&h, "Still active");
+    let (_out, ok) = h.output(&["archive", &spec_ref]);
+    assert!(!ok, "archive must refuse an approved (active) spec");
+}
+
+#[test]
 fn cancel_and_new_and_list_query() {
     let h = Harness::new();
     let created = h.human(&["new", "Rate-limit magic links", "--title", "Rate limit"]);
@@ -271,6 +332,13 @@ fn escalation_packet_scopes_to_failing_requirement() {
     let md = packet["markdown"].as_str().unwrap();
     assert!(md.contains("R1"), "{md}");
     assert!(md.contains("Recommended: amend the spec"), "{md}");
+
+    // `speccy review` on an escalated run renders that escalation packet.
+    let review = h.human(&["review", &spec_ref]);
+    assert!(
+        review.contains("Recommended: amend the spec"),
+        "escalated review should show the escalation packet: {review}"
+    );
 
     // Waiving R1 resolves it and resumes the run.
     let lease = d["lease"]["token"].as_str().unwrap().to_string();

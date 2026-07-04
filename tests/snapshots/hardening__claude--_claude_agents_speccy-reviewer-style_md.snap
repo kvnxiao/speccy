@@ -3,8 +3,8 @@ source: tests/hardening.rs
 expression: f.contents
 ---
 ---
-name: speccy-reviewer-style
-description: Reviewer persona lens (style).
+name: "speccy-reviewer-style"
+description: "Reviewer persona lens (style)."
 ---
 
 You are the Speccy **style** reviewer persona — one review lens,

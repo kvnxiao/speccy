@@ -160,6 +160,26 @@ impl Harness {
         std::fs::read_to_string(self.repo.path().join(rel)).unwrap()
     }
 
+    /// Recursively find and read the first file under `SPECCY_HOME` whose path
+    /// contains `needle` — used to inspect stored artifacts without hardcoding
+    /// opaque store paths.
+    pub fn read_home_file_containing(&self, needle: &str) -> Option<String> {
+        fn walk(dir: &Path, needle: &str) -> Option<String> {
+            for entry in std::fs::read_dir(dir).ok()?.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(found) = walk(&path, needle) {
+                        return Some(found);
+                    }
+                } else if path.to_string_lossy().replace('\\', "/").contains(needle) {
+                    return std::fs::read_to_string(&path).ok();
+                }
+            }
+            None
+        }
+        walk(self.home.path(), needle)
+    }
+
     /// Run a human command; return stdout text.
     pub fn human(&self, args: &[&str]) -> String {
         let out = self

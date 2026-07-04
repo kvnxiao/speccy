@@ -2,17 +2,18 @@
 //! (DESIGN § Install Flow). Idempotent: create missing, repair missing, report
 //! updates; never rewrite edited prose without `--update`/`--force`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use similar::{DiffOp, TextDiff};
 
 use crate::config::ProjectConfig;
 use crate::error::{Result, SpeccyError};
 use crate::render::{self, Harness, ManagedFile, PACK_VERSION};
-use crate::store::write_atomic;
+use crate::store::{home_dir, write_atomic};
 
 /// Parsed `speccy install` options (subset the command exposes).
 pub struct InstallOptions {
@@ -38,6 +39,7 @@ struct Planned {
     path: String,
     contents: String,
     template_id: String,
+    source_hash: String,
     target: Option<Harness>,
     action: Action,
 }
@@ -53,8 +55,19 @@ struct PackLock {
 struct LockEntry {
     path: String,
     target: String,
+    /// Render scope (`repo`; `user` scope is a later capability).
+    #[serde(default = "default_scope")]
+    scope: String,
     template_id: String,
+    /// Content hash of the source template — detects a template edit even when
+    /// `pack_version` is unchanged (DESIGN § Harness-Aware Template Rendering).
+    #[serde(default)]
+    source_hash: String,
     rendered_hash: String,
+}
+
+fn default_scope() -> String {
+    "repo".to_string()
 }
 
 /// Run the install command against a repo root. Returns the human-facing report.
@@ -86,6 +99,7 @@ pub fn run(repo_root: &Path, opts: &InstallOptions) -> Result<String> {
                 path: entry.path.clone(),
                 contents: String::new(),
                 template_id: entry.template_id.clone(),
+                source_hash: entry.source_hash.clone(),
                 target: Harness::parse(&entry.target),
                 action: Action::Remove,
             }),
@@ -134,15 +148,36 @@ pub fn run(repo_root: &Path, opts: &InstallOptions) -> Result<String> {
     if gitignore_needs_block {
         append_gitignore_block(repo_root)?;
     }
+    // A filesystem-safe, sortable stamp for staged conflict directories.
+    let conflict_stamp = jiff::Timestamp::now().as_second().to_string();
+    let mut merged: HashSet<String> = HashSet::new();
     for p in &to_write {
         match p.action {
             Action::Remove => {
                 let _ = std::fs::remove_file(repo_root.join(&p.path));
+                remove_base(repo_root, &p.path);
             }
             Action::Conflicted if opts.update && !opts.force => {
-                write_conflict(repo_root, p)?;
+                if resolve_conflict(repo_root, p, &conflict_stamp)? {
+                    merged.insert(p.path.clone());
+                }
             }
             _ => write_atomic(&repo_root.join(&p.path), p.contents.as_bytes())?,
+        }
+    }
+
+    // Refresh the base-render cache for every file now installed at the current
+    // render, so a future `--update` has a real three-way-merge base. Skip files
+    // whose local edits we staged rather than merged (their base stays put).
+    for p in &rendered {
+        let installed_current_render = match p.action {
+            Action::Create | Action::UpToDate => true,
+            Action::Outdated => should_write(p.action, opts),
+            Action::Conflicted => merged.contains(&p.path),
+            Action::Remove => false,
+        };
+        if installed_current_render {
+            let _ = write_base(repo_root, &p.path, &p.contents);
         }
     }
 
@@ -177,6 +212,7 @@ fn classify(repo_root: &Path, lock: &PackLock, f: ManagedFile, target: Option<Ha
         path: f.path,
         contents: f.contents,
         template_id: f.template_id,
+        source_hash: f.source_hash,
         target,
         action,
     }
@@ -251,7 +287,7 @@ fn preview(
             Action::Outdated if should_write(p.action, opts) => "update",
             Action::Outdated => "stale ",
             Action::Conflicted if opts.force => "force ",
-            Action::Conflicted if opts.update => "conflict",
+            Action::Conflicted if opts.update => "merge ",
             Action::Conflicted => "modified",
             Action::Remove if should_write(p.action, opts) => "remove",
             Action::Remove => "orphan",
@@ -299,11 +335,182 @@ fn confirm(report: &str) -> Result<bool> {
     Ok(matches!(line.trim(), "y" | "Y" | "yes"))
 }
 
-fn write_conflict(repo_root: &Path, p: &Planned) -> Result<()> {
-    // Preserve the local file; write the proposed render for review.
-    let dest = repo_root.join(".speccy/pack-updates/latest").join(&p.path);
-    write_atomic(&dest, p.contents.as_bytes())?;
-    Ok(())
+/// Resolve a locally-edited file against the new render via three-way merge.
+/// Returns `true` when the merge was clean and written to the repo, `false`
+/// when the local file was preserved and a conflict/proposal was staged.
+fn resolve_conflict(repo_root: &Path, p: &Planned, stamp: &str) -> Result<bool> {
+    let local = std::fs::read_to_string(repo_root.join(&p.path)).unwrap_or_default();
+    match read_base(repo_root, &p.path) {
+        // A base render is available → real three-way merge.
+        Some(base) => match merge3(&base, &local, &p.contents) {
+            MergeOutcome::Merged(text) => {
+                write_atomic(&repo_root.join(&p.path), text.as_bytes())?;
+                Ok(true)
+            }
+            MergeOutcome::Conflicted(text) => {
+                stage_update(repo_root, &p.path, &text, stamp)?;
+                Ok(false)
+            }
+        },
+        // No base to merge against (e.g. a fresh clone edited elsewhere):
+        // preserve the local file and stage the proposed render for review.
+        None => {
+            stage_update(repo_root, &p.path, &p.contents, stamp)?;
+            Ok(false)
+        }
+    }
+}
+
+/// Stage a proposed update / conflict-marked file under a per-run timestamped
+/// directory (DESIGN § Install Flow); transient, covered by the .gitignore
+/// backstop.
+fn stage_update(repo_root: &Path, rel: &str, contents: &str, stamp: &str) -> Result<()> {
+    let dest = repo_root
+        .join(".speccy/pack-updates")
+        .join(stamp)
+        .join(rel);
+    write_atomic(&dest, contents.as_bytes())
+}
+
+// --- three-way merge (diff3) ---
+
+enum MergeOutcome {
+    Merged(String),
+    Conflicted(String),
+}
+
+/// Line-level three-way merge. `similar` supplies the two base-vs-side diffs;
+/// this aligns them on lines equal (and aligned) in BOTH sides and resolves
+/// each intervening segment, emitting Git-style conflict markers only where the
+/// two sides changed the same region divergently.
+fn merge3(base: &str, local: &str, new: &str) -> MergeOutcome {
+    let base_l: Vec<&str> = base.split_inclusive('\n').collect();
+    let local_l: Vec<&str> = local.split_inclusive('\n').collect();
+    let new_l: Vec<&str> = new.split_inclusive('\n').collect();
+
+    let local_map = equal_alignment(&base_l, &local_l);
+    let new_map = equal_alignment(&base_l, &new_l);
+    let mut anchors: Vec<usize> = local_map
+        .keys()
+        .filter(|k| new_map.contains_key(k))
+        .copied()
+        .collect();
+    anchors.sort_unstable();
+
+    let mut out = String::new();
+    let mut conflict = false;
+    let (mut bi, mut li, mut ni) = (0usize, 0usize, 0usize);
+    let mut idx = 0;
+    loop {
+        let anchor = anchors.get(idx).copied();
+        let (ba, la, na) = match anchor {
+            Some(ba) => (ba, local_map[&ba], new_map[&ba]),
+            None => (base_l.len(), local_l.len(), new_l.len()),
+        };
+        resolve_segment(
+            &base_l[bi..ba],
+            &local_l[li..la],
+            &new_l[ni..na],
+            &mut out,
+            &mut conflict,
+        );
+        let Some(ba) = anchor else { break };
+        out.push_str(base_l[ba]); // the shared anchor line
+        bi = ba + 1;
+        li = local_map[&ba] + 1;
+        ni = new_map[&ba] + 1;
+        idx += 1;
+    }
+    if conflict {
+        MergeOutcome::Conflicted(out)
+    } else {
+        MergeOutcome::Merged(out)
+    }
+}
+
+/// Map each base line index to its aligned side index for lines the diff marks
+/// Equal (unchanged).
+fn equal_alignment(base: &[&str], side: &[&str]) -> HashMap<usize, usize> {
+    let mut map = HashMap::new();
+    for op in TextDiff::from_slices(base, side).ops() {
+        if let DiffOp::Equal {
+            old_index,
+            new_index,
+            len,
+        } = *op
+        {
+            for k in 0..len {
+                map.insert(old_index + k, new_index + k);
+            }
+        }
+    }
+    map
+}
+
+fn resolve_segment(
+    base: &[&str],
+    local: &[&str],
+    new: &[&str],
+    out: &mut String,
+    conflict: &mut bool,
+) {
+    if local == new || new == base {
+        // Both agree, or only the local side changed → take local.
+        local.iter().for_each(|l| out.push_str(l));
+    } else if local == base {
+        // Only the upstream render changed → take it.
+        new.iter().for_each(|l| out.push_str(l));
+    } else {
+        *conflict = true;
+        ensure_newline(out);
+        out.push_str("<<<<<<< local\n");
+        local.iter().for_each(|l| out.push_str(l));
+        ensure_newline(out);
+        out.push_str("=======\n");
+        new.iter().for_each(|l| out.push_str(l));
+        ensure_newline(out);
+        out.push_str(">>>>>>> incoming\n");
+    }
+}
+
+fn ensure_newline(out: &mut String) {
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+// --- base-render cache (runtime state under ~/.speccy) ---
+
+/// Per-workspace directory holding the last rendered content of each managed
+/// file, so `--update` can three-way-merge against a real base. Runtime state,
+/// never committed.
+fn base_cache_dir(repo_root: &Path) -> Result<PathBuf> {
+    let root = repo_root
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.to_path_buf());
+    let mut hasher = Sha256::new();
+    hasher.update(root.to_string_lossy().as_bytes());
+    let key: String = hasher
+        .finalize()
+        .iter()
+        .take(6)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    Ok(home_dir()?.join("pack-base").join(key))
+}
+
+fn read_base(repo_root: &Path, rel: &str) -> Option<String> {
+    std::fs::read_to_string(base_cache_dir(repo_root).ok()?.join(rel)).ok()
+}
+
+fn write_base(repo_root: &Path, rel: &str, contents: &str) -> Result<()> {
+    write_atomic(&base_cache_dir(repo_root)?.join(rel), contents.as_bytes())
+}
+
+fn remove_base(repo_root: &Path, rel: &str) {
+    if let Ok(dir) = base_cache_dir(repo_root) {
+        let _ = std::fs::remove_file(dir.join(rel));
+    }
 }
 
 // --- pack lock ---
@@ -345,7 +552,9 @@ fn write_lock(
                     LockEntry {
                         path: p.path.clone(),
                         target: p.target.map(|t| t.key().to_string()).unwrap_or_default(),
+                        scope: default_scope(),
                         template_id: p.template_id.clone(),
+                        source_hash: p.source_hash.clone(),
                         rendered_hash: hash(&p.contents),
                     },
                 );
@@ -366,8 +575,8 @@ fn render_lock_yaml(lock: &PackLock) -> String {
     let mut out = format!("pack_version: \"{}\"\nfiles:\n", lock.pack_version);
     for e in &lock.files {
         out.push_str(&format!(
-            "  - path: {}\n    target: {}\n    template_id: {}\n    rendered_hash: {}\n",
-            e.path, e.target, e.template_id, e.rendered_hash
+            "  - path: {}\n    target: {}\n    scope: {}\n    template_id: {}\n    source_hash: {}\n    rendered_hash: {}\n",
+            e.path, e.target, e.scope, e.template_id, e.source_hash, e.rendered_hash
         ));
     }
     out
@@ -426,4 +635,47 @@ fn hash(contents: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(contents.as_bytes());
     format!("sha256:{:x}", hasher.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge3, MergeOutcome};
+
+    fn merged(base: &str, local: &str, new: &str) -> String {
+        match merge3(base, local, new) {
+            MergeOutcome::Merged(m) => m,
+            MergeOutcome::Conflicted(c) => panic!("unexpected conflict:\n{c}"),
+        }
+    }
+
+    #[test]
+    fn takes_upstream_when_local_is_unchanged() {
+        assert_eq!(merged("a\nb\nc\n", "a\nb\nc\n", "a\nB\nc\n"), "a\nB\nc\n");
+    }
+
+    #[test]
+    fn keeps_local_when_upstream_is_unchanged() {
+        let local = "a\nb\nLOCAL\n";
+        assert_eq!(merged("a\nb\nc\n", local, "a\nb\nc\n"), local);
+    }
+
+    #[test]
+    fn merges_disjoint_changes_cleanly() {
+        assert_eq!(
+            merged("a\nb\nc\nd\n", "A\nb\nc\nd\n", "a\nb\nc\nD\n"),
+            "A\nb\nc\nD\n"
+        );
+    }
+
+    #[test]
+    fn flags_overlapping_changes_as_conflict() {
+        match merge3("a\nb\nc\n", "a\nLOCAL\nc\n", "a\nNEW\nc\n") {
+            MergeOutcome::Conflicted(c) => {
+                assert!(c.contains("<<<<<<<"), "{c}");
+                assert!(c.contains("LOCAL") && c.contains("NEW"), "{c}");
+                assert!(c.contains(">>>>>>>"), "{c}");
+            }
+            MergeOutcome::Merged(m) => panic!("expected conflict, got:\n{m}"),
+        }
+    }
 }

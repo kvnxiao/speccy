@@ -205,6 +205,52 @@ fn failing_command_records_nonzero_exit() {
 }
 
 #[test]
+fn known_secret_env_value_is_scrubbed_from_stored_output() {
+    let mut h = Harness::new();
+    // A secret-named env var; the command echoes its value verbatim.
+    h.set_env("MY_TEST_TOKEN", "ZZsecretvalueZZ");
+    let run = start_run(&h, draft(Some("echo ZZsecretvalueZZ")));
+    h.ctl(&[
+        "ctl", "evidence", "collect", "--run", &run, "--requirements", "R1", "--json",
+    ]);
+    // The stored command output must carry the placeholder, not the raw secret.
+    // (Scan the stdout section; the declared command string itself is not
+    // "output" and is shown verbatim on the spec card.)
+    let artifact = h
+        .read_home_file_containing("/evidence/")
+        .expect("evidence artifact stored");
+    let stdout = artifact
+        .split("--- stdout ---")
+        .nth(1)
+        .expect("artifact has a stdout section");
+    assert!(
+        stdout.contains("[REDACTED:MY_TEST_TOKEN]"),
+        "expected scrubbed output, got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("ZZsecretvalueZZ"),
+        "raw secret leaked into stored output: {stdout}"
+    );
+}
+
+#[test]
+fn output_over_the_byte_cap_is_noted_as_truncated() {
+    let h = Harness::new();
+    h.write_file(
+        ".speccy/project.yaml",
+        "evidence:\n  command_output_max_bytes: 4\n",
+    );
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let run = start_run(&h, draft(Some("echo aaaaaaaaaaaaaaaa")));
+    let collected = h.ctl(&[
+        "ctl", "evidence", "collect", "--run", &run, "--requirements", "R1", "--json",
+    ]);
+    let note = collected["evidence"][0]["note"].as_str().unwrap_or("");
+    assert!(note.contains("truncated"), "expected truncation note, got {note:?}");
+}
+
+#[test]
 fn provenance_leak_in_product_file_blocks_integration() {
     let h = Harness::new();
     let run = start_run(&h, draft(None));

@@ -6,6 +6,7 @@
 use minijinja::{Environment, UndefinedBehavior};
 use rust_embed::RustEmbed;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use crate::config::{Persona, ProjectConfig};
 use crate::error::{Result, SpeccyError};
@@ -40,17 +41,25 @@ impl Harness {
     }
 }
 
-/// A rendered managed file: its repo-relative path, contents, and the source
-/// template id (recorded in the pack lock for freshness checks).
+/// A rendered managed file: its repo-relative path, contents, the source
+/// template id, and the source template's content hash (both recorded in the
+/// pack lock for freshness/drift checks — a template edit changes the source
+/// hash even when `PACK_VERSION` is unchanged).
 #[derive(Debug, Clone)]
 pub struct ManagedFile {
     pub path: String,
     pub contents: String,
     pub template_id: String,
+    pub source_hash: String,
 }
 
 const SKILLS: &[&str] = &["brainstorm", "plan", "implement", "ship"];
 const ROLES: &[&str] = &["planner", "worker", "verifier", "repair"];
+
+/// The synthetic reviewer a `minimal`-risk run collapses to (DESIGN § Reviewer
+/// Personas). Rendered unconditionally so the collapsed roster always names a
+/// subagent that exists in the pack.
+const COMBINED_PERSONA: &str = "combined";
 
 /// Render the full pack for one harness target from the project config.
 pub fn render_pack(target: Harness, config: &ProjectConfig) -> Result<Vec<ManagedFile>> {
@@ -60,32 +69,62 @@ pub fn render_pack(target: Harness, config: &ProjectConfig) -> Result<Vec<Manage
     for name in SKILLS {
         let template_id = format!("skill-{name}.j2");
         let ctx = base_context(target);
-        files.push(ManagedFile {
-            path: skill_path(target, name),
-            contents: render(&env, &template_id, ctx)?,
-            template_id,
-        });
+        files.push(managed(&env, skill_path(target, name), template_id, ctx)?);
     }
     for role in ROLES {
         let template_id = format!("agent-{role}.j2");
         let ctx = base_context(target);
-        files.push(ManagedFile {
-            path: agent_path(target, role),
-            contents: render(&env, &template_id, ctx)?,
-            template_id,
+        files.push(managed(&env, agent_path(target, role), template_id, ctx)?);
+    }
+
+    // One reviewer file per configured persona, plus the synthetic `combined`
+    // reviewer the minimal tier collapses to (unless the roster already names
+    // one).
+    let mut personas: Vec<Persona> = config.review.personas.clone();
+    if !personas.iter().any(|p| p.name == COMBINED_PERSONA) {
+        personas.push(Persona {
+            name: COMBINED_PERSONA.to_string(),
+            model: None,
+            min_risk: None,
         });
     }
-    for persona in &config.review.personas {
-        let template_id = "agent-reviewer.j2".to_string();
+    for persona in &personas {
         let mut ctx = base_context(target);
         ctx["persona"] = persona_context(target, persona);
-        files.push(ManagedFile {
-            path: reviewer_path(target, &persona.name),
-            contents: render(&env, &template_id, ctx)?,
-            template_id,
-        });
+        files.push(managed(
+            &env,
+            reviewer_path(target, &persona.name),
+            "agent-reviewer.j2".to_string(),
+            ctx,
+        )?);
     }
     Ok(files)
+}
+
+/// Render one managed file, capturing its source-template content hash.
+fn managed(
+    env: &Environment,
+    path: String,
+    template_id: String,
+    ctx: serde_json::Value,
+) -> Result<ManagedFile> {
+    let contents = render(env, &template_id, ctx)?;
+    let source_hash = template_source_hash(&template_id)?;
+    Ok(ManagedFile {
+        path,
+        contents,
+        template_id,
+        source_hash,
+    })
+}
+
+/// Content hash of an embedded source template.
+fn template_source_hash(template_id: &str) -> Result<String> {
+    let file = Templates::get(template_id)
+        .ok_or_else(|| SpeccyError::io(format!("embedded template {template_id} missing")))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&file.data);
+    Ok(format!("sha256:{:x}", hasher.finalize()))
 }
 
 fn build_env() -> Result<Environment<'static>> {
@@ -163,6 +202,9 @@ fn charter_for(name: &str) -> &'static str {
         "style" => {
             "Documented conventions, language/framework idioms, comment quality, and process-provenance leakage a regex cannot catch."
         }
+        "combined" => {
+            "The single combined reviewer for minimal-risk specs: spec fidelity, defects, security, and style in one lens. Keep it proportional to the small change."
+        }
         _ => "Review the change through this lens and record structured findings.",
     }
 }
@@ -197,8 +239,12 @@ mod tests {
         let config = ProjectConfig::default();
         for target in [Harness::Claude, Harness::Codex] {
             let files = render_pack(target, &config).unwrap();
-            // 4 skills + 4 roles + 4 personas.
-            assert_eq!(files.len(), 12, "{target:?}");
+            // 4 skills + 4 roles + 4 personas + the synthetic `combined` reviewer.
+            assert_eq!(files.len(), 13, "{target:?}");
+            assert!(
+                files.iter().any(|f| f.path.contains("speccy-reviewer-combined")),
+                "combined reviewer must be rendered"
+            );
             for f in &files {
                 assert!(!f.contents.trim().is_empty(), "{} empty", f.path);
             }
@@ -217,6 +263,7 @@ mod tests {
         assert!(files
             .iter()
             .any(|f| f.path.contains("speccy-reviewer-perf")));
-        assert_eq!(files.len(), 13);
+        // 4 skills + 4 roles + 5 personas + the synthetic `combined` reviewer.
+        assert_eq!(files.len(), 14);
     }
 }

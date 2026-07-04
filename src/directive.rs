@@ -199,7 +199,7 @@ fn detect_out_of_band(
     )?;
     Ok(Some(AppliedTransition {
         subject: "run".into(),
-        from: run_state_str(run.state).into(),
+        from: run.state.as_str().into(),
         to: "escalated".into(),
         snapshot: None,
     }))
@@ -248,7 +248,7 @@ fn detect_resource_caps(
     )?;
     Ok(Some(AppliedTransition {
         subject: "run".into(),
-        from: run_state_str(from).into(),
+        from: from.as_str().into(),
         to: "escalated".into(),
         snapshot: None,
     }))
@@ -275,7 +275,7 @@ fn run_provenance_scan(
             Some(t.id.clone()),
             t.last_handoff_seq,
         )
-    } else if run.state == RunState::Verifying && run.run_review_rounds_completed == 0 {
+    } else if run.state == RunState::Verifying && !run.run_review_reviewed() {
         (
             Some(run.base_commit.clone()),
             None,
@@ -424,10 +424,11 @@ fn step_implementing(
 fn step_verifying(
     store: &Store,
     run: &RunProjection,
-    _config: &ProjectConfig,
+    config: &ProjectConfig,
 ) -> Result<Option<AppliedTransition>> {
-    if run.run_review_rounds_completed == 0 {
-        // Run-level review not done yet; directive dispatches the verifier.
+    if !run.run_review_reviewed() {
+        // Run-level review for this round not recorded yet; the directive
+        // dispatches the verifier.
         return Ok(None);
     }
     // A critical run with accepted risk parks at the confirmation gate before
@@ -451,9 +452,65 @@ fn step_verifying(
             snapshot: None,
         }));
     }
-    // Unresolved after run-level review. Run-level repair (RT tasks) is M3;
-    // for now the run escalates rather than looping.
+    // The run-level review left work unresolved. A blocked requirement cannot
+    // be repaired, so it escalates directly as a policy gate.
+    if run.has_blocked_requirement() {
+        return escalate(store, run);
+    }
+    // Rounds remaining → spawn a run-level repair task (RT<n>) linked to the
+    // failing requirements and loop back through `implementing` (DESIGN §
+    // Capability Escalation and Give-Up Policy). Otherwise the cap is
+    // exhausted and the run gives up.
+    if run.run_review_round < config.caps.run_review_rounds {
+        return Ok(Some(spawn_run_repair(store, run)?));
+    }
     escalate(store, run)
+}
+
+/// Append a dynamic run-level repair task (`RT<n>`) linked to the failing
+/// requirements and return the run to `implementing` so the normal task loop
+/// re-proves them, then re-enters `verifying` for the next review round.
+fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransition> {
+    let rt = next_rt_id(run);
+    let failing = run.failing_requirements();
+    let seed = if failing.is_empty() {
+        Some("resolve the run-level review findings".to_string())
+    } else {
+        Some(format!("re-prove run-level failures: {}", failing.join(", ")))
+    };
+    store.append_run_event(
+        &run.spec_id,
+        &run.run_id,
+        Event::TaskAppended {
+            task: crate::event::TaskInit {
+                id: rt.clone(),
+                title: Some(format!("Run-level repair (round {})", run.run_review_round + 1)),
+                requirements: failing,
+                constraints: Vec::new(),
+            },
+            seed_feedback: seed,
+        },
+    )?;
+    store.append_run_event(
+        &run.spec_id,
+        &run.run_id,
+        Event::RunStateTransitioned {
+            to: RunState::Implementing,
+            snapshot: None,
+        },
+    )?;
+    Ok(AppliedTransition {
+        subject: "run".into(),
+        from: "verifying".into(),
+        to: "implementing".into(),
+        snapshot: None,
+    })
+}
+
+/// Next `RT<n>` id for the run (shared with the ship-gate rework path).
+pub(crate) fn next_rt_id(run: &RunProjection) -> String {
+    let n = run.tasks.iter().filter(|t| t.id.starts_with("RT")).count() + 1;
+    format!("RT{n}")
 }
 
 /// Commit any in-flight diff as a labeled escalation snapshot and park the run.
@@ -478,7 +535,7 @@ fn escalate(store: &Store, run: &RunProjection) -> Result<Option<AppliedTransiti
     )?;
     Ok(Some(AppliedTransition {
         subject: "run".into(),
-        from: run_state_str(from).into(),
+        from: from.as_str().into(),
         to: "escalated".into(),
         snapshot,
     }))
@@ -521,7 +578,7 @@ fn compute_directive(
     let parts = match run.state {
         RunState::Implementing => implementing_parts(run, config),
         RunState::Verifying
-            if run.run_review_rounds_completed >= 1 && run.needs_accepted_risk_confirmation() =>
+            if run.run_review_reviewed() && run.needs_accepted_risk_confirmation() =>
         {
             Parts {
                 action: DirectiveAction::AwaitHumanGate,
@@ -565,7 +622,7 @@ fn compute_directive(
                 ..Default::default()
             },
             round: Some(Round {
-                current: run.run_review_rounds_completed + 1,
+                current: run.run_review_round,
                 max: config.caps.run_review_rounds,
                 scope: RoundScope::Run,
             }),
@@ -773,14 +830,3 @@ fn escalation_gate_answers() -> Vec<GateAnswer> {
     ]
 }
 
-fn run_state_str(s: RunState) -> &'static str {
-    match s {
-        RunState::Implementing => "implementing",
-        RunState::Verifying => "verifying",
-        RunState::Verified => "verified",
-        RunState::Submitted => "submitted",
-        RunState::Landed => "landed",
-        RunState::Escalated => "escalated",
-        RunState::Cancelled => "cancelled",
-    }
-}

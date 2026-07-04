@@ -3,8 +3,8 @@ source: tests/hardening.rs
 expression: f.contents
 ---
 ---
-name: speccy-reviewer-security
-description: Reviewer persona lens (security).
+name: "speccy-reviewer-security"
+description: "Reviewer persona lens (security)."
 ---
 
 You are the Speccy **security** reviewer persona — one review lens,

@@ -7,7 +7,7 @@ use serde_json::json;
 use crate::error::{Result, SpeccyError};
 use crate::event::{Event, SpecDecisionRecord};
 use crate::ids;
-use crate::model::{RequirementStatus, RiskTier, RunState, SpecStatus};
+use crate::model::{RequirementStatus, RunState, SpecStatus};
 use crate::packets;
 use crate::projection::{RunProjection, SpecState};
 use crate::store::{write_atomic, Store};
@@ -20,7 +20,7 @@ pub fn status(store: &Store) -> Result<String> {
         for run_id in store.list_runs(&spec_id)? {
             let run = store.run_projection(&spec_id, &run_id)?;
             if is_notable(run.state) {
-                cards.push(status_card(&spec, &run));
+                cards.push(status_card(store, &spec, &run));
             }
         }
     }
@@ -31,30 +31,108 @@ pub fn status(store: &Store) -> Result<String> {
     }
 }
 
-/// `speccy review [selector] [--evidence]` — the state-aware human packet.
-pub fn review(store: &Store, selector: Option<&str>, evidence: bool) -> Result<String> {
+/// An active run whose lease has expired has no live session driving it — it is
+/// interrupted, and the card surfaces resume attribution (DESIGN § Resume and
+/// Crash Recovery, § CLI/Admin Flow).
+fn is_interrupted(store: &Store, run: &RunProjection) -> bool {
+    if !matches!(run.state, RunState::Implementing | RunState::Verifying) {
+        return false;
+    }
+    matches!(
+        store.read_lease(&run.spec_id, &run.run_id),
+        Ok(Some(lease)) if lease.is_expired(jiff::Timestamp::now())
+    )
+}
+
+/// `speccy review [selector] [--evidence] [--json]` — the state-aware human
+/// packet; `--json` returns the same state-aware view structurally.
+pub fn review(store: &Store, selector: Option<&str>, evidence: bool, json_out: bool) -> Result<String> {
     let spec = resolve_spec(store, selector)?;
     let runs = store.list_runs(&spec.spec_id)?;
-    let Some(run_id) = runs.last() else {
+    let run = match runs.last() {
+        Some(rid) => Some((rid.clone(), store.run_projection(&spec.spec_id, rid)?)),
+        None => None,
+    };
+
+    if json_out {
+        let value = review_value(store, &spec, run.as_ref())?;
+        return Ok(serde_json::to_string(&value).unwrap_or_else(|_| "{}".into()));
+    }
+
+    let Some((run_id, run)) = run else {
         return Ok(spec_card(&spec));
     };
-    let run = store.run_projection(&spec.spec_id, run_id)?;
     let mut out = match run.state {
         RunState::Verified => {
-            let packet = packets::review(store, run_id)?;
+            let packet = packets::review(store, &run_id)?;
             packet["markdown"].as_str().unwrap_or("").to_string()
         }
-        RunState::Escalated => escalation_summary(&run),
+        // Escalated runs show the escalation packet, not a bespoke summary
+        // (DESIGN § CLI/Admin Flow).
+        RunState::Escalated => {
+            let packet = packets::escalation(store, &run_id)?;
+            packet["markdown"].as_str().unwrap_or("").to_string()
+        }
         RunState::Submitted => close_out_card(&spec, &run),
         RunState::Landed => accepted_summary(&spec, &run),
         RunState::Cancelled => format!("{}  {} — run cancelled", run.spec_ref, title_of(&spec)),
-        _ => status_card(&spec, &run),
+        _ => status_card(store, &spec, &run),
     };
     if evidence {
         out.push_str("\n\n");
         out.push_str(&evidence_drilldown(&run));
     }
     Ok(out)
+}
+
+/// The structural (`--json`) form of `review`, mirroring the text surface by
+/// state (DESIGN § CLI/Admin Flow).
+fn review_value(
+    store: &Store,
+    spec: &SpecState,
+    run: Option<&(String, RunProjection)>,
+) -> Result<serde_json::Value> {
+    let Some((run_id, run)) = run else {
+        let requirements: Vec<_> = spec
+            .latest_revision()
+            .map(|r| {
+                r.draft
+                    .requirements()
+                    .iter()
+                    .map(|req| json!({ "id": req.id, "statement": req.statement }))
+                    .collect()
+            })
+            .unwrap_or_default();
+        return Ok(json!({
+            "surface": "spec_card",
+            "spec_ref": spec.spec_ref,
+            "title": spec.title,
+            "spec_status": spec.status,
+            "requirements": requirements,
+        }));
+    };
+    Ok(match run.state {
+        RunState::Verified => packets::review(store, run_id)?,
+        RunState::Escalated => packets::escalation(store, run_id)?,
+        RunState::Submitted => json!({
+            "surface": "close_out",
+            "spec_ref": run.spec_ref,
+            "run_state": run.state,
+            "change_ref": run.change_ref,
+        }),
+        RunState::Landed => json!({
+            "surface": "accepted",
+            "spec_ref": run.spec_ref,
+            "run_state": run.state,
+        }),
+        _ => json!({
+            "surface": "status",
+            "spec_ref": run.spec_ref,
+            "run_state": run.state,
+            "risk": run.risk,
+            "interrupted": is_interrupted(store, run),
+        }),
+    })
 }
 
 /// `speccy list` — active specs by default; `--query` previews matches;
@@ -178,6 +256,12 @@ pub fn accept(
         if let Some(branch) = &cr.branch {
             out.push_str(&format!("  branch  {branch}\n"));
         }
+        if let Some(head) = &cr.head_sha {
+            out.push_str(&format!("  head    {head}\n"));
+        }
+        if let Some(base) = &cr.base {
+            out.push_str(&format!("  base    {base}\n"));
+        }
     }
     if let Some(pr) = pr {
         out.push_str(&format!("  pr  {pr}\n"));
@@ -215,6 +299,15 @@ pub fn accept(
 /// `speccy archive` — hide a stale accepted spec from active views.
 pub fn archive(store: &Store, selector: Option<&str>) -> Result<String> {
     let spec = resolve_spec_any(store, selector)?;
+    // Archive is for historical specs, not routine close-out of active work
+    // (DESIGN § Acceptance); refuse an active draft/approved spec.
+    if is_active_spec(spec.status) {
+        return Err(SpeccyError::invalid_transition(format!(
+            "{} is {}; archive is for accepted/closed specs — use `speccy cancel` to stop active work",
+            spec.spec_ref,
+            spec_status_str(spec.status)
+        )));
+    }
     store.append_spec_event(
         &spec.spec_id,
         Event::SpecStatusChanged {
@@ -357,26 +450,37 @@ fn is_notable(state: RunState) -> bool {
     )
 }
 
-fn status_card(spec: &SpecState, run: &RunProjection) -> String {
+fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
     let mut card = format!(
         "{}  {}          Risk: {}\n",
         run.spec_ref,
         title_of(spec),
-        risk_str(run.risk)
+        run.risk.as_str()
     );
     match run.state {
+        RunState::Implementing | RunState::Verifying if is_interrupted(store, run) => {
+            card.push_str(&interrupted_lines(store, run));
+        }
         RunState::Implementing | RunState::Verifying => {
             let (label, context) = active_context(run);
             card.push_str(&format!("  {label} — {context}\n"));
             card.push_str("  · autonomous, nothing needed\n");
             if let Some(secs) = age_seconds(run) {
-                card.push_str(&format!("  Last activity {}\n", humanize_age(secs)));
+                let activity = run.last_event_label.as_deref().unwrap_or("");
+                if activity.is_empty() {
+                    card.push_str(&format!("  Last activity {}\n", humanize_age(secs)));
+                } else {
+                    card.push_str(&format!(
+                        "  Last activity {} — {activity}\n",
+                        humanize_age(secs)
+                    ));
+                }
             }
         }
         RunState::Verified => {
             let accepted = accepted_risk_count(run);
             let suffix = if accepted > 0 {
-                format!(" · {accepted} accepted risk")
+                format!(" · {}", packets::accepted_risk_phrase(accepted))
             } else {
                 String::new()
             };
@@ -408,7 +512,8 @@ fn active_context(run: &RunProjection) -> (&'static str, String) {
     };
     let context = match run.active_task() {
         Some(t) => {
-            let title = t.title.clone().unwrap_or_else(|| t.id.clone());
+            // Tasks appear by title, never a bare controller ID (DESIGN § CLI).
+            let title = t.title.clone().unwrap_or_else(|| "the current task".into());
             if t.round > 1 {
                 format!("{title} · repair round {} of 3", t.round)
             } else {
@@ -418,6 +523,31 @@ fn active_context(run: &RunProjection) -> (&'static str, String) {
         None => "run-level validation".to_string(),
     };
     (label, context)
+}
+
+/// The Interrupted status card lines: what died, the uncommitted-diff
+/// attribution, and the resume action (DESIGN § CLI/Admin Flow).
+fn interrupted_lines(store: &Store, run: &RunProjection) -> String {
+    let (label, context) = active_context(run);
+    let mut out = format!("  Interrupted — session died during {label} \"{context}\"\n");
+    if let Some(task) = run.active_task() {
+        if let Some(base) = &task.baseline_commit {
+            if let Ok(diff) = crate::gitx::worktree_stat(&store.git_root, base) {
+                if diff.files > 0 {
+                    out.push_str(&format!(
+                        "  Uncommitted diff ({} files, +{} -{} vs {}) belongs to that task on resume\n",
+                        diff.files,
+                        diff.insertions,
+                        diff.deletions,
+                        &base[..base.len().min(7)]
+                    ));
+                }
+            }
+        }
+    }
+    out.push_str("  Next: /speccy-implement\n");
+    out.push_str("        (stash or commit first if these edits are not the worker's)\n");
+    out
 }
 
 fn spec_card(spec: &SpecState) -> String {
@@ -462,24 +592,6 @@ fn spec_card(spec: &SpecState) -> String {
         }
     }
     out.trim_end().to_string()
-}
-
-fn escalation_summary(run: &RunProjection) -> String {
-    let failing: Vec<&String> = run
-        .requirements
-        .iter()
-        .filter(|(_, r)| !r.status.is_resolved())
-        .map(|(id, _)| id)
-        .collect();
-    let list = failing
-        .iter()
-        .map(|s| s.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "{}  Needs you\nSpeccy stopped because {} could not be proven.\nReply in prose: amend the spec, provide setup, waive the requirement, or cancel.",
-        run.spec_ref, list
-    )
 }
 
 fn close_out_card(spec: &SpecState, run: &RunProjection) -> String {
@@ -603,6 +715,7 @@ fn accepted_risk_count(run: &RunProjection) -> usize {
         .count()
 }
 
+
 fn title_of(spec: &SpecState) -> String {
     spec.title.clone().unwrap_or_else(|| "(untitled)".into())
 }
@@ -619,15 +732,6 @@ fn humanize_age(secs: i64) -> String {
         format!("{}m ago", secs / 60)
     } else {
         format!("{}h ago", secs / 3600)
-    }
-}
-
-fn risk_str(r: RiskTier) -> &'static str {
-    match r {
-        RiskTier::Minimal => "minimal",
-        RiskTier::Standard => "standard",
-        RiskTier::High => "high",
-        RiskTier::Critical => "critical",
     }
 }
 

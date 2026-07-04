@@ -31,6 +31,19 @@ impl RunState {
             RunState::Implementing | RunState::Verifying | RunState::Verified
         )
     }
+
+    /// The snake_case wire string (matches the serde representation).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RunState::Implementing => "implementing",
+            RunState::Verifying => "verifying",
+            RunState::Verified => "verified",
+            RunState::Submitted => "submitted",
+            RunState::Landed => "landed",
+            RunState::Escalated => "escalated",
+            RunState::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// Task status (DESIGN § Task).
@@ -89,6 +102,16 @@ impl RiskTier {
             "high" => Some(RiskTier::High),
             "critical" => Some(RiskTier::Critical),
             _ => None,
+        }
+    }
+
+    /// The snake_case wire string (matches the serde representation).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RiskTier::Minimal => "minimal",
+            RiskTier::Standard => "standard",
+            RiskTier::High => "high",
+            RiskTier::Critical => "critical",
         }
     }
 }
@@ -166,6 +189,18 @@ pub enum FindingSeverity {
     Advisory,
     Positive,
     Uncertain,
+}
+
+impl FindingSeverity {
+    pub fn parse(s: &str) -> Option<FindingSeverity> {
+        match s {
+            "blocking" => Some(FindingSeverity::Blocking),
+            "advisory" => Some(FindingSeverity::Advisory),
+            "positive" => Some(FindingSeverity::Positive),
+            "uncertain" => Some(FindingSeverity::Uncertain),
+            _ => None,
+        }
+    }
 }
 
 // --------------------------------------------------------------------------

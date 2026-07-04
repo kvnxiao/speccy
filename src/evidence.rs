@@ -63,6 +63,9 @@ pub fn collect(
 
     let cap = config.evidence.command_output_max_bytes as usize;
     let timeout = Duration::from_secs(config.evidence.command_timeout_seconds);
+    // Known-secret env values are scrubbed from stored output before hashing
+    // (env-scrubbing stub; full redaction model is Q18 in OPEN-ITEMS.md).
+    let secrets = secret_env_values();
 
     // Serialize all command execution on the workspace command lock.
     let records = store.with_command_lock(|| {
@@ -70,8 +73,11 @@ pub fn collect(
         for (req_id, ev_id, command) in &targets {
             let id = ids::short_id("ev");
             let dirty_before = gitx::dirty_files(&store.git_root).unwrap_or_default().len();
-            let run = run_shell(command, &store.workspace_root, timeout, cap);
+            let mut run = run_shell(command, &store.workspace_root, timeout, cap);
             let dirty_after = gitx::dirty_files(&store.git_root).unwrap_or_default().len();
+
+            run.stdout = scrub_secrets(&run.stdout, &secrets);
+            run.stderr = scrub_secrets(&run.stderr, &secrets);
 
             let mut hasher = Sha256::new();
             hasher.update(&run.stdout);
@@ -84,21 +90,24 @@ pub fn collect(
                 artifact_body.as_bytes(),
             )?;
 
-            let note = if run.timed_out {
-                Some(format!(
+            let mut notes = Vec::new();
+            if run.timed_out {
+                notes.push(format!(
                     "timed out after {}s",
                     config.evidence.command_timeout_seconds
-                ))
-            } else {
-                None
-            };
+                ));
+            }
+            if run.truncated {
+                notes.push(format!("output truncated at {cap} bytes"));
+            }
+            let note = (!notes.is_empty()).then(|| notes.join("; "));
             let record = EvidenceRecord {
                 id: id.clone(),
                 requirement: req_id.clone(),
                 request: Some(ev_id.clone()),
                 kind: "command".into(),
                 collected_by: "controller".into(),
-                note,
+                note: note.clone(),
                 artifact: Some(artifact_rel),
                 command: Some(command.clone()),
                 exit_code: Some(run.exit_code),
@@ -119,6 +128,7 @@ pub fn collect(
                 "stdout_hash": stdout_hash,
                 "artifact": format!("evidence/{id}.txt"),
                 "collected_by": "controller",
+                "note": note,
             }));
         }
         Ok(out)
@@ -181,6 +191,8 @@ struct CommandRun {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     timed_out: bool,
+    /// stdout or stderr exceeded `command_output_max_bytes` and was clamped.
+    truncated: bool,
 }
 
 /// Run a command through the platform shell with a timeout and output cap.
@@ -207,6 +219,7 @@ fn run_shell(command: &str, cwd: &Path, timeout: Duration, max_bytes: usize) -> 
                 stdout: Vec::new(),
                 stderr: format!("failed to spawn command: {e}").into_bytes(),
                 timed_out: false,
+                truncated: false,
             }
         }
     };
@@ -235,28 +248,32 @@ fn run_shell(command: &str, cwd: &Path, timeout: Duration, max_bytes: usize) -> 
         }
     };
 
-    let stdout = out_handle.join().unwrap_or_default();
-    let stderr = err_handle.join().unwrap_or_default();
+    let (stdout, out_trunc) = out_handle.join().unwrap_or_default();
+    let (stderr, err_trunc) = err_handle.join().unwrap_or_default();
     CommandRun {
         exit_code,
         stdout,
         stderr,
         timed_out,
+        truncated: out_trunc || err_trunc,
     }
 }
 
-fn read_capped(pipe: Option<impl Read>, max_bytes: usize) -> Vec<u8> {
+/// Read a pipe up to `max_bytes`, returning the clamped bytes and whether the
+/// output exceeded the cap (so the caller can note truncation).
+fn read_capped(pipe: Option<impl Read>, max_bytes: usize) -> (Vec<u8>, bool) {
     let Some(mut pipe) = pipe else {
-        return Vec::new();
+        return (Vec::new(), false);
     };
     let mut buf = Vec::new();
-    // Read a bit past the cap so we can note truncation, then clamp.
+    // Read one byte past the cap so we can tell truncation from an exact fit.
     let _ = pipe
         .by_ref()
         .take((max_bytes as u64) + 1)
         .read_to_end(&mut buf);
+    let truncated = buf.len() > max_bytes;
     buf.truncate(max_bytes);
-    buf
+    (buf, truncated)
 }
 
 fn render_artifact(
@@ -266,10 +283,80 @@ fn render_artifact(
     dirty_after: usize,
 ) -> String {
     format!(
-        "command: {command}\nexit_code: {}\ntimed_out: {}\ndirty_before: {dirty_before}\ndirty_after: {dirty_after}\n\n--- stdout ---\n{}\n--- stderr ---\n{}\n",
+        "command: {command}\nexit_code: {}\ntimed_out: {}\ntruncated: {}\ndirty_before: {dirty_before}\ndirty_after: {dirty_after}\n\n--- stdout ---\n{}\n--- stderr ---\n{}\n",
         run.exit_code,
         run.timed_out,
+        run.truncated,
         String::from_utf8_lossy(&run.stdout),
         String::from_utf8_lossy(&run.stderr),
     )
+}
+
+/// Env vars whose values are treated as secrets and scrubbed from stored
+/// command output. This is the MVP env-scrubbing stub; the full redaction
+/// model is Open Question 18 (`OPEN-ITEMS.md`).
+fn secret_env_values() -> Vec<(String, String)> {
+    std::env::vars()
+        // Skip trivially short values: they would match innocuous substrings.
+        .filter(|(name, value)| is_secret_name(name) && value.trim().len() >= 4)
+        .collect()
+}
+
+fn is_secret_name(name: &str) -> bool {
+    let n = name.to_ascii_uppercase();
+    [
+        "SECRET",
+        "TOKEN",
+        "PASSWORD",
+        "PASSWD",
+        "CREDENTIAL",
+        "PRIVATE_KEY",
+        "API_KEY",
+        "ACCESS_KEY",
+        "AUTH",
+    ]
+    .iter()
+    .any(|needle| n.contains(needle))
+}
+
+/// Replace occurrences of each known-secret value with `[REDACTED:<NAME>]`.
+/// No-op (and byte-preserving) when there are no secrets to scrub.
+fn scrub_secrets(data: &[u8], secrets: &[(String, String)]) -> Vec<u8> {
+    if secrets.is_empty() {
+        return data.to_vec();
+    }
+    let mut text = String::from_utf8_lossy(data).into_owned();
+    for (name, value) in secrets {
+        if text.contains(value.as_str()) {
+            text = text.replace(value.as_str(), &format!("[REDACTED:{name}]"));
+        }
+    }
+    text.into_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_secret_name, scrub_secrets};
+
+    #[test]
+    fn scrubs_known_secret_values() {
+        let secrets = vec![("API_KEY".to_string(), "sk-live-abc123".to_string())];
+        let out = scrub_secrets(b"leaked sk-live-abc123 here", &secrets);
+        assert_eq!(String::from_utf8(out).unwrap(), "leaked [REDACTED:API_KEY] here");
+    }
+
+    #[test]
+    fn no_secrets_is_byte_preserving() {
+        let raw = vec![0u8, 159, 146, 150]; // invalid UTF-8
+        assert_eq!(scrub_secrets(&raw, &[]), raw);
+    }
+
+    #[test]
+    fn secret_name_matching() {
+        assert!(is_secret_name("GITHUB_TOKEN"));
+        assert!(is_secret_name("aws_access_key_id"));
+        assert!(is_secret_name("DB_PASSWORD"));
+        assert!(!is_secret_name("PATH"));
+        assert!(!is_secret_name("HOME"));
+    }
 }

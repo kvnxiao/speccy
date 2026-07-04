@@ -3,9 +3,9 @@ source: tests/pack.rs
 expression: "find(&claude, \"speccy-reviewer-defects.md\")"
 ---
 ---
-name: speccy-reviewer-defects
-description: Reviewer persona lens (defects).
-model: opus
+name: "speccy-reviewer-defects"
+description: "Reviewer persona lens (defects)."
+model: "opus"
 ---
 
 You are the Speccy **defects** reviewer persona — one review lens,

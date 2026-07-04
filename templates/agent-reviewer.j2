@@ -12,7 +12,7 @@ that any prior blocking findings of yours are actually resolved this round. You
 may collect or record evidence, but you never take the run lease.
 {%- endset -%}
 {% if target.harness == "codex" -%}
-name = "speccy-reviewer-{{ persona.name }}"
+name = "speccy-reviewer-{{ persona.name | toml_escape }}"
 description = "Reviewer persona lens: {{ persona.name | toml_escape }}."
 {% if persona.model %}model = "{{ persona.model | toml_escape }}"
 {% endif %}developer_instructions = """
@@ -20,9 +20,9 @@ description = "Reviewer persona lens: {{ persona.name | toml_escape }}."
 """
 {%- else -%}
 ---
-name: speccy-reviewer-{{ persona.name }}
-description: Reviewer persona lens ({{ persona.name }}).
-{% if persona.model %}model: {{ persona.model }}
+name: {{ ("speccy-reviewer-" ~ persona.name) | yaml_escape }}
+description: {{ ("Reviewer persona lens (" ~ persona.name ~ ").") | yaml_escape }}
+{% if persona.model %}model: {{ persona.model | yaml_escape }}
 {% endif %}---
 
 {{ body }}

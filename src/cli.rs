@@ -38,7 +38,7 @@ pub enum Command {
 
     // --- Human-facing commands (DESIGN § CLI/Admin Flow) ---
     /// Show one card per active run in this workspace.
-    Status(StatusArgs),
+    Status,
     /// List specs in this workspace; `--query` previews selector matches.
     List(ListArgs),
     /// Show the state-aware human packet for a spec/run.
@@ -285,11 +285,6 @@ pub struct EvidenceCollectArgs {
 #[derive(Debug, Args)]
 pub struct SelectorArgs {
     /// Spec reference or free-text selector; inferred when omitted.
-    pub selector: Option<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct StatusArgs {
     pub selector: Option<String>,
 }
 

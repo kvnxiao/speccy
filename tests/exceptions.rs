@@ -357,6 +357,125 @@ fn blocked_requirement_escalates_without_repair() {
     );
 }
 
+/// Drive a run, failing R1 the first `fail_run_gates` times a run-scope
+/// verifier round is dispatched (passing everything else), until a terminal
+/// directive. Returns `(final_directive, rt_tasks_created)`.
+fn drive_failing_run_gate(h: &Harness, run: &str, fail_run_gates: u32) -> (Value, usize) {
+    let mut failed = 0u32;
+    for _ in 0..60 {
+        let d = h.ctl(&["ctl", "run", "next", "--run", run, "--agent", "a", "--json"]);
+        let lease = d["lease"]["token"].as_str().unwrap().to_string();
+        match d["action"].as_str().unwrap() {
+            "claim_task" => {
+                let task = d["subject"]["task"].as_str().unwrap();
+                h.ctl(&[
+                    "ctl", "task", "claim", "--run", run, "--task", task, "--agent", "a",
+                    "--lease", &lease, "--json",
+                ]);
+            }
+            "dispatch_worker" => {
+                let task = d["subject"]["task"].as_str().unwrap().to_string();
+                let round = d["round"]["current"].as_u64().unwrap();
+                h.write_file(&format!("src/{task}_r{round}.txt"), "work\n");
+                h.ctl_in(
+                    &["ctl", "task", "record-handoff", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                    &json!({ "task": task, "round": round, "summary": "did it" }),
+                );
+            }
+            "dispatch_verifier" => {
+                let scope = d["round"]["scope"].as_str().unwrap().to_string();
+                let reqs: Vec<String> = d["subject"]["requirements"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect();
+                if scope == "run" && failed < fail_run_gates {
+                    failed += 1;
+                    // Final validation demotes R1: record a blocking finding and
+                    // fail it, forcing a run-level repair round.
+                    let f = h.ctl_in(
+                        &["ctl", "finding", "record", "--run", run, "--input", "-", "--json"],
+                        &json!({ "requirement": "R1", "severity": "blocking",
+                                 "note": "regression at integration", "recorded_by": "v" }),
+                    );
+                    h.ctl_in(
+                        &["ctl", "requirement", "set-status", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                        &json!({ "updates": [{ "requirement": "R1", "status": "failed",
+                                               "findings": [f["id"]] }] }),
+                    );
+                } else {
+                    let mut updates = Vec::new();
+                    for r in &reqs {
+                        let ev = h.ctl_in(
+                            &["ctl", "evidence", "record", "--run", run, "--input", "-", "--json"],
+                            &json!({ "requirement": r, "kind": "review", "collected_by": "v" }),
+                        );
+                        updates.push(json!({ "requirement": r, "status": "passed", "evidence": [ev["id"]] }));
+                    }
+                    h.ctl_in(
+                        &["ctl", "requirement", "set-status", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                        &json!({ "updates": updates }),
+                    );
+                }
+            }
+            _ => {
+                let status = h.ctl(&["ctl", "run", "status", "--run", run, "--json"]);
+                let rts = status["tasks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|t| t["id"].as_str().unwrap().starts_with("RT"))
+                    .count();
+                return (d, rts);
+            }
+        }
+    }
+    panic!("loop did not terminate");
+}
+
+#[test]
+fn run_level_repair_loop_reproves_then_verifies() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Run repair");
+    let run = h.ctl(&[
+        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &rev, "--json",
+    ])["run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Fail the first run-gate review; the controller spawns an RT repair task,
+    // loops through implementing, and re-verifies to `verified`.
+    let (d, rts) = drive_failing_run_gate(&h, &run, 1);
+    assert_eq!(d["action"], json!("await_human_gate"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("ship_decision"), "{d}");
+    assert_eq!(d["run_state"], json!("verified"));
+    assert_eq!(rts, 1, "exactly one run-level repair task should be created");
+}
+
+#[test]
+fn run_level_repair_cap_exhaustion_escalates() {
+    let h = Harness::new();
+    h.write_file(".speccy/project.yaml", "caps:\n  run_review_rounds: 2\n");
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Run repair cap");
+    let run = h.ctl(&[
+        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &rev, "--json",
+    ])["run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Fail every run-gate review. With cap 2 the run does one repair round
+    // (RT1) then escalates when the cap is exhausted.
+    let (d, rts) = drive_failing_run_gate(&h, &run, 99);
+    assert_eq!(d["action"], json!("await_human_gate"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    assert_eq!(rts, 1, "one repair round consumed before the cap escalated");
+}
+
 #[test]
 fn max_tasks_cap_parks_the_run() {
     let h = Harness::new();

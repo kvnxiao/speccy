@@ -184,10 +184,16 @@ pub struct RunProjection {
     pub change_ref: Option<ChangeRef>,
     pub last_snapshot: Option<String>,
     pub last_event_ts: Option<Timestamp>,
+    /// A short human rendering of the most recent event, for the status card's
+    /// last-activity line (DESIGN § CLI/Admin Flow).
+    pub last_event_label: Option<String>,
     pub started_at: Option<Timestamp>,
     max_status_seq: Option<usize>,
-    verifying_entered_seq: Option<usize>,
-    pub run_review_rounds_completed: u32,
+    last_verifying_entered_seq: Option<usize>,
+    /// 1-based run-level review round: the number of times the run has entered
+    /// `verifying` (each RT run-repair round re-enters it). 0 before the run
+    /// first reaches `verifying`.
+    pub run_review_round: u32,
 }
 
 impl RunProjection {
@@ -248,10 +254,11 @@ impl RunProjection {
                         change_ref: None,
                         last_snapshot: None,
                         last_event_ts: Some(ts),
+                        last_event_label: Some("run started".to_string()),
                         started_at: Some(ts),
                         max_status_seq: None,
-                        verifying_entered_seq: None,
-                        run_review_rounds_completed: 0,
+                        last_verifying_entered_seq: None,
+                        run_review_round: 0,
                     });
                 }
                 _ => {
@@ -266,6 +273,9 @@ impl RunProjection {
 
     fn apply(&mut self, seq: usize, ts: Timestamp, event: &Event) {
         self.last_event_ts = Some(ts);
+        if let Some(label) = event_label(event) {
+            self.last_event_label = Some(label);
+        }
         match event {
             Event::TaskClaimed {
                 task,
@@ -316,12 +326,6 @@ impl RunProjection {
                     }
                 }
                 self.max_status_seq = Some(seq);
-                if self.state == RunState::Verifying {
-                    // A set-status while verifying completes a run-level review round.
-                    if self.verifying_entered_seq.map(|v| seq > v).unwrap_or(false) {
-                        self.run_review_rounds_completed += 1;
-                    }
-                }
             }
             Event::TaskTransitioned {
                 task,
@@ -363,7 +367,8 @@ impl RunProjection {
             Event::RunStateTransitioned { to, snapshot } => {
                 self.state = *to;
                 if *to == RunState::Verifying {
-                    self.verifying_entered_seq = Some(seq);
+                    self.run_review_round += 1;
+                    self.last_verifying_entered_seq = Some(seq);
                 }
                 if let Some(s) = snapshot {
                     self.last_snapshot = Some(s.clone());
@@ -430,14 +435,42 @@ impl RunProjection {
         self.requirements.values().all(|r| r.status.is_resolved())
     }
 
+    /// Any requirement is `blocked` — repair cannot manufacture missing
+    /// environment or evidence, so such a run escalates as a policy gate.
+    pub fn has_blocked_requirement(&self) -> bool {
+        self.requirements
+            .values()
+            .any(|r| r.status == RequirementStatus::Blocked)
+    }
+
+    /// Unresolved (still `failed`/`pending`) requirement IDs — the ones a
+    /// run-level repair round is scoped to.
+    pub fn failing_requirements(&self) -> Vec<String> {
+        self.requirements
+            .iter()
+            .filter(|(_, r)| !r.status.is_resolved())
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Did the run-gate verifier record statuses for the current review round?
+    /// (Serial writes mean any set-status after the latest `verifying` entry is
+    /// this round's; DESIGN § Deterministic Loop Driving.)
+    pub fn run_review_reviewed(&self) -> bool {
+        matches!(
+            (self.max_status_seq, self.last_verifying_entered_seq),
+            (Some(status_seq), Some(entered_seq)) if status_seq > entered_seq
+        )
+    }
+
     /// The latest snapshot commit, or the recorded base if none yet.
     pub fn head_expectation(&self) -> &str {
         self.last_snapshot.as_deref().unwrap_or(&self.base_commit)
     }
 
-    /// Sequence index at which the run entered `verifying`, if it has.
+    /// Sequence index at which the run most recently entered `verifying`.
     pub fn verifying_entered_seq(&self) -> Option<usize> {
-        self.verifying_entered_seq
+        self.last_verifying_entered_seq
     }
 
     /// Whether a controller provenance finding was already recorded this round
@@ -486,7 +519,7 @@ impl RunProjection {
     /// Unresolved run-level blocking findings (task-less, recorded during the
     /// current verifying phase) — e.g. an integrated-diff provenance hit.
     pub fn run_blocking_findings(&self) -> Vec<&FindingRecord> {
-        let after = self.verifying_entered_seq.unwrap_or(usize::MAX);
+        let after = self.last_verifying_entered_seq.unwrap_or(usize::MAX);
         self.findings
             .iter()
             .filter(|(seq, f)| *seq > after && f.task.is_none() && f.severity == "blocking")
@@ -508,5 +541,54 @@ impl RunProjection {
         self.tasks
             .iter()
             .find(|t| matches!(t.status, TaskStatus::Building | TaskStatus::InReview))
+    }
+}
+
+/// A short human rendering of an event for the status card's last-activity
+/// line. `None` leaves the previous label in place.
+fn event_label(event: &Event) -> Option<String> {
+    Some(match event {
+        Event::TaskClaimed { task, .. } => format!("claimed {task}"),
+        Event::HandoffRecorded { task, round, .. } => {
+            format!("handoff for {task} (round {round})")
+        }
+        Event::EvidenceRecorded { evidence } => match &evidence.command {
+            Some(cmd) => format!("running {cmd}"),
+            None => format!("recorded evidence for {}", evidence.requirement),
+        },
+        Event::FindingRecorded { finding } => {
+            format!("recorded {} finding", finding.severity)
+        }
+        Event::RequirementStatusSet { updates } => match updates.as_slice() {
+            [one] => format!("set {} {}", one.requirement, status_wire(one.status)),
+            many => format!("set {} requirement statuses", many.len()),
+        },
+        Event::TaskTransitioned { task, to, .. } => format!("{task} {}", task_status_wire(*to)),
+        Event::TaskAppended { task, .. } => format!("queued {}", task.id),
+        Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
+        Event::RunDecision { decision } => format!("decision: {}", decision.kind),
+        Event::ShipRecorded { .. } => "recorded ship".to_string(),
+        _ => return None,
+    })
+}
+
+fn status_wire(s: RequirementStatus) -> &'static str {
+    match s {
+        RequirementStatus::Pending => "pending",
+        RequirementStatus::Passed => "passed",
+        RequirementStatus::ReviewPassed => "review_passed",
+        RequirementStatus::Failed => "failed",
+        RequirementStatus::Blocked => "blocked",
+        RequirementStatus::Waived => "waived",
+    }
+}
+
+fn task_status_wire(s: TaskStatus) -> &'static str {
+    match s {
+        TaskStatus::Queued => "queued",
+        TaskStatus::Building => "building",
+        TaskStatus::InReview => "in_review",
+        TaskStatus::Integrated => "integrated",
+        TaskStatus::Deferred => "deferred",
     }
 }

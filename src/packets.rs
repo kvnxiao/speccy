@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use crate::config::ProjectConfig;
 use crate::error::{Result, SpeccyError};
 use crate::gitx;
-use crate::model::{RequirementStatus, SpecDraft, SpecStatus};
+use crate::model::{RequirementStatus, RunState, SpecDraft, SpecStatus};
 use crate::projection::{RunProjection, SpecState};
 use crate::store::Store;
 
@@ -240,7 +240,7 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
         None => (
             json!({ "requirements": run.requirements.keys().cloned().collect::<Vec<_>>() }),
             run.base_commit.clone(),
-            run.run_review_rounds_completed + 1,
+            run.run_review_round.max(1),
             None,
         ),
     };
@@ -397,17 +397,37 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
         "Spec   {}  {}      Risk: {}\n",
         run.spec_ref,
         title,
-        risk_str(run.risk)
+        run.risk.as_str()
     ));
-    let accepted_note = if accepted.is_empty() {
-        "ready to ship".to_string()
+    // The packet is honest about non-verified runs: an escalated or policy-gated
+    // run shows the unresolved requirements, not "ready to ship" (DESIGN §
+    // Review Packet).
+    let needs_you: Vec<(&String, &crate::projection::ReqRuntime)> = run
+        .requirements
+        .iter()
+        .filter(|(_, r)| !r.status.is_resolved())
+        .collect();
+    if run.state == RunState::Verified {
+        let accepted_note = if accepted.is_empty() {
+            "ready to ship".to_string()
+        } else {
+            format!("ready to ship · {}", accepted_risk_phrase(accepted.len()))
+        };
+        out.push_str(&format!("Result verified — {accepted_note}\n"));
+        out.push_str("Recommended next action: /speccy-ship\n\n");
     } else {
-        format!("ready to ship · {} accepted risk", accepted.len())
-    };
-    out.push_str(&format!("Result verified — {accepted_note}\n"));
-    out.push_str("Recommended next action: /speccy-ship\n\n");
+        out.push_str(&format!(
+            "Result {} — {} unresolved requirement(s)\n",
+            run.state.as_str(),
+            needs_you.len()
+        ));
+        out.push_str("Recommended next action: speccy review\n\n");
+    }
     out.push_str(&format!("Requirements ({total})\n"));
     out.push_str(&format!("  Proven          {proven}\n"));
+    if !needs_you.is_empty() {
+        out.push_str(&format!("  Needs you       {}\n", needs_you.len()));
+    }
     if !accepted.is_empty() {
         out.push_str(&format!("  Accepted risk   {}\n", accepted.len()));
         out.push_str("\nAccepted risk\n");
@@ -424,6 +444,12 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
             out.push_str(&format!("  {id}  {label}  {note}\n"));
         }
     }
+    if !needs_you.is_empty() {
+        out.push_str("\nNeeds you\n");
+        for (id, r) in &needs_you {
+            out.push_str(&format!("  {id}  {}\n", req_status_label(r.status)));
+        }
+    }
     out.push_str(&format!(
         "\nChanged  {} files  +{} -{}     {} tasks\n",
         diff.files, diff.insertions, diff.deletions, tasks_done
@@ -432,11 +458,23 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
     out
 }
 
-fn risk_str(r: crate::model::RiskTier) -> &'static str {
-    match r {
-        crate::model::RiskTier::Minimal => "minimal",
-        crate::model::RiskTier::Standard => "standard",
-        crate::model::RiskTier::High => "high",
-        crate::model::RiskTier::Critical => "critical",
+/// "1 accepted risk" / "2 accepted risks" (DESIGN § Review UX). Shared with the
+/// human status card.
+pub(crate) fn accepted_risk_phrase(n: usize) -> String {
+    if n == 1 {
+        "1 accepted risk".to_string()
+    } else {
+        format!("{n} accepted risks")
+    }
+}
+
+fn req_status_label(s: RequirementStatus) -> &'static str {
+    match s {
+        RequirementStatus::Pending => "pending",
+        RequirementStatus::Passed => "passed",
+        RequirementStatus::ReviewPassed => "review-only evidence",
+        RequirementStatus::Failed => "failed",
+        RequirementStatus::Blocked => "blocked",
+        RequirementStatus::Waived => "waived",
     }
 }

@@ -517,8 +517,15 @@ fn run_record_decision(
                 ));
             }
             let reason = require_reason(&d, "rework")?;
-            append_decision("rework")?;
-            let rt = next_rt_id(&run);
+            let decision = record("rework");
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::RunDecision {
+                    decision: decision.clone(),
+                },
+            )?;
+            let rt = directive::next_rt_id(&run);
             store.append_run_event(
                 &spec_id,
                 run_id,
@@ -542,11 +549,17 @@ fn run_record_decision(
             )?;
             let config = ProjectConfig::load(&store.workspace_root)?;
             Ok(json!({
-                "decision_id": record("rework").decision_id,
+                "decision_id": decision.decision_id,
                 "type": "rework",
                 "run_state": "implementing",
+                // The rework becomes the next run-level review round when the RT
+                // task re-enters verifying; report that number, not a constant.
+                "round": {
+                    "current": run.run_review_round + 1,
+                    "max": config.caps.run_review_rounds,
+                    "scope": "run"
+                },
                 "task_appended": rt,
-                "round": { "current": 2, "max": config.caps.run_review_rounds, "scope": "run" },
                 "resume": "call run next",
             }))
         }
@@ -696,7 +709,7 @@ fn orphaned_requirements(run: &crate::projection::RunProjection, task_id: &str) 
 fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&'static str> {
     let run = store.run_projection(spec_id, run_id)?;
     if run.state != RunState::Escalated {
-        return Ok(run_state_name(run.state));
+        return Ok(run.state.as_str());
     }
     let target = if run.all_tasks_done() {
         RunState::Verifying
@@ -711,24 +724,7 @@ fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&
             snapshot: None,
         },
     )?;
-    Ok(run_state_name(target))
-}
-
-fn run_state_name(s: RunState) -> &'static str {
-    match s {
-        RunState::Implementing => "implementing",
-        RunState::Verifying => "verifying",
-        RunState::Verified => "verified",
-        RunState::Submitted => "submitted",
-        RunState::Landed => "landed",
-        RunState::Escalated => "escalated",
-        RunState::Cancelled => "cancelled",
-    }
-}
-
-fn next_rt_id(run: &crate::projection::RunProjection) -> String {
-    let n = run.tasks.iter().filter(|t| t.id.starts_with("RT")).count() + 1;
-    format!("RT{n}")
+    Ok(target.as_str())
 }
 
 // --------------------------------------------------------------------------
@@ -919,6 +915,14 @@ fn default_recorder() -> String {
 
 fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
     let f: FindingInput = read_input(input)?;
+    // Validate severity against the closed vocabulary so a typo cannot silently
+    // read as non-blocking and let a real blocker slip past aggregation.
+    if crate::model::FindingSeverity::parse(&f.severity).is_none() {
+        return Err(SpeccyError::validation(format!(
+            "invalid finding severity `{}`; expected blocking|advisory|positive|uncertain",
+            f.severity
+        )));
+    }
     let (spec_id, _) = store.run_by_id(run_id)?;
     let id = ids::short_id("fd");
     let record = FindingRecord {

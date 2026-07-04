@@ -296,7 +296,7 @@ fn workspace_id(workspace_root: &Path, git_root: &Path) -> String {
 }
 
 /// The store root: `SPECCY_HOME`, else `~/.speccy`.
-fn home_dir() -> Result<PathBuf> {
+pub(crate) fn home_dir() -> Result<PathBuf> {
     if let Ok(dir) = std::env::var("SPECCY_HOME") {
         return Ok(PathBuf::from(dir));
     }
@@ -405,6 +405,14 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         file.sync_all()?;
     }
     fs::rename(&tmp, path)?;
+    // Best-effort: fsync the parent directory so the rename is itself durable,
+    // not just the file's data (DESIGN § Storage Model). A no-op on platforms
+    // that cannot open a directory handle.
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
     Ok(())
 }
 

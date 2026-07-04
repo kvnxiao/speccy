@@ -19,10 +19,10 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Ctl(command) => emit_envelope(ops::dispatch(command)),
         Command::Doctor => doctor(),
-        Command::Status(_) => emit_text(humancli::status),
-        Command::Review(args) => {
-            emit_text(|store| humancli::review(store, args.selector.as_deref(), args.evidence))
-        }
+        Command::Status => emit_text(humancli::status),
+        Command::Review(args) => emit_text(|store| {
+            humancli::review(store, args.selector.as_deref(), args.evidence, json)
+        }),
         Command::List(args) => emit_text(|store| {
             humancli::list(
                 store,

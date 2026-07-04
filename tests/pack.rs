@@ -118,12 +118,13 @@ fn roster_change_adds_and_removes_persona_files() {
 }
 
 #[test]
-fn update_preserves_local_edits_and_stages_conflict() {
+fn update_merges_local_edits_when_upstream_unchanged() {
     let h = Harness::new();
     h.mkdir(".claude");
     h.output(&["install", "--yes"]);
-    // Local edit, then --update. The edited file is preserved; the proposed
-    // render is staged under .speccy/pack-updates/.
+    // Local edit, then --update at the same pack version. The three-way merge
+    // sees no upstream change (base == new render), so it preserves the local
+    // file and stages nothing.
     h.write_file(".claude/agents/speccy-worker.md", "my local version\n");
     let (out, ok) = h.output(&["install", "--update", "--yes"]);
     assert!(ok, "{out}");
@@ -131,5 +132,8 @@ fn update_preserves_local_edits_and_stages_conflict() {
         h.read(".claude/agents/speccy-worker.md"),
         "my local version\n"
     );
-    assert!(h.exists(".speccy/pack-updates/latest/.claude/agents/speccy-worker.md"));
+    assert!(
+        !h.exists(".speccy/pack-updates"),
+        "no conflict staged when upstream is unchanged"
+    );
 }
