@@ -1,0 +1,33 @@
+[package]
+name = "speccy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "A spec-driven run controller for coding agents"
+repository = "https://github.com/kvnxiao/speccy"
+default-run = "speccy"
+
+[[bin]]
+name = "speccy"
+path = "src/main.rs"
+
+[lib]
+name = "speccy"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-saphyr = "0.0.29"
+thiserror = "2"
+sha2 = "0.10"
+jiff = { version = "0.2", features = ["serde"] }
+ulid = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Speccy runtime state must never live in a repo. This is the defensive
+# backstop `speccy install` also writes into a target repo's .gitignore
+# (DESIGN § Git Policy); here it guards this repo during dogfooding.
+.speccy/*
+!.speccy/project.yaml
+!.speccy/pack-lock.yaml
