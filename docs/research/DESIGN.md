@@ -374,7 +374,7 @@ so an interrupted session can resume mid-task. The five statuses:
 
 When a task enters `building`, the controller records `baseline_commit` — the workspace git HEAD at claim time — on the task and preserves it across resume, so every diff, review, and evidence check has a stable baseline even after a crash mid-round.
 
-When a task reaches `integrated`, the controller snapshots the workspace as a git commit on the run's working branch and records the commit SHA on the task. Snapshots make resume deterministic: any uncommitted diff belongs to the current in-flight task, so `next-action` can tell "resume a partially built task" from "dispatch a fresh task" by comparing task status, round counter, and workspace dirtiness against the last snapshot.
+When a task reaches `integrated`, the controller snapshots the workspace as a git commit on the run's working branch and records the commit SHA on the task. Snapshots make resume deterministic: any uncommitted diff belongs to the current in-flight task, so `run next` can tell "resume a partially built task" from "dispatch a fresh task" by comparing task status, round counter, and workspace dirtiness against the last snapshot.
 
 This nested task loop is different from final run review. Task review is about whether a bounded unit is correct enough to move on. Final run review is about cross-task drift, requirement coverage, integration behavior, residual risk, and whether the whole spec should be accepted, repaired, waived, or rejected.
 

@@ -1,6 +1,6 @@
 # Speccy Controller I/O Shapes
 
-Status: authoritative for payload shapes, provisional until M2 implements them
+Status: authoritative for payload shapes, provisional until M1 implements them
 Date: 2026-07-03
 
 Every `speccy ctl` operation's input payload, the response envelope, and the

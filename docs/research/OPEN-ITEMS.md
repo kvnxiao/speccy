@@ -9,11 +9,9 @@ authoritative for current behavior; resolved decision history is archived in
 
 ## Backlog
 
-Empty. The decision index — the last backlog item — is deferred to Later
-Capabilities ("Carry-Forward Decisions" and "Later Capabilities" in
-`DESIGN.md`); the cheap `carry_forward` flag it needs is recorded from M6, so
-the projection can be built without a data migration when multi-spec use
-proves it necessary.
+Empty. The decision index (the last backlog item) is deferred to Later
+Capabilities; its `carry_forward` flag is recorded from M3, so the projection
+needs no data migration when multi-spec use proves it necessary.
 
 ## Open questions
 
@@ -33,7 +31,7 @@ with rationale in `DECISION-LOG.md`.
   generic markdown mapper?
 - **Q7 Vacuity threshold:** what minimum anti-vacuity evidence is required
   before the verifier can mark a high-priority requirement as `passed`?
-  (M5 ships only the adversarial-review prose.)
+  (MVP ships only the adversarial-review prose.)
 - **Q8 Scenario evidence:** how much should Speccy help convert
   `given/when/then` prose into evidence requests versus delegating that to
   harness agents?
@@ -63,7 +61,8 @@ with rationale in `DECISION-LOG.md`.
 
 ## Dogfood watch list
 
-Behaviors to measure during M8 dogfooding. Each names its candidate change if
+Behaviors to measure during dogfooding (recurring from M1, in-harness from
+M4). Each names its candidate change if
 the friction proves real; the rejection rationale behind each candidate is in
 `DECISION-LOG.md`.
 
