@@ -8,7 +8,8 @@ use std::process::ExitCode;
 
 use speccy::cli::{Cli, Command};
 use speccy::error::{envelope, Result};
-use speccy::ops;
+use speccy::store::Store;
+use speccy::{humancli, ops};
 
 use clap::Parser;
 
@@ -17,9 +18,31 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Ctl(command) => emit_envelope(ops::dispatch(command)),
         Command::Doctor => doctor(),
-        // Human-facing commands arrive in later milestones (M1/M3).
+        Command::Status(_) => emit_text(humancli::status),
+        Command::Review(args) => {
+            emit_text(|store| humancli::review(store, args.selector.as_deref(), args.evidence))
+        }
+        // Remaining human-facing commands arrive at M3.
         _ => {
             eprintln!("speccy: this command is not implemented yet");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Open the store, run a human command that renders text, and print it.
+fn emit_text<F>(render: F) -> ExitCode
+where
+    F: FnOnce(&Store) -> Result<String>,
+{
+    let result = Store::open().and_then(|store| render(&store));
+    match result {
+        Ok(text) => {
+            println!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("speccy: {}", e.message);
             ExitCode::FAILURE
         }
     }

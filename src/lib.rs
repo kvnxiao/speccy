@@ -8,7 +8,18 @@
 //! owns build order.
 
 pub mod cli;
+pub mod config;
+pub mod directive;
 pub mod error;
+pub mod event;
+pub mod gitx;
+pub mod humancli;
+pub mod ids;
+pub mod lint;
+pub mod model;
 pub mod ops;
+pub mod packets;
+pub mod projection;
+pub mod store;
 
 pub use error::{envelope, ErrorCode, Finding, Result, SpeccyError};
