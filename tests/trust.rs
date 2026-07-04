@@ -76,6 +76,70 @@ fn start_run(h: &Harness, body: Value) -> String {
 }
 
 #[test]
+fn approval_requires_human_prose() {
+    let h = Harness::new();
+    let start = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "trust test", "title": "Trust test" }),
+    );
+    let spec_ref = start["spec_ref"].as_str().unwrap().to_string();
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &draft(None),
+    );
+    let refused = h.ctl_in_raw(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_001-draft" }),
+    );
+    assert_eq!(refused["error"]["code"], json!("validation_failed"));
+    assert!(refused["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("approved_in_prose"));
+}
+
+#[test]
+fn spec_status_risk_tracks_the_active_revision() {
+    let h = Harness::new();
+    let (spec_ref, _revision) = approve(&h, draft(None));
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "patch-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "set": { "risk": "critical" } }),
+    );
+
+    let status = h.ctl(&["ctl", "spec", "status", "--spec", &spec_ref, "--json"]);
+    assert_eq!(status["active_revision"], json!("spec_rev_001"));
+    assert_eq!(status["risk"], json!("standard"));
+}
+
+#[test]
 fn second_agent_gets_lease_held() {
     let h = Harness::new();
     let run = start_run(&h, draft(None));
@@ -94,18 +158,144 @@ fn second_agent_gets_lease_held() {
 }
 
 #[test]
+fn evidence_record_must_match_the_declared_ledger() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(None));
+
+    let unknown = h.ctl_in_raw(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R9", "kind": "review", "collected_by": "v" }),
+    );
+    assert_eq!(unknown["error"]["code"], json!("not_found"));
+
+    let wrong_kind = h.ctl_in_raw(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "request": "E1", "kind": "browser", "collected_by": "v" }),
+    );
+    assert_eq!(wrong_kind["error"]["code"], json!("validation_failed"));
+    assert!(wrong_kind["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("not Browser"));
+}
+
+#[test]
+fn set_status_requires_recorded_evidence_for_that_requirement() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(None));
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().unwrap().to_string();
+
+    let refused = h.ctl_in_raw(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "passed", "evidence": ["ev_missing"] }] }),
+    );
+    assert_eq!(refused["error"]["code"], json!("not_found"));
+    assert!(refused["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("ev_missing"));
+}
+
+#[test]
+fn high_risk_browser_evidence_requires_a_readable_artifact() {
+    let h = Harness::new();
+    let run = start_run(
+        &h,
+        json!({
+            "goal": "do the thing", "scope": { "in": ["x"] }, "risk": "high",
+            "requirements": [{ "id": "R1", "statement": "it works",
+                "evidence": [{ "id": "E1", "kind": "browser", "note": "screenshot" }] }],
+            "tasks": [{ "id": "T1", "title": "the task", "requirements": ["R1"] }]
+        }),
+    );
+
+    let prose_only = h.ctl_in_raw(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "request": "E1", "kind": "browser", "collected_by": "v" }),
+    );
+    assert_eq!(prose_only["error"]["code"], json!("validation_failed"));
+    assert!(prose_only["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("requires an artifact"));
+
+    let missing_file = h.ctl_in_raw(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "request": "E1", "kind": "browser",
+                 "collected_by": "v", "artifact": "evidence/missing.png" }),
+    );
+    assert_eq!(missing_file["error"]["code"], json!("validation_failed"));
+    assert!(missing_file["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("not readable"));
+
+    let outside_tree = h.ctl_in_raw(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "request": "E1", "kind": "browser",
+                 "collected_by": "v", "artifact": "events.jsonl" }),
+    );
+    assert_eq!(outside_tree["error"]["code"], json!("validation_failed"));
+    assert!(outside_tree["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("evidence/"));
+}
+
+#[test]
 fn task_claim_records_the_caller_chosen_agent() {
     let h = Harness::new();
     let run = start_run(&h, draft(None));
     // Claim T1 with a distinctive, non-default agent ID.
     let d = h.ctl(&[
-        "ctl", "run", "next", "--run", &run, "--agent", "codex:sess_probe", "--json",
+        "ctl",
+        "run",
+        "next",
+        "--run",
+        &run,
+        "--agent",
+        "codex:sess_probe",
+        "--json",
     ]);
     let task = d["subject"]["task"].as_str().unwrap().to_string();
     let lease = d["lease"]["token"].as_str().unwrap().to_string();
     h.ctl(&[
-        "ctl", "task", "claim", "--run", &run, "--task", &task, "--agent", "codex:sess_probe",
-        "--lease", &lease, "--json",
+        "ctl",
+        "task",
+        "claim",
+        "--run",
+        &run,
+        "--task",
+        &task,
+        "--agent",
+        "codex:sess_probe",
+        "--lease",
+        &lease,
+        "--json",
     ]);
     // The claim is recorded against the caller's agent, not a hardcoded value.
     let log = h
@@ -200,6 +390,20 @@ fn command_evidence_is_collected_by_the_controller() {
     assert_eq!(ev["exit_code"], json!(0));
     assert_eq!(ev["collected_by"], json!("controller"));
     assert!(ev["stdout_hash"].as_str().unwrap().starts_with("sha256:"));
+    let artifact_hash = ev["artifact_hash"].as_str().unwrap();
+    assert!(artifact_hash.starts_with("sha256:"));
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events log stored");
+    let evidence_event: Value = log
+        .lines()
+        .find(|l| l.contains("\"type\":\"evidence_recorded\""))
+        .and_then(|l| serde_json::from_str(l).ok())
+        .expect("an evidence_recorded event");
+    assert_eq!(
+        evidence_event["evidence"]["artifact_hash"],
+        json!(artifact_hash)
+    );
 
     // Pasting command output through evidence record is refused.
     let refused = h.ctl_in_raw(
@@ -239,7 +443,14 @@ fn known_secret_env_value_is_scrubbed_from_stored_output() {
     h.set_env("MY_TEST_TOKEN", "ZZsecretvalueZZ");
     let run = start_run(&h, draft(Some("echo ZZsecretvalueZZ")));
     h.ctl(&[
-        "ctl", "evidence", "collect", "--run", &run, "--requirements", "R1", "--json",
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
     ]);
     // The stored command output must carry the placeholder, not the raw secret.
     // (Scan the stdout section; the declared command string itself is not
@@ -272,10 +483,20 @@ fn output_over_the_byte_cap_is_noted_as_truncated() {
     h.git(&["commit", "-m", "policy"]);
     let run = start_run(&h, draft(Some("echo aaaaaaaaaaaaaaaa")));
     let collected = h.ctl(&[
-        "ctl", "evidence", "collect", "--run", &run, "--requirements", "R1", "--json",
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
     ]);
     let note = collected["evidence"][0]["note"].as_str().unwrap_or("");
-    assert!(note.contains("truncated"), "expected truncation note, got {note:?}");
+    assert!(
+        note.contains("truncated"),
+        "expected truncation note, got {note:?}"
+    );
 }
 
 #[test]

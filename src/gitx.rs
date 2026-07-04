@@ -128,6 +128,8 @@ pub fn commit_all(dir: &Path, message: &str) -> Result<String> {
             &format!("user.name={COMMITTER_NAME}"),
             "-c",
             &format!("user.email={COMMITTER_EMAIL}"),
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "--no-verify",
             "--allow-empty",

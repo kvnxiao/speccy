@@ -476,7 +476,10 @@ fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransit
     let seed = if failing.is_empty() {
         Some("resolve the run-level review findings".to_string())
     } else {
-        Some(format!("re-prove run-level failures: {}", failing.join(", ")))
+        Some(format!(
+            "re-prove run-level failures: {}",
+            failing.join(", ")
+        ))
     };
     store.append_run_event(
         &run.spec_id,
@@ -484,7 +487,10 @@ fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransit
         Event::TaskAppended {
             task: crate::event::TaskInit {
                 id: rt.clone(),
-                title: Some(format!("Run-level repair (round {})", run.run_review_round + 1)),
+                title: Some(format!(
+                    "Run-level repair (round {})",
+                    run.run_review_round + 1
+                )),
                 requirements: failing,
                 constraints: Vec::new(),
             },
@@ -617,7 +623,7 @@ fn compute_directive(
         RunState::Verifying => Parts {
             action: DirectiveAction::DispatchVerifier,
             subject: Subject {
-                requirements: Some(run.requirements.keys().cloned().collect()),
+                requirements: Some(status_update_requirements(run)),
                 personas: Some(config.roster_for(run.risk)),
                 ..Default::default()
             },
@@ -755,6 +761,14 @@ fn implementing_parts(run: &RunProjection, config: &ProjectConfig) -> Parts {
     }
 }
 
+fn status_update_requirements(run: &RunProjection) -> Vec<String> {
+    run.requirements
+        .iter()
+        .filter(|(_, r)| r.status != RequirementStatus::Waived)
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
 fn halt_parts(reason: &str) -> Parts {
     Parts {
         action: DirectiveAction::Halt,
@@ -829,4 +843,3 @@ fn escalation_gate_answers() -> Vec<GateAnswer> {
         },
     ]
 }
-

@@ -1,9 +1,11 @@
 # Speccy Implementation Plan: Rust Walking Skeleton
 
-Status: roadmap, not started
+Status: roadmap, implementation in progress
 Date: 2026-07-04
 
 Build sequencing for the Speccy MVP. This doc sequences the build; `DESIGN.md` and `TERMINOLOGY.md` specify behavior. Every milestone names a deliverable and points to the DESIGN section that owns it — when a bullet and DESIGN disagree, DESIGN wins, so this doc never restates mechanics, enum values, or transition rules. Resolved prerequisites (project home, license, resolution rules, gate enumeration, workspace identity, payload shapes) are in `DECISION-LOG.md`; the milestones assume them.
+
+Progress note: the current repository contains an implemented Rust walking skeleton with tests spanning the trust loop, human surface, install packs, exception paths, and hardening. The checklist below remains the build-sequencing plan; mark individual boxes only when that milestone is deliberately accepted as complete.
 
 Each milestone is a one-line goal, its deliverables, and one **Done when** line — the single observable behavior that proves the slice works. Exhaustive per-behavior assertions live in the tests.
 

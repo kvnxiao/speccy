@@ -272,6 +272,7 @@ collected_by: "claude:verifier_T1"
 note: "second open of same link → 'link already used'; no session cookie set"
 artifact: "evidence/ev_12a6/replay.png"  # stored artifact reference; required for
                                          # browser/api at high and critical, else optional
+artifact_hash: "sha256:..."              # present when artifact is provided and readable
 ```
 
 ## `finding record` — finding.json

@@ -365,10 +365,7 @@ fn resolve_conflict(repo_root: &Path, p: &Planned, stamp: &str) -> Result<bool> 
 /// directory (DESIGN § Install Flow); transient, covered by the .gitignore
 /// backstop.
 fn stage_update(repo_root: &Path, rel: &str, contents: &str, stamp: &str) -> Result<()> {
-    let dest = repo_root
-        .join(".speccy/pack-updates")
-        .join(stamp)
-        .join(rel);
+    let dest = repo_root.join(".speccy/pack-updates").join(stamp).join(rel);
     write_atomic(&dest, contents.as_bytes())
 }
 

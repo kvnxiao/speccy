@@ -2,9 +2,10 @@
 //!
 //! Spec-scoped and run-scoped `events.jsonl` are canonical; projections are
 //! rebuilt by replay (`projection.rs`). Base-fact events are written by their
-//! recording operation; the transition events (`TaskTransitioned`,
-//! `RunStateTransitioned`) are written only by `run next`, the single mutation
-//! point for derived state (DESIGN § Deterministic Loop Driving).
+//! recording operation. Derived task/run transitions are written by `run next`,
+//! the single mutation point for derived state; explicit gate operations also
+//! write their owning run-state transitions (DESIGN § Deterministic Loop
+//! Driving).
 
 use serde::{Deserialize, Serialize};
 
@@ -166,6 +167,8 @@ pub struct EvidenceRecord {
     pub note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_hash: Option<String>,
     // command-evidence fields (M2)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,

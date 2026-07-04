@@ -121,7 +121,7 @@ impl SpecState {
 
     /// The approved revision, if any.
     pub fn approved_revision(&self) -> Option<&Revision> {
-        self.revisions.iter().find(|r| r.approved)
+        self.revisions.iter().rev().find(|r| r.approved)
     }
 
     pub fn revision(&self, id: &str) -> Option<&Revision> {
@@ -273,9 +273,6 @@ impl RunProjection {
 
     fn apply(&mut self, seq: usize, ts: Timestamp, event: &Event) {
         self.last_event_ts = Some(ts);
-        if let Some(label) = event_label(event) {
-            self.last_event_label = Some(label);
-        }
         match event {
             Event::TaskClaimed {
                 task,
@@ -377,6 +374,9 @@ impl RunProjection {
             Event::RunDecision { decision } => self.decisions.push(decision.clone()),
             Event::ShipRecorded { change_ref } => self.change_ref = Some(change_ref.clone()),
             _ => {}
+        }
+        if let Some(label) = event_label(self, event) {
+            self.last_event_label = Some(label);
         }
     }
 
@@ -546,11 +546,11 @@ impl RunProjection {
 
 /// A short human rendering of an event for the status card's last-activity
 /// line. `None` leaves the previous label in place.
-fn event_label(event: &Event) -> Option<String> {
+fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
     Some(match event {
-        Event::TaskClaimed { task, .. } => format!("claimed {task}"),
+        Event::TaskClaimed { task, .. } => format!("claimed {}", task_label(run, task)),
         Event::HandoffRecorded { task, round, .. } => {
-            format!("handoff for {task} (round {round})")
+            format!("handoff for {} (round {round})", task_label(run, task))
         }
         Event::EvidenceRecorded { evidence } => match &evidence.command {
             Some(cmd) => format!("running {cmd}"),
@@ -563,13 +563,21 @@ fn event_label(event: &Event) -> Option<String> {
             [one] => format!("set {} {}", one.requirement, status_wire(one.status)),
             many => format!("set {} requirement statuses", many.len()),
         },
-        Event::TaskTransitioned { task, to, .. } => format!("{task} {}", task_status_wire(*to)),
-        Event::TaskAppended { task, .. } => format!("queued {}", task.id),
+        Event::TaskTransitioned { task, to, .. } => {
+            format!("{} {}", task_label(run, task), task_status_wire(*to))
+        }
+        Event::TaskAppended { task, .. } => format!("queued {}", task_label(run, &task.id)),
         Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
         Event::RunDecision { decision } => format!("decision: {}", decision.kind),
         Event::ShipRecorded { .. } => "recorded ship".to_string(),
         _ => return None,
     })
+}
+
+fn task_label(run: &RunProjection, task_id: &str) -> String {
+    run.task(task_id)
+        .and_then(|t| t.title.clone())
+        .unwrap_or_else(|| "the current task".to_string())
 }
 
 fn status_wire(s: RequirementStatus) -> &'static str {

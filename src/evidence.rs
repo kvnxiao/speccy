@@ -85,6 +85,7 @@ pub fn collect(
 
             let artifact_rel = format!("evidence/{id}.txt");
             let artifact_body = render_artifact(command, &run, dirty_before, dirty_after);
+            let artifact_hash = hash_bytes(artifact_body.as_bytes());
             write_atomic(
                 &store.run_dir(&spec_id, run_id).join(&artifact_rel),
                 artifact_body.as_bytes(),
@@ -109,6 +110,7 @@ pub fn collect(
                 collected_by: "controller".into(),
                 note: note.clone(),
                 artifact: Some(artifact_rel),
+                artifact_hash: Some(artifact_hash.clone()),
                 command: Some(command.clone()),
                 exit_code: Some(run.exit_code),
                 stdout_hash: Some(stdout_hash.clone()),
@@ -126,6 +128,7 @@ pub fn collect(
                 "command": command,
                 "exit_code": run.exit_code,
                 "stdout_hash": stdout_hash,
+                "artifact_hash": artifact_hash,
                 "artifact": format!("evidence/{id}.txt"),
                 "collected_by": "controller",
                 "note": note,
@@ -292,6 +295,12 @@ fn render_artifact(
     )
 }
 
+fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("sha256:{:x}", hasher.finalize())
+}
+
 /// Env vars whose values are treated as secrets and scrubbed from stored
 /// command output. This is the MVP env-scrubbing stub; the full redaction
 /// model is Open Question 18 (`OPEN-ITEMS.md`).
@@ -342,7 +351,10 @@ mod tests {
     fn scrubs_known_secret_values() {
         let secrets = vec![("API_KEY".to_string(), "sk-live-abc123".to_string())];
         let out = scrub_secrets(b"leaked sk-live-abc123 here", &secrets);
-        assert_eq!(String::from_utf8(out).unwrap(), "leaked [REDACTED:API_KEY] here");
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "leaked [REDACTED:API_KEY] here"
+        );
     }
 
     #[test]

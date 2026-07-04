@@ -2,8 +2,11 @@
 //! the controller machinery: no directives, leases, run IDs, or ctl operations
 //! on the card. M1 ships `status` and `review`; the rest arrive at M3.
 
+use std::collections::BTreeSet;
+
 use serde_json::json;
 
+use crate::config::ProjectConfig;
 use crate::error::{Result, SpeccyError};
 use crate::event::{Event, SpecDecisionRecord};
 use crate::ids;
@@ -46,7 +49,12 @@ fn is_interrupted(store: &Store, run: &RunProjection) -> bool {
 
 /// `speccy review [selector] [--evidence] [--json]` — the state-aware human
 /// packet; `--json` returns the same state-aware view structurally.
-pub fn review(store: &Store, selector: Option<&str>, evidence: bool, json_out: bool) -> Result<String> {
+pub fn review(
+    store: &Store,
+    selector: Option<&str>,
+    evidence: bool,
+    json_out: bool,
+) -> Result<String> {
     let spec = resolve_spec(store, selector)?;
     let runs = store.list_runs(&spec.spec_id)?;
     let run = match runs.last() {
@@ -451,6 +459,9 @@ fn is_notable(state: RunState) -> bool {
 }
 
 fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
+    let repair_max = ProjectConfig::load(&store.workspace_root)
+        .map(|c| c.caps.task_repair_rounds)
+        .unwrap_or_else(|_| ProjectConfig::default().caps.task_repair_rounds);
     let mut card = format!(
         "{}  {}          Risk: {}\n",
         run.spec_ref,
@@ -462,7 +473,7 @@ fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
             card.push_str(&interrupted_lines(store, run));
         }
         RunState::Implementing | RunState::Verifying => {
-            let (label, context) = active_context(run);
+            let (label, context) = active_context(run, repair_max);
             card.push_str(&format!("  {label} — {context}\n"));
             card.push_str("  · autonomous, nothing needed\n");
             if let Some(secs) = age_seconds(run) {
@@ -505,7 +516,7 @@ fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
     card.trim_end().to_string()
 }
 
-fn active_context(run: &RunProjection) -> (&'static str, String) {
+fn active_context(run: &RunProjection, repair_max: u32) -> (&'static str, String) {
     let label = match run.state {
         RunState::Verifying => "Verifying",
         _ => "Implementing",
@@ -515,7 +526,7 @@ fn active_context(run: &RunProjection) -> (&'static str, String) {
             // Tasks appear by title, never a bare controller ID (DESIGN § CLI).
             let title = t.title.clone().unwrap_or_else(|| "the current task".into());
             if t.round > 1 {
-                format!("{title} · repair round {} of 3", t.round)
+                format!("{title} · repair round {} of {repair_max}", t.round)
             } else {
                 title
             }
@@ -528,7 +539,10 @@ fn active_context(run: &RunProjection) -> (&'static str, String) {
 /// The Interrupted status card lines: what died, the uncommitted-diff
 /// attribution, and the resume action (DESIGN § CLI/Admin Flow).
 fn interrupted_lines(store: &Store, run: &RunProjection) -> String {
-    let (label, context) = active_context(run);
+    let repair_max = ProjectConfig::load(&store.workspace_root)
+        .map(|c| c.caps.task_repair_rounds)
+        .unwrap_or_else(|_| ProjectConfig::default().caps.task_repair_rounds);
+    let (label, context) = active_context(run, repair_max);
     let mut out = format!("  Interrupted — session died during {label} \"{context}\"\n");
     if let Some(task) = run.active_task() {
         if let Some(base) = &task.baseline_commit {
@@ -591,7 +605,30 @@ fn spec_card(spec: &SpecState) -> String {
             ));
         }
     }
+    let commands = command_evidence_strings(draft);
+    if !commands.is_empty() {
+        out.push_str("\nCommands\n");
+        for command in commands {
+            out.push_str(&format!("- {command}\n"));
+        }
+    }
     out.trim_end().to_string()
+}
+
+fn command_evidence_strings(draft: &crate::model::SpecDraft) -> Vec<String> {
+    let mut commands = BTreeSet::new();
+    for requirement in draft.requirements() {
+        for evidence in &requirement.evidence {
+            if evidence.kind.as_deref() == Some("command") {
+                if let Some(command) = evidence.command.as_deref().map(str::trim) {
+                    if !command.is_empty() {
+                        commands.insert(command.to_string());
+                    }
+                }
+            }
+        }
+    }
+    commands.into_iter().collect()
 }
 
 fn close_out_card(spec: &SpecState, run: &RunProjection) -> String {
@@ -714,7 +751,6 @@ fn accepted_risk_count(run: &RunProjection) -> usize {
         })
         .count()
 }
-
 
 fn title_of(spec: &SpecState) -> String {
     spec.title.clone().unwrap_or_else(|| "(untitled)".into())

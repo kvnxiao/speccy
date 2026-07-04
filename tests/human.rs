@@ -171,12 +171,48 @@ fn status_card_ready_to_ship() {
 }
 
 #[test]
+fn status_card_uses_task_titles_in_activity() {
+    let h = Harness::new();
+    let (spec_ref, revision) = approve_minimal(&h, "Activity titles");
+    let started = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
+    ]);
+    let run = started["run_id"].as_str().unwrap().to_string();
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().unwrap().to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+
+    let status = h.human(&["status"]);
+    assert!(status.contains("the task"), "{status}");
+    assert!(!status.contains("T1"), "{status}");
+}
+
+#[test]
 fn status_card_shows_interrupted_after_lease_expiry() {
     let mut h = Harness::new();
     h.set_env("SPECCY_LEASE_TTL_SECONDS", "1");
     let (spec_ref, revision) = approve_minimal(&h, "Interrupted");
     let run = h.ctl(&[
-        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &revision, "--json",
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
     ])["run_id"]
         .as_str()
         .unwrap()
@@ -209,6 +245,44 @@ fn review_json_is_state_aware() {
     let v: serde_json::Value = serde_json::from_str(&out).expect("valid JSON");
     assert_eq!(v["surface"], json!("spec_card"), "{v}");
     assert_eq!(v["spec_ref"], json!(spec_ref));
+}
+
+#[test]
+fn spec_card_lists_command_evidence_before_approval() {
+    let h = Harness::new();
+    let start = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "run command evidence", "title": "Command card" }),
+    );
+    let spec_ref = start["spec_ref"].as_str().unwrap().to_string();
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({
+            "goal": "g", "scope": { "in": ["x"] }, "risk": "standard",
+            "requirements": [
+                { "id": "R1", "statement": "it works",
+                  "evidence": [
+                    { "id": "E1", "kind": "command", "command": "cargo test --test trust" },
+                    { "id": "E2", "kind": "command", "command": "cargo test --test trust" }
+                  ] }
+            ],
+            "tasks": [{ "id": "T1", "title": "the task", "requirements": ["R1"] }]
+        }),
+    );
+
+    let card = h.human(&["review"]);
+    assert!(card.contains("Commands"), "{card}");
+    assert!(card.contains("cargo test --test trust"), "{card}");
+    assert_eq!(card.matches("cargo test --test trust").count(), 1, "{card}");
 }
 
 #[test]

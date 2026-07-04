@@ -357,6 +357,88 @@ fn blocked_requirement_escalates_without_repair() {
     );
 }
 
+#[test]
+fn waiver_at_escalation_must_target_an_unresolved_requirement() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve(
+        &h,
+        "Scoped waiver",
+        json!({
+            "goal": "g", "scope": { "in": ["x"] }, "risk": "standard",
+            "requirements": [
+                { "id": "R1", "statement": "already proven",
+                  "evidence": [{ "id": "E1", "kind": "review" }] },
+                { "id": "R2", "statement": "missing setup",
+                  "evidence": [{ "id": "E1", "kind": "review" }] }
+            ],
+            "tasks": [{ "id": "T1", "requirements": ["R1", "R2"] }]
+        }),
+    );
+    let started = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ]);
+    let run = started["run_id"].as_str().unwrap().to_string();
+    let lease = claim_and_handoff(&h, &run, "T1");
+    let ev = h.ctl_in(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "kind": "review", "collected_by": "v" }),
+    );
+    h.ctl_in(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [
+            { "requirement": "R1", "status": "passed", "evidence": [ev["id"]] },
+            { "requirement": "R2", "status": "blocked", "note": "missing service" }
+        ] }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().unwrap().to_string();
+
+    let refused = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "record-decision",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "waive", "requirement": "R1",
+                 "reason": "wrong target", "residual_risk": "none" }),
+    );
+    assert_eq!(refused["error"]["code"], json!("invalid_transition"));
+    assert!(refused["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unresolved requirement"));
+}
+
 /// Drive a run, failing R1 the first `fail_run_gates` times a run-scope
 /// verifier round is dispatched (passing everything else), until a terminal
 /// directive. Returns `(final_directive, rt_tasks_created)`.
@@ -378,7 +460,18 @@ fn drive_failing_run_gate(h: &Harness, run: &str, fail_run_gates: u32) -> (Value
                 let round = d["round"]["current"].as_u64().unwrap();
                 h.write_file(&format!("src/{task}_r{round}.txt"), "work\n");
                 h.ctl_in(
-                    &["ctl", "task", "record-handoff", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                    &[
+                        "ctl",
+                        "task",
+                        "record-handoff",
+                        "--run",
+                        run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
                     &json!({ "task": task, "round": round, "summary": "did it" }),
                 );
             }
@@ -395,12 +488,25 @@ fn drive_failing_run_gate(h: &Harness, run: &str, fail_run_gates: u32) -> (Value
                     // Final validation demotes R1: record a blocking finding and
                     // fail it, forcing a run-level repair round.
                     let f = h.ctl_in(
-                        &["ctl", "finding", "record", "--run", run, "--input", "-", "--json"],
+                        &[
+                            "ctl", "finding", "record", "--run", run, "--input", "-", "--json",
+                        ],
                         &json!({ "requirement": "R1", "severity": "blocking",
                                  "note": "regression at integration", "recorded_by": "v" }),
                     );
                     h.ctl_in(
-                        &["ctl", "requirement", "set-status", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                        &[
+                            "ctl",
+                            "requirement",
+                            "set-status",
+                            "--run",
+                            run,
+                            "--lease",
+                            &lease,
+                            "--input",
+                            "-",
+                            "--json",
+                        ],
                         &json!({ "updates": [{ "requirement": "R1", "status": "failed",
                                                "findings": [f["id"]] }] }),
                     );
@@ -408,13 +514,28 @@ fn drive_failing_run_gate(h: &Harness, run: &str, fail_run_gates: u32) -> (Value
                     let mut updates = Vec::new();
                     for r in &reqs {
                         let ev = h.ctl_in(
-                            &["ctl", "evidence", "record", "--run", run, "--input", "-", "--json"],
+                            &[
+                                "ctl", "evidence", "record", "--run", run, "--input", "-", "--json",
+                            ],
                             &json!({ "requirement": r, "kind": "review", "collected_by": "v" }),
                         );
-                        updates.push(json!({ "requirement": r, "status": "passed", "evidence": [ev["id"]] }));
+                        updates.push(
+                            json!({ "requirement": r, "status": "passed", "evidence": [ev["id"]] }),
+                        );
                     }
                     h.ctl_in(
-                        &["ctl", "requirement", "set-status", "--run", run, "--lease", &lease, "--input", "-", "--json"],
+                        &[
+                            "ctl",
+                            "requirement",
+                            "set-status",
+                            "--run",
+                            run,
+                            "--lease",
+                            &lease,
+                            "--input",
+                            "-",
+                            "--json",
+                        ],
                         &json!({ "updates": updates }),
                     );
                 }
@@ -439,7 +560,14 @@ fn run_level_repair_loop_reproves_then_verifies() {
     let h = Harness::new();
     let (spec_ref, rev) = approve_minimal(&h, "Run repair");
     let run = h.ctl(&[
-        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &rev, "--json",
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
     ])["run_id"]
         .as_str()
         .unwrap()
@@ -451,7 +579,10 @@ fn run_level_repair_loop_reproves_then_verifies() {
     assert_eq!(d["action"], json!("await_human_gate"), "{d}");
     assert_eq!(d["subject"]["gate"], json!("ship_decision"), "{d}");
     assert_eq!(d["run_state"], json!("verified"));
-    assert_eq!(rts, 1, "exactly one run-level repair task should be created");
+    assert_eq!(
+        rts, 1,
+        "exactly one run-level repair task should be created"
+    );
 }
 
 #[test]
@@ -462,7 +593,14 @@ fn run_level_repair_cap_exhaustion_escalates() {
     h.git(&["commit", "-m", "policy"]);
     let (spec_ref, rev) = approve_minimal(&h, "Run repair cap");
     let run = h.ctl(&[
-        "ctl", "run", "start", "--spec", &spec_ref, "--revision", &rev, "--json",
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
     ])["run_id"]
         .as_str()
         .unwrap()

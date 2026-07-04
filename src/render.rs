@@ -242,7 +242,9 @@ mod tests {
             // 4 skills + 4 roles + 4 personas + the synthetic `combined` reviewer.
             assert_eq!(files.len(), 13, "{target:?}");
             assert!(
-                files.iter().any(|f| f.path.contains("speccy-reviewer-combined")),
+                files
+                    .iter()
+                    .any(|f| f.path.contains("speccy-reviewer-combined")),
                 "combined reviewer must be rendered"
             );
             for f in &files {

@@ -6,10 +6,12 @@
 //! never coerced into partial state.
 
 use std::io::Read;
+use std::path::{Component, Path};
 
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use crate::cli::{
     CtlCommand, EvidenceOp, FindingOp, PacketOp, RequirementOp, RunOp, SpecOp, TaskOp,
@@ -28,7 +30,7 @@ use crate::model::{
     ChangeRef, EvidenceKind, RequirementStatus, RiskTier, RunState, SpecDraft, TaskStatus,
 };
 use crate::packets;
-use crate::projection::SpecState;
+use crate::projection::{RunProjection, SpecState};
 use crate::store::Store;
 
 /// Dispatch a controller operation, returning its `data` payload.
@@ -127,11 +129,9 @@ fn spec_start(store: &Store, input: &str) -> Result<Value> {
 
 fn spec_status(store: &Store, spec_ref: &str) -> Result<Value> {
     let spec = store.spec_state_by_ref(spec_ref)?;
-    let active_revision = spec
-        .approved_revision()
-        .map(|r| r.id.clone())
-        .or_else(|| spec.latest_revision().map(display_rev));
-    let risk = spec.latest_revision().and_then(|r| r.draft.risk.clone());
+    let active = spec.approved_revision().or_else(|| spec.latest_revision());
+    let active_revision = active.map(display_rev);
+    let risk = active.and_then(|r| r.draft.risk.clone());
     let runs = store.list_runs(&spec.spec_id)?;
     Ok(json!({
         "spec_ref": spec.spec_ref,
@@ -217,6 +217,17 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
 
     match decision.kind.as_str() {
         "approve" => {
+            if decision
+                .approved_in_prose
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or("")
+                .is_empty()
+            {
+                return Err(SpeccyError::validation(
+                    "approve requires approved_in_prose",
+                ));
+            }
             let rev = spec
                 .revision(target)
                 .ok_or_else(|| SpeccyError::not_found(format!("no revision {target}")))?;
@@ -576,10 +587,21 @@ fn run_record_decision(
             Ok(json!({ "type": "cancel", "run_state": "cancelled" }))
         }
         "waive" => {
+            if run.state != RunState::Escalated {
+                return Err(SpeccyError::invalid_transition(
+                    "waive is only valid at an escalation gate",
+                ));
+            }
             let requirement = d
                 .requirement
                 .clone()
                 .ok_or_else(|| SpeccyError::validation("waive requires a requirement"))?;
+            ensure_run_requirement(&run, &requirement)?;
+            if run.req_status(&requirement).is_resolved() {
+                return Err(SpeccyError::invalid_transition(format!(
+                    "waive requires an unresolved requirement at the escalation gate ({requirement})"
+                )));
+            }
             require_reason(&d, "waive")?;
             require_residual_risk(&d, "waive")?;
             append_decision("waive")?;
@@ -606,11 +628,29 @@ fn run_record_decision(
                 "resume": "call run next",
             }))
         }
-        "provide_setup" | "confirm_accepted_risk" => {
+        "provide_setup" => {
+            if run.state != RunState::Escalated {
+                return Err(SpeccyError::invalid_transition(
+                    "provide_setup is only valid at an escalation gate",
+                ));
+            }
             require_reason(&d, &d.kind)?;
             append_decision(&d.kind)?;
             let resumed = resume_from_escalated(store, &spec_id, run_id)?;
             Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
+        }
+        "confirm_accepted_risk" => {
+            if !(run.state == RunState::Verifying
+                && run.run_review_reviewed()
+                && run.needs_accepted_risk_confirmation())
+            {
+                return Err(SpeccyError::invalid_transition(
+                    "confirm_accepted_risk is only valid at the accepted-risk confirmation gate",
+                ));
+            }
+            require_reason(&d, &d.kind)?;
+            append_decision(&d.kind)?;
+            Ok(json!({ "type": d.kind, "run_state": run.state, "resume": "call run next" }))
         }
         other => Err(SpeccyError::validation(format!(
             "unknown run decision type `{other}`"
@@ -675,7 +715,13 @@ fn task(store: &Store, op: TaskOp) -> Result<Value> {
     }
 }
 
-fn task_claim(store: &Store, run_id: &str, task_id: &str, agent: &str, lease: &str) -> Result<Value> {
+fn task_claim(
+    store: &Store,
+    run_id: &str,
+    task_id: &str,
+    agent: &str,
+    lease: &str,
+) -> Result<Value> {
     let (spec_id, run) = store.run_by_id(run_id)?;
     store.verify_lease(&spec_id, run_id, Some(lease))?;
     let task = run
@@ -726,6 +772,13 @@ fn task_record_handoff(
     let task = run.task(&handoff.task).ok_or_else(|| {
         SpeccyError::not_found(format!("no task {} in run {run_id}", handoff.task))
     })?;
+    let expected_round = task.round.max(1);
+    if handoff.round != expected_round {
+        return Err(SpeccyError::validation(format!(
+            "handoff.round {} does not match current task round {}",
+            handoff.round, expected_round
+        )));
+    }
     if task.status != TaskStatus::Building {
         return Err(SpeccyError::invalid_transition(format!(
             "task {} is {:?}, not building; cannot record a handoff",
@@ -734,7 +787,7 @@ fn task_record_handoff(
     }
     let handoff_id = ids::short_id("ho");
     let task_id = handoff.task.clone();
-    let round = task.round.max(1);
+    let round = expected_round;
     store.append_run_event(
         &spec_id,
         run_id,
@@ -788,6 +841,7 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
         }
         Some(k) => k,
     };
+    validate_evidence_reference(store, &run, &ev, kind)?;
     // Browser/api evidence on high/critical requires a stored, hashed artifact
     // (DESIGN § Acceptance Ledger); prose-only records are refused.
     if matches!(kind, EvidenceKind::Browser | EvidenceKind::Api)
@@ -804,6 +858,7 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
             ev.kind, run.risk
         )));
     }
+    let artifact_hash = hash_artifact_if_present(store, &spec_id, run_id, ev.artifact.as_deref())?;
     let id = ids::short_id("ev");
     let record = EvidenceRecord {
         id: id.clone(),
@@ -813,6 +868,7 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
         collected_by: ev.collected_by,
         note: ev.note,
         artifact: ev.artifact,
+        artifact_hash,
         command: None,
         exit_code: None,
         stdout_hash: None,
@@ -858,7 +914,20 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
             f.severity
         )));
     }
-    let (spec_id, _) = store.run_by_id(run_id)?;
+    if f.note.trim().is_empty() {
+        return Err(SpeccyError::validation("finding.note is required"));
+    }
+    let (spec_id, run) = store.run_by_id(run_id)?;
+    if let Some(requirement) = &f.requirement {
+        ensure_run_requirement(&run, requirement)?;
+    }
+    if let Some(task) = &f.task {
+        if run.task(task).is_none() {
+            return Err(SpeccyError::not_found(format!(
+                "no task {task} in run {run_id}"
+            )));
+        }
+    }
     let id = ids::short_id("fd");
     let record = FindingRecord {
         id: id.clone(),
@@ -902,7 +971,7 @@ fn requirement_set_status(
 
     // Validate each update's prerequisites before recording anything.
     for u in &payload.updates {
-        validate_status_update(u, run.risk)?;
+        validate_status_update(u, &run)?;
     }
 
     let updated: Vec<Value> = payload
@@ -921,7 +990,20 @@ fn requirement_set_status(
 }
 
 /// Status prerequisites (DESIGN § Requirement Resolution Rules).
-fn validate_status_update(u: &RequirementUpdate, tier: RiskTier) -> Result<()> {
+fn validate_status_update(u: &RequirementUpdate, run: &RunProjection) -> Result<()> {
+    let current = run
+        .requirements
+        .get(&u.requirement)
+        .ok_or_else(|| SpeccyError::not_found(format!("no requirement {}", u.requirement)))?;
+    if current.status == RequirementStatus::Waived {
+        return Err(SpeccyError::invalid_transition(format!(
+            "{} is waived; waived is terminal for this run",
+            u.requirement
+        )));
+    }
+    validate_evidence_ids(run, u)?;
+    validate_finding_ids(run, u)?;
+
     match u.status {
         RequirementStatus::Waived => Err(SpeccyError::validation(format!(
             "waived is gate-only; set it through run record-decision, not requirement set-status ({})",
@@ -944,11 +1026,12 @@ fn validate_status_update(u: &RequirementUpdate, tier: RiskTier) -> Result<()> {
                     u.requirement
                 )));
             }
-            if matches!(tier, RiskTier::High | RiskTier::Critical)
+            if matches!(run.risk, RiskTier::High | RiskTier::Critical)
                 && u.residual_risk.as_deref().map(str::trim).unwrap_or("").is_empty()
             {
                 return Err(SpeccyError::validation(format!(
-                    "review_passed at {tier:?} requires a residual_risk note for {}",
+                    "review_passed at {:?} requires a residual_risk note for {}",
+                    run.risk,
                     u.requirement
                 )));
             }
@@ -978,6 +1061,143 @@ fn validate_status_update(u: &RequirementUpdate, tier: RiskTier) -> Result<()> {
             "pending is the initial status and is never re-entered",
         )),
     }
+}
+
+fn ensure_run_requirement(run: &RunProjection, requirement: &str) -> Result<()> {
+    if run.requirements.contains_key(requirement) {
+        Ok(())
+    } else {
+        Err(SpeccyError::not_found(format!(
+            "no requirement {requirement} in run {}",
+            run.run_id
+        )))
+    }
+}
+
+fn run_draft(store: &Store, run: &RunProjection) -> Result<SpecDraft> {
+    let spec = store.spec_state(&run.spec_id)?;
+    spec.revision(&run.revision_id)
+        .map(|r| r.draft.clone())
+        .ok_or_else(|| SpeccyError::not_found(format!("revision {} not found", run.revision_id)))
+}
+
+fn validate_evidence_reference(
+    store: &Store,
+    run: &RunProjection,
+    ev: &EvidenceInput,
+    kind: EvidenceKind,
+) -> Result<()> {
+    ensure_run_requirement(run, &ev.requirement)?;
+    let Some(request) = ev.request.as_deref() else {
+        return Ok(());
+    };
+    let (req_id, request_id) = match request.split_once('.') {
+        Some((req, id)) => {
+            if req != ev.requirement {
+                return Err(SpeccyError::validation(format!(
+                    "evidence request {request} does not belong to requirement {}",
+                    ev.requirement
+                )));
+            }
+            (req, id)
+        }
+        None => (ev.requirement.as_str(), request),
+    };
+    let draft = run_draft(store, run)?;
+    let req = draft
+        .requirement(req_id)
+        .ok_or_else(|| SpeccyError::not_found(format!("no requirement {req_id}")))?;
+    let declared = req
+        .evidence
+        .iter()
+        .find(|e| e.id == request_id)
+        .ok_or_else(|| SpeccyError::not_found(format!("no evidence request {request}")))?;
+    let declared_kind = declared.kind_enum().ok_or_else(|| {
+        SpeccyError::validation(format!("evidence request {request} has no valid kind"))
+    })?;
+    if declared_kind != kind {
+        return Err(SpeccyError::validation(format!(
+            "evidence request {request} is kind {:?}, not {:?}",
+            declared_kind, kind
+        )));
+    }
+    Ok(())
+}
+
+fn validate_evidence_ids(run: &RunProjection, u: &RequirementUpdate) -> Result<()> {
+    for id in &u.evidence {
+        let record = run
+            .evidence
+            .iter()
+            .find(|e| &e.id == id)
+            .ok_or_else(|| SpeccyError::not_found(format!("no evidence artifact {id}")))?;
+        if record.requirement != u.requirement {
+            return Err(SpeccyError::validation(format!(
+                "evidence artifact {id} belongs to {}, not {}",
+                record.requirement, u.requirement
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_finding_ids(run: &RunProjection, u: &RequirementUpdate) -> Result<()> {
+    for id in &u.findings {
+        let record = run
+            .findings
+            .iter()
+            .map(|(_, f)| f)
+            .find(|f| &f.id == id)
+            .ok_or_else(|| SpeccyError::not_found(format!("no finding {id}")))?;
+        if let Some(requirement) = &record.requirement {
+            if requirement != &u.requirement {
+                return Err(SpeccyError::validation(format!(
+                    "finding {id} belongs to {requirement}, not {}",
+                    u.requirement
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn hash_artifact_if_present(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    artifact: Option<&str>,
+) -> Result<Option<String>> {
+    let Some(artifact) = artifact.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let rel = Path::new(artifact);
+    if rel.is_absolute()
+        || rel.components().any(|c| {
+            matches!(
+                c,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+        || rel
+            .components()
+            .next()
+            .is_none_or(|c| c.as_os_str() != "evidence")
+    {
+        return Err(SpeccyError::validation(format!(
+            "artifact reference must stay within the run evidence tree under evidence/: {artifact}"
+        )));
+    }
+    let root = store.run_dir(spec_id, run_id);
+    let path = root.join(rel);
+    let bytes = std::fs::read(&path).map_err(|e| {
+        SpeccyError::validation(format!(
+            "artifact reference {artifact} is not readable under {}: {e}",
+            root.display()
+        ))
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    Ok(Some(format!("sha256:{:x}", hasher.finalize())))
 }
 
 // --------------------------------------------------------------------------

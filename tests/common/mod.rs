@@ -29,6 +29,7 @@ impl Harness {
         h.git(&["-c", "init.defaultBranch=main", "init"]);
         h.git(&["config", "user.email", "test@speccy.local"]);
         h.git(&["config", "user.name", "Test"]);
+        h.git(&["config", "commit.gpgsign", "false"]);
         h.write_file("README.md", "# test repo\n");
         h.git(&["add", "-A"]);
         h.git(&["commit", "-m", "initial"]);
