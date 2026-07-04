@@ -132,6 +132,34 @@ impl Harness {
         parse_envelope(&out.stdout, args)
     }
 
+    /// Create a directory under the repo (e.g. a harness config dir).
+    pub fn mkdir(&self, rel: &str) {
+        std::fs::create_dir_all(self.repo.path().join(rel)).unwrap();
+    }
+
+    /// Run a command; return `(stdout, success)`.
+    pub fn output(&self, args: &[&str]) -> (String, bool) {
+        let out = self
+            .base_command()
+            .args(args)
+            .output()
+            .expect("speccy runs");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            out.status.success(),
+        )
+    }
+
+    /// True if a repo-relative path exists.
+    pub fn exists(&self, rel: &str) -> bool {
+        self.repo.path().join(rel).exists()
+    }
+
+    /// Read a repo-relative file.
+    pub fn read(&self, rel: &str) -> String {
+        std::fs::read_to_string(self.repo.path().join(rel)).unwrap()
+    }
+
     /// Run a human command; return stdout text.
     pub fn human(&self, args: &[&str]) -> String {
         let out = self

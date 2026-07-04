@@ -1,0 +1,35 @@
+---
+source: tests/pack.rs
+expression: "find(&files, \"speccy-implement/SKILL.md\")"
+---
+---
+name: speccy-implement
+description: Run an approved spec revision to verified — serial task implement-and-review rounds driven by the controller, then run-gate validation. Exits early if the revision is not approved.
+---
+
+# /speccy-implement
+
+Runs against an approved spec revision (inferred when unambiguous). A fresh,
+cleared session is recommended. Exits early unless the revision is `approved`.
+
+1. `speccy ctl spec status --spec <ref> --json` — confirm `approved`.
+2. `speccy ctl run start --spec <ref> --revision <rev> --json` — refuses
+   a dirty worktree; creates the run branch and task graph.
+3. Drive the loop. Repeat: call
+   `speccy ctl run next --run <id> --agent codex:<session> --json`,
+   perform the directive's `packet_with`, dispatch the named subagent, record the
+   outcome through `record_with`, then call `run next` again.
+
+   - `claim_task` -> `task claim`
+   - `dispatch_worker` -> `packet task`, dispatch **speccy-worker**, then `task record-handoff`
+   - `dispatch_verifier` -> `packet verification`, dispatch **speccy-verifier** which
+     fans out the personas in `subject.personas`, then `requirement set-status`
+   - `await_human_gate` -> stop and surface the gate's packet
+   - `halt`, an unknown action, or any controller error -> stop and surface it (fail closed)
+
+Read the returned state after every call; never infer the next step from
+transcript memory — only `run next` decides sequencing, rounds, and gates. If a
+`run next` response carries a `resume` block, echo it before dispatching.
+
+The loop is fully autonomous: no step-by-step steering. It ends `verified` on
+success or `escalated` on a spec/evidence/policy gap.

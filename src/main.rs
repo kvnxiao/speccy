@@ -58,8 +58,42 @@ fn main() -> ExitCode {
             eprintln!("speccy: export spec / run-bundle arrive in a later milestone");
             ExitCode::FAILURE
         }
-        Command::Install(_) => {
-            eprintln!("speccy: install arrives with the renderer and packs (M4)");
+        Command::Install(args) => install(args),
+    }
+}
+
+/// `speccy install` resolves the repo root via git and renders/manages packs.
+fn install(args: speccy::cli::InstallArgs) -> ExitCode {
+    use speccy::install::{run, InstallOptions};
+    let opts = InstallOptions {
+        target: args.target,
+        update: args.update,
+        dry_run: args.dry_run,
+        yes: args.yes,
+        check: args.check,
+        force: args.force,
+    };
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("speccy: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let repo_root = match speccy::gitx::toplevel(&cwd) {
+        Ok(root) => root,
+        Err(e) => {
+            eprintln!("speccy: {}", e.message);
+            return ExitCode::FAILURE;
+        }
+    };
+    match run(&repo_root, &opts) {
+        Ok(report) => {
+            println!("{report}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("speccy: {}", e.message);
             ExitCode::FAILURE
         }
     }
