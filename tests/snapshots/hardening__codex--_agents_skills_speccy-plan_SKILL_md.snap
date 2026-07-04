@@ -1,0 +1,56 @@
+---
+source: tests/hardening.rs
+expression: f.contents
+---
+---
+name: speccy-plan
+description: Route-check an engineering request; only when it warrants Speccy, draft a spec and acceptance ledger and present a compact spec card for prose approval.
+---
+
+# /speccy-plan
+
+Route-check first. Only on the `speccy_spec` route (or an explicit override) do
+you create controller state.
+
+## Route preflight (read-only)
+
+Rate scope: tiny | small | medium | large | initiative. Ask first: **can this be
+evidenced?** Low evidence-ability routes away even for large work.
+
+- tiny / small -> direct edit
+- medium -> regular harness planning (/plan)
+- large -> Speccy spec (continue below)
+- initiative -> split into multiple specs
+
+Route-away responses create no spec, ledger, or run. "use Speccy anyway"
+overrides.
+
+## Draft a spec
+
+1. `speccy ctl spec start --input request.json --json` — the verbatim
+   request (and a promoted brainstorm handoff, if any).
+2. `speccy ctl packet planning --spec <ref> --json` — a deterministic
+   work order. Inspect the repo read-only; reconcile prior-context candidates
+   against the current code (flag drift, don't carry stale requirements).
+3. Draft ONE complete candidate revision and submit it with
+   `speccy ctl spec record-draft --spec <ref> --input spec-draft.json --json`.
+   Repair lint findings with focused `spec patch-draft` calls.
+4. Present a compact spec card: goal, in/out scope, plan, acceptance statements,
+   the `kind: command` strings the controller will run, prior context carried
+   forward, and main risks. Use request_user_input for a structured choice.
+
+## Approval (the prose gate)
+
+The human approves in prose. Before recording, echo exactly what you will record:
+
+```
+Recording approval: <ref> rev <revision> -> approved
+```
+
+Then `speccy ctl spec record-decision --spec <ref> --input decision.json --json`
+(type `approve`). Approval is refused while the draft is lint-dirty.
+
+- `go` — record approval, then start the run in this session (see /speccy-implement).
+- `approve only` — record approval, print the /speccy-implement handoff.
+- `revise:` / `split:` / `cancel` route the other decisions. Ambiguous approval
+  prose defaults to `approve only`.

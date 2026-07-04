@@ -10,15 +10,22 @@ env:
 
 jobs:
   check:
-    name: fmt + clippy + test
-    # Cross-OS matrix arrives with the store (M1); M0 gates on one platform.
-    runs-on: ubuntu-latest
+    name: fmt + clippy + test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Configure git identity (for git-backed tests)
+        run: |
+          git config --global user.email ci@speccy.local
+          git config --global user.name CI
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy

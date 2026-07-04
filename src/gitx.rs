@@ -39,6 +39,14 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// The installed git version string (`git --version`), if git is available.
+pub fn version() -> Option<String> {
+    let out = Command::new("git").arg("--version").output().ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// The git repository top level, or `not_a_git_repo`.
 pub fn toplevel(dir: &Path) -> Result<PathBuf> {
     let out = Command::new("git")

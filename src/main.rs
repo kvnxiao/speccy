@@ -132,8 +132,55 @@ fn emit_envelope<T: serde::Serialize>(result: Result<T>) -> ExitCode {
     }
 }
 
-/// M0 stub: report basic health as plain text.
+/// `speccy doctor` — check git, the store, and pack freshness.
 fn doctor() -> ExitCode {
-    println!("speccy doctor: M0 stub — checks arrive with the store (M1) and packs (M4)");
-    ExitCode::SUCCESS
+    use speccy::install::{run, InstallOptions};
+
+    let mut ok = true;
+
+    match speccy::gitx::version() {
+        Some(v) => println!("git    OK  ({v})"),
+        None => {
+            println!("git    MISSING — install git");
+            ok = false;
+        }
+    }
+
+    match Store::open() {
+        Ok(store) => println!(
+            "store  OK  ({} writable; workspace {})",
+            store.home.display(),
+            store.workspace_id
+        ),
+        Err(e) => println!("store  WARN  ({})", e.message),
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    match speccy::gitx::toplevel(&cwd) {
+        Ok(root) if root.join(".speccy/pack-lock.yaml").exists() => {
+            let opts = InstallOptions {
+                target: "auto".into(),
+                update: false,
+                dry_run: false,
+                yes: false,
+                check: true,
+                force: false,
+            };
+            match run(&root, &opts) {
+                Ok(msg) => println!("packs  OK  ({msg})"),
+                Err(e) => {
+                    println!("packs  DRIFT  ({})", e.message.lines().next().unwrap_or(""));
+                    ok = false;
+                }
+            }
+        }
+        Ok(_) => println!("packs  none (run `speccy install`)"),
+        Err(_) => println!("packs  n/a  (not in a git repository)"),
+    }
+
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
