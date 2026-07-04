@@ -233,6 +233,7 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
                 )
                 .with_details(findings));
             }
+            let supersedes = decision.supersedes.clone();
             let record = SpecDecisionRecord {
                 decision_id: ids::short_id("dec"),
                 kind: "approve".into(),
@@ -244,10 +245,44 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
                 supersedes: decision.supersedes,
             };
             store.append_spec_event(&spec.spec_id, Event::SpecDecision { decision: record })?;
+
+            // Amendment at a gate: a superseding approval atomically closes the
+            // parked run as cancelled with a linking decision record (DESIGN §
+            // Amendment at the Escalation Gate).
+            let mut superseded_run = None;
+            if let Some(run_id) = supersedes.as_ref().and_then(|s| s.run_id.clone()) {
+                let (run_spec_id, _) = store.find_run(&run_id)?;
+                store.append_run_event(
+                    &run_spec_id,
+                    &run_id,
+                    Event::RunDecision {
+                        decision: RunDecisionRecord {
+                            decision_id: ids::short_id("dec"),
+                            kind: "superseded".into(),
+                            requirement: None,
+                            task: None,
+                            actor: "human".into(),
+                            reason: Some(format!("superseded by revision {target}")),
+                            residual_risk: None,
+                            carry_forward: false,
+                        },
+                    },
+                )?;
+                store.append_run_event(
+                    &run_spec_id,
+                    &run_id,
+                    Event::RunStateTransitioned {
+                        to: RunState::Cancelled,
+                        snapshot: None,
+                    },
+                )?;
+                superseded_run = Some(run_id);
+            }
             Ok(json!({
                 "approved_revision": target,
                 "spec_status": "approved",
                 "requirements_frozen": true,
+                "superseded_run": superseded_run,
                 "next": "Run /speccy-implement (fresh session recommended).",
             }))
         }

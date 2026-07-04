@@ -163,7 +163,7 @@ pub fn lint_draft(draft: &SpecDraft, policy: &CommandPolicy) -> Vec<Finding> {
 
 /// Whole-command glob match (never a prefix): `*` matches any run of chars,
 /// `?` any single char (DESIGN § Acceptance Ledger command allow policy).
-fn command_allowed(command: &str, patterns: &[String]) -> bool {
+pub fn command_allowed(command: &str, patterns: &[String]) -> bool {
     patterns.iter().any(|p| glob_match(p, command))
 }
 

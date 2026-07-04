@@ -184,6 +184,7 @@ pub struct RunProjection {
     pub change_ref: Option<ChangeRef>,
     pub last_snapshot: Option<String>,
     pub last_event_ts: Option<Timestamp>,
+    pub started_at: Option<Timestamp>,
     max_status_seq: Option<usize>,
     verifying_entered_seq: Option<usize>,
     pub run_review_rounds_completed: u32,
@@ -247,6 +248,7 @@ impl RunProjection {
                         change_ref: None,
                         last_snapshot: None,
                         last_event_ts: Some(ts),
+                        started_at: Some(ts),
                         max_status_seq: None,
                         verifying_entered_seq: None,
                         run_review_rounds_completed: 0,
@@ -392,6 +394,35 @@ impl RunProjection {
         task.requirements
             .iter()
             .all(|r| self.req_status(r).is_resolved())
+    }
+
+    /// A linked requirement is `blocked` — repair cannot manufacture missing
+    /// environment or evidence, so such a task escalates directly.
+    pub fn task_has_blocked_requirement(&self, task: &TaskState) -> bool {
+        task.requirements
+            .iter()
+            .any(|r| self.req_status(r) == RequirementStatus::Blocked)
+    }
+
+    /// Any requirement resolved by review-only evidence or a waiver.
+    pub fn has_accepted_risk(&self) -> bool {
+        self.requirements.values().any(|r| {
+            matches!(
+                r.status,
+                RequirementStatus::ReviewPassed | RequirementStatus::Waived
+            )
+        })
+    }
+
+    /// A critical-tier run with accepted risk needs an explicit confirmation
+    /// before `verified` (DESIGN § Requirement Resolution Rules).
+    pub fn needs_accepted_risk_confirmation(&self) -> bool {
+        self.risk == RiskTier::Critical
+            && self.has_accepted_risk()
+            && !self
+                .decisions
+                .iter()
+                .any(|d| d.kind == "confirm_accepted_risk")
     }
 
     /// Every requirement in the run is resolved.

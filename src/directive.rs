@@ -89,10 +89,14 @@ pub fn run_next(
     // --- lease management ---
     let (lease, resume) = manage_lease(store, spec_id, run_id, agent, &run0)?;
 
+    let config = ProjectConfig::load(&store.workspace_root)?;
     let mut applied = Vec::new();
 
-    // --- out-of-band commit detection (DESIGN § Run Branch and Snapshot Policy) ---
+    // Guards that park the run before the loop runs: an out-of-band commit or a
+    // resource cap. Both fail closed to an escalated policy gate.
     if let Some(t) = detect_out_of_band(store, spec_id, run_id, &run0)? {
+        applied.push(t);
+    } else if let Some(t) = detect_resource_caps(store, spec_id, run_id, &run0, &config)? {
         applied.push(t);
     } else {
         // --- provenance scan over the current diff (records blocking findings) ---
@@ -102,7 +106,6 @@ pub fn run_next(
     }
 
     let run = store.run_projection(spec_id, run_id)?;
-    let config = ProjectConfig::load(&store.workspace_root)?;
     let directive = compute_directive(&run, &config, applied, lease, resume);
     serde_json::to_value(&directive)
         .map_err(|e| SpeccyError::io(format!("failed to serialize directive: {e}")))
@@ -197,6 +200,55 @@ fn detect_out_of_band(
     Ok(Some(AppliedTransition {
         subject: "run".into(),
         from: run_state_str(run.state).into(),
+        to: "escalated".into(),
+        snapshot: None,
+    }))
+}
+
+/// Optional resource caps (task count, wall-clock). Hitting one parks the run
+/// at an escalated policy gate; Speccy cannot meter tokens (DESIGN §
+/// Capability Escalation and Give-Up Policy).
+fn detect_resource_caps(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    run: &RunProjection,
+    config: &ProjectConfig,
+) -> Result<Option<AppliedTransition>> {
+    if !matches!(run.state, RunState::Implementing | RunState::Verifying) {
+        return Ok(None);
+    }
+    let mut reason = None;
+    if let Some(max) = config.caps.max_tasks {
+        if run.tasks.len() as u32 > max {
+            reason = Some(format!("task count {} exceeds cap {max}", run.tasks.len()));
+        }
+    }
+    if reason.is_none() {
+        if let (Some(max_min), Some(started)) =
+            (config.caps.max_run_wall_clock_minutes, run.started_at)
+        {
+            let elapsed_min = (jiff::Timestamp::now().as_second() - started.as_second()) / 60;
+            if elapsed_min > max_min as i64 {
+                reason = Some(format!("wall-clock {elapsed_min}m exceeds cap {max_min}m"));
+            }
+        }
+    }
+    if reason.is_none() {
+        return Ok(None);
+    }
+    let from = run.state;
+    store.append_run_event(
+        spec_id,
+        run_id,
+        Event::RunStateTransitioned {
+            to: RunState::Escalated,
+            snapshot: None,
+        },
+    )?;
+    Ok(Some(AppliedTransition {
+        subject: "run".into(),
+        from: run_state_str(from).into(),
         to: "escalated".into(),
         snapshot: None,
     }))
@@ -321,6 +373,10 @@ fn step_implementing(
                     to: "integrated".into(),
                     snapshot: Some(sha),
                 }));
+            } else if run.task_has_blocked_requirement(active) {
+                // A blocked requirement cannot be repaired; escalate as a
+                // human/policy gate without consuming a repair round.
+                return escalate(store, run);
             } else if active.round < config.caps.task_repair_rounds {
                 store.append_run_event(
                     &run.spec_id,
@@ -372,6 +428,11 @@ fn step_verifying(
 ) -> Result<Option<AppliedTransition>> {
     if run.run_review_rounds_completed == 0 {
         // Run-level review not done yet; directive dispatches the verifier.
+        return Ok(None);
+    }
+    // A critical run with accepted risk parks at the confirmation gate before
+    // verifying can complete (the directive surfaces the gate).
+    if run.needs_accepted_risk_confirmation() {
         return Ok(None);
     }
     if run.all_requirements_resolved() && run.run_blocking_findings().is_empty() {
@@ -459,6 +520,43 @@ fn compute_directive(
 ) -> Directive {
     let parts = match run.state {
         RunState::Implementing => implementing_parts(run, config),
+        RunState::Verifying
+            if run.run_review_rounds_completed >= 1 && run.needs_accepted_risk_confirmation() =>
+        {
+            Parts {
+                action: DirectiveAction::AwaitHumanGate,
+                subject: Subject {
+                    gate: Some(Gate::AcceptedRiskConfirmation),
+                    requirements: Some(
+                        run.requirements
+                            .iter()
+                            .filter(|(_, r)| {
+                                matches!(
+                                    r.status,
+                                    RequirementStatus::ReviewPassed | RequirementStatus::Waived
+                                )
+                            })
+                            .map(|(id, _)| id.clone())
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+                round: None,
+                packet_with: Some("packet review".into()),
+                record_with: Some("run record-decision".into()),
+                reason: "critical spec: confirm accepted risk before verifying completes".into(),
+                gate_answers: Some(vec![
+                    GateAnswer {
+                        type_: "confirm_accepted_risk".into(),
+                        record_with: "run record-decision".into(),
+                    },
+                    GateAnswer {
+                        type_: "cancel".into(),
+                        record_with: "run record-decision".into(),
+                    },
+                ]),
+            }
+        }
         RunState::Verifying => Parts {
             action: DirectiveAction::DispatchVerifier,
             subject: Subject {

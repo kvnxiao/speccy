@@ -47,6 +47,20 @@ pub fn collect(
         ));
     }
 
+    // Command allow policy: when configured, refuse a command matching no
+    // pattern (DESIGN § Acceptance Ledger). The harness sandbox remains the
+    // security boundary; this is a drift guardrail.
+    let allow = &config.evidence.command_policy.allow;
+    if !allow.is_empty() {
+        for (req_id, ev_id, command) in &targets {
+            if !crate::lint::command_allowed(command, allow) {
+                return Err(SpeccyError::validation(format!(
+                    "command for {req_id}.{ev_id} matches no allow pattern: {command}"
+                )));
+            }
+        }
+    }
+
     let cap = config.evidence.command_output_max_bytes as usize;
     let timeout = Duration::from_secs(config.evidence.command_timeout_seconds);
 
