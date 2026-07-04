@@ -430,18 +430,23 @@ impl RunProjection {
     }
 
     /// Blocking findings recorded for this task's current round (after its
-    /// latest handoff), scoped to the task or its linked requirements.
+    /// latest handoff) that still block integration. A finding tied to a
+    /// requirement that is now resolved (e.g. after a waive) no longer blocks;
+    /// a task-scoped finding (no requirement, e.g. a provenance hit) blocks
+    /// until a round produces no new one.
     pub fn task_blocking_findings_this_round(&self, task: &TaskState) -> Vec<&FindingRecord> {
         let after = task.last_handoff_seq.unwrap_or(0);
         self.findings
             .iter()
             .filter(|(seq, f)| {
-                *seq > after
-                    && f.severity == "blocking"
-                    && (f.task.as_deref() == Some(&task.id)
-                        || f.requirement
-                            .as_ref()
-                            .is_some_and(|r| task.requirements.contains(r)))
+                if *seq <= after || f.severity != "blocking" {
+                    return false;
+                }
+                match &f.requirement {
+                    Some(r) if task.requirements.contains(r) => !self.req_status(r).is_resolved(),
+                    Some(_) => false,
+                    None => f.task.as_deref() == Some(&task.id),
+                }
             })
             .map(|(_, f)| f)
             .collect()

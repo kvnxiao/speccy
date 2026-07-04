@@ -2,11 +2,15 @@
 //! the controller machinery: no directives, leases, run IDs, or ctl operations
 //! on the card. M1 ships `status` and `review`; the rest arrive at M3.
 
+use serde_json::json;
+
 use crate::error::{Result, SpeccyError};
+use crate::event::{Event, SpecDecisionRecord};
+use crate::ids;
 use crate::model::{RequirementStatus, RiskTier, RunState, SpecStatus};
 use crate::packets;
 use crate::projection::{RunProjection, SpecState};
-use crate::store::Store;
+use crate::store::{write_atomic, Store};
 
 /// `speccy status` — one card per active run in the workspace.
 pub fn status(store: &Store) -> Result<String> {
@@ -51,6 +55,293 @@ pub fn review(store: &Store, selector: Option<&str>, evidence: bool) -> Result<S
         out.push_str(&evidence_drilldown(&run));
     }
     Ok(out)
+}
+
+/// `speccy list` — active specs by default; `--query` previews matches;
+/// `--json` returns the selector-resolution shape for install-pack skills.
+#[allow(clippy::too_many_arguments)]
+pub fn list(
+    store: &Store,
+    query: Option<&str>,
+    all: bool,
+    accepted: bool,
+    archived: bool,
+    status_filter: Option<&str>,
+    json_out: bool,
+) -> Result<String> {
+    let needle = query.map(|q| q.to_lowercase());
+    let mut rows = Vec::new();
+    for (spec_id, spec_ref) in store.list_specs()? {
+        let spec = store.spec_state(&spec_id)?;
+        if !list_visible(spec.status, all, accepted, archived, status_filter) {
+            continue;
+        }
+        if let Some(n) = &needle {
+            let title = spec.title.clone().unwrap_or_default().to_lowercase();
+            if !spec_ref.to_lowercase().contains(n) && !title.contains(n) {
+                continue;
+            }
+        }
+        rows.push(spec);
+    }
+
+    if json_out {
+        let arr: Vec<_> = rows
+            .iter()
+            .map(|s| json!({ "spec_ref": s.spec_ref, "title": s.title, "status": s.status }))
+            .collect();
+        return Ok(serde_json::to_string(&json!(arr)).unwrap_or_else(|_| "[]".into()));
+    }
+
+    if rows.is_empty() {
+        return Ok(match query {
+            Some(q) => format!("No specs matching \"{q}\"."),
+            None => "No active specs.".to_string(),
+        });
+    }
+    let mut out = match query {
+        Some(q) => format!("Specs matching \"{q}\":\n\n"),
+        None => String::from("Active specs:\n\n"),
+    };
+    for (i, s) in rows.iter().enumerate() {
+        out.push_str(&format!(
+            "{}  {}  {}   {}\n",
+            i + 1,
+            s.spec_ref,
+            title_of(s),
+            spec_status_str(s.status)
+        ));
+    }
+    out.push_str(&format!("\nUse: speccy review {}", rows[0].spec_ref));
+    Ok(out)
+}
+
+fn list_visible(
+    status: SpecStatus,
+    all: bool,
+    accepted: bool,
+    archived: bool,
+    status_filter: Option<&str>,
+) -> bool {
+    if let Some(f) = status_filter {
+        return spec_status_str(status) == f;
+    }
+    if all {
+        return true;
+    }
+    if accepted {
+        return status == SpecStatus::Accepted;
+    }
+    if archived {
+        return status == SpecStatus::Archived;
+    }
+    matches!(status, SpecStatus::Draft | SpecStatus::Approved)
+}
+
+/// `speccy accept` — record that a submitted run's change landed. Idempotent;
+/// uses the `change_ref` recorded at ship time (DESIGN § Acceptance).
+pub fn accept(
+    store: &Store,
+    selector: Option<&str>,
+    pr: Option<&str>,
+    note: Option<&str>,
+) -> Result<String> {
+    let spec = resolve_spec(store, selector)?;
+    let runs = store.list_runs(&spec.spec_id)?;
+    let mut submitted: Vec<(String, RunProjection)> = Vec::new();
+    let mut already_landed = false;
+    for rid in &runs {
+        let run = store.run_projection(&spec.spec_id, rid)?;
+        match run.state {
+            RunState::Submitted => submitted.push((rid.clone(), run)),
+            RunState::Landed => already_landed = true,
+            _ => {}
+        }
+    }
+    if submitted.len() > 1 {
+        return Err(SpeccyError::ambiguous_selector(
+            "more than one submitted run; name the spec explicitly",
+        ));
+    }
+    let Some((run_id, run)) = submitted.into_iter().next() else {
+        if already_landed {
+            return Ok(format!("{}  already recorded as landed.", spec.spec_ref));
+        }
+        return Err(SpeccyError::not_found("no submitted run to accept"));
+    };
+
+    let mut out = String::from("Recording landing for:\n");
+    if let Some(cr) = &run.change_ref {
+        if let Some(url) = &cr.url {
+            out.push_str(&format!("  {url}\n"));
+        }
+        if let Some(branch) = &cr.branch {
+            out.push_str(&format!("  branch  {branch}\n"));
+        }
+    }
+    if let Some(pr) = pr {
+        out.push_str(&format!("  pr  {pr}\n"));
+    }
+    if let Some(note) = note {
+        out.push_str(&format!("  note  {note}\n"));
+    }
+
+    store.append_run_event(
+        &spec.spec_id,
+        &run_id,
+        Event::RunStateTransitioned {
+            to: RunState::Landed,
+            snapshot: None,
+        },
+    )?;
+    store.append_spec_event(
+        &spec.spec_id,
+        Event::SpecStatusChanged {
+            to: SpecStatus::Accepted,
+        },
+    )?;
+
+    out.push_str(&format!(
+        "\nRecorded: {}  {}\n",
+        spec.spec_ref,
+        title_of(&spec)
+    ));
+    out.push_str("  run  submitted -> landed\n  spec approved  -> accepted\n");
+    out.push_str("Accepted specs leave default status/list output. Show them with:\n");
+    out.push_str("  speccy list --accepted");
+    Ok(out)
+}
+
+/// `speccy archive` — hide a stale accepted spec from active views.
+pub fn archive(store: &Store, selector: Option<&str>) -> Result<String> {
+    let spec = resolve_spec_any(store, selector)?;
+    store.append_spec_event(
+        &spec.spec_id,
+        Event::SpecStatusChanged {
+            to: SpecStatus::Archived,
+        },
+    )?;
+    Ok(format!(
+        "Archived {}. It leaves accepted-spec lists; its carry-forward decisions stay recorded.",
+        spec.spec_ref
+    ))
+}
+
+/// `speccy cancel` — stop the current or selected spec/run.
+pub fn cancel(store: &Store, selector: Option<&str>) -> Result<String> {
+    let spec = resolve_spec(store, selector)?;
+    let mut cancelled_run = false;
+    for rid in store.list_runs(&spec.spec_id)? {
+        let run = store.run_projection(&spec.spec_id, &rid)?;
+        if run.state.is_active() || run.state == RunState::Escalated {
+            store.append_run_event(
+                &spec.spec_id,
+                &rid,
+                Event::RunStateTransitioned {
+                    to: RunState::Cancelled,
+                    snapshot: None,
+                },
+            )?;
+            cancelled_run = true;
+        }
+    }
+    let latest_rev = spec
+        .latest_revision()
+        .map(|r| r.id.clone())
+        .unwrap_or_default();
+    store.append_spec_event(
+        &spec.spec_id,
+        Event::SpecDecision {
+            decision: SpecDecisionRecord {
+                decision_id: ids::short_id("dec"),
+                kind: "cancel".into(),
+                revision_id: latest_rev,
+                actor: "human".into(),
+                approved_in_prose: None,
+                note: Some("cancelled via speccy cancel".into()),
+                carry_forward: false,
+                supersedes: None,
+            },
+        },
+    )?;
+    if cancelled_run {
+        Ok(format!(
+            "Cancelled {} and its active run. Recorded as a spec decision.",
+            spec.spec_ref
+        ))
+    } else {
+        Ok(format!(
+            "Cancelled {}. Recorded as a spec decision.",
+            spec.spec_ref
+        ))
+    }
+}
+
+/// `speccy new` — record plain intent as a draft spec, outside a harness.
+pub fn new_spec(store: &Store, request: &str, title: Option<&str>) -> Result<String> {
+    if request.trim().is_empty() {
+        return Err(SpeccyError::validation("request must be non-empty"));
+    }
+    let existing: Vec<String> = store.list_specs()?.into_iter().map(|(_, r)| r).collect();
+    let mut spec_ref = ids::spec_ref();
+    for _ in 0..8 {
+        if !existing.contains(&spec_ref) {
+            break;
+        }
+        spec_ref = ids::spec_ref();
+    }
+    let spec_id = ids::spec_id();
+    store.create_spec(&spec_id, &spec_ref)?;
+    store.append_spec_event(
+        &spec_id,
+        Event::SpecCreated {
+            spec_ref: spec_ref.clone(),
+            spec_id: spec_id.clone(),
+            workspace_id: store.workspace_id.clone(),
+            request: request.to_string(),
+            source: Some("speccy new".into()),
+            title: title.map(str::to_string),
+            brainstorm_handoff: None,
+        },
+    )?;
+    let title_str = title.unwrap_or(request);
+    Ok(format!(
+        "Created draft spec {spec_ref} \"{title_str}\".\nNext: open your harness and run /speccy-plan {spec_ref}"
+    ))
+}
+
+/// `speccy export review` — write the review packet to an explicit destination
+/// (exempt from provenance scanning).
+pub fn export_review(store: &Store, selector: Option<&str>, dest: Option<&str>) -> Result<String> {
+    let spec = resolve_spec_any(store, selector)?;
+    let run_id = store
+        .list_runs(&spec.spec_id)?
+        .into_iter()
+        .next_back()
+        .ok_or_else(|| SpeccyError::not_found("no run to export"))?;
+    let packet = packets::review(store, &run_id)?;
+    let markdown = packet["markdown"].as_str().unwrap_or("").to_string();
+    let dest_dir = dest.map(std::path::PathBuf::from).unwrap_or_else(|| {
+        store
+            .git_root
+            .join("docs")
+            .join("specs")
+            .join(&spec.spec_ref)
+    });
+    let path = dest_dir.join("review-packet.md");
+    write_atomic(&path, markdown.as_bytes())?;
+    Ok(format!("Wrote {}", path.display()))
+}
+
+fn spec_status_str(s: SpecStatus) -> &'static str {
+    match s {
+        SpecStatus::Draft => "draft",
+        SpecStatus::Approved => "approved",
+        SpecStatus::Cancelled => "cancelled",
+        SpecStatus::Accepted => "accepted",
+        SpecStatus::Superseded => "superseded",
+        SpecStatus::Archived => "archived",
+    }
 }
 
 // --- rendering ---
@@ -280,6 +571,24 @@ pub fn resolve_spec(store: &Store, selector: Option<&str>) -> Result<SpecState> 
 
 fn is_active_spec(status: SpecStatus) -> bool {
     matches!(status, SpecStatus::Draft | SpecStatus::Approved)
+}
+
+/// Like `resolve_spec`, but inference across specs of any status (for
+/// `archive`/`export`, which act on accepted/landed specs).
+fn resolve_spec_any(store: &Store, selector: Option<&str>) -> Result<SpecState> {
+    match selector {
+        Some(_) => resolve_spec(store, selector),
+        None => {
+            let specs = store.list_specs()?;
+            match specs.as_slice() {
+                [(id, _)] => store.spec_state(id),
+                [] => Err(SpeccyError::not_found("no specs in this workspace")),
+                _ => Err(SpeccyError::ambiguous_selector(
+                    "more than one spec; name one explicitly",
+                )),
+            }
+        }
+    }
 }
 
 fn accepted_risk_count(run: &RunProjection) -> usize {

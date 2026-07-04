@@ -18,12 +18,15 @@ use crate::config::ProjectConfig;
 use crate::directive;
 use crate::error::{Finding, Result, SpeccyError};
 use crate::event::{
-    Event, EvidenceRecord, FindingRecord, Handoff, RequirementUpdate, SpecDecisionRecord, TaskInit,
+    Event, EvidenceRecord, FindingRecord, Handoff, RequirementUpdate, RunDecisionRecord,
+    SpecDecisionRecord, TaskInit,
 };
 use crate::gitx;
 use crate::ids;
 use crate::lint;
-use crate::model::{EvidenceKind, RequirementStatus, RiskTier, SpecDraft, TaskStatus};
+use crate::model::{
+    ChangeRef, EvidenceKind, RequirementStatus, RiskTier, RunState, SpecDraft, TaskStatus,
+};
 use crate::packets;
 use crate::projection::SpecState;
 use crate::store::Store;
@@ -286,8 +289,12 @@ fn run(store: &Store, op: RunOp) -> Result<Value> {
         RunOp::Start(args) => run_start(store, &args.spec, &args.revision),
         RunOp::Status(args) => run_status(store, &args.run),
         RunOp::Next(args) => run_next(store, &args.run, &args.agent),
-        RunOp::RecordDecision(_) => Err(SpeccyError::not_implemented("run record-decision (M3)")),
-        RunOp::RecordShip(_) => Err(SpeccyError::not_implemented("run record-ship (M3)")),
+        RunOp::RecordDecision(args) => {
+            run_record_decision(store, &args.run, args.lease.as_deref(), &args.input)
+        }
+        RunOp::RecordShip(args) => {
+            run_record_ship(store, &args.run, args.lease.as_deref(), &args.input)
+        }
     }
 }
 
@@ -393,6 +400,300 @@ fn run_status(store: &Store, run_id: &str) -> Result<Value> {
 fn run_next(store: &Store, run_id: &str, agent: &str) -> Result<Value> {
     let (spec_id, _) = store.find_run(run_id)?;
     directive::run_next(store, &spec_id, run_id, agent)
+}
+
+fn run_record_ship(store: &Store, run_id: &str, lease: Option<&str>, input: &str) -> Result<Value> {
+    let change_ref: ChangeRef = read_input(input)?;
+    let (spec_id, run) = store.run_by_id(run_id)?;
+    store.verify_lease(&spec_id, run_id, lease)?;
+    if run.state != RunState::Verified {
+        return Err(SpeccyError::invalid_transition(format!(
+            "run is {:?}, not verified; cannot ship",
+            run.state
+        )));
+    }
+    store.append_run_event(
+        &spec_id,
+        run_id,
+        Event::ShipRecorded {
+            change_ref: change_ref.clone(),
+        },
+    )?;
+    store.append_run_event(
+        &spec_id,
+        run_id,
+        Event::RunStateTransitioned {
+            to: RunState::Submitted,
+            snapshot: None,
+        },
+    )?;
+    Ok(json!({ "run_state": "submitted", "change_ref": change_ref }))
+}
+
+#[derive(Debug, Deserialize)]
+struct RunDecisionInput {
+    #[serde(rename = "type")]
+    kind: String,
+    requirement: Option<String>,
+    task: Option<String>,
+    #[serde(default = "default_actor")]
+    actor: String,
+    reason: Option<String>,
+    residual_risk: Option<String>,
+    #[serde(default)]
+    carry_forward: bool,
+}
+
+fn run_record_decision(
+    store: &Store,
+    run_id: &str,
+    lease: Option<&str>,
+    input: &str,
+) -> Result<Value> {
+    let d: RunDecisionInput = read_input(input)?;
+    let (spec_id, run) = store.run_by_id(run_id)?;
+    store.verify_lease(&spec_id, run_id, lease)?;
+
+    let record = |kind: &str| RunDecisionRecord {
+        decision_id: ids::short_id("dec"),
+        kind: kind.to_string(),
+        requirement: d.requirement.clone(),
+        task: d.task.clone(),
+        actor: d.actor.clone(),
+        reason: d.reason.clone(),
+        residual_risk: d.residual_risk.clone(),
+        carry_forward: d.carry_forward,
+    };
+    let append_decision = |kind: &str| {
+        store.append_run_event(
+            &spec_id,
+            run_id,
+            Event::RunDecision {
+                decision: record(kind),
+            },
+        )
+    };
+
+    match d.kind.as_str() {
+        "rework" => {
+            if run.state != RunState::Verified {
+                return Err(SpeccyError::invalid_transition(
+                    "rework is only valid at the ship gate",
+                ));
+            }
+            let reason = require_reason(&d, "rework")?;
+            append_decision("rework")?;
+            let rt = next_rt_id(&run);
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::TaskAppended {
+                    task: TaskInit {
+                        id: rt.clone(),
+                        title: Some("Rework from ship feedback".into()),
+                        requirements: Vec::new(),
+                        constraints: Vec::new(),
+                    },
+                    seed_feedback: Some(reason),
+                },
+            )?;
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::RunStateTransitioned {
+                    to: RunState::Implementing,
+                    snapshot: None,
+                },
+            )?;
+            let config = ProjectConfig::load(&store.workspace_root)?;
+            Ok(json!({
+                "decision_id": record("rework").decision_id,
+                "type": "rework",
+                "run_state": "implementing",
+                "task_appended": rt,
+                "round": { "current": 2, "max": config.caps.run_review_rounds, "scope": "run" },
+                "resume": "call run next",
+            }))
+        }
+        "cancel" => {
+            append_decision("cancel")?;
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::RunStateTransitioned {
+                    to: RunState::Cancelled,
+                    snapshot: None,
+                },
+            )?;
+            Ok(json!({ "type": "cancel", "run_state": "cancelled" }))
+        }
+        "waive" => {
+            let requirement = d
+                .requirement
+                .clone()
+                .ok_or_else(|| SpeccyError::validation("waive requires a requirement"))?;
+            require_reason(&d, "waive")?;
+            require_residual_risk(&d, "waive")?;
+            append_decision("waive")?;
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::RequirementStatusSet {
+                    updates: vec![RequirementUpdate {
+                        requirement: requirement.clone(),
+                        status: RequirementStatus::Waived,
+                        evidence: Vec::new(),
+                        findings: Vec::new(),
+                        residual_risk: d.residual_risk.clone(),
+                        note: d.reason.clone(),
+                    }],
+                },
+            )?;
+            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
+            Ok(json!({
+                "type": "waive",
+                "requirement": requirement,
+                "requirement_status": "waived",
+                "run_state": resumed,
+                "resume": "call run next",
+            }))
+        }
+        "defer" => {
+            let task = d
+                .task
+                .clone()
+                .ok_or_else(|| SpeccyError::validation("defer requires a task"))?;
+            require_reason(&d, "defer")?;
+            let orphaned = orphaned_requirements(&run, &task);
+            if !orphaned.is_empty() {
+                require_residual_risk(&d, "defer")?;
+            }
+            append_decision("defer")?;
+            store.append_run_event(
+                &spec_id,
+                run_id,
+                Event::TaskTransitioned {
+                    task: task.clone(),
+                    to: TaskStatus::Deferred,
+                    round: run.task(&task).map(|t| t.round).unwrap_or(0),
+                    snapshot: None,
+                },
+            )?;
+            if !orphaned.is_empty() {
+                store.append_run_event(
+                    &spec_id,
+                    run_id,
+                    Event::RequirementStatusSet {
+                        updates: orphaned
+                            .iter()
+                            .map(|r| RequirementUpdate {
+                                requirement: r.clone(),
+                                status: RequirementStatus::Waived,
+                                evidence: Vec::new(),
+                                findings: Vec::new(),
+                                residual_risk: d.residual_risk.clone(),
+                                note: d.reason.clone(),
+                            })
+                            .collect(),
+                    },
+                )?;
+            }
+            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
+            Ok(json!({
+                "type": "defer",
+                "task": task,
+                "waived": orphaned,
+                "run_state": resumed,
+                "resume": "call run next",
+            }))
+        }
+        "provide_setup" | "confirm_accepted_risk" => {
+            require_reason(&d, &d.kind)?;
+            append_decision(&d.kind)?;
+            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
+            Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
+        }
+        other => Err(SpeccyError::validation(format!(
+            "unknown run decision type `{other}`"
+        ))),
+    }
+}
+
+fn require_reason(d: &RunDecisionInput, kind: &str) -> Result<String> {
+    match d.reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(r) => Ok(r.to_string()),
+        None => Err(SpeccyError::validation(format!("{kind} requires a reason"))),
+    }
+}
+
+fn require_residual_risk(d: &RunDecisionInput, kind: &str) -> Result<()> {
+    if d.residual_risk
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        Err(SpeccyError::validation(format!(
+            "{kind} requires a residual_risk note"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Requirements linked only to `task` (not covered by any other non-deferred task).
+fn orphaned_requirements(run: &crate::projection::RunProjection, task_id: &str) -> Vec<String> {
+    let Some(task) = run.task(task_id) else {
+        return Vec::new();
+    };
+    task.requirements
+        .iter()
+        .filter(|r| {
+            !run.tasks.iter().any(|t| {
+                t.id != task_id && t.status != TaskStatus::Deferred && t.requirements.contains(r)
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// After a gate decision that unblocks a parked run, move it back into the loop.
+fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&'static str> {
+    let run = store.run_projection(spec_id, run_id)?;
+    if run.state != RunState::Escalated {
+        return Ok(run_state_name(run.state));
+    }
+    let target = if run.all_tasks_done() {
+        RunState::Verifying
+    } else {
+        RunState::Implementing
+    };
+    store.append_run_event(
+        spec_id,
+        run_id,
+        Event::RunStateTransitioned {
+            to: target,
+            snapshot: None,
+        },
+    )?;
+    Ok(run_state_name(target))
+}
+
+fn run_state_name(s: RunState) -> &'static str {
+    match s {
+        RunState::Implementing => "implementing",
+        RunState::Verifying => "verifying",
+        RunState::Verified => "verified",
+        RunState::Submitted => "submitted",
+        RunState::Landed => "landed",
+        RunState::Escalated => "escalated",
+        RunState::Cancelled => "cancelled",
+    }
+}
+
+fn next_rt_id(run: &crate::projection::RunProjection) -> String {
+    let n = run.tasks.iter().filter(|t| t.id.starts_with("RT")).count() + 1;
+    format!("RT{n}")
 }
 
 // --------------------------------------------------------------------------
@@ -715,7 +1016,7 @@ fn packet(store: &Store, op: PacketOp) -> Result<Value> {
         PacketOp::Task(args) => packets::task(store, &args.run, &args.task),
         PacketOp::Verification(args) => packets::verification(store, &args.run, &args.requirements),
         PacketOp::Review(args) => packets::review(store, &args.run),
-        PacketOp::Escalation(_) => Err(SpeccyError::not_implemented("packet escalation (M3)")),
+        PacketOp::Escalation(args) => packets::escalation(store, &args.run),
     }
 }
 

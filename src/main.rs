@@ -6,7 +6,7 @@
 
 use std::process::ExitCode;
 
-use speccy::cli::{Cli, Command};
+use speccy::cli::{Cli, Command, ExportCommand};
 use speccy::error::{envelope, Result};
 use speccy::store::Store;
 use speccy::{humancli, ops};
@@ -15,6 +15,7 @@ use clap::Parser;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    let json = cli.json;
     match cli.command {
         Command::Ctl(command) => emit_envelope(ops::dispatch(command)),
         Command::Doctor => doctor(),
@@ -22,9 +23,43 @@ fn main() -> ExitCode {
         Command::Review(args) => {
             emit_text(|store| humancli::review(store, args.selector.as_deref(), args.evidence))
         }
-        // Remaining human-facing commands arrive at M3.
-        _ => {
-            eprintln!("speccy: this command is not implemented yet");
+        Command::List(args) => emit_text(|store| {
+            humancli::list(
+                store,
+                args.query.as_deref(),
+                args.all,
+                args.accepted,
+                args.archived,
+                args.status.as_deref(),
+                json,
+            )
+        }),
+        Command::Accept(args) => emit_text(|store| {
+            humancli::accept(
+                store,
+                args.selector.as_deref(),
+                args.pr.as_deref(),
+                args.note.as_deref(),
+            )
+        }),
+        Command::Archive(args) => {
+            emit_text(|store| humancli::archive(store, args.selector.as_deref()))
+        }
+        Command::Cancel(args) => {
+            emit_text(|store| humancli::cancel(store, args.selector.as_deref()))
+        }
+        Command::New(args) => {
+            emit_text(|store| humancli::new_spec(store, &args.request, args.title.as_deref()))
+        }
+        Command::Export(ExportCommand::Review(args)) => emit_text(|store| {
+            humancli::export_review(store, args.selector.as_deref(), args.dest.as_deref())
+        }),
+        Command::Export(_) => {
+            eprintln!("speccy: export spec / run-bundle arrive in a later milestone");
+            ExitCode::FAILURE
+        }
+        Command::Install(_) => {
+            eprintln!("speccy: install arrives with the renderer and packs (M4)");
             ExitCode::FAILURE
         }
     }

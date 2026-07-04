@@ -8,9 +8,143 @@ use serde_json::{json, Value};
 use crate::config::ProjectConfig;
 use crate::error::{Result, SpeccyError};
 use crate::gitx;
-use crate::model::{RequirementStatus, SpecDraft};
+use crate::model::{RequirementStatus, SpecDraft, SpecStatus};
 use crate::projection::{RunProjection, SpecState};
 use crate::store::Store;
+
+/// Prior-context candidates: carry-forward hints from other active specs
+/// (DESIGN § Carry-Forward Decisions). Archived/cancelled/superseded specs
+/// leave planning context.
+fn prior_context_candidates(store: &Store, current_ref: &str) -> Result<Value> {
+    let mut out = Vec::new();
+    for (spec_id, spec_ref) in store.list_specs()? {
+        if spec_ref == current_ref {
+            continue;
+        }
+        let spec = store.spec_state(&spec_id)?;
+        if matches!(
+            spec.status,
+            SpecStatus::Cancelled | SpecStatus::Superseded | SpecStatus::Archived
+        ) {
+            continue;
+        }
+        let hint = spec.decisions.iter().find(|d| d.carry_forward).map(|d| {
+            format!(
+                "{}: {}",
+                d.decision_id,
+                d.note.clone().unwrap_or_else(|| d.kind.clone())
+            )
+        });
+        out.push(json!({
+            "spec_ref": spec.spec_ref,
+            "title": spec.title,
+            "status": spec.status,
+            "hint": hint,
+        }));
+    }
+    Ok(Value::Array(out))
+}
+
+/// `packet escalation` — focused handback scoped to the requirement(s) the run
+/// could not satisfy or prove (DESIGN § Escalation Packet).
+pub fn escalation(store: &Store, run_id: &str) -> Result<Value> {
+    let (_, run) = store.run_by_id(run_id)?;
+    let spec = store.spec_state(&run.spec_id)?;
+    let draft = spec
+        .revision(&run.revision_id)
+        .map(|r| r.draft.clone())
+        .unwrap_or_default();
+
+    let failing: Vec<(String, String)> = run
+        .requirements
+        .iter()
+        .filter(|(_, r)| !r.status.is_resolved())
+        .map(|(id, _)| {
+            let statement = draft
+                .requirement(id)
+                .and_then(|r| r.statement.clone())
+                .unwrap_or_default();
+            (id.clone(), statement)
+        })
+        .collect();
+
+    let tried: Vec<Value> = run
+        .handoffs
+        .iter()
+        .map(|h| {
+            let rejected: Vec<String> = run
+                .findings
+                .iter()
+                .map(|(_, f)| f)
+                .filter(|f| {
+                    f.severity == "blocking"
+                        && (f.task.as_deref() == Some(&h.task)
+                            || f.requirement
+                                .as_ref()
+                                .is_some_and(|r| failing.iter().any(|(fid, _)| fid == r)))
+                })
+                .map(|f| f.note.clone())
+                .collect();
+            json!({ "round": h.round, "summary": h.handoff.summary, "rejected": rejected })
+        })
+        .collect();
+
+    let markdown = render_escalation_markdown(&run, &failing, &tried);
+    Ok(json!({
+        "failing": failing.iter().map(|(id, st)| json!({ "id": id, "statement": st })).collect::<Vec<_>>(),
+        "tried": tried,
+        "partial_work": run.last_snapshot,
+        "recommended": "amend the spec",
+        "alternatives": ["provide setup", "waive this requirement", "cancel the run"],
+        "markdown": markdown,
+    }))
+}
+
+fn render_escalation_markdown(
+    run: &RunProjection,
+    failing: &[(String, String)],
+    tried: &[Value],
+) -> String {
+    let ids = failing
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut out = format!("Speccy stopped because {ids} could not be proven.\n\n");
+    if !tried.is_empty() {
+        out.push_str("Tried:\n");
+        for t in tried {
+            let round = t["round"].as_u64().unwrap_or(0);
+            let summary = t["summary"].as_str().unwrap_or("");
+            let rejected = t["rejected"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .unwrap_or_default();
+            if rejected.is_empty() {
+                out.push_str(&format!("  round {round} — {summary}\n"));
+            } else {
+                out.push_str(&format!(
+                    "  round {round} — {summary}   (rejected: {rejected})\n"
+                ));
+            }
+        }
+        out.push('\n');
+    }
+    if let Some(snap) = &run.last_snapshot {
+        out.push_str(&format!(
+            "Partial work applied: snapshot {snap} on {}.\n\n",
+            run.branch
+        ));
+    }
+    out.push_str("Recommended: amend the spec\n");
+    out.push_str("Alternatives: provide setup, waive this requirement, cancel the run\n");
+    out
+}
 
 /// `packet planning` — deterministic planning work order.
 pub fn planning(store: &Store, spec_ref: &str) -> Result<Value> {
@@ -33,8 +167,7 @@ pub fn planning(store: &Store, spec_ref: &str) -> Result<Value> {
             "git": { "head": head, "branch": branch, "dirty": dirty },
             "signals": project_signals(store),
         },
-        // Prior-context candidates over active specs arrive at M3.
-        "prior_context_candidates": [],
+        "prior_context_candidates": prior_context_candidates(store, &spec.spec_ref)?,
         "policy": {
             "risk_default": config.risk_default,
             "task_repair_cap": config.caps.task_repair_rounds,

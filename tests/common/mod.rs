@@ -148,3 +148,125 @@ fn parse_envelope(stdout: &[u8], args: &[&str]) -> Value {
     serde_json::from_str(&text)
         .unwrap_or_else(|e| panic!("non-JSON output for {args:?}: {e}\n---\n{text}"))
 }
+
+use serde_json::json;
+
+/// Create + approve a minimal single-task, single-review-requirement spec.
+/// Returns `(spec_ref, revision)`.
+pub fn approve_minimal(h: &Harness, title: &str) -> (String, String) {
+    let start = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "do the thing", "title": title }),
+    );
+    let spec_ref = start["spec_ref"].as_str().unwrap().to_string();
+    let drafted = h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({
+            "goal": "do the thing", "scope": { "in": ["x"] }, "risk": "standard",
+            "requirements": [{ "id": "R1", "statement": "it works",
+                "evidence": [{ "id": "E1", "kind": "review", "note": "review" }] }],
+            "tasks": [{ "id": "T1", "title": "the task", "requirements": ["R1"] }]
+        }),
+    );
+    assert_eq!(drafted["lint"]["clean"], json!(true), "{drafted}");
+    let approved = h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_001-draft", "approved_in_prose": "go" }),
+    );
+    let revision = approved["approved_revision"].as_str().unwrap().to_string();
+    (spec_ref, revision)
+}
+
+/// Drive the happy-path loop (review evidence, all requirements pass) until a
+/// terminal directive, and return it.
+pub fn drive_to_gate(h: &Harness, run: &str) -> Value {
+    for _ in 0..80 {
+        let d = h.ctl(&["ctl", "run", "next", "--run", run, "--agent", "a", "--json"]);
+        let lease = d["lease"]["token"].as_str().unwrap().to_string();
+        match d["action"].as_str().unwrap() {
+            "claim_task" => {
+                let task = d["subject"]["task"].as_str().unwrap();
+                h.ctl(&[
+                    "ctl", "task", "claim", "--run", run, "--task", task, "--agent", "a",
+                    "--lease", &lease, "--json",
+                ]);
+            }
+            "dispatch_worker" => {
+                let task = d["subject"]["task"].as_str().unwrap().to_string();
+                let round = d["round"]["current"].as_u64().unwrap();
+                h.write_file(&format!("src/{task}_r{round}.txt"), "work\n");
+                let reqs = d["subject"]["requirements"].clone();
+                h.ctl_in(
+                    &[
+                        "ctl",
+                        "task",
+                        "record-handoff",
+                        "--run",
+                        run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
+                    &json!({ "task": task, "round": round, "summary": "did it",
+                             "requirements_claimed": reqs }),
+                );
+            }
+            "dispatch_verifier" => {
+                let reqs: Vec<String> = d["subject"]["requirements"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect();
+                let mut updates = Vec::new();
+                for r in &reqs {
+                    let ev = h.ctl_in(
+                        &[
+                            "ctl", "evidence", "record", "--run", run, "--input", "-", "--json",
+                        ],
+                        &json!({ "requirement": r, "kind": "review", "collected_by": "v" }),
+                    );
+                    updates.push(json!({ "requirement": r, "status": "passed",
+                                         "evidence": [ev["id"]] }));
+                }
+                h.ctl_in(
+                    &[
+                        "ctl",
+                        "requirement",
+                        "set-status",
+                        "--run",
+                        run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
+                    &json!({ "updates": updates }),
+                );
+            }
+            _ => return d,
+        }
+    }
+    panic!("loop did not terminate");
+}
