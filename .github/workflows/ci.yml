@@ -17,7 +17,12 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      # Nightly is needed only for rustfmt's unstable options (see .rustfmt.toml).
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      # Stable is installed last, so it is the default toolchain for build/clippy/test.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -27,7 +32,7 @@ jobs:
           git config --global user.email ci@speccy.local
           git config --global user.name CI
       - name: Format
-        run: cargo fmt --all --check
+        run: cargo +nightly fmt --all --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Test

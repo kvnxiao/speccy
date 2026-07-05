@@ -1,0 +1,34 @@
+[package]
+name = "speccy-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Command-line surface for the Speccy run controller"
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+default-run = "speccy"
+
+[[bin]]
+name = "speccy"
+path = "src/main.rs"
+
+[dependencies]
+speccy-core.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+jiff.workspace = true
+camino.workspace = true
+fs-err.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+insta.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

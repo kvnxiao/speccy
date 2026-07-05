@@ -2,3 +2,11 @@
 # `.unwrap()` is denied even in tests so failures carry a descriptive
 # message via `.expect(...)`.
 allow-expect-in-tests = true
+
+# A test that hits an unexpected state should fail loudly. `panic!` and
+# indexing/slicing panics are the idiomatic way tests assert, so they are
+# allowed in `#[test]` fns and `#[cfg(test)]` modules. These carve-outs do
+# NOT reach integration-test *helper* functions (clippy sees those as
+# non-test code); helpers use a file-level `#![expect(...)]` with a reason.
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

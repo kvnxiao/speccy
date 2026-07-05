@@ -1,0 +1,36 @@
+[package]
+name = "speccy-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic core for the Speccy run controller"
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+name = "speccy_core"
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+jiff.workspace = true
+ulid.workspace = true
+fs4.workspace = true
+minijinja.workspace = true
+rust-embed.workspace = true
+similar.workspace = true
+camino.workspace = true
+fs-err.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
