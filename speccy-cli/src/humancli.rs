@@ -2,6 +2,7 @@
 //! the controller machinery: no directives, leases, run IDs, or ctl operations
 //! on the card. M1 ships `status` and `review`; the rest arrive at M3.
 
+use crate::style;
 use serde_json::json;
 use speccy_core::config::ProjectConfig;
 use speccy_core::error::Result;
@@ -96,7 +97,11 @@ pub fn review(
         }
         RunState::Submitted => close_out_card(&spec, &run),
         RunState::Landed => accepted_summary(&spec, &run),
-        RunState::Cancelled => format!("{}  {} — run cancelled", run.spec_ref, title_of(&spec)),
+        RunState::Cancelled => format!(
+            "{}  {} — run cancelled",
+            style::paint(style::SPEC_REF, &run.spec_ref),
+            title_of(&spec)
+        ),
         _ => status_card(store, &spec, &run),
     };
     if evidence {
@@ -202,8 +207,11 @@ pub fn list(
         });
     }
     let mut out = match query {
-        Some(q) => format!("Specs matching \"{q}\":\n\n"),
-        None => String::from("Active specs:\n\n"),
+        Some(q) => format!(
+            "{}\n\n",
+            style::paint(style::HEADER, &format!("Specs matching \"{q}\":"))
+        ),
+        None => format!("{}\n\n", style::paint(style::HEADER, "Active specs:")),
     };
     for (i, s) in rows.iter().enumerate() {
         // writing to a String is infallible
@@ -211,13 +219,20 @@ pub fn list(
             out,
             "{}  {}  {}   {}",
             i + 1,
-            s.spec_ref,
+            style::paint(style::SPEC_REF, &s.spec_ref),
             title_of(s),
-            spec_status_str(s.status)
+            style::paint(
+                style::spec_status_style(s.status),
+                spec_status_str(s.status)
+            )
         );
     }
     if let Some(first) = rows.first() {
-        _ = write!(out, "\nUse: speccy review {}", first.spec_ref);
+        _ = write!(
+            out,
+            "\nUse: speccy review {}",
+            style::paint(style::SPEC_REF, &first.spec_ref)
+        );
     }
     Ok(out)
 }
@@ -271,7 +286,10 @@ pub fn accept(
     }
     let Some((run_id, run)) = submitted.into_iter().next() else {
         if already_landed {
-            return Ok(format!("{}  already recorded as landed.", spec.spec_ref));
+            return Ok(format!(
+                "{}  already recorded as landed.",
+                style::paint(style::SPEC_REF, &spec.spec_ref)
+            ));
         }
         return Err(SpeccyError::not_found("no submitted run to accept"));
     };
@@ -313,7 +331,12 @@ pub fn accept(
         },
     )?;
 
-    _ = writeln!(out, "\nRecorded: {}  {}", spec.spec_ref, title_of(&spec));
+    _ = writeln!(
+        out,
+        "\nRecorded: {}  {}",
+        style::paint(style::SPEC_REF, &spec.spec_ref),
+        title_of(&spec)
+    );
     out.push_str("  run  submitted -> landed\n  spec approved  -> accepted\n");
     out.push_str("Accepted specs leave default status/list output. Show them with:\n");
     out.push_str("  speccy list --accepted");
@@ -340,7 +363,7 @@ pub fn archive(store: &Store, selector: Option<&str>) -> Result<String> {
     )?;
     Ok(format!(
         "Archived {}. It leaves accepted-spec lists; its carry-forward decisions stay recorded.",
-        spec.spec_ref
+        style::paint(style::SPEC_REF, &spec.spec_ref)
     ))
 }
 
@@ -384,12 +407,12 @@ pub fn cancel(store: &Store, selector: Option<&str>) -> Result<String> {
     if cancelled_run {
         Ok(format!(
             "Cancelled {} and its active run. Recorded as a spec decision.",
-            spec.spec_ref
+            style::paint(style::SPEC_REF, &spec.spec_ref)
         ))
     } else {
         Ok(format!(
             "Cancelled {}. Recorded as a spec decision.",
-            spec.spec_ref
+            style::paint(style::SPEC_REF, &spec.spec_ref)
         ))
     }
 }
@@ -422,8 +445,9 @@ pub fn new_spec(store: &Store, request: &str, title: Option<&str>) -> Result<Str
         },
     )?;
     let title_str = title.unwrap_or(request);
+    let painted_ref = style::paint(style::SPEC_REF, &spec_ref);
     Ok(format!(
-        "Created draft spec {spec_ref} \"{title_str}\".\nNext: open your harness and run /speccy-plan {spec_ref}"
+        "Created draft spec {painted_ref} \"{title_str}\".\nNext: open your harness and run /speccy-plan {spec_ref}"
     ))
 }
 
@@ -488,9 +512,9 @@ fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
     );
     let mut card = format!(
         "{}  {}          Risk: {}\n",
-        run.spec_ref,
+        style::paint(style::SPEC_REF, &run.spec_ref),
         title_of(spec),
-        run.risk.as_str()
+        style::paint(style::risk_style(run.risk), run.risk.as_str())
     );
     match run.state {
         RunState::Implementing | RunState::Verifying if is_interrupted(store, run) => {
@@ -499,14 +523,19 @@ fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
         RunState::Implementing | RunState::Verifying => {
             let (label, context) = active_context(run, repair_max);
             _ = writeln!(card, "  {label} — {context}");
-            card.push_str("  · autonomous, nothing needed\n");
+            _ = writeln!(
+                card,
+                "{}",
+                style::paint(style::DIM, "  · autonomous, nothing needed")
+            );
             if let Some(secs) = age_seconds(run) {
                 let activity = run.last_event_label.as_deref().unwrap_or("");
-                if activity.is_empty() {
-                    _ = writeln!(card, "  Last activity {}", humanize_age(secs));
+                let line = if activity.is_empty() {
+                    format!("  Last activity {}", humanize_age(secs))
                 } else {
-                    _ = writeln!(card, "  Last activity {} — {activity}", humanize_age(secs));
-                }
+                    format!("  Last activity {} — {activity}", humanize_age(secs))
+                };
+                _ = writeln!(card, "{}", style::paint(style::DIM, &line));
             }
         }
         RunState::Verified => {
@@ -516,11 +545,19 @@ fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
             } else {
                 String::new()
             };
-            _ = writeln!(card, "  Ready to ship{suffix}");
+            _ = writeln!(
+                card,
+                "  {}{suffix}",
+                style::paint(style::OK, "Ready to ship")
+            );
             card.push_str("  Next: /speccy-ship\n");
         }
         RunState::Escalated => {
-            card.push_str("  Needs you — a requirement could not be proven\n");
+            _ = writeln!(
+                card,
+                "  {} — a requirement could not be proven",
+                style::paint(style::WARN, "Needs you")
+            );
             card.push_str("  Next: speccy review\n");
         }
         RunState::Submitted => {
@@ -565,7 +602,10 @@ fn interrupted_lines(store: &Store, run: &RunProjection) -> String {
         |c| c.caps.task_repair_rounds,
     );
     let (label, context) = active_context(run, repair_max);
-    let mut out = format!("  Interrupted — session died during {label} \"{context}\"\n");
+    let mut out = format!(
+        "  {} — session died during {label} \"{context}\"\n",
+        style::paint(style::WARN, "Interrupted")
+    );
     if let Some(task) = run.active_task()
         && let Some(base) = &task.baseline_commit
         && let Ok(diff) = speccy_core::gitx::worktree_stat(&store.git_root, base)
@@ -589,23 +629,28 @@ fn spec_card(spec: &SpecState) -> String {
     let Some(rev) = spec.latest_revision() else {
         return format!(
             "{}  {} — draft (no content yet)",
-            spec.spec_ref,
+            style::paint(style::SPEC_REF, &spec.spec_ref),
             title_of(spec)
         );
     };
     let draft = &rev.draft;
+    let risk_str = draft.risk.as_deref().unwrap_or("?");
+    let painted_risk = match speccy_core::model::RiskTier::parse(risk_str) {
+        Some(tier) => style::paint(style::risk_style(tier), risk_str),
+        None => risk_str.to_string(),
+    };
     let mut out = format!(
         "Spec: {}  {}          Risk: {}\n",
-        spec.spec_ref,
+        style::paint(style::SPEC_REF, &spec.spec_ref),
         title_of(spec),
-        draft.risk.as_deref().unwrap_or("?")
+        painted_risk
     );
-    let status = if rev.approved {
-        "approved"
+    let (status, status_style) = if rev.approved {
+        ("approved", style::OK)
     } else {
-        "draft — approve to start"
+        ("draft — approve to start", style::DIM)
     };
-    _ = writeln!(out, "Status: {status}");
+    _ = writeln!(out, "Status: {}", style::paint(status_style, status));
     out.push('\n');
     if let Some(goal) = &draft.goal {
         _ = writeln!(out, "Goal: {goal}");
@@ -619,7 +664,7 @@ fn spec_card(spec: &SpecState) -> String {
         }
     }
     if !draft.requirements().is_empty() {
-        out.push_str("\nAcceptance\n");
+        _ = writeln!(out, "\n{}", style::paint(style::HEADER, "Acceptance"));
         for r in draft.requirements() {
             _ = writeln!(
                 out,
@@ -630,7 +675,7 @@ fn spec_card(spec: &SpecState) -> String {
     }
     let commands = command_evidence_strings(draft);
     if !commands.is_empty() {
-        out.push_str("\nCommands\n");
+        _ = writeln!(out, "\n{}", style::paint(style::HEADER, "Commands"));
         for command in commands {
             _ = writeln!(out, "- {command}");
         }
@@ -661,26 +706,35 @@ fn close_out_card(spec: &SpecState, run: &RunProjection) -> String {
         .unwrap_or_default();
     format!(
         "{}  {}\nAwaiting merge — {}\nAfter it merges, record it with: speccy accept",
-        run.spec_ref,
+        style::paint(style::SPEC_REF, &run.spec_ref),
         title_of(spec),
         pr
     )
 }
 
 fn accepted_summary(spec: &SpecState, run: &RunProjection) -> String {
-    format!("{}  {} — landed", run.spec_ref, title_of(spec))
+    format!(
+        "{}  {} — {}",
+        style::paint(style::SPEC_REF, &run.spec_ref),
+        title_of(spec),
+        style::paint(style::OK, "landed")
+    )
 }
 
 fn evidence_drilldown(run: &RunProjection) -> String {
-    let mut out = String::from("Ledger\n");
+    let mut out = format!("{}\n", style::paint(style::HEADER, "Ledger"));
     for (id, r) in &run.requirements {
-        _ = writeln!(out, "  {id}  {}", req_status_str(r.status));
+        _ = writeln!(
+            out,
+            "  {id}  {}",
+            style::paint(style::req_status_style(r.status), req_status_str(r.status))
+        );
         if let Some(rr) = &r.residual_risk {
             _ = writeln!(out, "      residual risk: {rr}");
         }
     }
     if !run.findings.is_empty() {
-        out.push_str("\nFindings\n");
+        _ = writeln!(out, "\n{}", style::paint(style::HEADER, "Findings"));
         for (_, f) in &run.findings {
             _ = writeln!(out, "  [{}] {}", f.severity, f.note);
         }

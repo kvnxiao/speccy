@@ -251,10 +251,10 @@ Practical meaning:
 
 - Acceptance linting, evidence capture, evidence recording, and requirement status updates should be internal controller operations, not public SDLC-shaped CLI commands.
 - Verification is a phase of `/speccy-implement`, not a separate entry skill. It runs as the internal verifier role inside the implement loop.
-- The verifier role calls Speccy controller tools such as `packet verification`, `evidence collect`, `evidence record`, `finding record`, and `requirement set-status`.
+- The `/speccy-implement` loop fetches `packet verification`, dispatches the verifier role, and records the verifier's returned status payload through `requirement set-status` with the live run lease.
 - For `kind: command`, the controller is the collector: `evidence collect` executes the declared command and records exit code/stdout/stderr/hash itself, and `evidence record` rejects agent-supplied output for that kind. The verifier still decides when to collect and judges adequacy; it never transcribes command results.
 - The verifier role is responsible for collecting evidence, interpreting semantic scenario prose, reviewing evidence adequacy, and performing adversarial vacuity review.
-- The verifier role should call Speccy tools to fetch scoped acceptance packets, collect command/test/diff evidence when useful, record evidence, and write structured reviewer findings.
+- The verifier role should call Speccy tools to collect command/test/diff evidence when useful, record evidence, and write structured reviewer findings. It should not take the run lease; aggregation and status writes stay with the lease-holding loop driver.
 - For minimal- and standard-risk specs, verification should usually mean "check the ledger, run declared commands, review the diff, and record residual risk." It should not manufacture a heavy process because a small task entered Speccy.
 
 So the normal flow is:
@@ -1621,10 +1621,10 @@ Implementation is a serial task execution loop. Each task gets its own implement
 2. Harness worker receives a task packet scoped to linked requirements, expected files/areas, evidence requests, and known constraints.
 3. Worker implements only that task.
 4. Worker returns a handoff.
-5. The configured reviewer personas fan out fresh-context over the handoff, diff, commands, and linked requirement evidence (see "Reviewer Personas"); the orchestrating verifier aggregates their findings.
+5. The configured reviewer personas fan out fresh-context over the handoff, diff, commands, and linked requirement evidence (see "Reviewer Personas"); the verifier aggregates their findings and returns status updates.
 6. The task verifier collects evidence for linked requirements, using Speccy evidence tools when useful.
 7. The verifier handles semantic review and evidence adequacy review at the depth required by the risk tier.
-8. Acceptance statuses update from collected evidence plus structured verifier findings.
+8. The lease-holding loop driver records acceptance statuses from collected evidence plus structured verifier findings.
 9. Failed task-linked items create task-scoped repair rounds up to the tier's cap. Blocked items never enter repair — rounds cannot manufacture missing environment or evidence — and escalate directly as a human/policy gate.
 10. The scheduler advances only after the task is `integrated`.
 

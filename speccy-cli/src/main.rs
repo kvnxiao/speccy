@@ -16,6 +16,7 @@ use std::process::ExitCode;
 mod cli;
 mod humancli;
 mod ops;
+mod style;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -59,7 +60,10 @@ fn main() -> ExitCode {
             humancli::export_review(store, args.selector.as_deref(), args.dest.as_deref())
         }),
         Command::Export(_) => {
-            eprintln!("speccy: export spec / run-bundle arrive in a later milestone");
+            anstream::eprintln!(
+                "{} export spec / run-bundle arrive in a later milestone",
+                style::paint(style::ERR, "speccy:")
+            );
             ExitCode::FAILURE
         }
         Command::Install(args) => install(&args),
@@ -81,31 +85,35 @@ fn install(args: &crate::cli::InstallArgs) -> ExitCode {
     let cwd = match std::env::current_dir() {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("speccy: {e}");
+            anstream::eprintln!("{} {e}", style::paint(style::ERR, "speccy:"));
             return ExitCode::FAILURE;
         }
     };
     let cwd = match camino::Utf8PathBuf::from_path_buf(cwd) {
         Ok(d) => d,
         Err(p) => {
-            eprintln!("speccy: current directory {} is not UTF-8", p.display());
+            anstream::eprintln!(
+                "{} current directory {} is not UTF-8",
+                style::paint(style::ERR, "speccy:"),
+                p.display()
+            );
             return ExitCode::FAILURE;
         }
     };
     let repo_root = match speccy_core::gitx::toplevel(&cwd) {
         Ok(root) => root,
         Err(e) => {
-            eprintln!("speccy: {}", e.message);
+            anstream::eprintln!("{} {}", style::paint(style::ERR, "speccy:"), e.message);
             return ExitCode::FAILURE;
         }
     };
     match run(&repo_root, &opts) {
         Ok(report) => {
-            println!("{report}");
+            anstream::println!("{report}");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("speccy: {}", e.message);
+            anstream::eprintln!("{} {}", style::paint(style::ERR, "speccy:"), e.message);
             ExitCode::FAILURE
         }
     }
@@ -119,11 +127,11 @@ where
     let result = Store::open().and_then(|store| render(&store));
     match result {
         Ok(text) => {
-            println!("{text}");
+            anstream::println!("{text}");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("speccy: {}", e.message);
+            anstream::eprintln!("{} {}", style::paint(style::ERR, "speccy:"), e.message);
             ExitCode::FAILURE
         }
     }
@@ -153,18 +161,27 @@ fn doctor() -> ExitCode {
     let mut ok = true;
 
     if let Some(v) = speccy_core::gitx::version() {
-        println!("git    OK  ({v})");
+        anstream::println!("git    {}  ({v})", style::paint(style::OK, "OK"));
     } else {
-        println!("git    MISSING — install git");
+        anstream::println!(
+            "git    {} — install git",
+            style::paint(style::ERR, "MISSING")
+        );
         ok = false;
     }
 
     match Store::open() {
-        Ok(store) => println!(
-            "store  OK  ({} writable; workspace {})",
-            store.home, store.workspace_id
+        Ok(store) => anstream::println!(
+            "store  {}  ({} writable; workspace {})",
+            style::paint(style::OK, "OK"),
+            store.home,
+            store.workspace_id
         ),
-        Err(e) => println!("store  WARN  ({})", e.message),
+        Err(e) => anstream::println!(
+            "store  {}  ({})",
+            style::paint(style::WARN, "WARN"),
+            e.message
+        ),
     }
 
     let cwd = std::env::current_dir()
@@ -182,15 +199,25 @@ fn doctor() -> ExitCode {
                 force: false,
             };
             match run(&root, &opts) {
-                Ok(msg) => println!("packs  OK  ({msg})"),
+                Ok(msg) => anstream::println!("packs  {}  ({msg})", style::paint(style::OK, "OK")),
                 Err(e) => {
-                    println!("packs  DRIFT  ({})", e.message.lines().next().unwrap_or(""));
+                    anstream::println!(
+                        "packs  {}  ({})",
+                        style::paint(style::ERR, "DRIFT"),
+                        e.message.lines().next().unwrap_or("")
+                    );
                     ok = false;
                 }
             }
         }
-        Ok(_) => println!("packs  none (run `speccy install`)"),
-        Err(_) => println!("packs  n/a  (not in a git repository)"),
+        Ok(_) => anstream::println!(
+            "packs  {} (run `speccy install`)",
+            style::paint(style::DIM, "none")
+        ),
+        Err(_) => anstream::println!(
+            "packs  {}  (not in a git repository)",
+            style::paint(style::DIM, "n/a")
+        ),
     }
 
     if ok {

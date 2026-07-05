@@ -1,0 +1,21 @@
+---
+name: speccy-brainstorm
+description: Optional read-only exploration that inspects the repo, sketches options, rates scope, and returns a brainstorm handoff with a recommended route. It never drafts a spec or calls the controller.
+---
+
+# /speccy-brainstorm
+
+Read-only. Makes **no** controller calls. Inspect the codebase, sketch candidate
+approaches, list open questions, and identify possible splits.
+
+Rate the request before recommending a route:
+
+- size: tiny | small | medium | large | initiative
+- **evidence-ability first** — can the result be validated? Low evidence-ability
+  routes away from a Speccy spec even for large work.
+- recommended route + a short reason.
+
+End with a brainstorm handoff and one recommended route: direct edit, regular
+harness planning (/plan), a Speccy spec (/speccy-plan), or
+split into multiple specs. The handoff is ephemeral chat context; it is
+persisted only if /speccy-plan promotes it.

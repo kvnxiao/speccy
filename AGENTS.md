@@ -27,14 +27,14 @@ cargo insta review                                       # accept/reject golden 
 
 CI runs fmt + clippy + `cargo test --all` on Linux, macOS, and Windows. Git-backed tests need a git identity configured.
 
-**Snapshot tests** (`insta`) live in `speccy-cli/tests/snapshots/*.snap` and cover rendered pack files for both harness targets. Changing a template under `speccy-core/templates/` will fail these until you review with `cargo insta review` and commit the updated `.snap`.
+**Snapshot tests** (`insta`) live in `speccy-cli/tests/snapshots/*.snap` and cover rendered pack files for both harness targets. Changing a template under `speccy-core/templates/skills/` or `speccy-core/templates/agents/` will fail these until you review with `cargo insta review` and commit the updated `.snap`.
 
 ## Architecture
 
 Two layers by design (`PRINCIPLES.md`, DESIGN § Architecture), split across the two workspace crates:
 
 1. **Deterministic core** (the `speccy-core` crate) — state machines, gates, scheduling, evidence bookkeeping, git snapshots. All code.
-2. **Prose layer** — role behavior and review rubrics, authored as `templates/*.j2` and rendered into repo-local harness packs the harness executes. Editable prose, not code.
+2. **Prose layer** — role behavior and review rubrics, authored as `templates/skills/*.j2` and `templates/agents/*.j2`, then rendered into repo-local harness packs the harness executes. Editable prose, not code.
 
 ### The loop is one operation
 

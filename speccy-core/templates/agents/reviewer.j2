@@ -9,7 +9,10 @@ requirements. Record structured findings with
 `{{ controller.cmd }} finding record` — severity is one of blocking | advisory |
 positive | uncertain; set the `persona` field to `{{ persona.name }}`. Confirm
 that any prior blocking findings of yours are actually resolved this round. You
-may collect or record evidence, but you never take the run lease.
+may collect or record evidence, but you never take the run lease. For
+`kind: command`, use `{{ controller.cmd }} evidence collect`; never paste
+command output. Use `evidence record` only for non-command evidence; browser/api
+at high/critical need a stored artifact.
 {%- endset -%}
 {% if target.harness == "codex" -%}
 name = "speccy-reviewer-{{ persona.name | toml_escape }}"

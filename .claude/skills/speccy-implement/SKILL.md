@@ -8,11 +8,11 @@ description: Run an approved spec revision to verified — serial task implement
 Runs against an approved spec revision (inferred when unambiguous). A fresh,
 cleared session is recommended. Exits early unless the revision is `approved`.
 
-1. `{{ controller.cmd }} spec status --spec <ref> --json` — confirm `approved`.
-2. `{{ controller.cmd }} run start --spec <ref> --revision <rev> --json` — refuses
+1. `speccy ctl spec status --spec <ref> --json` — confirm `approved`.
+2. `speccy ctl run start --spec <ref> --revision <rev> --json` — refuses
    a dirty worktree; creates the run branch and task graph.
 3. Drive the loop. Repeat: call
-   `{{ controller.cmd }} run next --run <id> --agent {{ target.harness }}:<session> --json`,
+   `speccy ctl run next --run <id> --agent claude:<session> --json`,
    perform the directive's `packet_with`, dispatch the named subagent, record the
    outcome through `record_with`, then call `run next` again.
 

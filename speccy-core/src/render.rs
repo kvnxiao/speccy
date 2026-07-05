@@ -79,12 +79,12 @@ pub fn render_pack(target: Harness, config: &ProjectConfig) -> Result<Vec<Manage
     let mut files = Vec::new();
 
     for name in SKILLS {
-        let template_id = format!("skill-{name}.j2");
+        let template_id = format!("skills/{name}.j2");
         let ctx = base_context(target);
         files.push(managed(&env, skill_path(target, name), template_id, ctx)?);
     }
     for role in ROLES {
-        let template_id = format!("agent-{role}.j2");
+        let template_id = format!("agents/{role}.j2");
         let ctx = base_context(target);
         files.push(managed(&env, agent_path(target, role), template_id, ctx)?);
     }
@@ -108,7 +108,7 @@ pub fn render_pack(target: Harness, config: &ProjectConfig) -> Result<Vec<Manage
         files.push(managed(
             &env,
             reviewer_path(target, &persona.name),
-            "agent-reviewer.j2".to_string(),
+            "agents/reviewer.j2".to_string(),
             ctx,
         )?);
     }

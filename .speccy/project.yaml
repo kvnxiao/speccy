@@ -1,0 +1,20 @@
+risk_default: standard
+caps:
+  task_repair_rounds: 3
+  run_review_rounds: 3
+  structured_output_retries: 3
+  max_tasks: null
+  max_run_wall_clock_minutes: null
+evidence:
+  command_timeout_seconds: 600
+  command_output_max_bytes: 1048576
+  command_policy:
+    allow: []
+review:
+  personas:
+    - name: spec-fidelity
+    - name: defects
+    - name: security
+    - name: style
+provenance:
+  extra_terms: []

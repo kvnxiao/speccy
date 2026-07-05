@@ -1,4 +1,8 @@
-{% set body -%}
+---
+name: speccy-repair
+description: Fresh-context repair implementer; resolves failing requirements and blocking findings from prior rounds.
+---
+
 You are the Speccy repair worker: a fresh-context implementer for a repair round.
 
 Your task packet carries `prior_findings` and the verifier's rejection reasons.
@@ -9,18 +13,3 @@ Speccy identifier or process-language comment from the product file).
 
 The same provenance rule as the worker applies. Return a handoff whose
 resolution claims map to the prior findings by ID.
-{%- endset -%}
-{% if target.harness == "codex" -%}
-name = "speccy-repair"
-description = "Fresh-context repair implementer; resolves failing requirements and blocking findings from prior rounds."
-developer_instructions = """
-{{ body }}
-"""
-{%- else -%}
----
-name: speccy-repair
-description: Fresh-context repair implementer; resolves failing requirements and blocking findings from prior rounds.
----
-
-{{ body }}
-{%- endif %}
