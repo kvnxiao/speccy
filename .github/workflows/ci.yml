@@ -27,13 +27,12 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - name: Configure git identity (for git-backed tests)
         run: |
           git config --global user.email ci@speccy.local
           git config --global user.name CI
-      - name: Format
-        run: cargo +nightly fmt --all --check
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --all
+      - name: CI gate (fmt + clippy + test)
+        run: just ci

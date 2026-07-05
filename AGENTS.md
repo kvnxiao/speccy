@@ -15,19 +15,23 @@ Two invariants constrain every change. Break either and the design is violated:
 
 This is a Cargo **workspace** with two member crates: `speccy-core` (deterministic library) and `speccy-cli` (the `speccy` binary). Integration tests live under `speccy-cli/tests/`.
 
+Recipes live in the `justfile`; run `just` (no args) to list them. The two ad-hoc single-test commands stay as raw `cargo`.
+
 ```bash
-cargo build                                              # whole workspace
-cargo test --all                                         # unit + integration
+just build                                               # whole workspace
+just install                                             # install the speccy binary (--locked)
+just test                                                # unit + integration
 cargo test -p speccy-cli --test e2e                      # one integration test file
 cargo test -p speccy-cli --test hardening golden_all_managed_files  # one test by name
-cargo clippy --all-targets -- -D warnings                # CI gate; warnings are errors
-cargo +nightly fmt --all --check                         # CI gate (nightly rustfmt)
-cargo insta review                                       # accept/reject golden snapshot changes
+just lint                                                # CI gate: fmt --check + clippy (warnings are errors)
+just fmt                                                 # apply nightly rustfmt
+just insta                                               # accept/reject golden snapshot changes
+just ci                                                  # full CI gate: lint + test
 ```
 
-CI runs fmt + clippy + `cargo test --all` on Linux, macOS, and Windows. Git-backed tests need a git identity configured.
+CI runs `just ci` (fmt --check + clippy + `cargo test --all`) on Linux, macOS, and Windows. Git-backed tests need a git identity configured.
 
-**Snapshot tests** (`insta`) live in `speccy-cli/tests/snapshots/*.snap` and cover rendered pack files for both harness targets. Changing a template under `speccy-core/templates/skills/` or `speccy-core/templates/agents/` will fail these until you review with `cargo insta review` and commit the updated `.snap`.
+**Snapshot tests** (`insta`) live in `speccy-cli/tests/snapshots/*.snap` and cover rendered pack files for both harness targets. Changing a template under `speccy-core/templates/skills/` or `speccy-core/templates/agents/` will fail these until you review with `just insta` and commit the updated `.snap`.
 
 ## Architecture
 
