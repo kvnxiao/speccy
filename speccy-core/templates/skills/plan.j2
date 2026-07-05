@@ -28,12 +28,19 @@ overrides.
 2. `{{ controller.cmd }} packet planning --spec <ref> --json` — a deterministic
    work order. Inspect the repo read-only; reconcile prior-context candidates
    against the current code (flag drift, don't carry stale requirements).
-3. Draft ONE complete candidate revision and submit it with
+3. Read `references/spec-quality.md`, then draft ONE complete candidate revision
+   and submit it with
    `{{ controller.cmd }} spec record-draft --spec <ref> --input spec-draft.json --json`.
    Repair lint findings with focused `spec patch-draft` calls.
-4. Present a compact spec card: goal, in/out scope, plan, acceptance statements,
-   the `kind: command` strings the controller will run, prior context carried
-   forward, and main risks. Use {{ names.question_tool }} for a structured choice.
+4. After controller lint is clean, run the semantic self-review in
+   `references/spec-quality.md`. Patch any placeholders, contradictions,
+   hidden scope, weak evidence, stale prior context, or code-answerable open
+   questions before approval.
+5. Read `references/spec-card-example.md`, then present a compact spec card:
+   goal, in/out scope, plan, acceptance statements, the `kind: command` strings
+   the controller will run, prior context carried forward, open questions with
+   recommended answers, and main risks. Use {{ names.question_tool }} for a
+   structured choice.
 
 ## Approval (the prose gate)
 

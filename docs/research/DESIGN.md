@@ -916,6 +916,13 @@ The install command should be idempotent:
 
 Both packs ship the same entry skills, listed in "Harness Skills", plus internal role prompts. The entry skills are the primary human-invoked surface; the role prompts and subagent definitions are dispatched by the `/speccy-plan` and `/speccy-implement` loops, not invoked directly.
 
+The `/speccy-plan` skill also installs a small `references/` directory beside
+the skill. These managed reference files are progressive-disclosure prompt
+material, not controller state: the planning skill and planner role read them
+only when drafting, semantically self-reviewing, or presenting the approval
+card. They carry examples and quality standards that would otherwise bloat the
+always-loaded skill prompt.
+
 Codex install pack (paths verified against Codex docs, 2026-07-03):
 
 - Entry skills at `.agents/skills/speccy-*/SKILL.md` — the Agent Skills
@@ -1602,16 +1609,17 @@ Planning is the `/speccy-plan` skill. It runs after an optional `/speccy-brainst
 7. The planner reconciles relevant prior specs and decisions against the current codebase, carrying forward only constraints that still appear valid and flagging stale, obsolete, contradicted, or superseded context.
 8. The planner classifies task risk and creates a complete candidate spec draft with goal, non-goals, scope, assumptions, acceptance requirements, expected evidence, and open questions.
 9. Speccy structurally lints the draft. The harness repairs missing or invalid sections through focused draft patches rather than section-by-section append commands.
-10. Human approval is requested through a compact spec card: goal, scope, non-goals, plan summary, key requirements, prior context carried forward, open questions, and main risks. The full spec and ledger are available on request.
-11. The planner creates only as much design/task detail as the request needs.
-12. Each acceptance requirement gets at least one evidence request; structural
+10. After structural lint is clean, the harness runs a semantic self-review against the installed planning reference: placeholders and vague language, contradictions, hidden scope, stale prior context, weak evidence, task/requirement coverage, risk-tier evidence depth, and open questions that the repo could have answered. Fixes are recorded as draft patches before the approval card.
+11. Human approval is requested through a compact spec card: goal, scope, non-goals, plan summary, key requirements, prior context carried forward, open questions with recommended answers, and main risks. The full spec and ledger are available on request.
+12. The planner creates only as much design/task detail as the request needs.
+13. Each acceptance requirement gets at least one evidence request; structural
    lint flags any requirement without one and approval is refused while the
    draft is lint-dirty. `blocked` and `waived` are runtime outcomes, never
    planned statuses. Manual human judgment is recorded as evidence or as a
    waiver/review-passed decision, not as its own requirement status.
-13. Higher-risk work stays in the same ledger but requires stronger evidence, such as negative cases, positive cases, pre-fix failure, fresh-context review, or human approval.
-14. Fresh-context adversarial review is required when new tests or review-only evidence carry an important acceptance decision.
-15. The human approves the spec card in prose for every spec; `/speccy-plan` records the approval through the controller, moving the revision to `approved`. `/speccy-implement` exits early until that approval exists.
+14. Higher-risk work stays in the same ledger but requires stronger evidence, such as negative cases, positive cases, pre-fix failure, fresh-context review, or human approval.
+15. Fresh-context adversarial review is required when new tests or review-only evidence carry an important acceptance decision.
+16. The human approves the spec card in prose for every spec; `/speccy-plan` records the approval through the controller, moving the revision to `approved`. `/speccy-implement` exits early until that approval exists.
 
 ### Implementation Phase
 

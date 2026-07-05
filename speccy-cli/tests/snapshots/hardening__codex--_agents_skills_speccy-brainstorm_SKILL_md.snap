@@ -1,5 +1,5 @@
 ---
-source: tests/hardening.rs
+source: speccy-cli/tests/hardening.rs
 expression: f.contents
 ---
 ---
@@ -9,8 +9,17 @@ description: Optional read-only exploration that inspects the repo, sketches opt
 
 # /speccy-brainstorm
 
-Read-only. Makes **no** controller calls. Inspect the codebase, sketch candidate
-approaches, list open questions, and identify possible splits.
+Read-only. Makes **no** controller calls. Inspect the codebase, docs, and recent
+patterns before asking. If the repo can answer a question, answer it by
+inspection instead of asking the human.
+
+Work one decision branch at a time:
+
+- ask at most one clarifying question per message, only when it would change the
+  route or design
+- prefer concrete options, each with a recommended answer
+- sketch 2-3 candidate approaches or routes with tradeoffs before settling
+- flag oversized requests early and propose the first split worth specifying
 
 Rate the request before recommending a route:
 
@@ -23,3 +32,8 @@ End with a brainstorm handoff and one recommended route: direct edit, regular
 harness planning (/plan), a Speccy spec (/speccy-plan), or
 split into multiple specs. The handoff is ephemeral chat context; it is
 persisted only if /speccy-plan promotes it.
+
+The handoff should include: goal, important context found in the repo, candidate
+approaches considered, recommended route, open questions with your recommended
+answers, and any suggested split. Do not draft the Speccy spec here; /speccy-plan
+owns the deeper spec-quality references and approval card.

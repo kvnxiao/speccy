@@ -1,0 +1,74 @@
+---
+source: speccy-cli/tests/hardening.rs
+expression: f.contents
+---
+# Speccy Spec Card Example
+
+Read this before presenting the approval card. The card is the human decision
+surface: it should answer what changes, what does not change, how Speccy will
+know it worked, and what could go wrong.
+
+```text
+Spec: SPEC-20260630-A7F4  Passwordless login
+Risk: high
+Decision needed: approve this spec, or revise scope
+Reply:
+  go                 approve and start now
+  approve only       approve, but do not start
+  revise: <changes>  update the spec card
+  split: <guidance>  split into multiple specs
+  cancel             stop this draft
+
+Goal:
+Let users sign in through single-use magic links.
+
+In scope:
+- Request login link by email
+- Token expiry and replay protection
+- Expired-link UI state
+
+Out of scope:
+- OAuth
+- Admin session revocation
+- Email vendor migration
+
+Plan:
+1. Add token model and expiry checks.
+2. Add request/consume endpoints.
+3. Add UI states.
+4. Add tests and fresh-context verification.
+
+Acceptance:
+- A magic link can be requested by email.
+- A link is single-use.
+- Links expire after 15 minutes.
+- An expired link is rejected and creates no session.
+
+Will run (evidence commands):
+- npm test -- auth/magic-link
+- npm test -- auth/expiry
+- npm test -- ui/expired-link
+
+Open questions:
+- Staging email delivery is not available locally. Recommended answer: verify
+  local token creation in this run and leave live delivery as manual evidence.
+
+Prior context:
+- Carry forward prior decision to store magic-link tokens hashed.
+- Prior file paths appear stale; current auth code moved under src/server/auth.
+
+Main risks:
+- Email delivery may need staging or production validation.
+
+-- rev spec_rev_001-draft - requirements R-AUTH-001...004 - ledger/evidence: speccy review --evidence
+```
+
+## Card Rules
+
+- Lead with the recommended next action and canonical replies.
+- Show distinct `kind: command` evidence strings exactly as they will run.
+- Keep acceptance statements plain enough for a human to approve.
+- Mention open questions only when they must remain unresolved before approval;
+  include the recommended answer.
+- Collapse internal IDs into the footer except for the spec ref and command
+  strings the human is approving.

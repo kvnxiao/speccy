@@ -13,7 +13,7 @@ use rust_embed::RustEmbed;
 use serde_json::json;
 
 /// Current pack version (bumped when templates change).
-pub const PACK_VERSION: &str = "0.1.0";
+pub const PACK_VERSION: &str = "0.1.1";
 
 #[derive(RustEmbed)]
 #[folder = "templates/"]
@@ -61,6 +61,7 @@ pub struct ManagedFile {
 }
 
 const SKILLS: &[&str] = &["brainstorm", "plan", "implement", "ship"];
+const REFERENCES: &[&str] = &["spec-quality", "spec-card-example"];
 const ROLES: &[&str] = &["planner", "worker", "verifier", "repair"];
 
 /// The synthetic reviewer a `minimal`-risk run collapses to (DESIGN § Reviewer
@@ -82,6 +83,16 @@ pub fn render_pack(target: Harness, config: &ProjectConfig) -> Result<Vec<Manage
         let template_id = format!("skills/{name}.j2");
         let ctx = base_context(target);
         files.push(managed(&env, skill_path(target, name), template_id, ctx)?);
+    }
+    for name in REFERENCES {
+        let template_id = format!("references/{name}.md.j2");
+        let ctx = base_context(target);
+        files.push(managed(
+            &env,
+            reference_path(target, name),
+            template_id,
+            ctx,
+        )?);
     }
     for role in ROLES {
         let template_id = format!("agents/{role}.j2");
@@ -226,6 +237,13 @@ fn skill_path(target: Harness, name: &str) -> String {
     }
 }
 
+fn reference_path(target: Harness, name: &str) -> String {
+    match target {
+        Harness::Claude => format!(".claude/skills/speccy-plan/references/{name}.md"),
+        Harness::Codex => format!(".agents/skills/speccy-plan/references/{name}.md"),
+    }
+}
+
 fn agent_path(target: Harness, role: &str) -> String {
     match target {
         Harness::Claude => format!(".claude/agents/speccy-{role}.md"),
@@ -250,8 +268,9 @@ mod tests {
         for target in [Harness::Claude, Harness::Codex] {
             let files = render_pack(target, &config)
                 .expect("render_pack should succeed for a default config");
-            // 4 skills + 4 roles + 4 personas + the synthetic `combined` reviewer.
-            assert_eq!(files.len(), 13, "{target:?}");
+            // 4 skills + 2 references + 4 roles + 4 personas + the synthetic
+            // `combined` reviewer.
+            assert_eq!(files.len(), 15, "{target:?}");
             assert!(
                 files
                     .iter()
@@ -279,7 +298,8 @@ mod tests {
                 .iter()
                 .any(|f| f.path.contains("speccy-reviewer-perf"))
         );
-        // 4 skills + 4 roles + 5 personas + the synthetic `combined` reviewer.
-        assert_eq!(files.len(), 14);
+        // 4 skills + 2 references + 4 roles + 5 personas + the synthetic
+        // `combined` reviewer.
+        assert_eq!(files.len(), 16);
     }
 }
