@@ -656,9 +656,17 @@ Default roster:
 | Persona | Charter |
 | --- | --- |
 | `spec-fidelity` | Do the changes satisfy the linked requirements? Any scope drift? Is the evidence non-vacuous and adequate for the risk tier? |
-| `defects` | Implementation correctness independent of the spec text: logic errors, edge cases, error handling, concurrency, silent failures. |
+| `defects` | Implementation correctness independent of the spec text: logic errors, edge cases, error handling, concurrency/races, leaks, silent failures, and meaningful performance regressions. |
 | `security` | Injection, authn/authz, secret handling, unsafe defaults, dependency risk. |
-| `style` | Documented conventions (`CLAUDE.md`/`AGENTS.md`, lint configs), idioms and known gotchas for the languages and frameworks in use, and comment quality — including process-provenance leakage (see "Provenance Hygiene"). |
+| `style` | Documented conventions (`CLAUDE.md`/`AGENTS.md`, lint configs), idioms and known gotchas for the languages and frameworks in use, behavior-preserving simplification of touched code, and comment quality — including process-provenance leakage (see "Provenance Hygiene"). |
+
+Reviewer findings use a high-signal admission bar. A persona records a finding
+only when the issue is material, high-confidence, caused or exposed by the
+reviewed diff, and actionable. Low-confidence guesses, unrelated pre-existing
+issues, and stylistic preferences not grounded in project conventions are
+omitted rather than turned into review noise; `uncertain` is reserved for
+genuine human judgment gaps. Each `blocking` or `advisory` note should name the
+concrete failure mode or guideline violation and the smallest plausible fix.
 
 "Correctness" is deliberately split into `spec-fidelity` and `defects`:
 the two fail independently — a change can
@@ -667,6 +675,12 @@ combined prompt anchors on the ledger and under-hunts latent bugs. The split
 also lets the two lenses use different models. Further default splits
 (performance, test quality, docs) were rejected as roster bloat; teams add
 them as custom personas where the repo warrants it.
+
+A dedicated simplifier subagent is likewise rejected for the default pack. The
+worker and repair roles do a final, touched-diff cleanup pass before handoff,
+and the `style` persona can record simplification findings. Any resulting edit
+then flows through the normal repair and review loop, preserving the single
+writer path and fresh-context verification.
 
 The roster lives in `.speccy/project.yaml` (schema in "Harness-Native Install
 Packs") and is a render input: `speccy install` renders one subagent file per

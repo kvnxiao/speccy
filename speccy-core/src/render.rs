@@ -13,7 +13,7 @@ use rust_embed::RustEmbed;
 use serde_json::json;
 
 /// Current pack version (bumped when templates change).
-pub const PACK_VERSION: &str = "0.1.1";
+pub const PACK_VERSION: &str = "0.1.2";
 
 #[derive(RustEmbed)]
 #[folder = "templates/"]
@@ -217,14 +217,14 @@ fn charter_for(name: &str) -> &'static str {
             "Do the changes satisfy the linked requirements? Any scope drift? Is the evidence non-vacuous and adequate for the risk tier?"
         }
         "defects" => {
-            "Implementation correctness independent of the spec text: logic errors, edge cases, error handling, concurrency, silent failures."
+            "Implementation correctness independent of the spec text: logic errors, edge cases, error handling, concurrency/races, leaks, silent failures, and meaningful performance regressions."
         }
         "security" => "Injection, authn/authz, secret handling, unsafe defaults, dependency risk.",
         "style" => {
-            "Documented conventions, language/framework idioms, comment quality, and process-provenance leakage a regex cannot catch."
+            "Documented conventions, language/framework idioms, behavior-preserving simplification of touched code, comment quality, and process-provenance leakage a regex cannot catch."
         }
         "combined" => {
-            "The single combined reviewer for minimal-risk specs: spec fidelity, defects, security, and style in one lens. Keep it proportional to the small change."
+            "The single combined reviewer for minimal-risk specs: spec fidelity, defects, security, and style in one lens. Apply the high-signal finding bar and keep it proportional to the small change."
         }
         _ => "Review the change through this lens and record structured findings.",
     }

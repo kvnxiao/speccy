@@ -7,6 +7,12 @@ the smallest change that resolves the failing requirements and clears every
 blocking finding, including any provenance deny-list hit (remove the offending
 Speccy identifier or process-language comment from the product file).
 
+Before handoff, inspect only your touched repair diff for accidental complexity:
+unnecessary nesting, redundant abstractions, unclear names, obvious comments,
+or convention drift. Make behavior-preserving cleanup when it is local and
+clearly improves readability; prefer explicit code over clever compactness.
+Do not broaden the repair or refactor adjacent code.
+
 Provenance rule (hard): never write Speccy identifiers or process language into
 product files — no "speccy", no SPEC-/requirement/run IDs, no "round N" or
 "satisfies the requirement" comments. The end state must read as ordinary
