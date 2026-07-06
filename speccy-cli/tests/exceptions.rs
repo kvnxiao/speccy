@@ -104,6 +104,79 @@ fn claim_and_handoff(h: &Harness, run: &str, task: &str) -> String {
         .to_string()
 }
 
+/// Drive a single-task/single-requirement run through the task gate (R1 passed,
+/// T1 integrated) to the run-scope verifier; returns the lease there.
+fn to_run_gate(h: &Harness, run: &str) -> String {
+    let lease = claim_and_handoff(h, run, "T1");
+    let ev = h.ctl_in(
+        &[
+            "ctl", "evidence", "record", "--run", run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "kind": "review", "collected_by": "v" }),
+    );
+    h.ctl_in(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "passed", "evidence": [ev["id"]] }] }),
+    );
+    // T1 integrates; the next directive is the run-scope verifier.
+    let d = h.ctl(&["ctl", "run", "next", "--run", run, "--agent", "a", "--json"]);
+    assert_eq!(d["action"], json!("dispatch_verifier"), "{d}");
+    assert_eq!(d["round"]["scope"], json!("run"), "{d}");
+    d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string()
+}
+
+/// Set a single requirement's status under a live lease (test convenience).
+fn set_status(h: &Harness, run: &str, lease: &str, update: Value) {
+    h.ctl_in(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            run,
+            "--lease",
+            lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [update] }),
+    );
+}
+
+/// Record a run-scoped gate decision under a live lease (test convenience).
+fn gate_decision(h: &Harness, run: &str, lease: &str, decision: Value) -> Value {
+    h.ctl_in(
+        &[
+            "ctl",
+            "run",
+            "record-decision",
+            "--run",
+            run,
+            "--lease",
+            lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &decision,
+    )
+}
+
 #[test]
 fn amendment_supersede_cancels_the_parked_run_and_reuses_the_branch() {
     let h = Harness::new();
@@ -1053,4 +1126,328 @@ fn accepted_risk_gate_waits_until_all_requirements_resolved() {
         }
     }
     panic!("never reached the accepted-risk gate");
+}
+
+#[test]
+fn waiver_at_escalation_gate_completes_the_run_without_a_new_review_round() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Waive completes");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let lease = to_run_gate(&h, &run);
+    // Block R1 at the run gate → run-level escalation.
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "needs staging" }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    // Waive R1 → every requirement resolved; the run resumes to verifying.
+    let waived = gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "waive", "requirement": "R1",
+                "reason": "accept the gap", "residual_risk": "manual check pending" }),
+    );
+    assert_eq!(waived["run_state"], json!("verifying"), "{waived}");
+
+    // One `run next` completes to verified — no new review round is opened.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("ship_decision"), "{d}");
+
+    // Exactly one implementing→verifying transition ever recorded: the resume
+    // re-entered verifying without opening a round.
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events.jsonl present");
+    let entered = log
+        .matches("run_state_transitioned\",\"to\":\"verifying\"")
+        .count();
+    assert_eq!(entered, 1, "resume opened a new review round:\n{log}");
+}
+
+#[test]
+fn provide_setup_reopens_the_current_review_round() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Provide setup run gate");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let lease = to_run_gate(&h, &run);
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "needs staging" }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "provide_setup", "reason": "staging is up now" }),
+    );
+
+    // Resume re-opens the SAME review round (current 1), not a fresh round.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("dispatch_verifier"), "{d}");
+    assert_eq!(d["round"]["scope"], json!("run"), "{d}");
+    assert_eq!(d["round"]["current"], json!(1), "{d}");
+}
+
+#[test]
+fn cap_exhausted_escalation_resumes_within_cap() {
+    let h = Harness::new();
+    h.write_file(".speccy/project.yaml", "caps:\n  run_review_rounds: 1\n");
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Cap resume");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let lease = to_run_gate(&h, &run);
+    // Fail R1 at run-gate round 1; with cap 1 this exhausts the cap → escalate.
+    let f = h.ctl_in(
+        &[
+            "ctl", "finding", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "severity": "blocking",
+                 "note": "regression", "recorded_by": "v" }),
+    );
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "failed", "findings": [f["id"]] }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "provide_setup", "reason": "retry" }),
+    );
+
+    // Resume stays within the cap: round { current: 1, max: 1 }, never 2 > 1.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("dispatch_verifier"), "{d}");
+    assert_eq!(d["round"]["current"], json!(1), "{d}");
+    assert_eq!(d["round"]["max"], json!(1), "{d}");
+}
+
+#[test]
+fn provide_setup_at_task_escalation_redispatches_the_worker() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Provide setup task gate");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Block R1 at the task gate → task-level escalation.
+    let lease = claim_and_handoff(&h, &run, "T1");
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "needs staging" }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "provide_setup", "reason": "staging is up now" }),
+    );
+
+    // The stuck task re-opens to a worker dispatch at its same round — not an
+    // immediate re-escalation.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("dispatch_worker"), "{d}");
+    assert_eq!(d["subject"]["task"], json!("T1"), "{d}");
+    assert_eq!(d["round"]["current"], json!(1), "{d}");
+}
+
+#[test]
+fn waiver_at_task_escalation_integrates_the_task() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Waive task gate");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let lease = claim_and_handoff(&h, &run, "T1");
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "needs staging" }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    // Waiving R1 fully resolves T1; the next `run next` integrates it.
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "waive", "requirement": "R1",
+                "reason": "accept the gap", "residual_risk": "manual check pending" }),
+    );
+    h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    let t1 = status["tasks"]
+        .as_array()
+        .expect("tasks array present")
+        .iter()
+        .find(|t| t["id"] == json!("T1"))
+        .expect("T1 present")
+        .clone();
+    assert_eq!(t1["status"], json!("integrated"), "{status}");
+}
+
+#[test]
+fn task_repair_cap_exhaustion_escalates() {
+    let h = Harness::new();
+    h.write_file(".speccy/project.yaml", "caps:\n  task_repair_rounds: 1\n");
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Task cap");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Fail R1 at task-gate round 1; with a repair cap of 1 the task escalates
+    // instead of opening a round 2.
+    let lease = claim_and_handoff(&h, &run, "T1");
+    let f = h.ctl_in(
+        &[
+            "ctl", "finding", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "severity": "blocking",
+                 "note": "regression", "recorded_by": "v" }),
+    );
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "failed", "findings": [f["id"]] }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("await_human_gate"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    let t1 = status["tasks"]
+        .as_array()
+        .expect("tasks array present")
+        .iter()
+        .find(|t| t["id"] == json!("T1"))
+        .expect("T1 present")
+        .clone();
+    assert_eq!(
+        t1["round"],
+        json!(1),
+        "cap-exhausted task must not open round 2: {status}"
+    );
 }

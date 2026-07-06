@@ -396,6 +396,18 @@ impl RunProjection {
                     self.last_snapshot = Some(s.clone());
                 }
             }
+            Event::RunResumed { to, reopen_review } => {
+                // A gate resume re-enters without opening a review round, so it
+                // never touches `run_review_round`. When work remains it re-arms
+                // the current round's verifying marker (re-review and the
+                // run-scope provenance guard); a run-completing waiver leaves the
+                // marker alone so the waive's own status write still reads as
+                // this round's review.
+                self.state = *to;
+                if *reopen_review && *to == RunState::Verifying {
+                    self.last_verifying_entered_seq = Some(seq);
+                }
+            }
             Event::RunDecision { decision } => self.decisions.push(decision.clone()),
             Event::ShipRecorded { change_ref } => self.change_ref = Some(change_ref.clone()),
             _ => {}
@@ -631,6 +643,7 @@ fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
         }
         Event::TaskAppended { task, .. } => format!("queued {}", task_label(run, &task.id)),
         Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
+        Event::RunResumed { to, .. } => format!("run resumed to {}", to.as_str()),
         Event::RunDecision { decision } => format!("decision: {}", decision.kind),
         Event::ShipRecorded { .. } => "recorded ship".to_string(),
         _ => return None,

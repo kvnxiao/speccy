@@ -117,6 +117,17 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         snapshot: Option<String>,
     },
+    /// A run resumed from `escalated` by a gate decision (`waive` /
+    /// `provide_setup`). Distinct from `RunStateTransitioned` so replay
+    /// re-enters `verifying`/`implementing` without counting a new review
+    /// round; `reopen_review` re-arms the current round's review (and the
+    /// run-scope provenance guard) when work is still outstanding (DESIGN §
+    /// Capability Escalation and Give-Up Policy).
+    RunResumed {
+        to: RunState,
+        #[serde(default)]
+        reopen_review: bool,
+    },
     /// A run-scoped gate decision (ship, escalation, accepted-risk).
     RunDecision { decision: RunDecisionRecord },
     /// The landed change reference recorded at ship time.

@@ -697,26 +697,66 @@ fn require_residual_risk(d: &RunDecisionInput, kind: &str) -> Result<()> {
 }
 
 /// After a gate decision that unblocks a parked run, move it back into the
-/// loop.
+/// loop with a `RunResumed` event — distinct from a state transition, so it
+/// re-enters without opening a new review round (DESIGN § Capability
+/// Escalation and Give-Up Policy).
 fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&'static str> {
     let run = store.run_projection(spec_id, run_id)?;
     if run.state != RunState::Escalated {
         return Ok(run.state.as_str());
     }
-    let target = if run.all_tasks_done() {
-        RunState::Verifying
-    } else {
-        RunState::Implementing
-    };
+
+    if run.all_tasks_done() {
+        // Run-level gate. Re-open the current round's review only when work is
+        // still outstanding; a waiver that resolved the last requirement lets
+        // `verifying` complete directly (subject to the critical gate).
+        let reopen_review =
+            !(run.all_requirements_resolved() && run.run_blocking_findings().is_empty());
+        store.append_run_event(
+            spec_id,
+            run_id,
+            Event::RunResumed {
+                to: RunState::Verifying,
+                reopen_review,
+            },
+        )?;
+        return Ok(RunState::Verifying.as_str());
+    }
+
+    // Task-level gate. Re-enter implementing without opening a review round.
     store.append_run_event(
         spec_id,
         run_id,
-        Event::RunStateTransitioned {
-            to: target,
-            snapshot: None,
+        Event::RunResumed {
+            to: RunState::Implementing,
+            reopen_review: false,
         },
     )?;
-    Ok(target.as_str())
+    // The stuck task is still `in_review` with its failing statuses. If it would
+    // re-escalate immediately (provide_setup, or a partial waiver), re-open it
+    // to `building` at the SAME round so the worker retries with the new setup;
+    // a waiver that fully resolved the task instead integrates on the next
+    // `run next`, so no re-open is needed.
+    if let Some(task) = run.active_task()
+        && task.status == TaskStatus::InReview
+        && run.task_reviewed_this_round(task)
+    {
+        let would_integrate = run.task_requirements_resolved(task)
+            && run.task_blocking_findings_this_round(task).is_empty();
+        if !would_integrate {
+            store.append_run_event(
+                spec_id,
+                run_id,
+                Event::TaskTransitioned {
+                    task: task.id.clone(),
+                    to: TaskStatus::Building,
+                    round: task.round,
+                    snapshot: None,
+                },
+            )?;
+        }
+    }
+    Ok(RunState::Implementing.as_str())
 }
 
 // --------------------------------------------------------------------------

@@ -570,7 +570,12 @@ in-flight diff as a labeled escalation snapshot — and on an out-of-band
 commit, which escalates but takes **no** snapshot: a snapshot commit there
 would bury or misattribute the human's out-of-band commit and worktree edits
 (see "Run Branch and Snapshot Policy").
-`run start` opens the run directly in `implementing`. Idempotency is over
+`run start` opens the run directly in `implementing`. The run-level
+review-round counter counts review rounds *opened* — each derived
+`-> verifying` transition — so a gate resume, which re-enters `verifying` or
+`implementing` through a distinct resume event rather than a transition, does
+not open a round and a run parked at its cap resumes within the cap.
+Idempotency is over
 settled state: once derived transitions apply, repeated calls return the same
 directive without re-applying them.
 
@@ -1393,8 +1398,8 @@ It includes:
 At the escalation gate the human responds in prose, and the harness records the right decision through the operation `gate_answers` names for that answer rather than offering a menu of process verbs. A gate decision that resolves a requirement — a waiver — sets the linked requirement status atomically inside the same operation; this is the only status-mutation path outside `requirement set-status`, and it is reserved for human gate decisions:
 
 - **Amend the spec.** The usual outcome. Creates a new approved spec revision and a new run, with a decision record explaining why the definition of done changed. The escalated run is closed as `cancelled` atomically inside the superseding approval, with a decision record naming the superseding revision and run (see "Amendment at the Escalation Gate"). Any guidance the human gives is folded into the amendment.
-- **Provide missing setup or evidence.** Keeps the spec revision, records the gate decision, and resumes the same run in `implementing` or `verifying` when the environment is ready.
-- **Waive the requirement.** Accept the residual risk; the decision sets the requirement to `waived` atomically, and the same run resumes from where it stopped.
+- **Provide missing setup or evidence.** Keeps the spec revision, records the gate decision, and resumes the same run in `implementing` or `verifying` when the environment is ready. Resume re-opens the *current* review round — it re-dispatches the run-level verifier, or re-opens the stuck task's worker at its same round — and never counts a fresh round, so a run parked at its cap resumes within the cap rather than at cap+1.
+- **Waive the requirement.** Accept the residual risk; the decision sets the requirement to `waived` atomically, and the same run resumes from where it stopped. If the waiver leaves every requirement resolved with no blocking finding, `verifying` completes straight to `verified` (subject to the critical accepted-risk gate) without opening a new review round; if work remains, resume behaves like provide-setup and re-opens the current round.
 - **Cancel the run.**
 
 #### Amendment at the Escalation Gate
@@ -1412,7 +1417,7 @@ An abandoned amendment records nothing: if the amended card is never approved, t
 
 At escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, so the parked worktree is clean and the superseding run's clean-worktree rule holds. The new run starts on the same branch, seeded with the prior run's summary and the escalation snapshot reference, so it reconciles rather than redoes. Rolling back to the run baseline remains the human's explicit fallback at the gate.
 
-Setup and waiver answers stay on the same run: the harness records the decision, and the following `run next` call resumes the loop from where it stopped. Only amendment replaces the run, because only amendment changes the definition of done.
+Setup and waiver answers stay on the same run: the harness records the decision, and the following `run next` call resumes the loop from where it stopped. The resume is recorded as a distinct event from an ordinary state transition, so replay re-enters `verifying` or `implementing` without incrementing the run-level review-round counter — a gate resume is not a fresh round. `provide_setup` re-arms the current round (re-review at the run gate, or the stuck task's worker at its same round); a waiver that resolves the last outstanding requirement lets `verifying` complete without any re-review. Only amendment replaces the run, because only amendment changes the definition of done.
 
 ### Acceptance
 
@@ -1530,6 +1535,13 @@ rename over the target. JSONL event appends use verified read-back — the
 appended record is re-read and checked before the operation reports success —
 so a crash never leaves a half-written transition. Resume from the store is
 only trustworthy if every write follows this discipline.
+
+The event vocabulary grows additively: a new binary may write event variants
+an older binary does not know (for example `run_resumed`). Replay is
+fail-closed, so an older binary reading a newer log errors on the unknown
+variant rather than silently dropping it. This is accepted for a local
+single-binary tool — the store is not a shared wire format — and it is why a
+downgrade after a run has advanced is unsupported.
 
 Concurrent `speccy` processes — the orchestrating skill plus lease-free
 reviewer personas — may append events at the same time. Event-log appends
