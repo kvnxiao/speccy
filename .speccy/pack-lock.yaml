@@ -1,80 +1,182 @@
-pack_version: "0.1.0"
+pack_version: "0.1.2"
 files:
+  - path: .agents/skills/speccy-brainstorm/SKILL.md
+    target: codex
+    scope: repo
+    template_id: skills/brainstorm.j2
+    source_hash: sha256:c5cafaa7b633858aa8de91fcbcf36d57a3fb23b759faab1735bc50eb807d0c9d
+    rendered_hash: sha256:46feff17b93b10414d71cdf70826c8df19b7a442e0264b1968f709434a9ff41c
+  - path: .agents/skills/speccy-implement/SKILL.md
+    target: codex
+    scope: repo
+    template_id: skills/implement.j2
+    source_hash: sha256:b542bebe2c96aa85d3235b34ee75215de574c6a6f10816b65d3514306cc83a56
+    rendered_hash: sha256:9703f6c9af76dc41ca07ef5fd47dbac532e891bd475b853e36966e88517e245a
+  - path: .agents/skills/speccy-plan/SKILL.md
+    target: codex
+    scope: repo
+    template_id: skills/plan.j2
+    source_hash: sha256:46bb76a146d28c181c696971f2f9ce6383968a1f5cbe33b2bcc3e850a95cb930
+    rendered_hash: sha256:096866d411099f22b70ad61f50fe1fdb4a9cf7bdc924ae726a60a03c300b5982
+  - path: .agents/skills/speccy-plan/references/spec-card-example.md
+    target: codex
+    scope: repo
+    template_id: references/spec-card-example.md.j2
+    source_hash: sha256:81eec0abb1797fbb9aa0436a08e5cf88ff2656104837df9465a4f7f79d83e24a
+    rendered_hash: sha256:81eec0abb1797fbb9aa0436a08e5cf88ff2656104837df9465a4f7f79d83e24a
+  - path: .agents/skills/speccy-plan/references/spec-quality.md
+    target: codex
+    scope: repo
+    template_id: references/spec-quality.md.j2
+    source_hash: sha256:699079b73a7bfe0db3753bb5b15b33fe8a541f9a401fcd33e8914163c29a6a2a
+    rendered_hash: sha256:3567e33795d51f111f8d49d1b489fe66124f0586c05ff1f257c5872d053ba3f4
+  - path: .agents/skills/speccy-ship/SKILL.md
+    target: codex
+    scope: repo
+    template_id: skills/ship.j2
+    source_hash: sha256:09de59cd7a42bcbaba714a029038030a8b54db7535f957614b219d080dc4e504
+    rendered_hash: sha256:15585c3c9fc97c100217ca5e7cb07869c46868792575b72a0f84a24e536887e3
   - path: .claude/agents/speccy-planner.md
     target: claude
     scope: repo
-    template_id: agent-planner.j2
-    source_hash: sha256:eb8cb470009a8fd9db25f54d8fd446314cc28fb8c0d92a15f51c41d35844b69e
-    rendered_hash: sha256:a5636e4eb13b724f4190fefeb0f1b41aab0ee21dedaeabfcadbda65213f91e1e
+    template_id: agents/planner.j2
+    source_hash: sha256:80209e425434d9a5987a7150e00feb1347f1ca6c9ff0748984e05b2310541216
+    rendered_hash: sha256:b7ffc287ca071214f137035f1c763d822f767feceaa9f6b82d2500640d2bf9d3
   - path: .claude/agents/speccy-repair.md
     target: claude
     scope: repo
-    template_id: agent-repair.j2
-    source_hash: sha256:a03976d741bebfcdaed22ea317a13818b84ecf550c866509fadf0bb183c3ea4d
-    rendered_hash: sha256:d2fde12976d4e8010f63aa9938f9dc2cd2a3547302bdcd66eb23c5a399b03de7
+    template_id: agents/repair.j2
+    source_hash: sha256:99f8843869f5ac34a065dbdbd03ef5500e28b80cf2c9548a9bc03d3b537c24d2
+    rendered_hash: sha256:be17bd0edfeedfe214e220524dda1aa3e484288b5a88988e709901dc61fffc96
   - path: .claude/agents/speccy-reviewer-combined.md
     target: claude
     scope: repo
-    template_id: agent-reviewer.j2
-    source_hash: sha256:11956b7842e0272d9634b3c46157d4106e41f2ab974f849267dffcb31645c6ce
-    rendered_hash: sha256:2413bd57fd81186e71c7fd8396e1c7637f8c30b63880ac59263ae0569d3ee063
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:4c18785f256e2ed08d3dab690b8e627f1e8c433bff70b8eecc97d5891ee3459a
   - path: .claude/agents/speccy-reviewer-defects.md
     target: claude
     scope: repo
-    template_id: agent-reviewer.j2
-    source_hash: sha256:11956b7842e0272d9634b3c46157d4106e41f2ab974f849267dffcb31645c6ce
-    rendered_hash: sha256:25b93e1eb29be6cd715b8c84503b1eff8337725db1ebf018448631a97fbf4220
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:2d4c658380373cb5a60e35ada073831d49e9baebdb9b584f707dce5dfe0888ee
   - path: .claude/agents/speccy-reviewer-security.md
     target: claude
     scope: repo
-    template_id: agent-reviewer.j2
-    source_hash: sha256:11956b7842e0272d9634b3c46157d4106e41f2ab974f849267dffcb31645c6ce
-    rendered_hash: sha256:72755bfab5813bd303ff6d8f31b29a93aef30f17a6b19e35ce104fb2ee5dc288
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:5ee5be26af05f1493450ac6a36f019f6602b4ab55382a3a1624ac716476f4476
   - path: .claude/agents/speccy-reviewer-spec-fidelity.md
     target: claude
     scope: repo
-    template_id: agent-reviewer.j2
-    source_hash: sha256:11956b7842e0272d9634b3c46157d4106e41f2ab974f849267dffcb31645c6ce
-    rendered_hash: sha256:515826967c44eb3d57f0ee68493fb96728cc15c2dc211fd0b9eb9d4db27f2898
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:f76396af1e78001bae7002a6f685253c6992766c896df56baf361ec57151bcf2
   - path: .claude/agents/speccy-reviewer-style.md
     target: claude
     scope: repo
-    template_id: agent-reviewer.j2
-    source_hash: sha256:11956b7842e0272d9634b3c46157d4106e41f2ab974f849267dffcb31645c6ce
-    rendered_hash: sha256:505e750509952d7ec8b93fff9ebc69d8ecc5a3c39cf37407700768f6116650dd
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:16d45365ffd52a47a93cd13610ab7e66a1722c88f660ee697cfe0a96b954fa62
   - path: .claude/agents/speccy-verifier.md
     target: claude
     scope: repo
-    template_id: agent-verifier.j2
-    source_hash: sha256:c58817a1cfb51050f8c5269ea8e1526de178e4265b8688332e6f32068af92902
-    rendered_hash: sha256:20c33fcabbeab3ecf66f68c8c73394b41680af03bf4bd9040cb206780182669d
+    template_id: agents/verifier.j2
+    source_hash: sha256:e617d1e0253294200d24dc6c7601b0775f9fc6251957a0261aca3616d3ddba50
+    rendered_hash: sha256:76647f524b70b56a2a11bba0c083621bf5e52762ab42a244282fb98061764048
   - path: .claude/agents/speccy-worker.md
     target: claude
     scope: repo
-    template_id: agent-worker.j2
-    source_hash: sha256:5e97c56f0029f8a6db233964e6b05f404fc1aed384e3467b621a995be7f481e2
-    rendered_hash: sha256:e00231662466732f50be2c760d68587ede5674260924df52e43a1c36b80efbea
+    template_id: agents/worker.j2
+    source_hash: sha256:1b8e3f263bd728e358b445de03333cbe2ec46c474ce31245d4703101dfccbc34
+    rendered_hash: sha256:7d007fac8574004aaad52784dd98bb8b5722227c26eb79401011dd8ba092cb5e
   - path: .claude/skills/speccy-brainstorm/SKILL.md
     target: claude
     scope: repo
-    template_id: skill-brainstorm.j2
-    source_hash: sha256:cb610a86bb251153a489b511c4ddf90ec6cff2de2b208844a5447e366b0ba024
-    rendered_hash: sha256:184203f2bf24a67b92c06da5f158dc4394054638c2cc15b203eaae27442d8a82
+    template_id: skills/brainstorm.j2
+    source_hash: sha256:c5cafaa7b633858aa8de91fcbcf36d57a3fb23b759faab1735bc50eb807d0c9d
+    rendered_hash: sha256:46feff17b93b10414d71cdf70826c8df19b7a442e0264b1968f709434a9ff41c
   - path: .claude/skills/speccy-implement/SKILL.md
     target: claude
     scope: repo
-    template_id: skill-implement.j2
-    source_hash: sha256:008a486ba375c73135bb7e1812736ab58fcdd64cb28b5a8ed071a8ad40757029
-    rendered_hash: sha256:5888c1d47ddf50a692c52683aea0a7f576911d42e560ad45ba74a89f9d7d6b8e
+    template_id: skills/implement.j2
+    source_hash: sha256:b542bebe2c96aa85d3235b34ee75215de574c6a6f10816b65d3514306cc83a56
+    rendered_hash: sha256:8054d508bc8609b5f126d1575f16934a6eac691bd5d05cd4cd633b95d9ab48fe
   - path: .claude/skills/speccy-plan/SKILL.md
     target: claude
     scope: repo
-    template_id: skill-plan.j2
-    source_hash: sha256:f3179b108ea2f30a2ca7483d98fa9e176c4fa09846482a1b801fce3e0785e111
-    rendered_hash: sha256:c459492c16a63a285db15f1b5c353db192cfdad4439ac520f979cd3487e58b76
+    template_id: skills/plan.j2
+    source_hash: sha256:46bb76a146d28c181c696971f2f9ce6383968a1f5cbe33b2bcc3e850a95cb930
+    rendered_hash: sha256:83b479d9885c7b2394d151e48b5342a63f8b3c2ce69a2306bda695444894de00
+  - path: .claude/skills/speccy-plan/references/spec-card-example.md
+    target: claude
+    scope: repo
+    template_id: references/spec-card-example.md.j2
+    source_hash: sha256:81eec0abb1797fbb9aa0436a08e5cf88ff2656104837df9465a4f7f79d83e24a
+    rendered_hash: sha256:81eec0abb1797fbb9aa0436a08e5cf88ff2656104837df9465a4f7f79d83e24a
+  - path: .claude/skills/speccy-plan/references/spec-quality.md
+    target: claude
+    scope: repo
+    template_id: references/spec-quality.md.j2
+    source_hash: sha256:699079b73a7bfe0db3753bb5b15b33fe8a541f9a401fcd33e8914163c29a6a2a
+    rendered_hash: sha256:3567e33795d51f111f8d49d1b489fe66124f0586c05ff1f257c5872d053ba3f4
   - path: .claude/skills/speccy-ship/SKILL.md
     target: claude
     scope: repo
-    template_id: skill-ship.j2
+    template_id: skills/ship.j2
     source_hash: sha256:09de59cd7a42bcbaba714a029038030a8b54db7535f957614b219d080dc4e504
     rendered_hash: sha256:973a2368bf5b6d632f0369f49578712016d3c5ce246b2cc6b81d6354a3baa9fd
+  - path: .codex/agents/speccy-planner.toml
+    target: codex
+    scope: repo
+    template_id: agents/planner.j2
+    source_hash: sha256:80209e425434d9a5987a7150e00feb1347f1ca6c9ff0748984e05b2310541216
+    rendered_hash: sha256:3f8aa89f300a46786c9abc7c4ae5d9dfbe4c9b20705b0b7b4daf8b07def3affa
+  - path: .codex/agents/speccy-repair.toml
+    target: codex
+    scope: repo
+    template_id: agents/repair.j2
+    source_hash: sha256:99f8843869f5ac34a065dbdbd03ef5500e28b80cf2c9548a9bc03d3b537c24d2
+    rendered_hash: sha256:dc5d2896bee97946d0f0722aafc12818ba67a24cd964a008abc60517d3393a95
+  - path: .codex/agents/speccy-reviewer-combined.toml
+    target: codex
+    scope: repo
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:0449b33b5d62fb07ea66dc2cd6edbb5170d8fe87f927381f1bcb9dc47f2e9fa5
+  - path: .codex/agents/speccy-reviewer-defects.toml
+    target: codex
+    scope: repo
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:8fd494d6eef096c51dc0b3feb613d6a8a73a66a2133d434950014f08489b0947
+  - path: .codex/agents/speccy-reviewer-security.toml
+    target: codex
+    scope: repo
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:9f585c20e758c4d1eaa8dbd5a4eaaafc4454b26bea7ec9e699b7d3697ef3c8af
+  - path: .codex/agents/speccy-reviewer-spec-fidelity.toml
+    target: codex
+    scope: repo
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:40ccf1b5482858bb21fa90a298808d024a88126c07fffd77beb0ab3eb25cdb00
+  - path: .codex/agents/speccy-reviewer-style.toml
+    target: codex
+    scope: repo
+    template_id: agents/reviewer.j2
+    source_hash: sha256:88fb2472478b3b3cdf3b07c9a1dfc59b5fc9199ca339ab7b0f21c7a27922b33a
+    rendered_hash: sha256:534606c996fe919c123834614522df7417b9f88035804e8fa7c2401cf9960829
+  - path: .codex/agents/speccy-verifier.toml
+    target: codex
+    scope: repo
+    template_id: agents/verifier.j2
+    source_hash: sha256:e617d1e0253294200d24dc6c7601b0775f9fc6251957a0261aca3616d3ddba50
+    rendered_hash: sha256:bea9c14d6cba0523db72560a30578b16a76694f0a334a3abcb489b9f845fc08b
+  - path: .codex/agents/speccy-worker.toml
+    target: codex
+    scope: repo
+    template_id: agents/worker.j2
+    source_hash: sha256:1b8e3f263bd728e358b445de03333cbe2ec46c474ce31245d4703101dfccbc34
+    rendered_hash: sha256:c1b66a7b595e2e0c7c9ee1f67fb5460e51e0b6f74951b466b5f7036b5e1cb23d

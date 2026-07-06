@@ -12,7 +12,7 @@ cleared session is recommended. Exits early unless the revision is `approved`.
 2. `speccy ctl run start --spec <ref> --revision <rev> --json` — refuses
    a dirty worktree; creates the run branch and task graph.
 3. Drive the loop. Repeat: call
-   `speccy ctl run next --run <id> --agent claude:<session> --json`,
+   `speccy ctl run next --run <id> --agent codex:<session> --json`,
    perform the directive's `packet_with`, dispatch or act as directed, record the
    outcome through `record_with` with the returned `lease.token`, then call
    `run next` again.

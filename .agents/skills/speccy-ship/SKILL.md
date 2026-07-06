@@ -1,0 +1,26 @@
+---
+name: speccy-ship
+description: Open the pull request for a verified run and move it to submitted. Echoes accepted risks and asks one confirmation before creating anything external.
+---
+
+# /speccy-ship
+
+Answers the ship gate for a verified run (inferred when unambiguous).
+
+1. `speccy ctl run next --run <id> --agent codex:<session> --json`
+   — takes the lease and returns the ship gate.
+2. If the accepted-risk bucket is non-empty, echo those lines and ask one
+   explicit confirmation ("Open the PR anyway?") with request_user_input
+   before creating anything external. With an empty bucket, proceed directly.
+3. Offer a squash by default so `speccy:` snapshot messages stay off mainline,
+   then open the PR (for example `gh pr create --body-file review-packet.md`).
+   Speccy makes no outbound calls — the PR is opened by the harness.
+4. `speccy ctl run record-ship --run <id> --lease <token> --input change-ref.json --json`
+   moves the run to `submitted`.
+
+Close by printing the boundary plainly:
+
+```
+PR merge is the source of truth.
+After it merges, record it with: speccy accept
+```

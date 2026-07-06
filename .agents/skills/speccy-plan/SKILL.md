@@ -39,7 +39,7 @@ overrides.
 5. Read `references/spec-card-example.md`, then present a compact spec card:
    goal, in/out scope, plan, acceptance statements, the `kind: command` strings
    the controller will run, prior context carried forward, open questions with
-   recommended answers, and main risks. Use AskUserQuestion for a
+   recommended answers, and main risks. Use request_user_input for a
    structured choice.
 
 ## Approval (the prose gate)
