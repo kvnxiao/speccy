@@ -7,6 +7,7 @@ use crate::config::ProjectConfig;
 use crate::error::Result;
 use crate::error::SpeccyError;
 use crate::gitx;
+use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
 use crate::model::RunState;
 use crate::model::SpecDraft;
@@ -38,7 +39,9 @@ fn prior_context_candidates(store: &Store, current_ref: &str) -> Result<Value> {
             format!(
                 "{}: {}",
                 d.decision_id,
-                d.note.clone().unwrap_or_else(|| d.kind.clone())
+                d.note
+                    .clone()
+                    .unwrap_or_else(|| d.kind.as_str().to_string())
             )
         });
         out.push(json!({
@@ -87,7 +90,7 @@ pub fn escalation(store: &Store, run_id: &str) -> Result<Value> {
                 .iter()
                 .map(|(_, f)| f)
                 .filter(|f| {
-                    f.severity == "blocking"
+                    f.severity == FindingSeverity::Blocking
                         && (f.task.as_deref() == Some(&h.task)
                             || f.requirement
                                 .as_ref()

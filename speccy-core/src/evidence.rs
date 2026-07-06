@@ -115,7 +115,7 @@ pub fn collect(
                 id: id.clone(),
                 requirement: req_id.clone(),
                 request: Some(ev_id.clone()),
-                kind: "command".into(),
+                kind: EvidenceKind::Command,
                 collected_by: "controller".into(),
                 note: note.clone(),
                 artifact: Some(artifact_rel),

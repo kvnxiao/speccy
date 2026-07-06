@@ -310,6 +310,115 @@ impl FindingSeverity {
     }
 }
 
+/// Spec-scoped decision kind (DESIGN § Decision Records and ADRs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecDecisionKind {
+    /// Approve a draft revision (may supersede a parked run).
+    Approve,
+    /// Reject a draft.
+    Reject,
+    /// Split the spec into smaller ones.
+    Split,
+    /// Change the spec's scope.
+    ScopeChange,
+    /// Abandon the spec.
+    Cancel,
+}
+
+impl SpecDecisionKind {
+    /// Parse the kind from its wire string, if valid.
+    #[must_use = "the parsed kind is useless if discarded"]
+    pub fn parse(s: &str) -> Option<SpecDecisionKind> {
+        match s {
+            "approve" => Some(SpecDecisionKind::Approve),
+            "reject" => Some(SpecDecisionKind::Reject),
+            "split" => Some(SpecDecisionKind::Split),
+            "scope_change" => Some(SpecDecisionKind::ScopeChange),
+            "cancel" => Some(SpecDecisionKind::Cancel),
+            _ => None,
+        }
+    }
+
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SpecDecisionKind::Approve => "approve",
+            SpecDecisionKind::Reject => "reject",
+            SpecDecisionKind::Split => "split",
+            SpecDecisionKind::ScopeChange => "scope_change",
+            SpecDecisionKind::Cancel => "cancel",
+        }
+    }
+}
+
+/// Run-scoped decision kind (DESIGN § Decision Records and ADRs). Gate answers
+/// plus the controller-generated `superseded` and `interrupt`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunDecisionKind {
+    /// Accept a requirement's residual risk at a gate.
+    Waive,
+    /// The human provided missing setup/evidence.
+    ProvideSetup,
+    /// Confirm accepted risk on a critical spec.
+    ConfirmAcceptedRisk,
+    /// Send a verified run back with feedback.
+    Rework,
+    /// Cancel the run.
+    Cancel,
+    /// Closed by a superseding amendment (controller-generated).
+    Superseded,
+    /// Parked by a harness interrupt (controller-generated).
+    Interrupt,
+}
+
+impl RunDecisionKind {
+    /// Parse the kind from its wire string, if valid.
+    #[must_use = "the parsed kind is useless if discarded"]
+    pub fn parse(s: &str) -> Option<RunDecisionKind> {
+        match s {
+            "waive" => Some(RunDecisionKind::Waive),
+            "provide_setup" => Some(RunDecisionKind::ProvideSetup),
+            "confirm_accepted_risk" => Some(RunDecisionKind::ConfirmAcceptedRisk),
+            "rework" => Some(RunDecisionKind::Rework),
+            "cancel" => Some(RunDecisionKind::Cancel),
+            "superseded" => Some(RunDecisionKind::Superseded),
+            "interrupt" => Some(RunDecisionKind::Interrupt),
+            _ => None,
+        }
+    }
+
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RunDecisionKind::Waive => "waive",
+            RunDecisionKind::ProvideSetup => "provide_setup",
+            RunDecisionKind::ConfirmAcceptedRisk => "confirm_accepted_risk",
+            RunDecisionKind::Rework => "rework",
+            RunDecisionKind::Cancel => "cancel",
+            RunDecisionKind::Superseded => "superseded",
+            RunDecisionKind::Interrupt => "interrupt",
+        }
+    }
+}
+
+/// A change reference's kind (SCHEMAS § run record-ship).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeRefKind {
+    /// A pull request.
+    PullRequest,
+    /// A pushed branch.
+    Branch,
+    /// A patch/diff.
+    Patch,
+    /// No external change reference.
+    None,
+}
+
 // --------------------------------------------------------------------------
 // Spec draft payloads (SCHEMAS § spec record-draft / patch-draft)
 // --------------------------------------------------------------------------
@@ -451,7 +560,7 @@ pub struct TaskDef {
 /// A reference to the change produced by a run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeRef {
-    pub kind: String, // pull_request | branch | patch | none
+    pub kind: ChangeRefKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -460,4 +569,37 @@ pub struct ChangeRef {
     pub head_sha: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decision_and_change_kinds_round_trip() {
+        // Serde wire strings are unchanged from the old stringly-typed fields.
+        assert_eq!(
+            serde_json::to_string(&SpecDecisionKind::ScopeChange).expect("ser"),
+            "\"scope_change\""
+        );
+        assert_eq!(
+            serde_json::from_str::<RunDecisionKind>("\"confirm_accepted_risk\"").expect("de"),
+            RunDecisionKind::ConfirmAcceptedRisk
+        );
+        assert_eq!(
+            serde_json::from_str::<ChangeRefKind>("\"pull_request\"").expect("de"),
+            ChangeRefKind::PullRequest
+        );
+        // as_str / parse round-trip and reject unknowns.
+        assert_eq!(SpecDecisionKind::ScopeChange.as_str(), "scope_change");
+        assert_eq!(
+            SpecDecisionKind::parse("scope_change"),
+            Some(SpecDecisionKind::ScopeChange)
+        );
+        assert_eq!(
+            RunDecisionKind::parse("interrupt"),
+            Some(RunDecisionKind::Interrupt)
+        );
+        assert_eq!(RunDecisionKind::parse("bogus"), None);
+    }
 }

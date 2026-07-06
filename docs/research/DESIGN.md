@@ -106,6 +106,11 @@ A decision record captures an important scope, evidence, waiver, validation, or 
 
 Architectural decision records (ADRs) are a narrower subset: durable architecture decisions that future maintainers should know. Speccy should keep decision records in the run store by default and optionally export selected architecture decisions as ADRs, such as `docs/adr/0007-use-magic-link-tokens.md`.
 
+Each decision record carries a `type` from a closed vocabulary (this section owns the values):
+
+- **Spec decision kinds** (`spec record-decision`): `approve | reject | split | scope_change | cancel`.
+- **Run decision kinds** (`run record-decision` and controller-generated): `waive | provide_setup | confirm_accepted_risk | rework | cancel | superseded | interrupt`. `superseded` is written by the controller when an amendment's superseding approval closes this run (see "Amendment at the Escalation Gate"); `interrupt` is written by `run interrupt` on a harness give-up (see "Capability Escalation"). The rest are human gate answers.
+
 ### Acceptance Ledger
 
 The MVP baseline should be one streamlined acceptance ledger. It is the capture area that prevents agents from claiming completion without tying requirements to checks, review evidence, or explicit waivers.

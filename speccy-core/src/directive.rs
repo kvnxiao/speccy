@@ -17,9 +17,11 @@ use crate::gitx;
 use crate::ids;
 use crate::lease::LeaseState;
 use crate::model::DirectiveAction;
+use crate::model::FindingSeverity;
 use crate::model::Gate;
 use crate::model::RequirementStatus;
 use crate::model::RoundScope;
+use crate::model::RunDecisionKind;
 use crate::model::RunState;
 use crate::model::TaskStatus;
 use crate::projection::RunProjection;
@@ -174,7 +176,7 @@ pub fn interrupt_run(
             Event::RunDecision {
                 decision: RunDecisionRecord {
                     decision_id: ids::short_id("dec"),
-                    kind: "interrupt".into(),
+                    kind: RunDecisionKind::Interrupt,
                     requirement: None,
                     task: None,
                     actor: "harness".into(),
@@ -376,7 +378,7 @@ fn run_provenance_scan(
             requirement: None,
             task: task_id.clone(),
             persona: None,
-            severity: "blocking".into(),
+            severity: FindingSeverity::Blocking,
             note: format!(
                 "{}:{} references \"{}\" — provenance deny-list hit",
                 hit.file, hit.line, hit.term

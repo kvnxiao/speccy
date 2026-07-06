@@ -39,7 +39,9 @@ use speccy_core::model::ChangeRef;
 use speccy_core::model::EvidenceKind;
 use speccy_core::model::RequirementStatus;
 use speccy_core::model::RiskTier;
+use speccy_core::model::RunDecisionKind;
 use speccy_core::model::RunState;
+use speccy_core::model::SpecDecisionKind;
 use speccy_core::model::SpecDraft;
 use speccy_core::model::TaskStatus;
 use speccy_core::packets;
@@ -287,7 +289,7 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
 
             let record = SpecDecisionRecord {
                 decision_id: ids::short_id("dec"),
-                kind: "approve".into(),
+                kind: SpecDecisionKind::Approve,
                 revision_id: target.to_string(),
                 actor: decision.actor,
                 approved_in_prose: decision.approved_in_prose,
@@ -308,7 +310,7 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
                     Event::RunDecision {
                         decision: RunDecisionRecord {
                             decision_id: ids::short_id("dec"),
-                            kind: "superseded".into(),
+                            kind: RunDecisionKind::Superseded,
                             requirement: None,
                             task: None,
                             actor: "human".into(),
@@ -337,12 +339,16 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
             }))
         }
         "cancel" => {
-            let record = spec_decision_record(&decision, "cancel", target);
+            let record = spec_decision_record(&decision, SpecDecisionKind::Cancel, target);
             store.append_spec_event(&spec.spec_id, Event::SpecDecision { decision: record })?;
             Ok(json!({ "spec_status": "cancelled" }))
         }
         "reject" | "split" | "scope_change" => {
-            let record = spec_decision_record(&decision, &decision.kind, target);
+            // The match guarantees a valid kind; parse maps it to the enum.
+            let kind = SpecDecisionKind::parse(&decision.kind).ok_or_else(|| {
+                SpeccyError::validation(format!("unknown spec decision type `{}`", decision.kind))
+            })?;
+            let record = spec_decision_record(&decision, kind, target);
             store.append_spec_event(&spec.spec_id, Event::SpecDecision { decision: record })?;
             Ok(json!({ "decision": decision.kind, "spec_status": spec.status }))
         }
@@ -352,10 +358,14 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
     }
 }
 
-fn spec_decision_record(input: &SpecDecisionInput, kind: &str, target: &str) -> SpecDecisionRecord {
+fn spec_decision_record(
+    input: &SpecDecisionInput,
+    kind: SpecDecisionKind,
+    target: &str,
+) -> SpecDecisionRecord {
     SpecDecisionRecord {
         decision_id: ids::short_id("dec"),
-        kind: kind.to_string(),
+        kind,
         revision_id: target.to_string(),
         actor: input.actor.clone(),
         approved_in_prose: input.approved_in_prose.clone(),
@@ -583,9 +593,9 @@ fn run_record_decision(
     let (spec_id, run) = store.run_by_id(run_id)?;
     store.verify_lease(&spec_id, run_id, lease)?;
 
-    let record = |kind: &str| RunDecisionRecord {
+    let record = |kind: RunDecisionKind| RunDecisionRecord {
         decision_id: ids::short_id("dec"),
-        kind: kind.to_string(),
+        kind,
         requirement: d.requirement.clone(),
         task: d.task.clone(),
         actor: d.actor.clone(),
@@ -593,7 +603,7 @@ fn run_record_decision(
         residual_risk: d.residual_risk.clone(),
         carry_forward: d.carry_forward,
     };
-    let append_decision = |kind: &str| {
+    let append_decision = |kind: RunDecisionKind| {
         store.append_run_event(
             &spec_id,
             run_id,
@@ -611,7 +621,7 @@ fn run_record_decision(
                 ));
             }
             let reason = require_reason(&d, "rework")?;
-            let decision = record("rework");
+            let decision = record(RunDecisionKind::Rework);
             store.append_run_event(
                 &spec_id,
                 run_id,
@@ -658,7 +668,7 @@ fn run_record_decision(
             }))
         }
         "cancel" => {
-            append_decision("cancel")?;
+            append_decision(RunDecisionKind::Cancel)?;
             store.append_run_event(
                 &spec_id,
                 run_id,
@@ -687,7 +697,7 @@ fn run_record_decision(
             }
             require_reason(&d, "waive")?;
             require_residual_risk(&d, "waive")?;
-            append_decision("waive")?;
+            append_decision(RunDecisionKind::Waive)?;
             store.append_run_event(
                 &spec_id,
                 run_id,
@@ -718,7 +728,7 @@ fn run_record_decision(
                 ));
             }
             require_reason(&d, &d.kind)?;
-            append_decision(&d.kind)?;
+            append_decision(RunDecisionKind::ProvideSetup)?;
             let resumed = resume_from_escalated(store, &spec_id, run_id)?;
             Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
         }
@@ -729,7 +739,7 @@ fn run_record_decision(
                 ));
             }
             require_reason(&d, &d.kind)?;
-            append_decision(&d.kind)?;
+            append_decision(RunDecisionKind::ConfirmAcceptedRisk)?;
             Ok(json!({ "type": d.kind, "run_state": run.state, "resume": "call run next" }))
         }
         other => Err(SpeccyError::validation(format!(
@@ -975,7 +985,7 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
         id: id.clone(),
         requirement: ev.requirement.clone(),
         request: ev.request,
-        kind: ev.kind.clone(),
+        kind,
         collected_by: ev.collected_by,
         note: ev.note,
         artifact: ev.artifact,
@@ -1019,12 +1029,12 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
     let f: FindingInput = read_input(input)?;
     // Validate severity against the closed vocabulary so a typo cannot silently
     // read as non-blocking and let a real blocker slip past aggregation.
-    if speccy_core::model::FindingSeverity::parse(&f.severity).is_none() {
-        return Err(SpeccyError::validation(format!(
+    let severity = speccy_core::model::FindingSeverity::parse(&f.severity).ok_or_else(|| {
+        SpeccyError::validation(format!(
             "invalid finding severity `{}`; expected blocking|advisory|positive|uncertain",
             f.severity
-        )));
-    }
+        ))
+    })?;
     if f.note.trim().is_empty() {
         return Err(SpeccyError::validation("finding.note is required"));
     }
@@ -1045,7 +1055,7 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
         requirement: f.requirement,
         task: f.task,
         persona: f.persona,
-        severity: f.severity,
+        severity,
         note: f.note,
         recorded_by: f.recorded_by,
     };

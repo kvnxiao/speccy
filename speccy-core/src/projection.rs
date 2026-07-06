@@ -11,9 +11,12 @@ use crate::event::LoggedEvent;
 use crate::event::RunDecisionRecord;
 use crate::event::SpecDecisionRecord;
 use crate::model::ChangeRef;
+use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
 use crate::model::RiskTier;
+use crate::model::RunDecisionKind;
 use crate::model::RunState;
+use crate::model::SpecDecisionKind;
 use crate::model::SpecDraft;
 use crate::model::SpecStatus;
 use crate::model::TaskStatus;
@@ -95,8 +98,8 @@ impl SpecState {
                 Event::SpecDecision { decision } => {
                     if let Some(s) = state.as_mut() {
                         s.decisions.push(decision.clone());
-                        match decision.kind.as_str() {
-                            "approve" => {
+                        match decision.kind {
+                            SpecDecisionKind::Approve => {
                                 if let Some(rev) = s
                                     .revisions
                                     .iter_mut()
@@ -106,7 +109,7 @@ impl SpecState {
                                 }
                                 s.status = SpecStatus::Approved;
                             }
-                            "cancel" => s.status = SpecStatus::Cancelled,
+                            SpecDecisionKind::Cancel => s.status = SpecStatus::Cancelled,
                             _ => {}
                         }
                         s.last_event_ts = Some(ts);
@@ -507,7 +510,7 @@ impl RunProjection {
             && !self
                 .decisions
                 .iter()
-                .any(|d| d.kind == "confirm_accepted_risk")
+                .any(|d| d.kind == RunDecisionKind::ConfirmAcceptedRisk)
     }
 
     /// Every requirement in the run is resolved.
@@ -607,7 +610,7 @@ impl RunProjection {
         self.findings
             .iter()
             .filter(|(seq, f)| {
-                if *seq <= after || f.severity != "blocking" {
+                if *seq <= after || f.severity != FindingSeverity::Blocking {
                     return false;
                 }
                 match &f.requirement {
@@ -627,7 +630,9 @@ impl RunProjection {
         let after = self.last_verifying_entered_seq.unwrap_or(usize::MAX);
         self.findings
             .iter()
-            .filter(|(seq, f)| *seq > after && f.task.is_none() && f.severity == "blocking")
+            .filter(|(seq, f)| {
+                *seq > after && f.task.is_none() && f.severity == FindingSeverity::Blocking
+            })
             .map(|(_, f)| f)
             .collect()
     }
@@ -668,7 +673,7 @@ fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
             None => format!("recorded evidence for {}", evidence.requirement),
         },
         Event::FindingRecorded { finding } => {
-            format!("recorded {} finding", finding.severity)
+            format!("recorded {} finding", finding.severity.as_str())
         }
         Event::RequirementStatusSet { updates } => match updates.as_slice() {
             [one] => format!("set {} {}", one.requirement, one.status.as_str()),
@@ -680,7 +685,7 @@ fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
         Event::TaskAppended { task, .. } => format!("queued {}", task_label(run, &task.id)),
         Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
         Event::RunResumed { to, .. } => format!("run resumed to {}", to.as_str()),
-        Event::RunDecision { decision } => format!("decision: {}", decision.kind),
+        Event::RunDecision { decision } => format!("decision: {}", decision.kind.as_str()),
         Event::ShipRecorded { .. } => "recorded ship".to_string(),
         _ => return None,
     })

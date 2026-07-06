@@ -1892,3 +1892,46 @@ fn run_interrupt_refuses_parked_runs_and_bad_reasons() {
         "{parked}"
     );
 }
+
+#[test]
+fn run_record_ship_rejects_unknown_change_ref_kind() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Ship kind");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // record-ship parses the change ref into a typed ChangeRefKind, so an
+    // out-of-vocabulary kind is refused at input parse.
+    let refused = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "record-ship",
+            "--run",
+            &run,
+            "--lease",
+            "whatever",
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "kind": "bogus", "branch": "speccy/x" }),
+    );
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    assert_eq!(
+        refused["error"]["code"],
+        json!("validation_failed"),
+        "{refused}"
+    );
+}

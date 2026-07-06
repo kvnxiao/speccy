@@ -661,4 +661,18 @@ mod tests {
         let err = read_events(&path).expect_err("corrupt line must fail");
         assert!(err.message.contains("corrupt event"), "{}", err.message);
     }
+
+    #[test]
+    fn out_of_vocabulary_enum_fails_closed() {
+        // A finding severity outside the closed vocabulary no longer parses;
+        // replay fails closed rather than silently reading it as non-blocking.
+        let (_dir, base) = utf8_tempdir();
+        let path = base.join("events.jsonl");
+        let line = "{\"ts\":\"2020-01-01T00:00:00Z\",\"type\":\"finding_recorded\",\
+                     \"finding\":{\"id\":\"fd_x\",\"severity\":\"blocker\",\
+                     \"note\":\"typo\",\"recorded_by\":\"v\"}}\n";
+        fs::write(&path, line).expect("write events");
+        let err = read_events(&path).expect_err("out-of-vocabulary severity must fail");
+        assert!(err.message.contains("corrupt event"), "{}", err.message);
+    }
 }

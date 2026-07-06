@@ -8,8 +8,12 @@
 //! Driving).
 
 use crate::model::ChangeRef;
+use crate::model::EvidenceKind;
+use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
+use crate::model::RunDecisionKind;
 use crate::model::RunState;
+use crate::model::SpecDecisionKind;
 use crate::model::SpecDraft;
 use crate::model::TaskStatus;
 use serde::Deserialize;
@@ -180,7 +184,7 @@ pub struct EvidenceRecord {
     pub requirement: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request: Option<String>,
-    pub kind: String,
+    pub kind: EvidenceKind,
     pub collected_by: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
@@ -207,7 +211,7 @@ pub struct FindingRecord {
     pub task: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persona: Option<String>,
-    pub severity: String,
+    pub severity: FindingSeverity,
     pub note: String,
     pub recorded_by: String,
 }
@@ -232,7 +236,7 @@ pub struct RequirementUpdate {
 pub struct SpecDecisionRecord {
     pub decision_id: String,
     #[serde(rename = "type")]
-    pub kind: String, // approve | reject | split | scope_change | cancel
+    pub kind: SpecDecisionKind,
     pub revision_id: String,
     pub actor: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -259,11 +263,7 @@ pub struct Supersedes {
 pub struct RunDecisionRecord {
     pub decision_id: String,
     #[serde(rename = "type")]
-    // Gate answers: waive | provide_setup | confirm_accepted_risk | rework | cancel.
-    // Plus the controller-generated `superseded`, written when an amendment's
-    // superseding approval closes this run (DESIGN § Amendment at the Escalation
-    // Gate), and `interrupt`, written by `run interrupt` on a harness give-up.
-    pub kind: String,
+    pub kind: RunDecisionKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requirement: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

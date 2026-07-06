@@ -12,6 +12,7 @@ use speccy_core::event::SpecDecisionRecord;
 use speccy_core::ids;
 use speccy_core::model::RequirementStatus;
 use speccy_core::model::RunState;
+use speccy_core::model::SpecDecisionKind;
 use speccy_core::model::SpecStatus;
 use speccy_core::packets;
 use speccy_core::projection::RunProjection;
@@ -391,7 +392,7 @@ pub fn cancel(store: &Store, selector: Option<&str>) -> Result<String> {
         Event::SpecDecision {
             decision: SpecDecisionRecord {
                 decision_id: ids::short_id("dec"),
-                kind: "cancel".into(),
+                kind: SpecDecisionKind::Cancel,
                 revision_id: latest_rev,
                 actor: "human".into(),
                 approved_in_prose: None,
@@ -725,7 +726,7 @@ fn evidence_drilldown(run: &RunProjection) -> String {
     if !run.findings.is_empty() {
         _ = writeln!(out, "\n{}", style::paint(style::HEADER, "Findings"));
         for (_, f) in &run.findings {
-            _ = writeln!(out, "  [{}] {}", f.severity, f.note);
+            _ = writeln!(out, "  [{}] {}", f.severity.as_str(), f.note);
         }
     }
     out.trim_end().to_string()
