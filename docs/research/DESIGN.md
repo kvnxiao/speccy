@@ -1350,7 +1350,7 @@ Why the judgment is per requirement, not per task:
   is not requirement satisfaction, so the give-up gate must read requirement
   status.
 
-The same fail-closed rule covers resource caps beyond rounds: optional policy caps on task count and run wall-clock. Speccy makes no LLM calls and cannot meter tokens, so token budgets belong to the harness. Hitting any cap parks the run at an `escalated` policy gate; the human raises the cap or cancels, and the same run resumes.
+The same fail-closed rule covers resource caps beyond rounds: optional policy caps on task count and run wall-clock. Speccy makes no LLM calls and cannot meter tokens, so token budgets belong to the harness. Hitting any cap parks the run at an `escalated` policy gate; the human raises the cap or cancels, and the same run resumes. The wall-clock cap measures *active* time — the intervals the run spent `implementing` or `verifying` — and excludes time parked at a human gate (`escalated`, `verified`), so a run that waited overnight for a human answer is not punished for the wait. Active time is derived from event timestamps at replay, not stored as separate state.
 
 The caps are two policy values in `.speccy/project.yaml`, not hard-coded constants: one for per-task repair rounds and one for run-level review rounds, each defaulting to 3. The controller reads and enforces them. Every `run next` directive that starts a repair round carries the counter — "spawn repair round 2 of 3" — and the controller returns an escalation directive instead of another round when the cap is exhausted, so the orchestrating agent reports rounds without ever counting them. High-risk specs can lower the caps and prototypes can raise them without touching pack prose.
 

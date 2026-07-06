@@ -158,6 +158,30 @@ fn set_status(h: &Harness, run: &str, lease: &str, update: Value) {
     );
 }
 
+/// Rewrite the `ts` of matching events in the run's stored log; the test owns
+/// `SPECCY_HOME`. Each edit is `(type, optional "to" filter, new RFC3339 ts)`.
+fn rewrite_event_ts(h: &Harness, run: &str, edits: &[(&str, Option<&str>, &str)]) {
+    let path = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run events log path");
+    let text = fs_err::read_to_string(&path).expect("read log");
+    let mut out = String::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let mut v: Value = serde_json::from_str(line).expect("json line");
+        for (ty, to_filter, new_ts) in edits {
+            if v["type"] == json!(*ty) && to_filter.is_none_or(|t| v["to"] == json!(t)) {
+                v["ts"] = json!(*new_ts);
+            }
+        }
+        out.push_str(&serde_json::to_string(&v).expect("serialize line"));
+        out.push('\n');
+    }
+    fs_err::write(&path, out).expect("write log");
+}
+
 /// Record a run-scoped gate decision under a live lease (test convenience).
 fn gate_decision(h: &Harness, run: &str, lease: &str, decision: Value) -> Value {
     h.ctl_in(
@@ -1450,4 +1474,116 @@ fn task_repair_cap_exhaustion_escalates() {
         json!(1),
         "cap-exhausted task must not open round 2: {status}"
     );
+}
+
+#[test]
+fn wall_clock_cap_parks_the_run() {
+    let h = Harness::new();
+    h.write_file(
+        ".speccy/project.yaml",
+        "caps:\n  max_run_wall_clock_minutes: 0\n",
+    );
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Wall clock");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Backdate the run start far into the past → large accumulated active time.
+    rewrite_event_ts(&h, &run, &[("run_started", None, "2020-01-01T00:00:00Z")]);
+    // An in-flight edit is present when the cap trips.
+    h.write_file("src/wip.txt", "work\n");
+
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["run_state"], json!("escalated"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    let t = &d["applied_transitions"][0];
+    assert_eq!(t["to"], json!("escalated"), "{d}");
+    assert!(
+        t["snapshot"].as_str().is_some_and(|s| !s.is_empty()),
+        "wall-clock escalation must commit a snapshot: {d}"
+    );
+}
+
+#[test]
+fn wall_clock_cap_excludes_parked_gate_time() {
+    let h = Harness::new();
+    h.write_file(
+        ".speccy/project.yaml",
+        "caps:\n  max_run_wall_clock_minutes: 60\n",
+    );
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Parked exclusion");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Drive to a task-level escalation (blocked R1).
+    let lease = claim_and_handoff(&h, &run, "T1");
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "needs staging" }),
+    );
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+
+    // Rewrite the log so the run was active only ~2 minutes, then parked for
+    // years: start at 2020-01-01T00:00:00Z, escalated at 2020-01-01T00:02:00Z.
+    // The old wall-clock computation (now − start) would blow past the 60m cap;
+    // active time (2m) is well under it.
+    rewrite_event_ts(
+        &h,
+        &run,
+        &[
+            ("run_started", None, "2020-01-01T00:00:00Z"),
+            (
+                "run_state_transitioned",
+                Some("escalated"),
+                "2020-01-01T00:02:00Z",
+            ),
+        ],
+    );
+
+    // Resume; the long parked gap must not count toward the wall-clock cap, so
+    // the run redispatches the worker instead of re-escalating.
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "provide_setup", "reason": "staging is up now" }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("dispatch_worker"), "{d}");
+    assert_eq!(d["subject"]["task"], json!("T1"), "{d}");
 }

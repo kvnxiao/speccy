@@ -208,6 +208,14 @@ pub struct RunProjection {
     /// last-activity line (DESIGN § CLI/Admin Flow).
     pub last_event_label: Option<String>,
     pub started_at: Option<Timestamp>,
+    /// Seconds the run has spent in an active state
+    /// (`implementing`/`verifying`) across completed intervals, excluding
+    /// time parked at a human gate. The currently-open interval is added on
+    /// demand by `active_seconds_at`.
+    active_seconds: i64,
+    /// Timestamp the current state interval began, used to close the open
+    /// active interval when the state changes or on `active_seconds_at`.
+    state_entered_at: Timestamp,
     max_status_seq: Option<usize>,
     last_verifying_entered_seq: Option<usize>,
     /// 1-based run-level review round: the number of times the run has entered
@@ -277,6 +285,8 @@ impl RunProjection {
                         last_event_ts: Some(ts),
                         last_event_label: Some("run started".to_string()),
                         started_at: Some(ts),
+                        active_seconds: 0,
+                        state_entered_at: ts,
                         max_status_seq: None,
                         last_verifying_entered_seq: None,
                         run_review_round: 0,
@@ -387,6 +397,7 @@ impl RunProjection {
                 });
             }
             Event::RunStateTransitioned { to, snapshot } => {
+                self.accumulate_active(ts);
                 self.state = *to;
                 if *to == RunState::Verifying {
                     self.run_review_round += 1;
@@ -397,6 +408,7 @@ impl RunProjection {
                 }
             }
             Event::RunResumed { to, reopen_review } => {
+                self.accumulate_active(ts);
                 // A gate resume re-enters without opening a review round, so it
                 // never touches `run_review_round`. When work remains it re-arms
                 // the current round's verifying marker (re-review and the
@@ -415,6 +427,30 @@ impl RunProjection {
         if let Some(label) = event_label(self, event) {
             self.last_event_label = Some(label);
         }
+    }
+
+    /// Close the just-ended state interval into `active_seconds` when the run
+    /// was in an active state, and re-anchor `state_entered_at` for the new
+    /// interval. Called on every state change (transition or resume). The delta
+    /// is clamped at zero so out-of-order or clock-skewed timestamps never
+    /// subtract time.
+    fn accumulate_active(&mut self, ts: Timestamp) {
+        if matches!(self.state, RunState::Implementing | RunState::Verifying) {
+            self.active_seconds += (ts.as_second() - self.state_entered_at.as_second()).max(0);
+        }
+        self.state_entered_at = ts;
+    }
+
+    /// Seconds the run has spent `implementing`/`verifying` as of `now`,
+    /// excluding time parked at a human gate. Adds the currently-open active
+    /// interval to the accumulated total (DESIGN § Capability Escalation).
+    #[must_use = "returns the active-time total without side effects"]
+    pub fn active_seconds_at(&self, now: Timestamp) -> i64 {
+        let mut total = self.active_seconds;
+        if matches!(self.state, RunState::Implementing | RunState::Verifying) {
+            total += (now.as_second() - self.state_entered_at.as_second()).max(0);
+        }
+        total
     }
 
     /// The task with the given id, if present.
@@ -673,5 +709,54 @@ fn task_status_wire(s: TaskStatus) -> &'static str {
         TaskStatus::Building => "building",
         TaskStatus::InReview => "in_review",
         TaskStatus::Integrated => "integrated",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::LoggedEvent;
+
+    fn at(secs: i64) -> Timestamp {
+        Timestamp::from_second(secs).expect("valid timestamp")
+    }
+
+    #[test]
+    fn active_time_excludes_parked_intervals() {
+        let t0 = 1_700_000_000i64;
+        // 10m implementing, then parked at `escalated` for 3h, then resumed and
+        // 5m verifying. Only the active 15m should count.
+        let events = vec![
+            LoggedEvent {
+                ts: at(t0),
+                event: Event::RunStarted {
+                    run_id: "run_x".into(),
+                    spec_ref: "SPEC-1".into(),
+                    spec_id: "spec_x".into(),
+                    revision_id: "spec_rev_001".into(),
+                    risk: "standard".into(),
+                    branch: "speccy/spec-1".into(),
+                    base_commit: "abc".into(),
+                    tasks: Vec::new(),
+                },
+            },
+            LoggedEvent {
+                ts: at(t0 + 600),
+                event: Event::RunStateTransitioned {
+                    to: RunState::Escalated,
+                    snapshot: None,
+                },
+            },
+            LoggedEvent {
+                ts: at(t0 + 600 + 10_800),
+                event: Event::RunResumed {
+                    to: RunState::Verifying,
+                    reopen_review: true,
+                },
+            },
+        ];
+        let run = RunProjection::replay(&events).expect("replay");
+        let now = at(t0 + 600 + 10_800 + 300);
+        assert_eq!(run.active_seconds_at(now), 15 * 60);
     }
 }

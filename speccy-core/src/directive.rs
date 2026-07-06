@@ -256,12 +256,12 @@ fn detect_resource_caps(
         reason = Some(format!("task count {} exceeds cap {max}", run.tasks.len()));
     }
     if reason.is_none()
-        && let (Some(max_min), Some(started)) =
-            (config.caps.max_run_wall_clock_minutes, run.started_at)
+        && let Some(max_min) = config.caps.max_run_wall_clock_minutes
     {
-        let elapsed_min = (jiff::Timestamp::now().as_second() - started.as_second()) / 60;
-        if elapsed_min > i64::from(max_min) {
-            reason = Some(format!("wall-clock {elapsed_min}m exceeds cap {max_min}m"));
+        // Active time only — time parked at a human gate does not count.
+        let active_min = run.active_seconds_at(jiff::Timestamp::now()) / 60;
+        if active_min > i64::from(max_min) {
+            reason = Some(format!("active time {active_min}m exceeds cap {max_min}m"));
         }
     }
     if reason.is_none() {

@@ -175,7 +175,14 @@ impl Harness {
     /// contains `needle` — used to inspect stored artifacts without hardcoding
     /// opaque store paths.
     pub fn read_home_file_containing(&self, needle: &str) -> Option<String> {
-        fn walk(dir: &Path, needle: &str) -> Option<String> {
+        fs_err::read_to_string(self.home_path_containing(needle)?).ok()
+    }
+
+    /// Recursively find the first file path under `SPECCY_HOME` containing
+    /// `needle`. Lets a test read *and* rewrite a stored event log without
+    /// hardcoding opaque store paths.
+    pub fn home_path_containing(&self, needle: &str) -> Option<PathBuf> {
+        fn walk(dir: &Path, needle: &str) -> Option<PathBuf> {
             for entry in fs_err::read_dir(dir).ok()?.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
@@ -183,7 +190,7 @@ impl Harness {
                         return Some(found);
                     }
                 } else if path.to_string_lossy().replace('\\', "/").contains(needle) {
-                    return fs_err::read_to_string(&path).ok();
+                    return Some(path);
                 }
             }
             None
