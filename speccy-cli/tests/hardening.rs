@@ -273,6 +273,122 @@ fn concurrent_command_collect_serializes() {
     assert_eq!(status["run_state"], json!("implementing"));
 }
 
+/// C2 regression: `run next` holds the store lock across its whole cycle, so
+/// many concurrent processes (same agent, all renewing the one live lease)
+/// apply the implementing→verifying derived transition exactly once. Pre-fix
+/// they can each read the same pre-transition state and append `verifying`
+/// more than once; post-fix that is impossible. Probabilistic before the fix,
+/// never false-failing after it.
+#[test]
+fn concurrent_run_next_applies_derived_transitions_once() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Concurrent derive");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Drive T1 to in_review with R1 resolved, stopping *before* the `run next`
+    // that would integrate it and cross into verifying.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.write_file("src/t1.txt", "work\n");
+    h.ctl_in(
+        &[
+            "ctl",
+            "task",
+            "record-handoff",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "task": "T1", "round": 1, "summary": "did it", "requirements_claimed": ["R1"] }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    let ev = h.ctl_in(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "kind": "review", "collected_by": "v" }),
+    );
+    h.ctl_in(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "passed", "evidence": [ev["id"]] }] }),
+    );
+
+    // Fan out concurrent `run next` calls, all as agent "a" so they renew the
+    // single live lease and all enter the cycle at once.
+    thread::scope(|scope| {
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let h = &h;
+                let run = run.as_str();
+                scope.spawn(move || {
+                    h.ctl_raw(&["ctl", "run", "next", "--run", run, "--agent", "a", "--json"]);
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().expect("thread joins");
+        }
+    });
+
+    // The implementing→verifying transition was applied exactly once.
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events.jsonl present");
+    let verifying = log.matches("\"to\":\"verifying\"").count();
+    assert_eq!(
+        verifying, 1,
+        "verifying transition applied {verifying} times:\n{log}"
+    );
+
+    // The run sits in verifying at run-review round 1, not 2 from a double-apply.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["run_state"], json!("verifying"), "{d}");
+    assert_eq!(d["round"]["current"], json!(1), "{d}");
+    assert_eq!(d["round"]["scope"], json!("run"), "{d}");
+}
+
 /// Golden render for every managed file across both targets.
 #[test]
 fn golden_all_managed_files() {

@@ -25,6 +25,13 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 
+/// Proof that the per-workspace store lock is held. Minted only inside
+/// [`Store::with_store_lock`] and required by `append_*_with`, so those appends
+/// are unreachable without holding the lock. Zero-sized; the field is private
+/// so no other module can forge one.
+#[derive(Debug)]
+pub struct StoreLockGuard(());
+
 /// A resolved workspace bound to the current git repository.
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -215,18 +222,36 @@ impl Store {
         self.run_dir(spec_id, run_id).join("events.jsonl")
     }
 
-    /// Append an event to the spec's event log under the store lock.
+    /// Append an event to the spec's event log, acquiring the store lock for
+    /// the duration of the append.
     ///
     /// # Errors
     ///
     /// Returns an error if the event cannot be serialized, written, or its
     /// read-back verification fails.
     pub fn append_spec_event(&self, spec_id: &str, event: Event) -> Result<()> {
-        let path = self.spec_events_path(spec_id);
-        self.with_store_lock(|| append_event(&path, event))
+        self.with_store_lock(|guard| self.append_spec_event_with(guard, spec_id, event))
     }
 
-    /// Append an event to the run's event log under the store lock.
+    /// Append an event to the spec's event log while the caller already holds
+    /// the store lock (proven by `_guard`). Used inside a multi-append cycle
+    /// like `run next` that wraps the whole cycle in one `with_store_lock`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event cannot be serialized, written, or its
+    /// read-back verification fails.
+    pub fn append_spec_event_with(
+        &self,
+        _guard: &StoreLockGuard,
+        spec_id: &str,
+        event: Event,
+    ) -> Result<()> {
+        append_event(&self.spec_events_path(spec_id), event)
+    }
+
+    /// Append an event to the run's event log, acquiring the store lock for the
+    /// duration of the append.
     ///
     /// # Errors
     ///
@@ -234,24 +259,50 @@ impl Store {
     /// event cannot be serialized, written, or its read-back verification
     /// fails.
     pub fn append_run_event(&self, spec_id: &str, run_id: &str, event: Event) -> Result<()> {
+        self.with_store_lock(|guard| self.append_run_event_with(guard, spec_id, run_id, event))
+    }
+
+    /// Append an event to the run's event log while the caller already holds
+    /// the store lock (proven by `_guard`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the run directory cannot be created, or if the
+    /// event cannot be serialized, written, or its read-back verification
+    /// fails.
+    pub fn append_run_event_with(
+        &self,
+        _guard: &StoreLockGuard,
+        spec_id: &str,
+        run_id: &str,
+        event: Event,
+    ) -> Result<()> {
         let dir = self.run_dir(spec_id, run_id);
         fs::create_dir_all(&dir)?;
-        let path = self.run_events_path(spec_id, run_id);
-        self.with_store_lock(|| append_event(&path, event))
+        append_event(&self.run_events_path(spec_id, run_id), event)
     }
 
     // --- locks (DESIGN § Storage Model, § Run Lease and Concurrent Writers) ---
 
-    /// Serialize concurrent event appends on a per-workspace store lock, held
-    /// only for the duration of the append. Artifact files are per-ID and
-    /// never contend, so they are written outside this lock.
+    /// Serialize concurrent event appends on a per-workspace store lock. The
+    /// closure receives a [`StoreLockGuard`] proving the lock is held, which it
+    /// passes to `append_*_with` for every append it makes. `run next` wraps
+    /// its whole cycle in one call so a concurrent cycle cannot read the
+    /// same pre-transition state and apply a derived transition twice
+    /// (DESIGN § Storage Model). Artifact files are per-ID and never
+    /// contend, so they are written outside this lock.
     ///
     /// # Errors
     ///
     /// Returns an error if the lock file cannot be created or acquired, or if
     /// `f` returns an error.
-    pub fn with_store_lock<T>(&self, f: impl FnOnce() -> Result<T>) -> Result<T> {
-        self.with_lock(&self.workspace_dir().join(".store.lock"), f)
+    pub fn with_store_lock<T>(&self, f: impl FnOnce(&StoreLockGuard) -> Result<T>) -> Result<T> {
+        self.with_lock(&self.workspace_dir().join(".store.lock"), || {
+            // Minted only here, while the lock is held; a `&StoreLockGuard` is
+            // therefore proof at compile time that the store lock is held.
+            let guard = StoreLockGuard(());
+            f(&guard)
+        })
     }
 
     /// The workspace command lock (separate from the run lease): only one

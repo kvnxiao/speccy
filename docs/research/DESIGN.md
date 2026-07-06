@@ -1517,8 +1517,18 @@ only trustworthy if every write follows this discipline.
 
 Concurrent `speccy` processes — the orchestrating skill plus lease-free
 reviewer personas — may append events at the same time. Event-log appends
-therefore serialize on a per-workspace store lock file, held only for the
-duration of the append; artifact files are written per-ID and never contend.
+therefore serialize on a per-workspace store lock file; artifact files are
+written per-ID and never contend. Most appends hold the lock only for their own
+duration. The exception is `run next`: it holds the store lock across its whole
+cycle — the opening projection read, the derived-transition appends (including
+the git snapshot commits and diffs they trigger), and the closing projection
+read — so a second concurrent `run next` cannot read the same pre-transition
+state and apply a derived transition twice. Lease-free reviewer appends may
+therefore wait briefly while a `run next` cycle holds the lock. Lock order is
+one-directional: an operation that needs both takes the command lock first, then
+the store lock (`run next` takes only the store lock; `evidence collect` takes
+the command lock around execution and the store lock only for its own append),
+so the two locks cannot deadlock.
 
 SQLite should not be committed to git. It is binary, noisy, and poor for review. JSONL event logs are text and portable, but they are still operational run history and should not be committed by default either.
 

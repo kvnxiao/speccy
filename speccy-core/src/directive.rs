@@ -25,6 +25,7 @@ use crate::projection::RunProjection;
 use crate::projection::TaskState;
 use crate::provenance;
 use crate::store::Store;
+use crate::store::StoreLockGuard;
 use serde::Serialize;
 
 /// A derived transition applied by this `run next` call (SCHEMAS § Directive).
@@ -102,28 +103,39 @@ pub fn run_next(
     run_id: &str,
     agent: &str,
 ) -> Result<serde_json::Value> {
-    let run0 = store.run_projection(spec_id, run_id)?;
-
-    // --- lease management ---
-    let (lease, resume) = manage_lease(store, spec_id, run_id, agent, &run0)?;
-
     let config = ProjectConfig::load(&store.workspace_root)?;
-    let mut applied = Vec::new();
 
-    // Guards that park the run before the loop runs: an out-of-band commit or a
-    // resource cap. Both fail closed to an escalated policy gate.
-    if let Some(t) = detect_out_of_band(store, spec_id, run_id, &run0)? {
-        applied.push(t);
-    } else if let Some(t) = detect_resource_caps(store, spec_id, run_id, &run0, &config)? {
-        applied.push(t);
-    } else {
-        // --- provenance scan over the current diff (records blocking findings) ---
-        run_provenance_scan(store, spec_id, run_id, &run0)?;
-        // --- derived transitions ---
-        applied.extend(advance(store, spec_id, run_id)?);
-    }
+    // The whole cycle runs under one store-lock hold: the opening projection
+    // read, lease management, the derived-transition appends (and the git
+    // snapshots they trigger), and the closing projection read. This stops a
+    // concurrent `run next` from reading the same pre-transition state and
+    // applying a derived transition twice (DESIGN § Storage Model).
+    let (run, applied, lease, resume) = store.with_store_lock(|guard| {
+        let run0 = store.run_projection(spec_id, run_id)?;
 
-    let run = store.run_projection(spec_id, run_id)?;
+        // --- lease management ---
+        let (lease, resume) = manage_lease(store, guard, spec_id, run_id, agent, &run0)?;
+
+        let mut applied = Vec::new();
+
+        // Guards that park the run before the loop runs: an out-of-band commit
+        // or a resource cap. Both fail closed to an escalated policy gate.
+        if let Some(t) = detect_out_of_band(store, guard, spec_id, run_id, &run0)? {
+            applied.push(t);
+        } else if let Some(t) = detect_resource_caps(store, guard, spec_id, run_id, &run0, &config)?
+        {
+            applied.push(t);
+        } else {
+            // --- provenance scan over the current diff (records blocking findings) ---
+            run_provenance_scan(store, guard, spec_id, run_id, &run0)?;
+            // --- derived transitions ---
+            applied.extend(advance(store, guard, spec_id, run_id)?);
+        }
+
+        let run = store.run_projection(spec_id, run_id)?;
+        Ok((run, applied, lease, resume))
+    })?;
+
     let directive = compute_directive(&run, &config, applied, lease, resume);
     serde_json::to_value(&directive)
         .map_err(|e| SpeccyError::io(format!("failed to serialize directive: {e}")))
@@ -134,6 +146,7 @@ pub fn run_next(
 /// cleared.
 fn manage_lease(
     store: &Store,
+    _guard: &StoreLockGuard,
     spec_id: &str,
     run_id: &str,
     agent: &str,
@@ -195,6 +208,7 @@ fn resume_attribution(
 /// a human or another tool committed; park the run at an escalated policy gate.
 fn detect_out_of_band(
     store: &Store,
+    guard: &StoreLockGuard,
     spec_id: &str,
     run_id: &str,
     run: &RunProjection,
@@ -207,7 +221,8 @@ fn detect_out_of_band(
     if head == expected {
         return Ok(None);
     }
-    store.append_run_event(
+    store.append_run_event_with(
+        guard,
         spec_id,
         run_id,
         Event::RunStateTransitioned {
@@ -228,6 +243,7 @@ fn detect_out_of_band(
 /// Capability Escalation and Give-Up Policy).
 fn detect_resource_caps(
     store: &Store,
+    guard: &StoreLockGuard,
     spec_id: &str,
     run_id: &str,
     run: &RunProjection,
@@ -255,7 +271,8 @@ fn detect_resource_caps(
         return Ok(None);
     }
     let from = run.state;
-    store.append_run_event(
+    store.append_run_event_with(
+        guard,
         spec_id,
         run_id,
         Event::RunStateTransitioned {
@@ -276,6 +293,7 @@ fn detect_resource_caps(
 /// not duplicate them). Findings feed the normal repair round.
 fn run_provenance_scan(
     store: &Store,
+    guard: &StoreLockGuard,
     spec_id: &str,
     run_id: &str,
     run: &RunProjection,
@@ -331,18 +349,23 @@ fn run_provenance_scan(
             ),
             recorded_by: "controller:provenance-scan".into(),
         };
-        store.append_run_event(spec_id, run_id, Event::FindingRecorded { finding })?;
+        store.append_run_event_with(guard, spec_id, run_id, Event::FindingRecorded { finding })?;
     }
     Ok(())
 }
 
 /// Apply derived transitions to a fixpoint, returning those applied this call.
-fn advance(store: &Store, spec_id: &str, run_id: &str) -> Result<Vec<AppliedTransition>> {
+fn advance(
+    store: &Store,
+    guard: &StoreLockGuard,
+    spec_id: &str,
+    run_id: &str,
+) -> Result<Vec<AppliedTransition>> {
     let mut applied = Vec::new();
     loop {
         let run = store.run_projection(spec_id, run_id)?;
         let config = ProjectConfig::load(&store.workspace_root)?;
-        match step(store, &run, &config)? {
+        match step(store, guard, &run, &config)? {
             Some(t) => applied.push(t),
             None => break,
         }
@@ -353,18 +376,20 @@ fn advance(store: &Store, spec_id: &str, run_id: &str) -> Result<Vec<AppliedTran
 /// Apply at most one derived transition. `None` means state is settled.
 fn step(
     store: &Store,
+    guard: &StoreLockGuard,
     run: &RunProjection,
     config: &ProjectConfig,
 ) -> Result<Option<AppliedTransition>> {
     match run.state {
-        RunState::Implementing => step_implementing(store, run, config),
-        RunState::Verifying => step_verifying(store, run, config),
+        RunState::Implementing => step_implementing(store, guard, run, config),
+        RunState::Verifying => step_verifying(store, guard, run, config),
         _ => Ok(None),
     }
 }
 
 fn step_implementing(
     store: &Store,
+    guard: &StoreLockGuard,
     run: &RunProjection,
     config: &ProjectConfig,
 ) -> Result<Option<AppliedTransition>> {
@@ -374,7 +399,8 @@ fn step_implementing(
             let resolved = run.task_requirements_resolved(active) && blocking.is_empty();
             if resolved {
                 let sha = task_snapshot(store, run, active)?;
-                store.append_run_event(
+                store.append_run_event_with(
+                    guard,
                     &run.spec_id,
                     &run.run_id,
                     Event::TaskTransitioned {
@@ -393,9 +419,10 @@ fn step_implementing(
             } else if run.task_has_blocked_requirement(active) {
                 // A blocked requirement cannot be repaired; escalate as a
                 // human/policy gate without consuming a repair round.
-                return escalate(store, run);
+                return escalate(store, guard, run);
             } else if active.round < config.caps.task_repair_rounds {
-                store.append_run_event(
+                store.append_run_event_with(
+                    guard,
                     &run.spec_id,
                     &run.run_id,
                     Event::TaskTransitioned {
@@ -412,14 +439,15 @@ fn step_implementing(
                     snapshot: None,
                 }));
             }
-            return escalate(store, run);
+            return escalate(store, guard, run);
         }
         // building, or in_review not yet reviewed — no transition; the
         // directive will dispatch the worker or verifier.
         return Ok(None);
     }
     if run.all_tasks_done() {
-        store.append_run_event(
+        store.append_run_event_with(
+            guard,
             &run.spec_id,
             &run.run_id,
             Event::RunStateTransitioned {
@@ -439,6 +467,7 @@ fn step_implementing(
 
 fn step_verifying(
     store: &Store,
+    guard: &StoreLockGuard,
     run: &RunProjection,
     config: &ProjectConfig,
 ) -> Result<Option<AppliedTransition>> {
@@ -453,7 +482,8 @@ fn step_verifying(
         return Ok(None);
     }
     if run.all_requirements_resolved() && run.run_blocking_findings().is_empty() {
-        store.append_run_event(
+        store.append_run_event_with(
+            guard,
             &run.spec_id,
             &run.run_id,
             Event::RunStateTransitioned {
@@ -471,22 +501,26 @@ fn step_verifying(
     // The run-level review left work unresolved. A blocked requirement cannot
     // be repaired, so it escalates directly as a policy gate.
     if run.has_blocked_requirement() {
-        return escalate(store, run);
+        return escalate(store, guard, run);
     }
     // Rounds remaining → spawn a run-level repair task (RT<n>) linked to the
     // failing requirements and loop back through `implementing` (DESIGN §
     // Capability Escalation and Give-Up Policy). Otherwise the cap is
     // exhausted and the run gives up.
     if run.run_review_round < config.caps.run_review_rounds {
-        return Ok(Some(spawn_run_repair(store, run)?));
+        return Ok(Some(spawn_run_repair(store, guard, run)?));
     }
-    escalate(store, run)
+    escalate(store, guard, run)
 }
 
 /// Append a dynamic run-level repair task (`RT<n>`) linked to the failing
 /// requirements and return the run to `implementing` so the normal task loop
 /// re-proves them, then re-enters `verifying` for the next review round.
-fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransition> {
+fn spawn_run_repair(
+    store: &Store,
+    guard: &StoreLockGuard,
+    run: &RunProjection,
+) -> Result<AppliedTransition> {
     let rt = next_rt_id(run);
     let failing = run.failing_requirements();
     let seed = if failing.is_empty() {
@@ -497,7 +531,8 @@ fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransit
             failing.join(", ")
         ))
     };
-    store.append_run_event(
+    store.append_run_event_with(
+        guard,
         &run.spec_id,
         &run.run_id,
         Event::TaskAppended {
@@ -513,7 +548,8 @@ fn spawn_run_repair(store: &Store, run: &RunProjection) -> Result<AppliedTransit
             seed_feedback: seed,
         },
     )?;
-    store.append_run_event(
+    store.append_run_event_with(
+        guard,
         &run.spec_id,
         &run.run_id,
         Event::RunStateTransitioned {
@@ -537,7 +573,11 @@ pub fn next_rt_id(run: &RunProjection) -> String {
 }
 
 /// Commit any in-flight diff as a labeled escalation snapshot and park the run.
-fn escalate(store: &Store, run: &RunProjection) -> Result<Option<AppliedTransition>> {
+fn escalate(
+    store: &Store,
+    guard: &StoreLockGuard,
+    run: &RunProjection,
+) -> Result<Option<AppliedTransition>> {
     ensure_on_branch(store, run)?;
     let snapshot = if gitx::is_dirty(&store.git_root)? {
         Some(gitx::commit_all(
@@ -548,7 +588,8 @@ fn escalate(store: &Store, run: &RunProjection) -> Result<Option<AppliedTransiti
         None
     };
     let from = run.state;
-    store.append_run_event(
+    store.append_run_event_with(
+        guard,
         &run.spec_id,
         &run.run_id,
         Event::RunStateTransitioned {
