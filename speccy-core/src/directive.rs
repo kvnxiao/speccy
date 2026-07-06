@@ -461,12 +461,14 @@ fn step_verifying(
         // dispatches the verifier.
         return Ok(None);
     }
-    // A critical run with accepted risk parks at the confirmation gate before
-    // verifying can complete (the directive surfaces the gate).
-    if run.needs_accepted_risk_confirmation() {
-        return Ok(None);
-    }
     if run.all_requirements_resolved() && run.run_blocking_findings().is_empty() {
+        // Verification is otherwise complete. A critical run with accepted risk
+        // now parks at the confirmation gate (the directive surfaces it); this
+        // is the only place the gate fires, so an unresolved requirement below
+        // reaches repair/escalation instead of pre-empting to the gate.
+        if run.needs_accepted_risk_confirmation() {
+            return Ok(None);
+        }
         store.append_run_event_with(
             guard,
             &run.spec_id,
@@ -626,11 +628,7 @@ fn compute_directive(
 ) -> Directive {
     let parts = match run.state {
         RunState::Implementing => implementing_parts(run, config),
-        RunState::Verifying
-            if run.run_review_reviewed() && run.needs_accepted_risk_confirmation() =>
-        {
-            accepted_risk_confirmation_parts(run)
-        }
+        RunState::Verifying if run.at_accepted_risk_gate() => accepted_risk_confirmation_parts(run),
         RunState::Verifying => verifying_parts(run, config),
         RunState::Verified => verified_parts(run),
         RunState::Escalated => escalated_parts(run),

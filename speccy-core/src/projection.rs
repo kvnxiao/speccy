@@ -468,6 +468,21 @@ impl RunProjection {
         self.requirements.values().all(|r| r.status.is_resolved())
     }
 
+    /// The critical-tier accepted-risk confirmation gate is live: the run is
+    /// `verifying` with its run-level review recorded, every requirement
+    /// resolved, no blocking finding outstanding, and a confirmation still
+    /// owed. It is the last stop before `verified`, so a still-failing or
+    /// blocked run repairs or escalates first and never reaches it (DESIGN §
+    /// Requirement Resolution Rules, § Human Gates).
+    #[must_use = "returns the gate check without side effects"]
+    pub fn at_accepted_risk_gate(&self) -> bool {
+        self.state == RunState::Verifying
+            && self.run_review_reviewed()
+            && self.all_requirements_resolved()
+            && self.run_blocking_findings().is_empty()
+            && self.needs_accepted_risk_confirmation()
+    }
+
     /// Any requirement is `blocked` — repair cannot manufacture missing
     /// environment or evidence, so such a run escalates as a policy gate.
     #[must_use = "returns the blocked check without side effects"]

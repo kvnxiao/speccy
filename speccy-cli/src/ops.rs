@@ -664,10 +664,7 @@ fn run_record_decision(
             Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
         }
         "confirm_accepted_risk" => {
-            if !(run.state == RunState::Verifying
-                && run.run_review_reviewed()
-                && run.needs_accepted_risk_confirmation())
-            {
+            if !run.at_accepted_risk_gate() {
                 return Err(SpeccyError::invalid_transition(
                     "confirm_accepted_risk is only valid at the accepted-risk confirmation gate",
                 ));

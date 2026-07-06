@@ -220,6 +220,11 @@ On a `critical` spec, any requirement resolved by `review_passed` or `waived`
 parks the run at an `await_human_gate` directive ("confirm accepted risk")
 before `verifying` can complete; the confirmation is recorded through
 `run record-decision`. This is the only tier-added gate (see "Human Gates").
+The gate is the last stop before `verified`: it fires only once the run-level
+review is recorded, every requirement is resolved, and no blocking finding
+remains. A run still holding a `failed` requirement or an unresolved blocking
+finding takes the run-repair or escalation path first — the accepted-risk gate
+never pre-empts unfinished verification.
 
 Status prerequisites, enforced by `requirement set-status`:
 
@@ -1990,8 +1995,10 @@ inside phases:
    exhaustion, a blocked requirement, resource caps,
    structured-output retry exhaustion, or out-of-band commits.
 3. **Critical-tier accepted-risk confirmation** — on `critical` specs only,
-   before `verified`, covering every `review_passed`/`waived` requirement
-   (see "Requirement Resolution Rules").
+   the last stop before `verified`, covering every `review_passed`/`waived`
+   requirement. Fires only once the run-level review is recorded, every
+   requirement is resolved, and no blocking finding remains; a still-failing
+   run repairs or escalates first (see "Requirement Resolution Rules").
 4. **Ship decision** — `verified`, answered by `/speccy-ship`, a `rework`
    decision (send it back), an amendment, or cancel.
 5. **Merge acknowledgement** — `submitted`, answered by `speccy accept`.

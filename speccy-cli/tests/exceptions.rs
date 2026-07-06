@@ -871,3 +871,186 @@ fn resource_cap_escalation_commits_the_inflight_diff() {
         "worktree not clean after snapshot: {porcelain:?}"
     );
 }
+
+#[test]
+fn accepted_risk_gate_waits_until_all_requirements_resolved() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve(
+        &h,
+        "Critical gate ordering",
+        json!({
+            "goal": "g", "scope": { "in": ["x"] }, "risk": "critical",
+            "requirements": [
+                { "id": "R1", "statement": "accepted risk",
+                  "evidence": [{ "id": "E1", "kind": "review" }] },
+                { "id": "R2", "statement": "must be proven",
+                  "evidence": [{ "id": "E1", "kind": "review" }] }
+            ],
+            "tasks": [{ "id": "T1", "requirements": ["R1", "R2"] }]
+        }),
+    );
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // R1 is always accepted risk (review_passed). R2 fails the first run-gate
+    // review, forcing a run-repair round; the accepted-risk gate must not fire
+    // while R2 is unresolved, only after R2 is re-proven.
+    let mut r2_failed = false;
+    for _ in 0..40 {
+        let d = h.ctl(&[
+            "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+        ]);
+        let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+        match d["action"].as_str().expect("action present") {
+            "claim_task" => {
+                let task = d["subject"]["task"].as_str().expect("task present");
+                h.ctl(&[
+                    "ctl", "task", "claim", "--run", &run, "--task", task, "--agent", "a",
+                    "--lease", &lease, "--json",
+                ]);
+            }
+            "dispatch_worker" => {
+                let task = d["subject"]["task"]
+                    .as_str()
+                    .expect("task present")
+                    .to_string();
+                let round = d["round"]["current"].as_u64().expect("round present");
+                h.write_file(&format!("src/{task}_r{round}.txt"), "work\n");
+                h.ctl_in(
+                    &[
+                        "ctl",
+                        "task",
+                        "record-handoff",
+                        "--run",
+                        &run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
+                    &json!({ "task": task, "round": round, "summary": "did it" }),
+                );
+            }
+            "dispatch_verifier" => {
+                let scope = d["round"]["scope"]
+                    .as_str()
+                    .expect("scope present")
+                    .to_string();
+                let reqs: Vec<String> = d["subject"]["requirements"]
+                    .as_array()
+                    .expect("reqs present")
+                    .iter()
+                    .map(|v| v.as_str().expect("req string").to_string())
+                    .collect();
+                let mut updates = Vec::new();
+                for r in &reqs {
+                    if r == "R2" && scope == "run" && !r2_failed {
+                        r2_failed = true;
+                        let f = h.ctl_in(
+                            &[
+                                "ctl", "finding", "record", "--run", &run, "--input", "-", "--json",
+                            ],
+                            &json!({ "requirement": "R2", "severity": "blocking",
+                                     "note": "regression at integration", "recorded_by": "v" }),
+                        );
+                        updates.push(
+                            json!({ "requirement": "R2", "status": "failed", "findings": [f["id"]] }),
+                        );
+                    } else {
+                        let ev = h.ctl_in(
+                            &[
+                                "ctl", "evidence", "record", "--run", &run, "--input", "-",
+                                "--json",
+                            ],
+                            &json!({ "requirement": r, "kind": "review", "collected_by": "v" }),
+                        );
+                        if r == "R1" {
+                            updates.push(json!({ "requirement": "R1", "status": "review_passed",
+                                "evidence": [ev["id"]], "residual_risk": "accepted, not proven locally" }));
+                        } else {
+                            updates.push(
+                                json!({ "requirement": r, "status": "passed", "evidence": [ev["id"]] }),
+                            );
+                        }
+                    }
+                }
+                h.ctl_in(
+                    &[
+                        "ctl",
+                        "requirement",
+                        "set-status",
+                        "--run",
+                        &run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
+                    &json!({ "updates": updates }),
+                );
+            }
+            "await_human_gate" => {
+                assert_eq!(
+                    d["subject"]["gate"],
+                    json!("accepted_risk_confirmation"),
+                    "{d}"
+                );
+                assert!(
+                    r2_failed,
+                    "gate appeared before R2 ever failed at the run gate"
+                );
+                // By the time the gate fires, R2 has been re-proven — the gate
+                // never pre-empted the unresolved requirement.
+                let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+                let r2 = status["requirements"]
+                    .as_array()
+                    .expect("reqs")
+                    .iter()
+                    .find(|r| r["id"] == json!("R2"))
+                    .expect("R2 present")
+                    .clone();
+                assert_eq!(
+                    r2["status"],
+                    json!("passed"),
+                    "gate pre-empted an unresolved R2: {status}"
+                );
+                h.ctl_in(
+                    &[
+                        "ctl",
+                        "run",
+                        "record-decision",
+                        "--run",
+                        &run,
+                        "--lease",
+                        &lease,
+                        "--input",
+                        "-",
+                        "--json",
+                    ],
+                    &json!({ "type": "confirm_accepted_risk", "reason": "risk accepted" }),
+                );
+                let done = h.ctl(&[
+                    "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+                ]);
+                assert_eq!(done["run_state"], json!("verified"), "{done}");
+                assert_eq!(done["subject"]["gate"], json!("ship_decision"), "{done}");
+                return;
+            }
+            other => panic!("unexpected {other}: {d}"),
+        }
+    }
+    panic!("never reached the accepted-risk gate");
+}
