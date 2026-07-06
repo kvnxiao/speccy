@@ -225,6 +225,12 @@ fn default_actor() -> String {
     "human".into()
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "single decision-kind dispatch; each match arm is self-contained and \
+              splitting would mean threading store/spec/target/decision through \
+              several helpers for no clarity gain"
+)]
 fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Value> {
     let decision: SpecDecisionInput = read_input(input)?;
     let spec = store.spec_state_by_ref(spec_ref)?;
@@ -258,7 +264,27 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
                 )
                 .with_details(findings));
             }
-            let supersedes = decision.supersedes.clone();
+            // Resolve and validate the superseded run BEFORE recording the
+            // approval, so a bad or non-parked run_id can never leave the spec
+            // approved with the parked run still open. A residual crash window
+            // between the approval append and the run's cancellation remains;
+            // its recovery is the gate's ordinary cancel answer (DESIGN §
+            // Amendment at the Escalation Gate).
+            let superseded = match decision.supersedes.as_ref().and_then(|s| s.run_id.clone()) {
+                Some(run_id) => {
+                    let (run_spec_id, _) = store.find_run(&run_id)?;
+                    let run = store.run_projection(&run_spec_id, &run_id)?;
+                    if !matches!(run.state, RunState::Escalated | RunState::Verified) {
+                        return Err(SpeccyError::invalid_transition(format!(
+                            "run {run_id} is {:?}, not parked at an escalation or ship gate; cannot supersede it",
+                            run.state
+                        )));
+                    }
+                    Some((run_spec_id, run_id))
+                }
+                None => None,
+            };
+
             let record = SpecDecisionRecord {
                 decision_id: ids::short_id("dec"),
                 kind: "approve".into(),
@@ -275,8 +301,7 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
             // parked run as cancelled with a linking decision record (DESIGN §
             // Amendment at the Escalation Gate).
             let mut superseded_run = None;
-            if let Some(run_id) = supersedes.as_ref().and_then(|s| s.run_id.clone()) {
-                let (run_spec_id, _) = store.find_run(&run_id)?;
+            if let Some((run_spec_id, run_id)) = superseded {
                 store.append_run_event(
                     &run_spec_id,
                     &run_id,

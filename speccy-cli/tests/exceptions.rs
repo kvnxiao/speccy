@@ -224,6 +224,11 @@ fn amendment_supersede_cancels_the_parked_run_and_reuses_the_branch() {
         .expect("branch present")
         .to_string();
 
+    // Park run1 at a gate (the ship gate) — superseding requires the target run
+    // to be parked at an escalation or ship gate.
+    let d = drive_to_gate(&h, &run1);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+
     // Open revision 2 (seeded from the approved revision) and approve it as a
     // superseding amendment of run1.
     h.ctl_in(
@@ -1586,4 +1591,118 @@ fn wall_clock_cap_excludes_parked_gate_time() {
     ]);
     assert_eq!(d["action"], json!("dispatch_worker"), "{d}");
     assert_eq!(d["subject"]["task"], json!("T1"), "{d}");
+}
+
+#[test]
+fn superseding_approval_with_unknown_run_id_records_nothing() {
+    let h = Harness::new();
+    let (spec_ref, rev1) = approve_minimal(&h, "Supersede validate");
+    let run1 = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev1,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    // Park run1 at the ship gate (verified) — a valid supersede target.
+    let d = drive_to_gate(&h, &run1);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+
+    // Open revision 2.
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "patch-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "set": {} }),
+    );
+
+    // (a) Approving rev2 with a bogus run_id fails and records nothing.
+    let bad = h.ctl_in_raw(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_002-draft",
+                 "approved_in_prose": "go",
+                 "supersedes": { "run_id": "run_does_not_exist" } }),
+    );
+    assert_eq!(bad["ok"], json!(false), "{bad}");
+    assert_eq!(bad["error"]["code"], json!("not_found"), "{bad}");
+
+    // (b) Re-approving rev2 with the real run succeeds — proving (a) left rev2
+    // unapproved (an already-approved revision would refuse here).
+    let ok = h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_002-draft",
+                 "approved_in_prose": "go",
+                 "supersedes": { "run_id": run1 } }),
+    );
+    assert_eq!(ok["approved_revision"], json!("spec_rev_002"), "{ok}");
+    assert_eq!(ok["superseded_run"], json!(run1), "{ok}");
+    let st = h.ctl(&["ctl", "run", "status", "--run", &run1, "--json"]);
+    assert_eq!(st["run_state"], json!("cancelled"), "{st}");
+
+    // (c) Superseding an already-cancelled run is refused.
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "patch-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "set": {} }),
+    );
+    let refused = h.ctl_in_raw(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_003-draft",
+                 "approved_in_prose": "go",
+                 "supersedes": { "run_id": run1 } }),
+    );
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    assert_eq!(
+        refused["error"]["code"],
+        json!("invalid_transition"),
+        "{refused}"
+    );
 }
