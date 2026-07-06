@@ -48,29 +48,25 @@ pub struct Directive {
     pub run_state: RunState,
     pub action: DirectiveAction,
     pub subject: Subject,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // Serialized explicitly (as `null` when absent) to match SCHEMAS § Directive.
     pub round: Option<Round>,
     pub packet_with: Option<String>,
     pub record_with: Option<String>,
     pub reason: String,
     pub applied_transitions: Vec<AppliedTransition>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub gate_answers: Option<Vec<GateAnswer>>,
     pub resume: Option<serde_json::Value>,
     pub lease: LeaseState,
 }
 
 /// What a directive acts on: a task, its requirements, a gate, and/or the
-/// reviewer personas.
+/// reviewer personas. Every field serializes explicitly (as `null` when
+/// absent) to match SCHEMAS § Directive.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Subject {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub requirements: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub gate: Option<Gate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub personas: Option<Vec<String>>,
 }
 

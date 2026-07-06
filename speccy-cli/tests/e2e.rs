@@ -362,6 +362,58 @@ fn run_next_is_idempotent() {
     assert_eq!(d2["applied_transitions"], json!([]));
 }
 
+/// SCHEMAS § Directive requires absent optionals to serialize as explicit
+/// `null`, not be omitted. `contains_key` proves the key is present (mere
+/// `is_null()` cannot distinguish an omitted key from a null one).
+#[test]
+fn claim_task_directive_serializes_absent_fields_as_null() {
+    let h = Harness::new();
+    let (spec_ref, revision) = approved_spec(&h);
+    let started = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
+    ]);
+    let run = started["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("claim_task"));
+
+    let obj = d.as_object().expect("directive is an object");
+    assert!(obj.contains_key("round"), "round key must be present: {d}");
+    assert!(
+        obj["round"].is_null(),
+        "round must be null at claim_task: {d}"
+    );
+
+    let subject = d["subject"].as_object().expect("subject is an object");
+    assert!(
+        subject.contains_key("gate"),
+        "gate key must be present: {d}"
+    );
+    assert!(
+        subject["gate"].is_null(),
+        "gate must be null at claim_task: {d}"
+    );
+    assert!(
+        subject.contains_key("personas"),
+        "personas key must be present: {d}"
+    );
+    assert!(
+        subject.contains_key("requirements"),
+        "requirements key must be present: {d}"
+    );
+}
+
 #[test]
 fn resume_mid_build_returns_same_worker_directive() {
     let h = Harness::new();
