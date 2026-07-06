@@ -1,7 +1,7 @@
 # Open Items
 
-Status: 0 backlog items · 16 open questions · 5 watch items
-Date: 2026-07-04 (ceremony-reduction pass)
+Status: 0 backlog items · 3 deferred perf items · 16 open questions · 5 watch items
+Date: 2026-07-05 (review-hardening fold)
 
 The live surface for undecided work. `DESIGN.md` and `TERMINOLOGY.md` are
 authoritative for current behavior; resolved decision history is archived in
@@ -12,6 +12,28 @@ authoritative for current behavior; resolved decision history is archived in
 Empty. The decision index (the last backlog item) is deferred to Later
 Capabilities; its `carry_forward` flag is recorded from M3, so the projection
 needs no data migration when multi-spec use proves it necessary.
+
+## Deferred performance
+
+Micro-optimizations on the `run next` hot path, measured but left unbuilt in the
+review-hardening fold: each is an accepted cost at current single-run,
+single-workspace scale. Build them only if dogfooding shows the loop is slow;
+none changes behavior. (Distinct from the deferred capabilities in
+`DECISION-LOG.md`, which are token-cost optimizations for review fan-out.)
+
+- **Provenance rescan memoization** — `run next` recomputes the worktree diff
+  and rebuilds the deny-terms each round even when the round's scan already
+  ran (the guard skips re-*recording* but still re-derives the inputs).
+  Candidate: memoize per (baseline, guard-seq) so an unchanged round is a
+  no-op. The scan is already once-per-round and cheap at MVP diff sizes.
+- **`scan_diff` per-added-line `to_lowercase`** — every added line is
+  lowercased into a fresh `String` for case-insensitive matching. Candidate: a
+  case-insensitive substring search that does not allocate per line. Immaterial
+  until diffs are large.
+- **Merged `git rev-parse` spawn** — the loop shells out to git several times
+  per cycle (HEAD, branch, dirty). Candidate: a single combined `git` spawn.
+  Sub-second at current scale; process-spawn overhead only shows up under
+  tight looping.
 
 ## Open questions
 

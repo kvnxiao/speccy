@@ -107,6 +107,12 @@ Durable decisions and the alternatives they rejected, grouped by area. This exis
 - **Approved revisions are immutable in place** (Q20): statements and evidence requests are frozen; agents propose draft patches, humans approve new revisions, and verifiers touch status only. A draft op against an approved spec opens revision N+1.
 - **Exports are trimmed to `export review`, `export spec`, and `export run-bundle --redact`;** others wait for proven dogfood need.
 
+## Review hardening fold (2026-07)
+
+- **A four-axis read (correctness, completeness, maintainability, performance) was folded in as Phase A controller-correctness fixes and Phase B mechanical fixes.** The durable per-decision outcomes are recorded inline in the sections above (waive `residual_risk` at all tiers, out-of-band no-snapshot, superseding-approval crash window, gate-resume review-round, `run interrupt`); the rest were bug fixes, dedupe, and doc reconciliations carrying no design change. The three accepted-cost perf items live in `OPEN-ITEMS.md`.
+- **Event-record `kind`/`severity` fields are typed enums, and replay fails closed on an out-of-vocabulary value.** `FindingRecord.severity`, `EvidenceRecord.kind`, both decision-record `kind`s, and `ChangeRef.kind` deserialize into closed enums whose canonical vocabularies live in `DESIGN.md`. A hand-corrupted log — or one written by a newer binary — fails replay as `corrupt event` rather than silently reading an unknown value as a safe default. Rejected keeping them `String`: the store is already fail-closed on truncation, and a silent severity/kind fallback is exactly the class of bug the ledger must not have. Accepted cost: a log written by a newer binary is unreadable by an older one — acceptable for a local single-binary tool. `run record-ship` now rejects an out-of-vocabulary `kind` at intake instead of storing it.
+- **A directive serializes absent optionals as explicit `null`, not omitted keys.** `Directive.round`/`gate_answers` and every `Subject` field match the SCHEMAS § Directive shape; only `AppliedTransition.snapshot` stays presence-conditional. Rejected omission: a stable key set is easier for the packs and any JSON consumer to read, and idempotency already compares by value.
+
 ## Deferred to Later Capabilities
 
 Designed in `DESIGN.md`, cut from the MVP build; none changes the state contract.
