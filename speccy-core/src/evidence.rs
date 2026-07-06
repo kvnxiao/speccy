@@ -20,8 +20,10 @@ use camino::Utf8Path;
 use serde_json::Value;
 use serde_json::json;
 use std::io::Read;
+use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -105,6 +107,9 @@ pub fn collect(
             }
             if run.truncated {
                 notes.push(format!("output truncated at {cap} bytes"));
+            }
+            if run.reader_abandoned {
+                notes.push("reader abandoned: descendant process still holds the pipe".to_string());
             }
             let note = (!notes.is_empty()).then(|| notes.join("; "));
             let record = EvidenceRecord {
@@ -201,7 +206,15 @@ struct ShellRun {
     timed_out: bool,
     /// stdout or stderr exceeded `command_output_max_bytes` and was clamped.
     truncated: bool,
+    /// A reader thread was still blocked on a pipe past the grace window (a
+    /// killed command's descendant still holds the write end); its stream is
+    /// recorded empty and the thread is leaked rather than blocking forever.
+    reader_abandoned: bool,
 }
+
+/// Grace after the process exits (or is killed) for the reader threads to drain
+/// the pipes before a still-blocked reader is abandoned.
+const READER_GRACE: Duration = Duration::from_secs(2);
 
 /// Run a command through the platform shell with a timeout and output cap.
 fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize) -> ShellRun {
@@ -228,15 +241,26 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
                 stderr: format!("failed to spawn command: {e}").into_bytes(),
                 timed_out: false,
                 truncated: false,
+                reader_abandoned: false,
             };
         }
     };
 
-    // Drain pipes on threads so a chatty command cannot deadlock on a full pipe.
+    // Drain pipes on threads so a chatty command cannot deadlock on a full
+    // pipe. The threads report over channels (rather than a joined handle) so
+    // that a reader blocked on a pipe a killed descendant still holds open can
+    // be abandoned instead of blocking this thread forever.
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
-    let out_handle = thread::spawn(move || read_capped(stdout_pipe, max_bytes));
-    let err_handle = thread::spawn(move || read_capped(stderr_pipe, max_bytes));
+    let (out_tx, out_rx) = mpsc::channel();
+    let (err_tx, err_rx) = mpsc::channel();
+    thread::spawn(move || {
+        // Send failing means the receiver was abandoned; drop the output.
+        _ = out_tx.send(read_capped(stdout_pipe, max_bytes));
+    });
+    thread::spawn(move || {
+        _ = err_tx.send(read_capped(stderr_pipe, max_bytes));
+    });
 
     let deadline = Instant::now() + timeout;
     let mut timed_out = false;
@@ -245,8 +269,9 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
             Ok(Some(status)) => break status.code().unwrap_or(-1),
             Ok(None) => {
                 if Instant::now() >= deadline {
-                    // Best-effort: the process is being abandoned either way.
-                    _ = child.kill();
+                    // Best-effort tree kill: descendants that inherited the
+                    // pipes must die too, or the readers never see EOF.
+                    kill_tree(&mut child);
                     // Reap the killed child; nothing to do with the result.
                     _ = child.wait();
                     timed_out = true;
@@ -258,15 +283,51 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
         }
     };
 
-    let (stdout, out_trunc) = out_handle.join().unwrap_or_default();
-    let (stderr, err_trunc) = err_handle.join().unwrap_or_default();
+    // One shared grace deadline across both streams so a single stuck reader
+    // cannot double the wait.
+    let grace_deadline = Instant::now() + READER_GRACE;
+    let (stdout, out_trunc, out_lost) = recv_stream(&out_rx, grace_deadline);
+    let (stderr, err_trunc, err_lost) = recv_stream(&err_rx, grace_deadline);
     ShellRun {
         exit_code,
         stdout,
         stderr,
         timed_out,
         truncated: out_trunc || err_trunc,
+        reader_abandoned: out_lost || err_lost,
     }
+}
+
+/// Await a reader thread's `(bytes, truncated)` result until `deadline`.
+/// Returns `(bytes, truncated, abandoned)`; on timeout the reader is abandoned
+/// (`abandoned = true`) and its stream is recorded empty.
+fn recv_stream(rx: &mpsc::Receiver<(Vec<u8>, bool)>, deadline: Instant) -> (Vec<u8>, bool, bool) {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    match rx.recv_timeout(remaining) {
+        Ok((buf, truncated)) => (buf, truncated, false),
+        Err(_) => (Vec::new(), false, true),
+    }
+}
+
+/// Best-effort tree kill of a timed-out command. On Windows, `taskkill /T`
+/// terminates the whole process tree so descendants that inherited the pipes
+/// die too; elsewhere (and if `taskkill` cannot be spawned) fall back to
+/// killing the direct child.
+fn kill_tree(child: &mut Child) {
+    #[cfg(windows)]
+    {
+        let spawned = Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok();
+        if spawned {
+            return;
+        }
+    }
+    _ = child.kill();
 }
 
 /// Read a pipe up to `max_bytes`, returning the clamped bytes and whether the
@@ -281,7 +342,7 @@ fn read_capped(pipe: Option<impl Read>, max_bytes: usize) -> (Vec<u8>, bool) {
     // used, capped and reported as truncated below.
     _ = pipe
         .by_ref()
-        .take((max_bytes as u64) + 1)
+        .take((max_bytes as u64).saturating_add(1))
         .read_to_end(&mut buf);
     let truncated = buf.len() > max_bytes;
     buf.truncate(max_bytes);
@@ -374,5 +435,44 @@ mod tests {
         assert!(is_secret_name("DB_PASSWORD"));
         assert!(!is_secret_name("PATH"));
         assert!(!is_secret_name("HOME"));
+    }
+
+    #[test]
+    fn read_capped_does_not_overflow_at_usize_max() {
+        // `max_bytes + 1` would overflow at usize::MAX; saturating_add avoids it.
+        let (buf, truncated) = super::read_capped(Some(&b"data"[..]), usize::MAX);
+        assert_eq!(buf, b"data");
+        assert!(!truncated);
+    }
+
+    // A timed-out command whose backgrounded descendant still holds the output
+    // pipe must not block the collector forever: the reader is abandoned after
+    // the bounded grace window. (Unix-only: relies on `sleep` + `&` semantics.)
+    #[cfg(unix)]
+    #[test]
+    fn timeout_abandons_a_reader_held_by_a_descendant() {
+        use camino::Utf8Path;
+        use std::time::Duration;
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let run = super::run_shell(
+            "echo hi; sleep 30",
+            Utf8Path::new("."),
+            Duration::from_secs(1),
+            4096,
+        );
+        let elapsed = start.elapsed();
+        assert!(run.timed_out, "command should have hit the 1s timeout");
+        assert!(
+            run.reader_abandoned,
+            "reader held by the orphaned sleep should be abandoned"
+        );
+        // 1s timeout + 2s grace; a generous bound proves it did not block on
+        // the 30s sleep.
+        assert!(
+            elapsed < Duration::from_secs(15),
+            "collector blocked too long: {elapsed:?}"
+        );
     }
 }

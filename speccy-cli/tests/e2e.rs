@@ -550,3 +550,68 @@ fn integrated_task_snapshot_survives_resume() {
     }
     panic!("never reached T2 claim");
 }
+
+/// A spec with multiple carry-forward decisions surfaces all of them as
+/// `hints` in another spec's planning packet (not just the first).
+#[test]
+fn planning_packet_surfaces_all_carry_forward_hints() {
+    let h = Harness::new();
+
+    // Spec A: two carry-forward decisions.
+    let a = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "session hardening", "title": "Session hardening" }),
+    );
+    let a_ref = a["spec_ref"]
+        .as_str()
+        .expect("spec_ref present")
+        .to_string();
+    for note in ["tokens stored hashed", "rotate session on login"] {
+        h.ctl_in(
+            &[
+                "ctl",
+                "spec",
+                "record-decision",
+                "--spec",
+                &a_ref,
+                "--input",
+                "-",
+                "--json",
+            ],
+            &json!({ "type": "scope_change", "revision": "spec_rev_001",
+                     "note": note, "carry_forward": true }),
+        );
+    }
+
+    // Spec B: the one being planned.
+    let b = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "passwordless login" }),
+    );
+    let b_ref = b["spec_ref"]
+        .as_str()
+        .expect("spec_ref present")
+        .to_string();
+
+    let planning = h.ctl(&["ctl", "packet", "planning", "--spec", &b_ref, "--json"]);
+    let candidates = planning["prior_context_candidates"]
+        .as_array()
+        .expect("prior_context_candidates array");
+    let entry = candidates
+        .iter()
+        .find(|c| c["spec_ref"] == json!(a_ref))
+        .expect("spec A surfaces as prior context");
+    let hints = entry["hints"].as_array().expect("hints array");
+    assert_eq!(
+        hints.len(),
+        2,
+        "both carry-forward decisions surface: {entry}"
+    );
+    let joined = hints
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect::<Vec<_>>()
+        .join(" | ");
+    assert!(joined.contains("tokens stored hashed"), "{joined}");
+    assert!(joined.contains("rotate session on login"), "{joined}");
+}

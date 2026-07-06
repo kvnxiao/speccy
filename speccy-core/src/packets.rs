@@ -34,20 +34,25 @@ fn prior_context_candidates(store: &Store, current_ref: &str) -> Result<Value> {
         ) {
             continue;
         }
-        let hint = spec.decisions.iter().find(|d| d.carry_forward).map(|d| {
-            format!(
-                "{}: {}",
-                d.decision_id,
-                d.note
-                    .clone()
-                    .unwrap_or_else(|| d.kind.as_str().to_string())
-            )
-        });
+        let hints: Vec<String> = spec
+            .decisions
+            .iter()
+            .filter(|d| d.carry_forward)
+            .map(|d| {
+                format!(
+                    "{}: {}",
+                    d.decision_id,
+                    d.note
+                        .clone()
+                        .unwrap_or_else(|| d.kind.as_str().to_string())
+                )
+            })
+            .collect();
         out.push(json!({
             "spec_ref": spec.spec_ref,
             "title": spec.title,
             "status": spec.status,
-            "hint": hint,
+            "hints": hints,
         }));
     }
     Ok(Value::Array(out))

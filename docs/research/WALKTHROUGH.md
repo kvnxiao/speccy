@@ -307,7 +307,7 @@ $ speccy ctl packet planning --spec SPEC-20260630-A7F4 --json
     "prior_context_candidates": [
       { "spec_ref": "SPEC-20260401-9C21", "title": "Session hardening",
         "status": "accepted",
-        "hint": "dec_20260401_003: tokens/credentials stored hashed" } ],
+        "hints": ["dec_20260401_003: tokens/credentials stored hashed"] } ],
     "policy": { "risk_default": "standard",
                 "task_repair_cap": 3, "run_review_cap": 3 },
     "output_contract": { "submit_with": "spec record-draft",
@@ -315,7 +315,7 @@ $ speccy ctl packet planning --spec SPEC-20260630-A7F4 --json
                                       "requirements", "tasks"] } } }
 ```
 
-`prior_context_candidates` is the active-spec prior context — the accepted `SPEC-20260401-9C21` surfaces because it is not archived. Its carried-forward decision becomes the card's "Prior context" line. (Surfacing decisions from *archived* specs in planning is deferred to Later Capabilities; the `carry_forward` flag is recorded now. See "Carry-Forward Decisions" in `DESIGN.md`.)
+`prior_context_candidates` is the active-spec prior context — the accepted `SPEC-20260401-9C21` surfaces because it is not archived. Its carried-forward decisions (all of them, as `hints`) become the card's "Prior context" line. (Surfacing decisions from *archived* specs in planning is deferred to Later Capabilities; the `carry_forward` flag is recorded now. See "Carry-Forward Decisions" in `DESIGN.md`.)
 
 #### 2.3 Draft, lint, patch
 

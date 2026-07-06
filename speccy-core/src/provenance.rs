@@ -56,15 +56,24 @@ pub fn scan_diff(diff: &str, terms: &[String]) -> Vec<ProvenanceHit> {
     let mut current_file: Option<String> = None;
     let mut exempt = false;
     let mut new_line = 0usize;
+    // A `+++ ` line is a file header only when it pairs with a preceding
+    // `--- ` line; otherwise it is an added content line (a `+` marker on text
+    // that itself begins with `++ `) and must be scanned like any other.
+    let mut prev_minus_header = false;
 
     for line in diff.lines() {
-        if let Some(path) = line.strip_prefix("+++ ") {
-            let path = path.strip_prefix("b/").unwrap_or(path).trim();
-            exempt = path == "/dev/null" || is_exempt(path);
-            current_file = Some(path.to_string());
-            continue;
+        if prev_minus_header {
+            prev_minus_header = false;
+            if let Some(path) = line.strip_prefix("+++ ") {
+                let path = path.strip_prefix("b/").unwrap_or(path).trim();
+                exempt = path == "/dev/null" || is_exempt(path);
+                current_file = Some(path.to_string());
+                continue;
+            }
+            // Not a paired header; fall through and process normally.
         }
         if line.starts_with("--- ") {
+            prev_minus_header = true;
             continue;
         }
         if let Some(rest) = line.strip_prefix("@@") {
@@ -72,7 +81,8 @@ pub fn scan_diff(diff: &str, terms: &[String]) -> Vec<ProvenanceHit> {
             continue;
         }
         if let Some(added) = line.strip_prefix('+') {
-            // (Not a `+++` header — those are handled above.)
+            // Any added line that is not a paired `+++ ` header — including one
+            // whose content begins with `++ ` — is scanned here.
             if !exempt && let Some(file) = &current_file {
                 let lowered_added = added.to_lowercase();
                 if let Some((_, original)) = lowered
@@ -147,7 +157,7 @@ diff --git a/.claude/agents/x.md b/.claude/agents/x.md
 
     #[test]
     fn clean_diff_has_no_hits() {
-        let diff = "+++ b/src/ok.ts\n@@ -0,0 +1,1 @@\n+const x = 1;\n";
+        let diff = "--- a/src/ok.ts\n+++ b/src/ok.ts\n@@ -0,0 +1,1 @@\n+const x = 1;\n";
         let terms = deny_terms("SPEC-1", "spec_x", "run_x", [], &[]);
         assert!(scan_diff(diff, &terms).is_empty());
     }
@@ -155,8 +165,27 @@ diff --git a/.claude/agents/x.md b/.claude/agents/x.md
     #[test]
     fn bare_task_ids_are_not_terms() {
         // T1 is not in the deny-list, so a diff mentioning it is clean.
-        let diff = "+++ b/src/t.ts\n@@ -0,0 +1,1 @@\n+const T1 = compute();\n";
+        let diff = "--- a/src/t.ts\n+++ b/src/t.ts\n@@ -0,0 +1,1 @@\n+const T1 = compute();\n";
         let terms = deny_terms("SPEC-1", "spec_x", "run_x", ["R-AUTH-003".into()], &[]);
         assert!(scan_diff(diff, &terms).is_empty());
+    }
+
+    #[test]
+    fn added_content_line_starting_with_plus_plus_is_scanned() {
+        // An added line whose text begins with `++ ` is content, not a paired
+        // `+++ ` file header, so a leak on it is still flagged.
+        let diff = "\
+--- a/src/x.ts
++++ b/src/x.ts
+@@ -1,1 +1,2 @@
+ keep
++++ speccy marker leaked here
+";
+        let terms = deny_terms("SPEC-1", "spec_x", "run_x", [], &[]);
+        let hits = scan_diff(diff, &terms);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        let hit = hits.first().expect("exactly one hit was asserted above");
+        assert_eq!(hit.file, "src/x.ts");
+        assert_eq!(hit.term, "speccy");
     }
 }
