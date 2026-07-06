@@ -902,19 +902,25 @@ a requirement above; the design requirement remains a structured template
 engine with testable render inputs and outputs, not loyalty to any particular
 engine.
 
-The template context should include at least:
+The base context every template receives supplies:
 
 - `target.harness`: `codex`, `claude`, or a future harness key.
-- `target.scope`: `repo` or `user`.
-- `capabilities`: supported primitives such as slash commands, skills,
-  subagents, MCP, hooks, structured user questions, and plan mode.
-- `names`: harness-native names for important actions and tools, such as the
-  planning command/mode and structured-question tool.
-- `paths`: rendered output paths for skills, commands, agents, and pack files.
-- `controller`: the `speccy ctl ... --json` command prefix and controller
-  protocol version.
-- `pack`: pack version, source template IDs, managed file IDs, and template
-  hashes.
+- `target.scope`: pack scope (`repo`).
+- `names`: harness-native names for important actions and tools — currently the
+  planning command/mode and the structured-question tool.
+- `controller`: the `speccy ctl` command prefix and controller protocol
+  version.
+- `pack.version`: the pack format version.
+
+Other context is added only for the templates that need it, not supplied
+uniformly: reviewer files get per-persona context (`name`, `model`, `charter`),
+and richer keys such as `capabilities` (supported primitives — slash commands,
+skills, subagents, MCP, hooks, structured user questions, plan mode) and
+`paths` (rendered output paths) are added when a template requires them.
+Per-file pack hashes are computed after render (they are self-referential) and
+are not a render input. `minijinja`'s strict-undefined mode enforces this
+contract: a template that references a variable the renderer does not supply
+fails the render rather than emitting a blank.
 
 Shared partials should hold harness-neutral policy, acceptance, review, and
 repair guidance. Target overlays should provide harness-specific prose,

@@ -59,15 +59,22 @@ fn main() -> ExitCode {
         Command::Export(ExportCommand::Review(args)) => emit_text(|store| {
             humancli::export_review(store, args.selector.as_deref(), args.dest.as_deref())
         }),
-        Command::Export(_) => {
-            anstream::eprintln!(
-                "{} export spec / run-bundle arrive in a later milestone",
-                style::paint(style::ERR, "speccy:")
-            );
-            ExitCode::FAILURE
-        }
+        // Not routed through emit_text: it would open the store first and turn
+        // "not implemented" into a store error outside a workspace.
+        Command::Export(ExportCommand::Spec(_)) => not_implemented("export spec"),
+        Command::Export(ExportCommand::RunBundle(_)) => not_implemented("export run-bundle"),
         Command::Install(args) => install(&args),
     }
+}
+
+/// Report an unimplemented command to stderr and fail, without opening the
+/// store (so it works outside a workspace).
+fn not_implemented(what: &str) -> ExitCode {
+    anstream::eprintln!(
+        "{} {what} is not implemented yet; planned for a later milestone",
+        style::paint(style::ERR, "speccy:")
+    );
+    ExitCode::FAILURE
 }
 
 /// `speccy install` resolves the repo root via git and renders/manages packs.
