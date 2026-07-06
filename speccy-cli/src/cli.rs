@@ -113,6 +113,9 @@ pub enum RunOp {
     RecordDecision(RunInput),
     /// Record a ship: `verified -> submitted` plus the change reference.
     RecordShip(RunInput),
+    /// Signal a harness interrupt (structured-output retry exhaustion); parks
+    /// the run at the escalation gate.
+    Interrupt(RunInput),
 }
 
 #[derive(Debug, Subcommand)]

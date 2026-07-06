@@ -1,5 +1,5 @@
 ---
-source: tests/pack.rs
+source: speccy-cli/tests/pack.rs
 expression: "find(&files, \"speccy-implement/SKILL.md\")"
 ---
 ---
@@ -30,6 +30,14 @@ cleared session is recommended. Exits early unless the revision is `approved`.
      with `requirement set-status`
    - `await_human_gate` -> stop and surface the gate's packet
    - `halt`, an unknown action, or any controller error -> stop and surface it (fail closed)
+
+If a dispatched subagent cannot return valid structured output — a malformed
+handoff or status payload — retry it, up to the project's structured-output
+retry cap. If it still cannot, call
+`speccy ctl run interrupt --run <id> --lease <token> --input interrupt.json --json`
+with `reason: structured_output_retries_exhausted`; the controller snapshots the
+in-flight work and parks the run at the escalation gate for a human. Do not
+count retries against repair rounds — that is the controller's job, not yours.
 
 Read the returned state after every call; never infer the next step from
 transcript memory — only `run next` decides sequencing, rounds, and gates. If a

@@ -261,7 +261,8 @@ pub struct RunDecisionRecord {
     #[serde(rename = "type")]
     // Gate answers: waive | provide_setup | confirm_accepted_risk | rework | cancel.
     // Plus the controller-generated `superseded`, written when an amendment's
-    // superseding approval closes this run (DESIGN § Amendment at the Escalation Gate).
+    // superseding approval closes this run (DESIGN § Amendment at the Escalation
+    // Gate), and `interrupt`, written by `run interrupt` on a harness give-up.
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requirement: Option<String>,

@@ -1706,3 +1706,189 @@ fn superseding_approval_with_unknown_run_id_records_nothing() {
         "{refused}"
     );
 }
+
+#[test]
+fn run_interrupt_escalates_with_reason_and_snapshot() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Interrupt");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Claim T1 and start work (leaving a dirty worktree), then the worker's
+    // structured output keeps failing and the harness interrupts.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.write_file("src/wip.txt", "half-done\n");
+
+    let out = h.ctl_in(
+        &[
+            "ctl",
+            "run",
+            "interrupt",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "reason": "structured_output_retries_exhausted",
+                 "detail": "verifier returned malformed status JSON 3x" }),
+    );
+    assert_eq!(out["run_state"], json!("escalated"), "{out}");
+    assert_eq!(
+        out["reason"],
+        json!("structured_output_retries_exhausted"),
+        "{out}"
+    );
+    assert!(
+        out["snapshot"].as_str().is_some_and(|s| !s.is_empty()),
+        "interrupt must commit a snapshot: {out}"
+    );
+    // The snapshot captured the in-flight work; the worktree is clean.
+    let porcelain = h.git(&["status", "--porcelain"]);
+    assert!(
+        porcelain.trim().is_empty(),
+        "worktree not clean: {porcelain:?}"
+    );
+
+    // The run parks at the escalation gate; provide_setup resumes it.
+    let gate = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+    let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
+    gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "provide_setup", "reason": "model is behaving now" }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("dispatch_worker"), "{d}");
+    assert_eq!(d["subject"]["task"], json!("T1"), "{d}");
+}
+
+#[test]
+fn run_interrupt_refuses_parked_runs_and_bad_reasons() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Interrupt guards");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // (b) An unknown reason is refused before anything is touched.
+    let bad_reason = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "interrupt",
+            "--run",
+            &run,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "reason": "bogus" }),
+    );
+    assert_eq!(bad_reason["ok"], json!(false), "{bad_reason}");
+    assert_eq!(
+        bad_reason["error"]["code"],
+        json!("validation_failed"),
+        "{bad_reason}"
+    );
+
+    // (c) A valid reason without a live lease is refused.
+    let no_lease = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "interrupt",
+            "--run",
+            &run,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "reason": "structured_output_retries_exhausted" }),
+    );
+    assert_eq!(no_lease["ok"], json!(false), "{no_lease}");
+    assert_eq!(no_lease["error"]["code"], json!("lease_held"), "{no_lease}");
+
+    // (a) A parked (verified) run cannot be interrupted, even with a live lease.
+    let (spec2, rev2) = approve_minimal(&h, "Parked interrupt");
+    let run2 = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec2,
+        "--revision",
+        &rev2,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let verified = drive_to_gate(&h, &run2);
+    assert_eq!(verified["run_state"], json!("verified"), "{verified}");
+    let lease = verified["lease"]["token"]
+        .as_str()
+        .expect("lease")
+        .to_string();
+    let parked = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "interrupt",
+            "--run",
+            &run2,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "reason": "structured_output_retries_exhausted" }),
+    );
+    assert_eq!(parked["ok"], json!(false), "{parked}");
+    assert_eq!(
+        parked["error"]["code"],
+        json!("invalid_transition"),
+        "{parked}"
+    );
+}

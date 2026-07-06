@@ -12,6 +12,7 @@ use crate::error::Result;
 use crate::error::SpeccyError;
 use crate::event::Event;
 use crate::event::FindingRecord;
+use crate::event::RunDecisionRecord;
 use crate::gitx;
 use crate::ids;
 use crate::lease::LeaseState;
@@ -138,6 +139,54 @@ pub fn run_next(
     let directive = compute_directive(&run, &config, applied, lease, resume);
     serde_json::to_value(&directive)
         .map_err(|e| SpeccyError::io(format!("failed to serialize directive: {e}")))
+}
+
+/// Record a harness interrupt (e.g. structured-output retry exhaustion) and
+/// park the run at the escalation gate, committing the in-flight diff as a
+/// labeled snapshot. The controller only receives the signal — the retry count
+/// lives in pack prose, so the controller stays deterministic (DESIGN §
+/// Capability Escalation and Give-Up Policy).
+///
+/// # Errors
+///
+/// Returns an error if the run is not `implementing`/`verifying`, or if the
+/// store or git operations fail.
+pub fn interrupt_run(
+    store: &Store,
+    spec_id: &str,
+    run_id: &str,
+    reason: &str,
+    detail: Option<&str>,
+) -> Result<AppliedTransition> {
+    store.with_store_lock(|guard| {
+        let run = store.run_projection(spec_id, run_id)?;
+        if !matches!(run.state, RunState::Implementing | RunState::Verifying) {
+            return Err(SpeccyError::invalid_transition(format!(
+                "run is {:?}, not implementing or verifying; cannot interrupt",
+                run.state
+            )));
+        }
+        let note = detail.map_or_else(|| reason.to_string(), |d| format!("{reason}: {d}"));
+        store.append_run_event_with(
+            guard,
+            spec_id,
+            run_id,
+            Event::RunDecision {
+                decision: RunDecisionRecord {
+                    decision_id: ids::short_id("dec"),
+                    kind: "interrupt".into(),
+                    requirement: None,
+                    task: None,
+                    actor: "harness".into(),
+                    reason: Some(note),
+                    residual_risk: None,
+                    carry_forward: false,
+                },
+            },
+        )?;
+        escalate(store, guard, &run)?
+            .ok_or_else(|| SpeccyError::io("interrupt failed to escalate the run"))
+    })
 }
 
 /// Handle lease contention, expiry-clearing, and renewal. Returns the live

@@ -310,6 +310,21 @@ head_sha: a7f4c2e
 base: main
 ```
 
+## `run interrupt` — interrupt.json
+
+Signals the controller that the harness gave up on a step it cannot express as
+a gate decision — currently only structured-output retry exhaustion. The
+controller validates the run state and lease, records the reason, commits the
+in-flight diff as a labeled snapshot, and parks the run at the escalation gate.
+Lease-gated: `--run <id> --lease <token> --input interrupt.json`.
+
+```yaml
+reason: structured_output_retries_exhausted   # closed vocabulary; the only MVP value
+detail: "verifier returned malformed status JSON 3x"   # optional; free text
+```
+
+Response `data`: `{ "run_state": "escalated", "reason": <reason>, "snapshot": <sha|null> }`.
+
 ## Packets
 
 Packet operations take no `--input`. Their `data` payloads are

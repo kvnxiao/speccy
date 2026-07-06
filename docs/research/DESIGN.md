@@ -565,11 +565,11 @@ needs_repair holding state. Run transitions:
 `implementing -> verifying` when every task is `integrated`,
 `verifying -> verified` when every requirement is resolved and any
 critical-tier confirmation gate is answered, and `-> escalated` on cap
-exhaustion, a blocked requirement, or a resource cap — each committing the
-in-flight diff as a labeled escalation snapshot — and on an out-of-band
-commit, which escalates but takes **no** snapshot: a snapshot commit there
-would bury or misattribute the human's out-of-band commit and worktree edits
-(see "Run Branch and Snapshot Policy").
+exhaustion, a blocked requirement, a resource cap, or a harness interrupt
+(`run interrupt`) — each committing the in-flight diff as a labeled escalation
+snapshot — and on an out-of-band commit, which escalates but takes **no**
+snapshot: a snapshot commit there would bury or misattribute the human's
+out-of-band commit and worktree edits (see "Run Branch and Snapshot Policy").
 `run start` opens the run directly in `implementing`. The run-level
 review-round counter counts review rounds *opened* — each derived
 `-> verifying` transition — so a gate resume, which re-enters `verifying` or
@@ -1079,6 +1079,7 @@ speccy ctl run status --run <id> --json
 speccy ctl run next --run <id> --agent <id> --json
 speccy ctl run record-decision --run <id> --lease <token> --input decision.json --json
 speccy ctl run record-ship --run <id> --lease <token> --input change-ref.json --json
+speccy ctl run interrupt --run <id> --lease <token> --input interrupt.json --json
 
 speccy ctl task claim --run <id> --task <id> --agent <id> --lease <token> --json
 speccy ctl task record-handoff --run <id> --lease <token> --input handoff.json --json
@@ -1351,6 +1352,8 @@ Why the judgment is per requirement, not per task:
   status.
 
 The same fail-closed rule covers resource caps beyond rounds: optional policy caps on task count and run wall-clock. Speccy makes no LLM calls and cannot meter tokens, so token budgets belong to the harness. Hitting any cap parks the run at an `escalated` policy gate; the human raises the cap or cancels, and the same run resumes. The wall-clock cap measures *active* time — the intervals the run spent `implementing` or `verifying` — and excludes time parked at a human gate (`escalated`, `verified`), so a run that waited overnight for a human answer is not punished for the wait. Active time is derived from event timestamps at replay, not stored as separate state.
+
+Structured-output retry exhaustion is the one give-up the controller cannot detect itself, because it never runs an LLM and never sees a subagent's raw output. A dispatched worker/verifier/reviewer that cannot return valid structured output after the pack retries it up to `caps.structured_output_retries` (default 3) is a dead end the same as a cap. The pack prose owns the count and, on exhaustion, calls `run interrupt --input interrupt.json` with `reason: structured_output_retries_exhausted`; the controller validates the run is active and the lease is live, records the reason as a run decision, commits the in-flight diff as a labeled escalation snapshot, and parks the run at the existing escalation gate. No new gate or state — the reason rides the escalation packet's decision list. The controller stays deterministic: it receives the signal, it does not count retries.
 
 The caps are two policy values in `.speccy/project.yaml`, not hard-coded constants: one for per-task repair rounds and one for run-level review rounds, each defaulting to 3. The controller reads and enforces them. Every `run next` directive that starts a repair round carries the counter — "spawn repair round 2 of 3" — and the controller returns an escalation directive instead of another round when the cap is exhausted, so the orchestrating agent reports rounds without ever counting them. High-risk specs can lower the caps and prototypes can raise them without touching pack prose.
 

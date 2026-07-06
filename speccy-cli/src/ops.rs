@@ -380,7 +380,41 @@ fn run(store: &Store, op: RunOp) -> Result<Value> {
         RunOp::RecordShip(args) => {
             run_record_ship(store, &args.run, args.lease.as_deref(), &args.input)
         }
+        RunOp::Interrupt(args) => {
+            run_interrupt(store, &args.run, args.lease.as_deref(), &args.input)
+        }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct InterruptInput {
+    reason: String,
+    detail: Option<String>,
+}
+
+fn run_interrupt(store: &Store, run_id: &str, lease: Option<&str>, input: &str) -> Result<Value> {
+    let payload: InterruptInput = read_input(input)?;
+    // Closed vocabulary; a single MVP value.
+    if payload.reason != "structured_output_retries_exhausted" {
+        return Err(SpeccyError::validation(format!(
+            "unknown interrupt reason `{}`; expected structured_output_retries_exhausted",
+            payload.reason
+        )));
+    }
+    let (spec_id, _) = store.find_run(run_id)?;
+    store.verify_lease(&spec_id, run_id, lease)?;
+    let applied = directive::interrupt_run(
+        store,
+        &spec_id,
+        run_id,
+        &payload.reason,
+        payload.detail.as_deref(),
+    )?;
+    Ok(json!({
+        "run_state": "escalated",
+        "reason": payload.reason,
+        "snapshot": applied.snapshot,
+    }))
 }
 
 fn run_start(store: &Store, spec_ref: &str, revision: &str) -> Result<Value> {
