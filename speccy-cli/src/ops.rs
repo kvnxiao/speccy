@@ -386,12 +386,16 @@ fn run_start(store: &Store, spec_ref: &str, revision: &str) -> Result<Value> {
     }
 
     let branch = ids::run_branch(&spec.spec_ref, spec.title.as_deref());
-    let base_commit = gitx::head(&store.git_root)?;
     if gitx::branch_exists(&store.git_root, &branch)? {
         gitx::checkout(&store.git_root, &branch)?;
     } else {
         gitx::create_branch(&store.git_root, &branch)?;
     }
+    // Record the base *after* checkout: the run branch's tip. For a reused
+    // branch that is the earlier run's last snapshot, not the unrelated commit
+    // the user happened to have checked out (`create_branch` is `checkout -b`,
+    // so HEAD is unchanged and this works for both paths).
+    let base_commit = gitx::head(&store.git_root)?;
 
     let risk = rev.draft.risk.clone().unwrap_or_else(|| "standard".into());
     let tasks: Vec<TaskInit> = rev

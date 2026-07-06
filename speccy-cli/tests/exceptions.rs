@@ -16,6 +16,7 @@ mod common;
 
 use common::Harness;
 use common::approve_minimal;
+use common::drive_to_gate;
 use serde_json::Value;
 use serde_json::json;
 
@@ -725,4 +726,103 @@ fn max_tasks_cap_parks_the_run() {
         "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
     ]);
     assert_eq!(d["run_state"], json!("escalated"), "{d}");
+}
+
+#[test]
+fn run_start_on_existing_branch_records_branch_tip_as_base() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Reuse branch");
+    let run1 = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    // Drive run1 to verified so the branch advances past its base with snapshots.
+    let d = drive_to_gate(&h, &run1);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+
+    // Return to main so HEAD differs from the run branch tip, then reuse the
+    // branch for a second run.
+    h.git(&["checkout", "main"]);
+    let run2 = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // The reused run's base is the branch tip captured *after* checkout, so the
+    // first directive claims the first task — it does not misread the branch
+    // tip as an out-of-band commit and escalate.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run2, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("claim_task"), "{d}");
+    assert_eq!(d["run_state"], json!("implementing"), "{d}");
+    assert_eq!(d["applied_transitions"], json!([]), "{d}");
+}
+
+#[test]
+fn out_of_band_commit_parks_the_run() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Out of band");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Claim T1 so the run is actively implementing.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+
+    // A human commits out-of-band on the run branch.
+    h.write_file("hand-edit.txt", "human change\n");
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "human out-of-band commit"]);
+
+    // The run parks at an escalated policy gate; the out-of-band escalation
+    // takes NO snapshot (a snapshot commit would bury the human's commit).
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("await_human_gate"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    assert_eq!(d["run_state"], json!("escalated"), "{d}");
+    let t = &d["applied_transitions"][0];
+    assert_eq!(t["to"], json!("escalated"), "{d}");
+    assert_eq!(
+        t["snapshot"],
+        json!(null),
+        "out-of-band escalation must take no snapshot: {d}"
+    );
 }

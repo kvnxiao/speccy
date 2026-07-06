@@ -779,12 +779,16 @@ own partial diff — as a permanent false positive.
 The first `run start` for a spec creates the spec's run branch,
 `speccy/<spec-ref-lowercased>-<slug>` (for example
 `speccy/spec-20260630-a7f4-passwordless-login`), from the currently
-checked-out HEAD, and records that HEAD as the run's base. Later runs of the
-same spec — after an amendment or a cancelled run — reuse the same branch,
-which is how a superseding run reconciles the escalation snapshot instead of
-redoing work. `run start` never chooses a base branch itself: whatever the
-user has checked out is the base, and the clean-worktree refusal is the only
-precondition.
+checked-out HEAD. The base recorded is the run branch's tip *after* checkout:
+for a first run that is the HEAD it was branched from; for a later run that
+reuses an existing branch — after an amendment or a cancelled run — it is that
+branch's tip, which already carries the earlier run's snapshots. Recording the
+pre-checkout HEAD would set the base to whatever unrelated commit the user had
+out, making the reused run's diff and out-of-band check span commits that are
+not its own. Reusing the branch is how a superseding run reconciles the
+escalation snapshot instead of redoing work. `run start` never chooses a base
+branch itself: whatever the user has checked out is the branch point, and the
+clean-worktree refusal is the only precondition.
 
 Controller-created commits — task snapshots and escalation snapshots — use
 the committer identity `Speccy <noreply@speccy.local>` and the message
