@@ -1779,6 +1779,25 @@ fn run_interrupt_escalates_with_reason_and_snapshot() {
         "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
     ]);
     assert_eq!(gate["subject"]["gate"], json!("escalation"), "{gate}");
+
+    // The interrupt reason rides the escalation packet's decision list and its
+    // rendered markdown (DESIGN § Escalation Packet).
+    let pkt = h.ctl(&["ctl", "packet", "escalation", "--run", &run, "--json"]);
+    let decisions = pkt["decisions"].as_array().expect("decisions present");
+    assert!(
+        decisions.iter().any(|d| d["type"] == json!("interrupt")
+            && d["reason"]
+                .as_str()
+                .is_some_and(|r| r.contains("structured_output_retries_exhausted"))),
+        "interrupt reason missing from escalation packet decisions: {pkt}"
+    );
+    assert!(
+        pkt["markdown"]
+            .as_str()
+            .is_some_and(|m| m.contains("structured_output_retries_exhausted")),
+        "interrupt reason missing from escalation markdown: {pkt}"
+    );
+
     let lease = gate["lease"]["token"].as_str().expect("lease").to_string();
     gate_decision(
         &h,

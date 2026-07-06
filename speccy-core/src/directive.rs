@@ -218,12 +218,16 @@ fn manage_lease(
                     l.agent, l.expires_at
                 )));
             }
-            // Renewal slack: while at least half the TTL remains, embed the
-            // on-disk lease unchanged and skip the rewrite. The lease is
-            // derived state (DESIGN § Run Lease), so a skipped renewal only
-            // risks an earlier expiry, never a torn file.
+            // Renewal debounce: skip the rewrite only for rapid back-to-back
+            // calls — a lease renewed within the last tenth of its TTL. The
+            // on-disk expiry then never trails real time by more than that, so
+            // the worst-case dispatch window stays near the full TTL instead of
+            // halving to ttl/2. The lease is derived state (DESIGN § Run Lease),
+            // so a skipped renewal only risks an earlier expiry, never a torn
+            // file.
+            let ttl = crate::lease::ttl_seconds();
             let remaining = l.expires_at.as_second() - now.as_second();
-            if remaining >= crate::lease::ttl_seconds() / 2 {
+            if remaining > ttl - ttl / 10 {
                 return Ok((l, None));
             }
             let renewed = l.renewed();

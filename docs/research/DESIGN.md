@@ -614,9 +614,12 @@ controller contract includes a run-level lease:
   ID, with a 10-minute expiry (MVP default). The token returns with the
   directive and is passed back as `--lease <token>` on state-mutating
   operations. Agent IDs are opaque caller-chosen strings; the packs use a
-  `<harness>:<session>` convention. Renewal may be skipped while ample TTL
-  remains (at least half the TTL); the lease is derived state, so a skipped
-  renewal only risks an earlier expiry, never a torn on-disk lease.
+  `<harness>:<session>` convention. Renewal is skipped only for rapid
+  back-to-back calls — a lease renewed within the last tenth of its TTL — so
+  the on-disk expiry never trails real time by more than that and the
+  worst-case dispatch window stays near the full TTL; the lease is derived
+  state, so a skipped renewal only risks an earlier expiry, never a torn
+  on-disk lease.
 - State-mutating operations — `task claim`, `task record-handoff`,
   `requirement set-status`, `run record-decision`, `run record-ship`, and any
   operation a `run next` directive names in `record_with` — require the live

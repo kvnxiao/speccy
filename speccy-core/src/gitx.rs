@@ -210,11 +210,16 @@ pub fn diff_files(dir: &Utf8Path, base: &str) -> Result<Vec<String>> {
 
 /// Full unified diff text against `base` (working tree included).
 ///
+/// The default `a/`/`b/` path prefixes are forced so the header shape holds
+/// even under a user's `diff.noprefix`/`diff.mnemonicPrefix` git config: the
+/// provenance scanner (`provenance::scan_diff`) relies on that shape to tell a
+/// real file header from a content line beginning with `-- `/`++ `.
+///
 /// # Errors
 ///
 /// Returns an error if `git` is unavailable or the diff fails.
 pub fn diff_text(dir: &Utf8Path, base: &str) -> Result<String> {
-    git(dir, &["diff", base])
+    git(dir, &["diff", "--src-prefix=a/", "--dst-prefix=b/", base])
 }
 
 /// Untracked file paths (respecting `.gitignore`).

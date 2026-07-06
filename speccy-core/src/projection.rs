@@ -210,7 +210,6 @@ pub struct RunProjection {
     /// A short human rendering of the most recent event, for the status card's
     /// last-activity line (DESIGN § CLI/Admin Flow).
     pub last_event_label: Option<String>,
-    pub started_at: Option<Timestamp>,
     /// Seconds the run has spent in an active state
     /// (`implementing`/`verifying`) across completed intervals, excluding
     /// time parked at a human gate. The currently-open interval is added on
@@ -287,7 +286,6 @@ impl RunProjection {
                         last_snapshot: None,
                         last_event_ts: Some(ts),
                         last_event_label: Some("run started".to_string()),
-                        started_at: Some(ts),
                         active_seconds: 0,
                         state_entered_at: ts,
                         max_status_seq: None,

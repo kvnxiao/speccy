@@ -316,14 +316,17 @@ fn recv_stream(rx: &mpsc::Receiver<(Vec<u8>, bool)>, deadline: Instant) -> (Vec<
 fn kill_tree(child: &mut Child) {
     #[cfg(windows)]
     {
-        let spawned = Command::new("taskkill")
+        // Only trust `taskkill` when it actually reports success: a nonzero
+        // exit (process already gone, access denied) means the tree may still
+        // be alive, so fall through to the direct child kill.
+        let killed = Command::new("taskkill")
             .args(["/PID", &child.id().to_string(), "/T", "/F"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .is_ok();
-        if spawned {
+            .is_ok_and(|s| s.success());
+        if killed {
             return;
         }
     }

@@ -9,13 +9,16 @@ use crate::error::SpeccyError;
 use crate::gitx;
 use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
+use crate::model::RunDecisionKind;
 use crate::model::RunState;
 use crate::model::SpecStatus;
+use crate::projection::HandoffMeta;
 use crate::projection::RunProjection;
 use crate::projection::SpecState;
 use crate::store::Store;
 use serde_json::Value;
 use serde_json::json;
+use std::collections::HashMap;
 use std::fmt::Write as _;
 
 /// Prior-context candidates: carry-forward hints from other active specs
@@ -83,9 +86,8 @@ pub fn escalation(store: &Store, run_id: &str) -> Result<Value> {
         })
         .collect();
 
-    let tried: Vec<Value> = run
-        .handoffs
-        .iter()
+    let tried: Vec<Value> = dedup_handoffs(&run.handoffs)
+        .into_iter()
         .map(|h| {
             let rejected: Vec<String> = run
                 .findings
@@ -104,15 +106,54 @@ pub fn escalation(store: &Store, run_id: &str) -> Result<Value> {
         })
         .collect();
 
+    // Recorded run decisions ride the escalation packet (DESIGN § Escalation
+    // Packet): notably the interrupt reason, the one give-up the controller
+    // cannot detect itself.
+    let decisions: Vec<Value> = run
+        .decisions
+        .iter()
+        .map(|d| {
+            json!({
+                "id": d.decision_id,
+                "type": d.kind.as_str(),
+                "reason": d.reason,
+                "requirement": d.requirement,
+                "task": d.task,
+            })
+        })
+        .collect();
+
     let markdown = render_escalation_markdown(&run, &failing, &tried);
     Ok(json!({
         "failing": failing.iter().map(|(id, st)| json!({ "id": id, "statement": st })).collect::<Vec<_>>(),
         "tried": tried,
+        "decisions": decisions,
         "partial_work": run.last_snapshot,
         "recommended": "amend the spec",
         "alternatives": ["provide setup", "waive this requirement", "cancel the run"],
         "markdown": markdown,
     }))
+}
+
+/// Collapse handoffs to the latest one per `(task, round)`, preserving the
+/// order each round was first attempted. A resume can re-open a task at its
+/// same round (DESIGN § Escalation Gate), appending a second handoff for that
+/// `(task, round)`; the escalation "tried" list is per attempt-round, so those
+/// duplicates must not produce duplicate rows.
+fn dedup_handoffs(handoffs: &[HandoffMeta]) -> Vec<&HandoffMeta> {
+    let mut order: Vec<(&str, u32)> = Vec::new();
+    let mut latest: HashMap<(&str, u32), &HandoffMeta> = HashMap::new();
+    for h in handoffs {
+        let key = (h.task.as_str(), h.round);
+        if latest.insert(key, h).is_none() {
+            order.push(key);
+        }
+    }
+    // Each key in `order` was inserted into `latest`, so `get` always hits.
+    order
+        .into_iter()
+        .filter_map(|key| latest.get(&key).copied())
+        .collect()
 }
 
 fn render_escalation_markdown(
@@ -146,6 +187,21 @@ fn render_escalation_markdown(
             } else {
                 _ = writeln!(out, "  round {round} — {summary}   (rejected: {rejected})");
             }
+        }
+        out.push('\n');
+    }
+    // Surface the interrupt reason (structured-output retry exhaustion): the
+    // one give-up the controller cannot detect, recorded as a run decision.
+    let interrupts: Vec<&str> = run
+        .decisions
+        .iter()
+        .filter(|d| d.kind == RunDecisionKind::Interrupt)
+        .filter_map(|d| d.reason.as_deref())
+        .collect();
+    if !interrupts.is_empty() {
+        out.push_str("Interrupted:\n");
+        for reason in interrupts {
+            _ = writeln!(out, "  {reason}");
         }
         out.push('\n');
     }

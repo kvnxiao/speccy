@@ -668,8 +668,9 @@ fn planning_packet_surfaces_all_carry_forward_hints() {
     assert!(joined.contains("rotate session on login"), "{joined}");
 }
 
-/// P4: back-to-back `run next` calls with ample TTL remaining do not rewrite
-/// the lease — same token and same expiry (DESIGN § Run Lease renewal slack).
+/// P4: rapid back-to-back `run next` calls (renewed within the debounce
+/// window) do not rewrite the lease — same token and same expiry (DESIGN §
+/// Run Lease renewal debounce).
 #[test]
 fn lease_renewal_is_skipped_while_ample_ttl_remains() {
     let h = Harness::new();

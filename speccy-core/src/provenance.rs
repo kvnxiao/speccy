@@ -57,22 +57,29 @@ pub fn scan_diff(diff: &str, terms: &[String]) -> Vec<ProvenanceHit> {
     let mut exempt = false;
     let mut new_line = 0usize;
     // A `+++ ` line is a file header only when it pairs with a preceding
-    // `--- ` line; otherwise it is an added content line (a `+` marker on text
-    // that itself begins with `++ `) and must be scanned like any other.
+    // `--- ` line AND carries the git header path shape (`b/<path>` or
+    // `/dev/null`). Otherwise it is an added content line (a `+` marker on text
+    // that itself begins with `++ `) and must be scanned like any other. The
+    // same shape check gates the `--- ` arming, so a removed content line
+    // beginning with `-- ` (rendered `--- …`) does not spoof a header pair and
+    // let the following `++ …` content escape the scan (a mirror bypass).
     let mut prev_minus_header = false;
 
     for line in diff.lines() {
         if prev_minus_header {
             prev_minus_header = false;
-            if let Some(path) = line.strip_prefix("+++ ") {
-                let path = path.strip_prefix("b/").unwrap_or(path).trim();
+            if let Some(after) = line.strip_prefix("+++ ")
+                && let Some(path) = git_header_path(after, "b/")
+            {
                 exempt = path == "/dev/null" || is_exempt(path);
                 current_file = Some(path.to_string());
                 continue;
             }
-            // Not a paired header; fall through and process normally.
+            // Not a paired header; fall through and scan this line as content.
         }
-        if line.starts_with("--- ") {
+        if let Some(after) = line.strip_prefix("--- ")
+            && git_header_path(after, "a/").is_some()
+        {
             prev_minus_header = true;
             continue;
         }
@@ -108,6 +115,22 @@ pub fn scan_diff(diff: &str, terms: &[String]) -> Vec<ProvenanceHit> {
 fn is_exempt(path: &str) -> bool {
     let norm = path.replace('\\', "/");
     EXEMPT_PREFIXES.iter().any(|p| norm.starts_with(p))
+}
+
+/// Return the repo-relative path when `after` — the text following a `--- ` or
+/// `+++ ` marker — has the shape of a real git diff file header:
+/// `<prefix><path>` (`a/`/`b/`) or `/dev/null`. A content line that merely
+/// begins with `-- `/`++ ` lacks this shape and yields `None`, so the caller
+/// scans it as content instead of mistaking it for a header. The diff is always
+/// `git diff` output with the default prefixes forced (see `gitx::diff_text`),
+/// so the shape is guaranteed.
+fn git_header_path<'a>(after: &'a str, prefix: &str) -> Option<&'a str> {
+    let after = after.trim_end();
+    if after == "/dev/null" {
+        Some("/dev/null")
+    } else {
+        after.strip_prefix(prefix)
+    }
 }
 
 /// Parse the new-file start line from a hunk header `@@ -a,b +c,d @@`.
@@ -186,6 +209,29 @@ diff --git a/.claude/agents/x.md b/.claude/agents/x.md
         assert_eq!(hits.len(), 1, "{hits:?}");
         let hit = hits.first().expect("exactly one hit was asserted above");
         assert_eq!(hit.file, "src/x.ts");
+        assert_eq!(hit.term, "speccy");
+    }
+
+    #[test]
+    fn removed_double_dash_line_does_not_spoof_a_header_and_skip_scanning() {
+        // A removed content line beginning with `-- ` renders as `--- …` and a
+        // following added line beginning with `++ ` renders as `+++ …`. Without
+        // the git-path-shape check these mirror the `--- a/… / +++ b/…` header
+        // pair, so the leak on the added `++ …` line would escape the scan.
+        let diff = "\
+--- a/db/schema.sql
++++ b/db/schema.sql
+@@ -1,3 +1,3 @@
+ keep
+--- old comment
++++ speccy leaked in the new comment
+";
+        let terms = deny_terms("SPEC-1", "spec_x", "run_x", [], &[]);
+        let hits = scan_diff(diff, &terms);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        let hit = hits.first().expect("exactly one hit was asserted above");
+        assert_eq!(hit.file, "db/schema.sql");
+        assert_eq!(hit.line, 2);
         assert_eq!(hit.term, "speccy");
     }
 }

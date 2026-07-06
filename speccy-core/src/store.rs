@@ -20,10 +20,22 @@ use fs_err::File;
 use fs_err::OpenOptions;
 use fs_err::{self as fs};
 use fs4::FileExt;
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
+
+thread_local! {
+    /// Lock paths this thread currently holds. Re-entering `with_lock` on a
+    /// path already held would `flock` a second fresh handle from the same
+    /// process and deadlock — the double-lock footgun the [`StoreLockGuard`]
+    /// type cannot prevent at compile time, since a self-locking `append_*`
+    /// stays callable inside a `with_store_lock` closure. Tracking held paths
+    /// turns that misuse into a safe reentrant pass-through.
+    static HELD_LOCKS: RefCell<HashSet<Utf8PathBuf>> = RefCell::new(HashSet::new());
+}
 
 /// Proof that the per-workspace store lock is held. Minted only inside
 /// [`Store::with_store_lock`] and required by `append_*_with`, so those appends
@@ -380,6 +392,23 @@ impl Store {
     }
 
     fn with_lock<T>(&self, path: &Utf8Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        // Reentrant: if this thread already holds `path`, the outer frame owns
+        // the OS lock, so run `f` directly rather than re-acquiring the same
+        // lock and deadlocking.
+        let newly_held = HELD_LOCKS.with(|held| held.borrow_mut().insert(path.to_owned()));
+        if !newly_held {
+            return f();
+        }
+        let result = self.locked(path, f);
+        HELD_LOCKS.with(|held| {
+            held.borrow_mut().remove(path);
+        });
+        result
+    }
+
+    /// Acquire the OS lock at `path`, run `f`, then release. Callers go through
+    /// [`Self::with_lock`], which adds the reentrancy guard.
+    fn locked<T>(&self, path: &Utf8Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
         fs::create_dir_all(self.workspace_dir())?;
         // The lock handle must be a `std::fs::File`: `fs4::FileExt` is
         // implemented for it, not for `fs_err::File`.
