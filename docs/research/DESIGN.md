@@ -211,10 +211,10 @@ its shape:
 
 | Tier | `passed` | `review_passed` | `waived` |
 | --- | --- | --- | --- |
-| minimal | resolves | resolves | resolves |
-| standard | resolves | resolves | resolves |
+| minimal | resolves | resolves | resolves, requires a recorded `residual_risk` note |
+| standard | resolves | resolves | resolves, requires a recorded `residual_risk` note |
 | high | resolves | resolves, requires a recorded `residual_risk` note | resolves, requires a recorded `residual_risk` note |
-| critical | resolves | requires human confirmation at a gate | requires human confirmation at a gate |
+| critical | resolves | requires human confirmation at a gate | requires human confirmation at a gate, plus a recorded `residual_risk` note |
 
 On a `critical` spec, any requirement resolved by `review_passed` or `waived`
 parks the run at an `await_human_gate` directive ("confirm accepted risk")
@@ -236,7 +236,11 @@ Status prerequisites, enforced by `requirement set-status`:
   `high` and `critical`, a `residual_risk` note.
 - `blocked` requires a note naming what is missing.
 - `waived` is set only through a gate decision (`run record-decision`), never
-  through `requirement set-status`.
+  through `requirement set-status`. It always requires a recorded
+  `residual_risk` note, at every tier — a waiver is an accepted risk by
+  definition, so the note recording what risk is accepted is mandatory
+  regardless of tier (unlike `review_passed`, whose `residual_risk` requirement
+  applies only at `high`/`critical`).
 
 Status transitions:
 

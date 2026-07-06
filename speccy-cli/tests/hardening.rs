@@ -389,6 +389,126 @@ fn concurrent_run_next_applies_derived_transitions_once() {
     assert_eq!(d["round"]["scope"], json!("run"), "{d}");
 }
 
+/// The run-scope provenance scan runs over the integrated diff at the run gate
+/// and blocks verification: a task-scope diff can be clean while the integrated
+/// worktree carries a leak, recorded as a task-less controller finding.
+#[test]
+fn run_scope_provenance_scan_blocks_verification() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Run-scope provenance");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Claim + hand off T1 with a clean file, so the task-scope scan passes.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    h.write_file("src/t1.txt", "work\n");
+    h.ctl_in(
+        &[
+            "ctl",
+            "task",
+            "record-handoff",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "task": "T1", "round": 1, "summary": "did it", "requirements_claimed": ["R1"] }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    let ev = h.ctl_in(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "kind": "review", "collected_by": "v" }),
+    );
+    h.ctl_in(
+        &[
+            "ctl", "requirement", "set-status", "--run", &run, "--lease", &lease, "--input", "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "passed", "evidence": [ev["id"]] }] }),
+    );
+    // T1 integrates → verifying; the run-scope verifier is next.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["round"]["scope"], json!("run"), "{d}");
+
+    // Introduce a provenance leak into a product file after integration.
+    h.write_file("src/leak.txt", &format!("// see {spec_ref} for context\n"));
+
+    // This `run next` runs the run-scope scan over the integrated diff and
+    // records a blocking, task-less provenance finding.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"].as_str().expect("lease").to_string();
+    let ev2 = h.ctl_in(
+        &[
+            "ctl", "evidence", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "kind": "review", "collected_by": "v" }),
+    );
+    h.ctl_in(
+        &[
+            "ctl", "requirement", "set-status", "--run", &run, "--lease", &lease, "--input", "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "passed", "evidence": [ev2["id"]] }] }),
+    );
+
+    // With the provenance finding outstanding, the run does not verify.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_ne!(d["run_state"], json!("verified"), "{d}");
+
+    // A task-less controller provenance finding was recorded.
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events.jsonl present");
+    let found = log
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .any(|v| {
+            v["type"] == json!("finding_recorded")
+                && v["finding"]["recorded_by"] == json!("controller:provenance-scan")
+                && v["finding"]["task"].is_null()
+        });
+    assert!(
+        found,
+        "expected a task-less provenance-scan finding:\n{log}"
+    );
+}
+
 /// Golden render for every managed file across both targets.
 #[test]
 fn golden_all_managed_files() {

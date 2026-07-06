@@ -31,6 +31,7 @@ Durable decisions and the alternatives they rejected, grouped by area. This exis
 - **Naming disambiguation:** run terminal state is `landed`, task terminal state is `integrated`, and `accepted` is a spec status only. The risk tier is `minimal` (not `tiny`); the scope ladder keeps `tiny`.
 - **`defer`/`deferred` cut entirely.** `waive` (accept a requirement's risk) and `cancel` (abandon the run) already cover the escalation resolutions; a task-scoped defer that cascade-waives orphaned requirements added state-machine surface without an MVP need. Task terminal state is `integrated` only.
 - **`waived` is gate-only and terminal for the run**, set atomically inside `run record-decision` — the only requirement-status mutation outside `requirement set-status`.
+- **Waive requires a `residual_risk` note at every tier**, not only high/critical. A waiver is an accepted risk by definition, so the note recording what risk is accepted is mandatory regardless of tier; the DESIGN tier table now matches the code, which has always required it. Rejected tier-conditional leniency for waive. `review_passed` stays tier-conditional (its `residual_risk` requirement applies only at high/critical) because it rests on real, if weaker, evidence rather than an accepted gap.
 - **`failed` may rest on a reviewer finding, not only recorded evidence.**
 
 ## The loop (run next)
