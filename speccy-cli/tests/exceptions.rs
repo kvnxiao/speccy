@@ -826,3 +826,48 @@ fn out_of_band_commit_parks_the_run() {
         "out-of-band escalation must take no snapshot: {d}"
     );
 }
+
+#[test]
+fn resource_cap_escalation_commits_the_inflight_diff() {
+    let h = Harness::new();
+    h.write_file(".speccy/project.yaml", "caps:\n  max_tasks: 0\n");
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "policy"]);
+    let (spec_ref, rev) = approve_minimal(&h, "Cap snapshot");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // An in-flight edit exists when the resource cap trips.
+    h.write_file("src/inflight.txt", "work in progress\n");
+
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["run_state"], json!("escalated"), "{d}");
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    // Unlike out-of-band, a resource-cap escalation commits the in-flight diff
+    // as a labeled snapshot.
+    let t = &d["applied_transitions"][0];
+    assert_eq!(t["to"], json!("escalated"), "{d}");
+    assert!(
+        t["snapshot"].as_str().is_some_and(|s| !s.is_empty()),
+        "resource-cap escalation must commit a snapshot: {d}"
+    );
+    // The worktree is clean afterward — the snapshot captured the edit.
+    let porcelain = h.git(&["status", "--porcelain"]);
+    assert!(
+        porcelain.trim().is_empty(),
+        "worktree not clean after snapshot: {porcelain:?}"
+    );
+}

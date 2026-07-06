@@ -122,8 +122,7 @@ pub fn run_next(
         // or a resource cap. Both fail closed to an escalated policy gate.
         if let Some(t) = detect_out_of_band(store, guard, spec_id, run_id, &run0)? {
             applied.push(t);
-        } else if let Some(t) = detect_resource_caps(store, guard, spec_id, run_id, &run0, &config)?
-        {
+        } else if let Some(t) = detect_resource_caps(store, guard, &run0, &config)? {
             applied.push(t);
         } else {
             // --- provenance scan over the current diff (records blocking findings) ---
@@ -244,8 +243,6 @@ fn detect_out_of_band(
 fn detect_resource_caps(
     store: &Store,
     guard: &StoreLockGuard,
-    spec_id: &str,
-    run_id: &str,
     run: &RunProjection,
     config: &ProjectConfig,
 ) -> Result<Option<AppliedTransition>> {
@@ -270,22 +267,10 @@ fn detect_resource_caps(
     if reason.is_none() {
         return Ok(None);
     }
-    let from = run.state;
-    store.append_run_event_with(
-        guard,
-        spec_id,
-        run_id,
-        Event::RunStateTransitioned {
-            to: RunState::Escalated,
-            snapshot: None,
-        },
-    )?;
-    Ok(Some(AppliedTransition {
-        subject: "run".into(),
-        from: from.as_str().into(),
-        to: "escalated".into(),
-        snapshot: None,
-    }))
+    // A resource cap commits the in-flight diff as a labeled snapshot, like the
+    // other give-up escalations (DESIGN § Deterministic Loop Driving); only the
+    // out-of-band escalation takes no snapshot.
+    escalate(store, guard, run)
 }
 
 /// Run the deterministic provenance scan over the current diff and record any

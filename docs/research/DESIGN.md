@@ -559,9 +559,12 @@ the task straight to `in_review`; there is no separate reviewable or
 needs_repair holding state. Run transitions:
 `implementing -> verifying` when every task is `integrated`,
 `verifying -> verified` when every requirement is resolved and any
-critical-tier confirmation gate is answered, and `-> escalated` — including
-the labeled escalation snapshot — on cap exhaustion, a blocked requirement,
-resource caps, or out-of-band commits (see "Run Branch and Snapshot Policy").
+critical-tier confirmation gate is answered, and `-> escalated` on cap
+exhaustion, a blocked requirement, or a resource cap — each committing the
+in-flight diff as a labeled escalation snapshot — and on an out-of-band
+commit, which escalates but takes **no** snapshot: a snapshot commit there
+would bury or misattribute the human's out-of-band commit and worktree edits
+(see "Run Branch and Snapshot Policy").
 `run start` opens the run directly in `implementing`. Idempotency is over
 settled state: once derived transitions apply, repeated calls return the same
 directive without re-applying them.
@@ -803,7 +806,11 @@ while a run is active. `run next` verifies that HEAD matches the last
 recorded snapshot (or the recorded base before any snapshot exists); if a
 human or another tool committed out-of-band, the run parks at an `escalated`
 policy gate naming the unexpected commits, and the human decides whether to
-fold them in, reset, or cancel.
+fold them in, reset, or cancel. This escalation takes no snapshot — the
+in-flight diff is left as-is, since a Speccy snapshot commit on top would bury
+or misattribute the human's out-of-band work. The cap-driven escalations
+(cap exhaustion, blocked requirement, resource cap) do commit the labeled
+snapshot.
 
 ### Provenance Hygiene
 
