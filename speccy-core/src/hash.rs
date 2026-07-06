@@ -33,6 +33,26 @@ pub fn to_hex(bytes: &[u8]) -> String {
     out
 }
 
+/// SHA-256 of `bytes`, truncated to its first `n` digest bytes and lowercase
+/// hex-encoded (`2 * n` characters). Used for short, collision-tolerant
+/// directory keys; `n` is clamped to the 32-byte digest length.
+///
+/// # Examples
+///
+/// ```
+/// use speccy_core::hash::short_hex;
+///
+/// assert_eq!(short_hex(b"speccy", 3).len(), 6);
+/// ```
+#[must_use = "the hex-encoded string is the result of the computation"]
+pub fn short_hex(bytes: &[u8], n: usize) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let take = n.min(digest.len());
+    to_hex(digest.get(..take).unwrap_or_else(|| digest.as_slice()))
+}
+
 /// SHA-256 of `bytes` as a `sha256:`-prefixed lowercase hex digest.
 ///
 /// # Examples

@@ -15,8 +15,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
-use sha2::Digest;
-use sha2::Sha256;
 use similar::DiffOp;
 use similar::TextDiff;
 use std::collections::BTreeMap;
@@ -531,11 +529,7 @@ fn base_cache_dir(repo_root: &Utf8Path) -> Result<Utf8PathBuf> {
     let root = repo_root
         .canonicalize_utf8()
         .unwrap_or_else(|_| repo_root.to_path_buf());
-    let mut hasher = Sha256::new();
-    hasher.update(root.as_str().as_bytes());
-    let digest = hasher.finalize();
-    let prefix: Vec<u8> = digest.iter().take(6).copied().collect();
-    let key = crate::hash::to_hex(&prefix);
+    let key = crate::hash::short_hex(root.as_str().as_bytes(), 6);
     Ok(home_dir()?.join("pack-base").join(key))
 }
 

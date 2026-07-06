@@ -420,27 +420,11 @@ pub fn new_spec(store: &Store, request: &str, title: Option<&str>) -> Result<Str
     if request.trim().is_empty() {
         return Err(SpeccyError::validation("request must be non-empty"));
     }
-    let existing: Vec<String> = store.list_specs()?.into_iter().map(|(_, r)| r).collect();
-    let mut spec_ref = ids::spec_ref();
-    for _ in 0..8 {
-        if !existing.contains(&spec_ref) {
-            break;
-        }
-        spec_ref = ids::spec_ref();
-    }
-    let spec_id = ids::spec_id();
-    store.create_spec(&spec_id, &spec_ref)?;
-    store.append_spec_event(
-        &spec_id,
-        Event::SpecCreated {
-            spec_ref: spec_ref.clone(),
-            spec_id: spec_id.clone(),
-            workspace_id: store.workspace_id.clone(),
-            request: request.to_string(),
-            source: Some("speccy new".into()),
-            title: title.map(str::to_string),
-            brainstorm_handoff: None,
-        },
+    let (spec_ref, _spec_id) = store.mint_spec(
+        request.to_string(),
+        Some("speccy new".into()),
+        title.map(str::to_string),
+        None,
     )?;
     let title_str = title.unwrap_or(request);
     let painted_ref = style::paint(style::SPEC_REF, &spec_ref);
@@ -492,11 +476,17 @@ fn is_notable(state: RunState) -> bool {
     )
 }
 
-fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
-    let repair_max = ProjectConfig::load(&store.workspace_root).map_or_else(
+/// The task-repair cap from project config, falling back to the default when
+/// the config cannot be read.
+fn repair_max(store: &Store) -> u32 {
+    ProjectConfig::load(&store.workspace_root).map_or_else(
         |_| ProjectConfig::default().caps.task_repair_rounds,
         |c| c.caps.task_repair_rounds,
-    );
+    )
+}
+
+fn status_card(store: &Store, spec: &SpecState, run: &RunProjection) -> String {
+    let repair_max = repair_max(store);
     let mut card = format!(
         "{}  {}          Risk: {}\n",
         style::paint(style::SPEC_REF, &run.spec_ref),
@@ -584,10 +574,7 @@ fn active_context(run: &RunProjection, repair_max: u32) -> (&'static str, String
 /// The Interrupted status card lines: what died, the uncommitted-diff
 /// attribution, and the resume action (DESIGN § CLI/Admin Flow).
 fn interrupted_lines(store: &Store, run: &RunProjection) -> String {
-    let repair_max = ProjectConfig::load(&store.workspace_root).map_or_else(
-        |_| ProjectConfig::default().caps.task_repair_rounds,
-        |c| c.caps.task_repair_rounds,
-    );
+    let repair_max = repair_max(store);
     let (label, context) = active_context(run, repair_max);
     let mut out = format!(
         "  {} — session died during {label} \"{context}\"\n",

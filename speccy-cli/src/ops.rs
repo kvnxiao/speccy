@@ -114,28 +114,8 @@ fn spec_start(store: &Store, input: &str) -> Result<Value> {
             "request is required and must be non-empty",
         ));
     }
-    let existing: Vec<String> = store.list_specs()?.into_iter().map(|(_, r)| r).collect();
-    let mut spec_ref = ids::spec_ref();
-    for _ in 0..8 {
-        if !existing.contains(&spec_ref) {
-            break;
-        }
-        spec_ref = ids::spec_ref();
-    }
-    let spec_id = ids::spec_id();
-    store.create_spec(&spec_id, &spec_ref)?;
-    store.append_spec_event(
-        &spec_id,
-        Event::SpecCreated {
-            spec_ref: spec_ref.clone(),
-            spec_id: spec_id.clone(),
-            workspace_id: store.workspace_id.clone(),
-            request: req.request,
-            source: req.source,
-            title: req.title,
-            brainstorm_handoff: req.brainstorm_handoff,
-        },
-    )?;
+    let (spec_ref, spec_id) =
+        store.mint_spec(req.request, req.source, req.title, req.brainstorm_handoff)?;
     Ok(json!({
         "spec_ref": spec_ref,
         "spec_id": spec_id,
@@ -1194,13 +1174,6 @@ fn ensure_run_requirement(run: &RunProjection, requirement: &str) -> Result<()> 
     }
 }
 
-fn run_draft(store: &Store, run: &RunProjection) -> Result<SpecDraft> {
-    let spec = store.spec_state(&run.spec_id)?;
-    spec.revision(&run.revision_id)
-        .map(|r| r.draft.clone())
-        .ok_or_else(|| SpeccyError::not_found(format!("revision {} not found", run.revision_id)))
-}
-
 fn validate_evidence_reference(
     store: &Store,
     run: &RunProjection,
@@ -1223,7 +1196,7 @@ fn validate_evidence_reference(
         }
         None => (ev.requirement.as_str(), request),
     };
-    let draft = run_draft(store, run)?;
+    let draft = store.run_draft(run)?;
     let req = draft
         .requirement(req_id)
         .ok_or_else(|| SpeccyError::not_found(format!("no requirement {req_id}")))?;
@@ -1335,14 +1308,8 @@ fn packet(store: &Store, op: PacketOp) -> Result<Value> {
 // --------------------------------------------------------------------------
 
 fn lint_value(findings: &[Finding]) -> Value {
-    json!({
-        "clean": findings.is_empty(),
-        "findings": findings.iter().map(|f| json!({
-            "code": f.code,
-            "path": f.path,
-            "message": f.message,
-        })).collect::<Vec<_>>(),
-    })
+    // `Finding` serializes with `path` omitted when absent (SCHEMAS § Envelope).
+    json!({ "clean": findings.is_empty(), "findings": findings })
 }
 
 fn strip_draft(revision: &str) -> &str {

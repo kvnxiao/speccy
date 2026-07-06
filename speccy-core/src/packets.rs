@@ -10,7 +10,6 @@ use crate::gitx;
 use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
 use crate::model::RunState;
-use crate::model::SpecDraft;
 use crate::model::SpecStatus;
 use crate::projection::RunProjection;
 use crate::projection::SpecState;
@@ -62,11 +61,9 @@ fn prior_context_candidates(store: &Store, current_ref: &str) -> Result<Value> {
 /// Returns an error if the run or its spec cannot be loaded from the store.
 pub fn escalation(store: &Store, run_id: &str) -> Result<Value> {
     let (_, run) = store.run_by_id(run_id)?;
-    let spec = store.spec_state(&run.spec_id)?;
-    let draft = spec
-        .revision(&run.revision_id)
-        .map(|r| r.draft.clone())
-        .unwrap_or_default();
+    // Lenient on purpose: the escalation packet must render even if the pinned
+    // revision is missing, so a lost draft falls back to an empty one.
+    let draft = store.run_draft(&run).unwrap_or_default();
 
     let failing: Vec<(String, String)> = run
         .requirements
@@ -207,7 +204,7 @@ pub fn planning(store: &Store, spec_ref: &str) -> Result<Value> {
 /// `task_id` does not name a task in the run.
 pub fn task(store: &Store, run_id: &str, task_id: &str) -> Result<Value> {
     let (_, run) = store.run_by_id(run_id)?;
-    let draft = run_draft(store, &run)?;
+    let draft = store.run_draft(&run)?;
     let task = run
         .task(task_id)
         .ok_or_else(|| SpeccyError::not_found(format!("no task {task_id} in run {run_id}")))?;
@@ -348,13 +345,6 @@ pub fn review(store: &Store, run_id: &str) -> Result<Value> {
 }
 
 // --- helpers ---
-
-fn run_draft(store: &Store, run: &RunProjection) -> Result<SpecDraft> {
-    let spec = store.spec_state(&run.spec_id)?;
-    spec.revision(&run.revision_id)
-        .map(|r| r.draft.clone())
-        .ok_or_else(|| SpeccyError::not_found(format!("revision {} not found", run.revision_id)))
-}
 
 fn requirement_json(req: &crate::model::Requirement) -> Value {
     serde_json::to_value(req).unwrap_or(Value::Null)

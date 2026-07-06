@@ -168,8 +168,6 @@ pub struct InputArgs {
     /// Payload file path, or `-` to read from stdin.
     #[arg(long)]
     pub input: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 /// `--spec <ref>` only.
@@ -177,8 +175,6 @@ pub struct InputArgs {
 pub struct SpecRef {
     #[arg(long)]
     pub spec: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 /// `--spec <ref> --input <path|->`.
@@ -188,8 +184,6 @@ pub struct SpecInput {
     pub spec: String,
     #[arg(long)]
     pub input: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 /// `--run <id>` only.
@@ -197,8 +191,6 @@ pub struct SpecInput {
 pub struct RunRef {
     #[arg(long)]
     pub run: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 /// `--run <id> --lease <token> --input <path|->` for lease-gated writes.
@@ -212,8 +204,6 @@ pub struct RunInput {
     pub lease: Option<String>,
     #[arg(long)]
     pub input: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -222,8 +212,6 @@ pub struct RunStartArgs {
     pub spec: String,
     #[arg(long)]
     pub revision: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -233,8 +221,6 @@ pub struct RunNextArgs {
     /// Opaque caller-chosen agent ID; binds/renews the run lease.
     #[arg(long)]
     pub agent: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -243,8 +229,6 @@ pub struct TaskRef {
     pub run: String,
     #[arg(long)]
     pub task: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -257,8 +241,6 @@ pub struct TaskClaimArgs {
     pub agent: String,
     #[arg(long)]
     pub lease: String,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -268,8 +250,6 @@ pub struct VerificationArgs {
     /// Comma-separated requirement IDs to scope the packet.
     #[arg(long, value_delimiter = ',')]
     pub requirements: Vec<String>,
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -282,8 +262,6 @@ pub struct EvidenceCollectArgs {
     /// Optional qualified request IDs (`R.E`) to narrow collection.
     #[arg(long, value_delimiter = ',')]
     pub requests: Vec<String>,
-    #[arg(long)]
-    pub json: bool,
 }
 
 // --- Human command arguments ---

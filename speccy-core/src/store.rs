@@ -11,6 +11,7 @@ use crate::event::Event;
 use crate::event::LoggedEvent;
 use crate::gitx;
 use crate::lease::LeaseState;
+use crate::model::SpecDraft;
 use crate::projection::RunProjection;
 use crate::projection::SpecState;
 use camino::Utf8Path;
@@ -19,8 +20,6 @@ use fs_err::File;
 use fs_err::OpenOptions;
 use fs_err::{self as fs};
 use fs4::FileExt;
-use sha2::Digest;
-use sha2::Sha256;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -134,6 +133,46 @@ impl Store {
             format!("{spec_ref}\n").as_bytes(),
         )?;
         Ok(())
+    }
+
+    /// Mint a fresh spec: pick a collision-free `SPEC-...` reference (retrying
+    /// up to 8 times against existing refs), create its directory, and append
+    /// the `SpecCreated` event. Returns the `(spec_ref, spec_id)` pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the existing specs cannot be listed, or the spec
+    /// directory or `SpecCreated` event cannot be written.
+    pub fn mint_spec(
+        &self,
+        request: String,
+        source: Option<String>,
+        title: Option<String>,
+        brainstorm_handoff: Option<String>,
+    ) -> Result<(String, String)> {
+        let existing: Vec<String> = self.list_specs()?.into_iter().map(|(_, r)| r).collect();
+        let mut spec_ref = crate::ids::spec_ref();
+        for _ in 0..8 {
+            if !existing.contains(&spec_ref) {
+                break;
+            }
+            spec_ref = crate::ids::spec_ref();
+        }
+        let spec_id = crate::ids::spec_id();
+        self.create_spec(&spec_id, &spec_ref)?;
+        self.append_spec_event(
+            &spec_id,
+            Event::SpecCreated {
+                spec_ref: spec_ref.clone(),
+                spec_id: spec_id.clone(),
+                workspace_id: self.workspace_id.clone(),
+                request,
+                source,
+                title,
+                brainstorm_handoff,
+            },
+        )?;
+        Ok((spec_ref, spec_id))
     }
 
     /// All `(spec_id, spec_ref)` pairs in this workspace.
@@ -460,17 +499,30 @@ impl Store {
         let run = self.run_projection(&spec_id, run_id)?;
         Ok((spec_id, run))
     }
+
+    /// The spec draft a run was started against (its pinned revision).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the run's spec cannot be loaded, or the pinned
+    /// revision no longer exists in the spec.
+    pub fn run_draft(&self, run: &RunProjection) -> Result<SpecDraft> {
+        let spec = self.spec_state(&run.spec_id)?;
+        spec.revision(&run.revision_id)
+            .map(|r| r.draft.clone())
+            .ok_or_else(|| {
+                SpeccyError::not_found(format!("revision {} not found", run.revision_id))
+            })
+    }
 }
 
 /// `ws_<hash>` from the canonical workspace root plus git root.
 fn workspace_id(workspace_root: &Utf8Path, git_root: &Utf8Path) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(workspace_root.as_str().as_bytes());
-    hasher.update([0]);
-    hasher.update(git_root.as_str().as_bytes());
-    let digest = hasher.finalize();
-    let prefix: Vec<u8> = digest.iter().take(3).copied().collect();
-    format!("ws_{}", crate::hash::to_hex(&prefix))
+    let mut buf = Vec::new();
+    buf.extend_from_slice(workspace_root.as_str().as_bytes());
+    buf.push(0);
+    buf.extend_from_slice(git_root.as_str().as_bytes());
+    format!("ws_{}", crate::hash::short_hex(&buf, 3))
 }
 
 /// The store root: `SPECCY_HOME`, else `~/.speccy`.

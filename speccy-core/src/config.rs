@@ -110,6 +110,11 @@ pub fn default_roster() -> Vec<Persona> {
         .collect()
 }
 
+/// The synthetic reviewer a `minimal`-risk run collapses to (DESIGN § Reviewer
+/// Personas). Rendered unconditionally so the collapsed roster always names a
+/// subagent that exists in the pack.
+pub const COMBINED_PERSONA: &str = "combined";
+
 /// One reviewer persona in the roster.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Persona {

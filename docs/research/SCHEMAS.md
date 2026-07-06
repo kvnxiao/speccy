@@ -36,6 +36,8 @@ Every operation returns:
   `not_found`, `ambiguous_selector`, `cap_exhausted`, `io_error`.
 - `error.details` — optional array of structured findings (same shape as
   `lint.findings` below).
+- Each finding's `path` is omitted when it does not apply (a finding not
+  anchored to a payload location carries only `code` and `message`).
 
 Write operations that lint return their findings inside `data`:
 

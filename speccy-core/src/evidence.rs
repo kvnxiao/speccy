@@ -41,11 +41,7 @@ pub fn collect(
     requests: &[String],
 ) -> Result<Value> {
     let (spec_id, run) = store.run_by_id(run_id)?;
-    let spec = store.spec_state(&spec_id)?;
-    let draft = spec
-        .revision(&run.revision_id)
-        .map(|r| r.draft.clone())
-        .ok_or_else(|| SpeccyError::not_found(format!("revision {} not found", run.revision_id)))?;
+    let draft = store.run_draft(&run)?;
     let config = ProjectConfig::load(&store.workspace_root)?;
 
     // Resolve the set of (requirement, request) command targets.
@@ -94,7 +90,7 @@ pub fn collect(
 
             let artifact_rel = format!("evidence/{id}.txt");
             let artifact_body = render_artifact(command, &run, dirty_before, dirty_after);
-            let artifact_hash = hash_bytes(artifact_body.as_bytes());
+            let artifact_hash = crate::hash::sha256_prefixed(artifact_body.as_bytes());
             write_atomic(
                 &store.run_dir(&spec_id, run_id).join(&artifact_rel),
                 artifact_body.as_bytes(),
@@ -198,7 +194,7 @@ fn resolve_targets(
     Ok(targets)
 }
 
-struct CommandRun {
+struct ShellRun {
     exit_code: i32,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
@@ -208,7 +204,7 @@ struct CommandRun {
 }
 
 /// Run a command through the platform shell with a timeout and output cap.
-fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize) -> CommandRun {
+fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize) -> ShellRun {
     let mut cmd = if cfg!(windows) {
         let mut c = Command::new("cmd");
         c.arg("/c").arg(command);
@@ -226,7 +222,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            return CommandRun {
+            return ShellRun {
                 exit_code: -1,
                 stdout: Vec::new(),
                 stderr: format!("failed to spawn command: {e}").into_bytes(),
@@ -264,7 +260,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
 
     let (stdout, out_trunc) = out_handle.join().unwrap_or_default();
     let (stderr, err_trunc) = err_handle.join().unwrap_or_default();
-    CommandRun {
+    ShellRun {
         exit_code,
         stdout,
         stderr,
@@ -294,7 +290,7 @@ fn read_capped(pipe: Option<impl Read>, max_bytes: usize) -> (Vec<u8>, bool) {
 
 fn render_artifact(
     command: &str,
-    run: &CommandRun,
+    run: &ShellRun,
     dirty_before: usize,
     dirty_after: usize,
 ) -> String {
@@ -306,10 +302,6 @@ fn render_artifact(
         String::from_utf8_lossy(&run.stdout),
         String::from_utf8_lossy(&run.stderr),
     )
-}
-
-fn hash_bytes(bytes: &[u8]) -> String {
-    crate::hash::sha256_prefixed(bytes)
 }
 
 /// Env vars whose values are treated as secrets and scrubbed from stored

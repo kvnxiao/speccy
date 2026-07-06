@@ -3,6 +3,7 @@
 //! target-specific harness packs with `minijinja` (strict undefined). One
 //! reviewer subagent renders per configured persona per target.
 
+use crate::config::COMBINED_PERSONA;
 use crate::config::Persona;
 use crate::config::ProjectConfig;
 use crate::error::Result;
@@ -63,11 +64,6 @@ pub struct ManagedFile {
 const SKILLS: &[&str] = &["brainstorm", "plan", "implement", "ship"];
 const REFERENCES: &[&str] = &["spec-quality", "spec-card-example"];
 const ROLES: &[&str] = &["planner", "worker", "verifier", "repair"];
-
-/// The synthetic reviewer a `minimal`-risk run collapses to (DESIGN § Reviewer
-/// Personas). Rendered unconditionally so the collapsed roster always names a
-/// subagent that exists in the pack.
-const COMBINED_PERSONA: &str = "combined";
 
 /// Render the full pack for one harness target from the project config.
 ///
