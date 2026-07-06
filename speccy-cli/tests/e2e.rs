@@ -667,3 +667,37 @@ fn planning_packet_surfaces_all_carry_forward_hints() {
     assert!(joined.contains("tokens stored hashed"), "{joined}");
     assert!(joined.contains("rotate session on login"), "{joined}");
 }
+
+/// P4: back-to-back `run next` calls with ample TTL remaining do not rewrite
+/// the lease — same token and same expiry (DESIGN § Run Lease renewal slack).
+#[test]
+fn lease_renewal_is_skipped_while_ample_ttl_remains() {
+    let h = Harness::new();
+    let (spec_ref, revision) = approved_spec(&h);
+    let started = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
+    ]);
+    let run = started["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let d1 = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let d2 = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(
+        d1["lease"]["expires_at"], d2["lease"]["expires_at"],
+        "lease was renewed despite ample TTL: {d1} vs {d2}"
+    );
+    assert_eq!(d1["lease"]["token"], d2["lease"]["token"]);
+}

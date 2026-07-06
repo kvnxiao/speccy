@@ -20,8 +20,9 @@ use fs_err::File;
 use fs_err::OpenOptions;
 use fs_err::{self as fs};
 use fs4::FileExt;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::io::Write;
 
 /// Proof that the per-workspace store lock is held. Minted only inside
@@ -201,6 +202,28 @@ impl Store {
         Ok(out)
     }
 
+    /// The internal spec IDs in this workspace, sorted. Cheaper than
+    /// [`Store::list_specs`] because it does not read each `spec-ref.txt`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specs directory cannot be read.
+    pub fn list_spec_ids(&self) -> Result<Vec<String>> {
+        let mut ids = Vec::new();
+        let dir = self.specs_dir();
+        if !dir.exists() {
+            return Ok(ids);
+        }
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                ids.push(entry.file_name().to_string_lossy().to_string());
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    }
+
     /// Resolve a `SPEC-...` reference to its internal spec ID.
     ///
     /// # Errors
@@ -243,7 +266,7 @@ impl Store {
     /// Returns an error if the specs cannot be listed, or if no run with the
     /// given ID exists.
     pub fn find_run(&self, run_id: &str) -> Result<(String, String)> {
-        for (spec_id, _) in self.list_specs()? {
+        for spec_id in self.list_spec_ids()? {
             let runs = self.spec_dir(&spec_id).join("runs").join(run_id);
             if runs.is_dir() {
                 return Ok((spec_id, run_id.to_string()));
@@ -548,34 +571,57 @@ fn append_event(path: &Utf8Path, event: Event) -> Result<()> {
     let logged = LoggedEvent::now(event);
     let line = serde_json::to_string(&logged)
         .map_err(|e| SpeccyError::io(format!("failed to serialize event: {e}")))?;
+    let mut record = line.into_bytes();
+    record.push(b'\n');
     {
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-        file.write_all(line.as_bytes())?;
-        file.write_all(b"\n")?;
+        file.write_all(&record)?;
         file.flush()?;
         file.sync_all()?;
     }
-    // Verified read-back: the last line must be exactly what we wrote.
-    let last = last_line(path)?;
-    if last.as_deref() != Some(line.as_str()) {
+    verify_tail(path, &record)
+}
+
+/// Byte-exact tail verification: the file must end in exactly `record`, and
+/// (unless `record` is the whole file) the byte before it must be a newline.
+/// This catches a torn tail — a pre-existing final record with no trailing
+/// newline — at append time, and is CRLF-safe because appends are explicit
+/// `b"\n"` bytes.
+fn verify_tail(path: &Utf8Path, record: &[u8]) -> Result<()> {
+    let written = record.len() as u64;
+    let mut file = File::open(path)?;
+    let len = file.metadata()?.len();
+    if len < written {
+        return Err(SpeccyError::io(format!(
+            "append verification failed for {path}: read-back short"
+        )));
+    }
+    if len == written {
+        // The record is the whole file (first append).
+        let mut buf = vec![0u8; record.len()];
+        file.read_exact(&mut buf)?;
+        if buf != record {
+            return Err(SpeccyError::io(format!(
+                "append verification failed for {path}: read-back mismatch"
+            )));
+        }
+        return Ok(());
+    }
+    // Read the newline separator plus our record from the tail.
+    file.seek(SeekFrom::Start(len - written - 1))?;
+    let mut buf = vec![0u8; record.len() + 1];
+    file.read_exact(&mut buf)?;
+    if buf.first() != Some(&b'\n') {
+        return Err(SpeccyError::io(format!(
+            "append verification failed for {path}: read-back mismatch (torn tail: missing record separator)"
+        )));
+    }
+    if buf.get(1..).unwrap_or_default() != record {
         return Err(SpeccyError::io(format!(
             "append verification failed for {path}: read-back mismatch"
         )));
     }
     Ok(())
-}
-
-fn last_line(path: &Utf8Path) -> Result<Option<String>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut last = None;
-    for line in reader.lines() {
-        let line = line?;
-        if !line.trim().is_empty() {
-            last = Some(line);
-        }
-    }
-    Ok(last)
 }
 
 /// Read and parse a JSONL event log, failing closed on a corrupt or truncated
@@ -703,6 +749,24 @@ mod tests {
             "{}",
             err.message
         );
+    }
+
+    #[test]
+    fn append_over_a_torn_tail_fails_read_back() {
+        // A pre-existing final record with no trailing newline is a torn tail;
+        // appending after it must fail verification rather than silently
+        // concatenating onto the broken line.
+        let (_dir, base) = utf8_tempdir();
+        let path = base.join("events.jsonl");
+        fs::write(&path, "{\"partial\":true}").expect("write torn tail");
+        let err = append_event(
+            &path,
+            Event::SpecStatusChanged {
+                to: SpecStatus::Accepted,
+            },
+        )
+        .expect_err("append over a torn tail must fail read-back");
+        assert!(err.message.contains("read-back"), "{}", err.message);
     }
 
     #[test]

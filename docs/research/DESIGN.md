@@ -611,10 +611,12 @@ the same run must not interleave `ctl` calls and corrupt round counting, so the
 controller contract includes a run-level lease:
 
 - `run next --agent <id>` issues or renews a lease token bound to that agent
-  ID, with a 10-minute expiry (MVP default), renewed on every controller
-  call. The token returns with the directive and is passed back as
-  `--lease <token>` on state-mutating operations. Agent IDs are opaque
-  caller-chosen strings; the packs use a `<harness>:<session>` convention.
+  ID, with a 10-minute expiry (MVP default). The token returns with the
+  directive and is passed back as `--lease <token>` on state-mutating
+  operations. Agent IDs are opaque caller-chosen strings; the packs use a
+  `<harness>:<session>` convention. Renewal may be skipped while ample TTL
+  remains (at least half the TTL); the lease is derived state, so a skipped
+  renewal only risks an earlier expiry, never a torn on-disk lease.
 - State-mutating operations — `task claim`, `task record-handoff`,
   `requirement set-status`, `run record-decision`, `run record-ship`, and any
   operation a `run next` directive names in `record_with` — require the live

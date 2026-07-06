@@ -118,20 +118,31 @@ pub fn run_next(
         let mut applied = Vec::new();
 
         // Guards that park the run before the loop runs: an out-of-band commit
-        // or a resource cap. Both fail closed to an escalated policy gate.
-        if let Some(t) = detect_out_of_band(store, guard, spec_id, run_id, &run0)? {
+        // or a resource cap. Both fail closed to an escalated policy gate and
+        // append an event, so the settled state must be re-projected.
+        let settled = if let Some(t) = detect_out_of_band(store, guard, spec_id, run_id, &run0)? {
             applied.push(t);
+            store.run_projection(spec_id, run_id)?
         } else if let Some(t) = detect_resource_caps(store, guard, &run0, &config)? {
             applied.push(t);
+            store.run_projection(spec_id, run_id)?
         } else {
-            // --- provenance scan over the current diff (records blocking findings) ---
-            run_provenance_scan(store, guard, spec_id, run_id, &run0)?;
-            // --- derived transitions ---
-            applied.extend(advance(store, guard, spec_id, run_id)?);
-        }
+            // Provenance scan over the current diff records blocking findings;
+            // re-project only when it actually recorded some.
+            let hits = run_provenance_scan(store, guard, spec_id, run_id, &run0, &config)?;
+            let start = if hits == 0 {
+                run0
+            } else {
+                store.run_projection(spec_id, run_id)?
+            };
+            // advance() starts from `start` and returns the settled projection,
+            // so no separate final rebuild is needed.
+            let (transitions, settled) = advance(store, guard, spec_id, run_id, start, &config)?;
+            applied.extend(transitions);
+            settled
+        };
 
-        let run = store.run_projection(spec_id, run_id)?;
-        Ok((run, applied, lease, resume))
+        Ok((settled, applied, lease, resume))
     })?;
 
     let directive = compute_directive(&run, &config, applied, lease, resume);
@@ -199,27 +210,39 @@ fn manage_lease(
     run: &RunProjection,
 ) -> Result<(LeaseState, Option<serde_json::Value>)> {
     let now = jiff::Timestamp::now();
-    let current = store.read_lease(spec_id, run_id)?;
-    let (lease, resume) = match current {
+    match store.read_lease(spec_id, run_id)? {
         Some(l) if !l.is_expired(now) => {
-            if l.agent == agent {
-                (l.renewed(), None)
-            } else {
+            if l.agent != agent {
                 return Err(SpeccyError::lease_held(format!(
                     "run lease held by {} until {}",
                     l.agent, l.expires_at
                 )));
             }
+            // Renewal slack: while at least half the TTL remains, embed the
+            // on-disk lease unchanged and skip the rewrite. The lease is
+            // derived state (DESIGN § Run Lease), so a skipped renewal only
+            // risks an earlier expiry, never a torn file.
+            let remaining = l.expires_at.as_second() - now.as_second();
+            if remaining >= crate::lease::ttl_seconds() / 2 {
+                return Ok((l, None));
+            }
+            let renewed = l.renewed();
+            store.write_lease(spec_id, run_id, &renewed)?;
+            Ok((renewed, None))
         }
         Some(l) => {
             // Expired: clear it and report resume attribution.
             let resume = resume_attribution(store, run, &l.agent);
-            (LeaseState::issue(agent), Some(resume))
+            let lease = LeaseState::issue(agent);
+            store.write_lease(spec_id, run_id, &lease)?;
+            Ok((lease, Some(resume)))
         }
-        None => (LeaseState::issue(agent), None),
-    };
-    store.write_lease(spec_id, run_id, &lease)?;
-    Ok((lease, resume))
+        None => {
+            let lease = LeaseState::issue(agent);
+            store.write_lease(spec_id, run_id, &lease)?;
+            Ok((lease, None))
+        }
+    }
 }
 
 /// Summarize what resume will fold into the in-flight task after clearing a
@@ -329,8 +352,8 @@ fn run_provenance_scan(
     spec_id: &str,
     run_id: &str,
     run: &RunProjection,
-) -> Result<()> {
-    let config = ProjectConfig::load(&store.workspace_root)?;
+    config: &ProjectConfig,
+) -> Result<usize> {
     // Choose the diff scope: an in-review task's diff, or the integrated
     // run diff during verifying.
     let (baseline, task_id, guard_seq) = if let Some(t) = run
@@ -349,15 +372,15 @@ fn run_provenance_scan(
             run.verifying_entered_seq(),
         )
     } else {
-        return Ok(());
+        return Ok(0);
     };
     let Some(baseline) = baseline else {
-        return Ok(());
+        return Ok(0);
     };
 
     // Already scanned this round? (a provenance finding recorded after the guard)
     if run.provenance_scanned_after(guard_seq, task_id.as_deref()) {
-        return Ok(());
+        return Ok(0);
     }
 
     let diff = gitx::worktree_diff(&store.git_root, &baseline).unwrap_or_default();
@@ -368,6 +391,7 @@ fn run_provenance_scan(
         run.requirements.keys().cloned(),
         &config.provenance.extra_terms,
     );
+    let mut recorded = 0;
     for hit in provenance::scan_diff(&diff, &terms) {
         let finding = FindingRecord {
             id: ids::short_id("fd"),
@@ -382,27 +406,30 @@ fn run_provenance_scan(
             recorded_by: "controller:provenance-scan".into(),
         };
         store.append_run_event_with(guard, spec_id, run_id, Event::FindingRecorded { finding })?;
+        recorded += 1;
     }
-    Ok(())
+    Ok(recorded)
 }
 
-/// Apply derived transitions to a fixpoint, returning those applied this call.
+/// Apply derived transitions to a fixpoint starting from `initial`. Returns the
+/// transitions applied this call and the settled projection (so the caller
+/// needs no separate final rebuild). `config` is loaded once by the caller
+/// rather than re-read every iteration.
 fn advance(
     store: &Store,
     guard: &StoreLockGuard,
     spec_id: &str,
     run_id: &str,
-) -> Result<Vec<AppliedTransition>> {
+    initial: RunProjection,
+    config: &ProjectConfig,
+) -> Result<(Vec<AppliedTransition>, RunProjection)> {
     let mut applied = Vec::new();
-    loop {
-        let run = store.run_projection(spec_id, run_id)?;
-        let config = ProjectConfig::load(&store.workspace_root)?;
-        match step(store, guard, &run, &config)? {
-            Some(t) => applied.push(t),
-            None => break,
-        }
+    let mut run = initial;
+    while let Some(t) = step(store, guard, &run, config)? {
+        applied.push(t);
+        run = store.run_projection(spec_id, run_id)?;
     }
-    Ok(applied)
+    Ok((applied, run))
 }
 
 /// Apply at most one derived transition. `None` means state is settled.
