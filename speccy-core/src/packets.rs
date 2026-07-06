@@ -502,7 +502,10 @@ pub fn accepted_risk_phrase(n: usize) -> String {
     }
 }
 
-fn req_status_label(s: RequirementStatus) -> &'static str {
+/// Human-facing requirement-status label ("review-only evidence" for
+/// `review_passed`), shared with the human CLI's evidence drill-down.
+#[must_use = "returns the label without side effects"]
+pub fn req_status_label(s: RequirementStatus) -> &'static str {
     match s {
         RequirementStatus::Pending => "pending",
         RequirementStatus::Passed => "passed",

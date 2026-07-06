@@ -281,7 +281,7 @@ fn detect_out_of_band(
     Ok(Some(AppliedTransition {
         subject: "run".into(),
         from: run.state.as_str().into(),
-        to: "escalated".into(),
+        to: RunState::Escalated.as_str().into(),
         snapshot: None,
     }))
 }
@@ -446,8 +446,8 @@ fn step_implementing(
                 )?;
                 return Ok(Some(AppliedTransition {
                     subject: format!("task:{}", active.id),
-                    from: "in_review".into(),
-                    to: "integrated".into(),
+                    from: TaskStatus::InReview.as_str().into(),
+                    to: TaskStatus::Integrated.as_str().into(),
                     snapshot: Some(sha),
                 }));
             } else if run.task_has_blocked_requirement(active) {
@@ -468,8 +468,8 @@ fn step_implementing(
                 )?;
                 return Ok(Some(AppliedTransition {
                     subject: format!("task:{}", active.id),
-                    from: "in_review".into(),
-                    to: "building".into(),
+                    from: TaskStatus::InReview.as_str().into(),
+                    to: TaskStatus::Building.as_str().into(),
                     snapshot: None,
                 }));
             }
@@ -491,8 +491,8 @@ fn step_implementing(
         )?;
         return Ok(Some(AppliedTransition {
             subject: "run".into(),
-            from: "implementing".into(),
-            to: "verifying".into(),
+            from: RunState::Implementing.as_str().into(),
+            to: RunState::Verifying.as_str().into(),
             snapshot: None,
         }));
     }
@@ -529,8 +529,8 @@ fn step_verifying(
         )?;
         return Ok(Some(AppliedTransition {
             subject: "run".into(),
-            from: "verifying".into(),
-            to: "verified".into(),
+            from: RunState::Verifying.as_str().into(),
+            to: RunState::Verified.as_str().into(),
             snapshot: None,
         }));
     }
@@ -595,8 +595,8 @@ fn spawn_run_repair(
     )?;
     Ok(AppliedTransition {
         subject: "run".into(),
-        from: "verifying".into(),
-        to: "implementing".into(),
+        from: RunState::Verifying.as_str().into(),
+        to: RunState::Implementing.as_str().into(),
         snapshot: None,
     })
 }
@@ -636,7 +636,7 @@ fn escalate(
     Ok(Some(AppliedTransition {
         subject: "run".into(),
         from: from.as_str().into(),
-        to: "escalated".into(),
+        to: RunState::Escalated.as_str().into(),
         snapshot,
     }))
 }

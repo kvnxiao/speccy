@@ -671,11 +671,11 @@ fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
             format!("recorded {} finding", finding.severity)
         }
         Event::RequirementStatusSet { updates } => match updates.as_slice() {
-            [one] => format!("set {} {}", one.requirement, status_wire(one.status)),
+            [one] => format!("set {} {}", one.requirement, one.status.as_str()),
             many => format!("set {} requirement statuses", many.len()),
         },
         Event::TaskTransitioned { task, to, .. } => {
-            format!("{} {}", task_label(run, task), task_status_wire(*to))
+            format!("{} {}", task_label(run, task), to.as_str())
         }
         Event::TaskAppended { task, .. } => format!("queued {}", task_label(run, &task.id)),
         Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
@@ -690,26 +690,6 @@ fn task_label(run: &RunProjection, task_id: &str) -> String {
     run.task(task_id)
         .and_then(|t| t.title.clone())
         .unwrap_or_else(|| "the current task".to_string())
-}
-
-fn status_wire(s: RequirementStatus) -> &'static str {
-    match s {
-        RequirementStatus::Pending => "pending",
-        RequirementStatus::Passed => "passed",
-        RequirementStatus::ReviewPassed => "review_passed",
-        RequirementStatus::Failed => "failed",
-        RequirementStatus::Blocked => "blocked",
-        RequirementStatus::Waived => "waived",
-    }
-}
-
-fn task_status_wire(s: TaskStatus) -> &'static str {
-    match s {
-        TaskStatus::Queued => "queued",
-        TaskStatus::Building => "building",
-        TaskStatus::InReview => "in_review",
-        TaskStatus::Integrated => "integrated",
-    }
 }
 
 #[cfg(test)]

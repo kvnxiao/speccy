@@ -70,6 +70,19 @@ pub enum TaskStatus {
     Integrated,
 }
 
+impl TaskStatus {
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TaskStatus::Queued => "queued",
+            TaskStatus::Building => "building",
+            TaskStatus::InReview => "in_review",
+            TaskStatus::Integrated => "integrated",
+        }
+    }
+}
+
 /// Requirement status — six canonical values (DESIGN § Requirement Resolution
 /// Rules).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -99,6 +112,19 @@ impl RequirementStatus {
             self,
             RequirementStatus::Passed | RequirementStatus::ReviewPassed | RequirementStatus::Waived
         )
+    }
+
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RequirementStatus::Pending => "pending",
+            RequirementStatus::Passed => "passed",
+            RequirementStatus::ReviewPassed => "review_passed",
+            RequirementStatus::Failed => "failed",
+            RequirementStatus::Blocked => "blocked",
+            RequirementStatus::Waived => "waived",
+        }
     }
 }
 
@@ -159,6 +185,21 @@ pub enum SpecStatus {
     Superseded,
     /// Retired from the planning-candidate set.
     Archived,
+}
+
+impl SpecStatus {
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SpecStatus::Draft => "draft",
+            SpecStatus::Approved => "approved",
+            SpecStatus::Cancelled => "cancelled",
+            SpecStatus::Accepted => "accepted",
+            SpecStatus::Superseded => "superseded",
+            SpecStatus::Archived => "archived",
+        }
+    }
 }
 
 /// Directive action — closed vocabulary (DESIGN § Deterministic Loop Driving).
@@ -254,6 +295,17 @@ impl FindingSeverity {
             "positive" => Some(FindingSeverity::Positive),
             "uncertain" => Some(FindingSeverity::Uncertain),
             _ => None,
+        }
+    }
+
+    /// The `snake_case` wire string (matches the serde representation).
+    #[must_use = "returns the wire string without side effects"]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FindingSeverity::Blocking => "blocking",
+            FindingSeverity::Advisory => "advisory",
+            FindingSeverity::Positive => "positive",
+            FindingSeverity::Uncertain => "uncertain",
         }
     }
 }

@@ -221,10 +221,7 @@ pub fn list(
             i + 1,
             style::paint(style::SPEC_REF, &s.spec_ref),
             title_of(s),
-            style::paint(
-                style::spec_status_style(s.status),
-                spec_status_str(s.status)
-            )
+            style::paint(style::spec_status_style(s.status), s.status.as_str())
         );
     }
     if let Some(first) = rows.first() {
@@ -245,7 +242,7 @@ fn list_visible(
     status_filter: Option<&str>,
 ) -> bool {
     if let Some(f) = status_filter {
-        return spec_status_str(status) == f;
+        return status.as_str() == f;
     }
     if all {
         return true;
@@ -352,7 +349,7 @@ pub fn archive(store: &Store, selector: Option<&str>) -> Result<String> {
         return Err(SpeccyError::invalid_transition(format!(
             "{} is {}; archive is for accepted/closed specs — use `speccy cancel` to stop active work",
             spec.spec_ref,
-            spec_status_str(spec.status)
+            spec.status.as_str()
         )));
     }
     store.append_spec_event(
@@ -479,17 +476,6 @@ pub fn export_review(store: &Store, selector: Option<&str>, dest: Option<&str>) 
     let path = dest_dir.join("review-packet.md");
     write_atomic(&path, markdown.as_bytes())?;
     Ok(format!("Wrote {path}"))
-}
-
-fn spec_status_str(s: SpecStatus) -> &'static str {
-    match s {
-        SpecStatus::Draft => "draft",
-        SpecStatus::Approved => "approved",
-        SpecStatus::Cancelled => "cancelled",
-        SpecStatus::Accepted => "accepted",
-        SpecStatus::Superseded => "superseded",
-        SpecStatus::Archived => "archived",
-    }
 }
 
 // --- rendering ---
@@ -727,7 +713,10 @@ fn evidence_drilldown(run: &RunProjection) -> String {
         _ = writeln!(
             out,
             "  {id}  {}",
-            style::paint(style::req_status_style(r.status), req_status_str(r.status))
+            style::paint(
+                style::req_status_style(r.status),
+                packets::req_status_label(r.status)
+            )
         );
         if let Some(rr) = &r.residual_risk {
             _ = writeln!(out, "      residual risk: {rr}");
@@ -845,16 +834,5 @@ fn humanize_age(secs: i64) -> String {
         format!("{}m ago", secs / 60)
     } else {
         format!("{}h ago", secs / 3600)
-    }
-}
-
-fn req_status_str(s: RequirementStatus) -> &'static str {
-    match s {
-        RequirementStatus::Pending => "pending",
-        RequirementStatus::Passed => "passed",
-        RequirementStatus::ReviewPassed => "review-only evidence",
-        RequirementStatus::Failed => "failed",
-        RequirementStatus::Blocked => "blocked",
-        RequirementStatus::Waived => "waived",
     }
 }
