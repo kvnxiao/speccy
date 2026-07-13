@@ -29,6 +29,11 @@ similar.workspace = true
 camino.workspace = true
 fs-err.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# Kill-on-close job object for command process-tree containment (DESIGN §
+# Acceptance Ledger); keeps the workspace `unsafe_code = "forbid"`.
+win32job.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 

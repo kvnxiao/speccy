@@ -265,6 +265,23 @@ and a `--requests` entry naming a non-command request is refused with
 `validation_failed`. Use it to re-prove a single artifact without re-collecting
 a requirement's full evidence set.
 
+Each recorded artifact carries the before/after repository identity captured
+around its execution and a containment verdict:
+
+```json
+"repo": {
+  "head_before": "a7f4c2e…", "head_after": "a7f4c2e…", "head_changed": false,
+  "diff_hash_before": "sha256:…", "diff_hash_after": "sha256:…",
+  "newly_dirty": ["package-lock.json"]
+},
+"contained": true
+```
+
+Identity capture failure fails the collection (`io_error`); a containment
+failure records the evidence with `exit_code: -1` (failed) and a note — never
+a successful command with a warning. The artifact file additionally stores
+the full sorted dirty-path lists and the observed raw exit code.
+
 ## `evidence record` — evidence.json
 
 ```yaml

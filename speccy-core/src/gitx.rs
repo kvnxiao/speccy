@@ -238,15 +238,20 @@ pub fn untracked_files(dir: &Utf8Path) -> Result<Vec<String>> {
 
 /// A unified diff against `base` that *also* includes untracked new files as
 /// additions. `git diff` alone omits untracked files, but a worker's new files
-/// are part of its change and must be scanned and attributed.
+/// are part of its change and must be scanned and attributed. Fail-closed: an
+/// unreadable untracked file is an error, never silently-empty content —
+/// provenance scanning and evidence identity both hash this diff (binary
+/// content is included lossily rather than dropped).
 ///
 /// # Errors
 ///
-/// Returns an error if `git` is unavailable or any underlying diff fails.
+/// Returns an error if `git` is unavailable, any underlying diff fails, or an
+/// untracked file cannot be read.
 pub fn worktree_diff(dir: &Utf8Path, base: &str) -> Result<String> {
     let mut out = diff_text(dir, base)?;
     for file in untracked_files(dir)? {
-        let content = fs_err::read_to_string(dir.join(&file)).unwrap_or_default();
+        let bytes = fs_err::read(dir.join(&file))?;
+        let content = String::from_utf8_lossy(&bytes);
         let count = content.lines().count();
         // Writing to a `String` is infallible.
         _ = write!(
@@ -267,13 +272,14 @@ pub fn worktree_diff(dir: &Utf8Path, base: &str) -> Result<String> {
 ///
 /// # Errors
 ///
-/// Returns an error if `git` is unavailable or the diff fails.
+/// Returns an error if `git` is unavailable, the diff fails, or an untracked
+/// file cannot be read.
 pub fn worktree_stat(dir: &Utf8Path, base: &str) -> Result<DiffStat> {
     let mut stat = diff_stat(dir, base)?;
     for file in untracked_files(dir)? {
-        let content = fs_err::read_to_string(dir.join(&file)).unwrap_or_default();
+        let bytes = fs_err::read(dir.join(&file))?;
         stat.files += 1;
-        stat.insertions += content.lines().count();
+        stat.insertions += String::from_utf8_lossy(&bytes).lines().count();
     }
     Ok(stat)
 }

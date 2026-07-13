@@ -34,6 +34,7 @@ camino = { version = "1.2", features = ["serde1"] }
 fs-err = "3.3"
 tempfile = "3.27"
 insta = "1.48"
+win32job = "2.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

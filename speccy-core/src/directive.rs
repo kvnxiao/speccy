@@ -337,7 +337,10 @@ fn run_provenance_scan(
         return Ok(0);
     }
 
-    let diff = gitx::worktree_diff(&store.git_root, &baseline).unwrap_or_default();
+    // Fail-closed: an unreadable diff halts the directive; an empty diff may
+    // only mean a successfully read, genuinely empty diff (DESIGN §
+    // Provenance Hygiene).
+    let diff = gitx::worktree_diff(&store.git_root, &baseline)?;
     let terms = provenance::deny_terms(
         &run.spec_ref,
         spec_id,

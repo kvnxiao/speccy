@@ -668,3 +668,274 @@ fn provenance_leak_in_product_file_blocks_integration() {
         "task must not integrate with an unresolved leak"
     );
 }
+
+/// B: a command that backgrounds a delayed sentinel write leaves no live
+/// descendant — the write must never land after evidence is recorded.
+/// (Unix shell syntax; the Windows twin is below.)
+#[cfg(unix)]
+#[test]
+fn backgrounded_descendant_cannot_mutate_after_collection() {
+    let h = Harness::new();
+    let run = start_run(
+        &h,
+        draft(Some("( sleep 2 && touch escaped_normal.txt ) & echo done")),
+    );
+    let out = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    assert_eq!(out["evidence"][0]["exit_code"], json!(0), "{out}");
+    assert_eq!(out["evidence"][0]["contained"], json!(true), "{out}");
+    // Past the sentinel delay: the descendant must be dead, not just slow.
+    sleep(Duration::from_secs(3));
+    assert!(
+        !h.exists("escaped_normal.txt"),
+        "descendant survived teardown and mutated the workspace"
+    );
+}
+
+/// B: the same containment holds when the command itself times out.
+#[cfg(unix)]
+#[test]
+fn timed_out_descendant_cannot_mutate_after_collection() {
+    let h = Harness::new();
+    h.write_file(
+        ".speccy/project.yaml",
+        "evidence:\n  command_timeout_seconds: 1\n",
+    );
+    h.git(&["add", "-A"]);
+    h.git(&["commit", "-m", "config"]);
+    let run = start_run(
+        &h,
+        draft(Some("( sleep 3 && touch escaped_timeout.txt ) & sleep 30")),
+    );
+    let out = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    assert_eq!(out["evidence"][0]["exit_code"], json!(-1), "{out}");
+    let note = out["evidence"][0]["note"].as_str().expect("note present");
+    assert!(note.contains("timed out"), "{out}");
+    assert_eq!(out["evidence"][0]["contained"], json!(true), "{out}");
+    sleep(Duration::from_secs(3));
+    assert!(
+        !h.exists("escaped_timeout.txt"),
+        "descendant survived the timeout teardown"
+    );
+}
+
+/// B (Windows twin): a detached descendant is contained by the job object.
+#[cfg(windows)]
+#[test]
+fn backgrounded_descendant_cannot_mutate_after_collection() {
+    let h = Harness::new();
+    let run = start_run(
+        &h,
+        draft(Some(
+            "start /b cmd /c \"ping -n 4 127.0.0.1 > nul & echo x > escaped_normal.txt\"",
+        )),
+    );
+    let out = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    assert_eq!(out["evidence"][0]["contained"], json!(true), "{out}");
+    sleep(Duration::from_secs(5));
+    assert!(
+        !h.exists("escaped_normal.txt"),
+        "descendant survived teardown and mutated the workspace"
+    );
+}
+
+/// B: equal dirty-file counts with different contents are different repo
+/// identities — attribution rests on the diff hash, not a count.
+#[test]
+fn equal_dirty_counts_with_different_contents_attribute_differently() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(Some("echo hi")));
+
+    h.write_file("attr.txt", "one\n");
+    let first = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    h.write_file("attr.txt", "two\n");
+    let second = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+
+    let a = &first["evidence"][0]["repo"];
+    let b = &second["evidence"][0]["repo"];
+    assert_eq!(a["head_changed"], json!(false), "{first}");
+    assert_ne!(
+        a["diff_hash_after"], b["diff_hash_after"],
+        "same dirty count, different contents must be different identities"
+    );
+}
+
+/// B: a command that changes HEAD is explicitly reported on the record.
+#[test]
+fn command_that_changes_head_is_reported() {
+    let h = Harness::new();
+    let run = start_run(
+        &h,
+        draft(Some(
+            "git -c user.email=t@t -c user.name=t commit --allow-empty -m oob",
+        )),
+    );
+    let out = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    let repo = &out["evidence"][0]["repo"];
+    assert_eq!(repo["head_changed"], json!(true), "{out}");
+    assert_ne!(repo["head_before"], repo["head_after"], "{out}");
+    let note = out["evidence"][0]["note"].as_str().expect("note present");
+    assert!(note.contains("changed HEAD"), "{out}");
+}
+
+/// B: when git facts are unavailable, evidence collection fails closed (no
+/// event recorded), the provenance scan halts `run next`, and the planning
+/// packet reports structured nulls with warnings — never fabricated cleans.
+#[test]
+fn unavailable_git_facts_fail_closed_and_render_unavailability() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(Some("echo hi")));
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    let spec_ref = status["spec_ref"]
+        .as_str()
+        .expect("spec_ref present")
+        .to_string();
+
+    // Break HEAD resolution: point it at a branch that does not exist.
+    h.write_file(".git/HEAD", "ref: refs/heads/does-not-exist\n");
+
+    // Evidence identity capture fails; nothing is recorded.
+    let refused = h.ctl_raw(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    let msg = refused["error"]["message"]
+        .as_str()
+        .expect("error message present");
+    assert!(msg.contains("repository identity"), "{refused}");
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    assert!(
+        !log.contains("evidence_recorded"),
+        "failed identity capture still recorded evidence:\n{log}"
+    );
+
+    // The planning packet reports nulls plus warnings, not empty strings.
+    let packet = h.ctl(&["ctl", "packet", "planning", "--spec", &spec_ref, "--json"]);
+    assert_eq!(packet["workspace"]["git"]["head"], json!(null), "{packet}");
+    let warnings = packet["workspace"]["warnings"]
+        .as_array()
+        .expect("warnings present");
+    assert!(!warnings.is_empty(), "{packet}");
+}
+
+/// B: an unreadable diff halts `run next` (the provenance scan) instead of
+/// silently scanning nothing.
+#[test]
+fn unreadable_diff_halts_run_next() {
+    let h = Harness::new();
+    let run = start_run(&h, draft(None));
+
+    // Claim and hand off so the provenance scan targets the task diff.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+    h.write_file("src/T1.txt", "work\n");
+    h.ctl_in(
+        &[
+            "ctl",
+            "task",
+            "record-handoff",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "task": "T1", "round": 1, "summary": "did it" }),
+    );
+
+    // Corrupt only the task's stored baseline (leaving the run's base commit
+    // intact, so out-of-band detection stays quiet) so the scan's diff cannot
+    // be produced.
+    let log_path = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log path");
+    let text = fs_err::read_to_string(&log_path).expect("read log");
+    let mut out = String::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let mut v: Value = serde_json::from_str(line).expect("json line");
+        if v["type"] == json!("task_claimed") {
+            v["baseline_commit"] = json!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        }
+        out.push_str(&serde_json::to_string(&v).expect("serialize line"));
+        out.push('\n');
+    }
+    fs_err::write(&log_path, out).expect("write log");
+
+    let refused = h.ctl_raw(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+}

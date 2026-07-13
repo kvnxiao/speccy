@@ -232,9 +232,21 @@ pub fn planning(store: &Store, spec_ref: &str) -> Result<Value> {
         Some(r) if r.approved => "approved",
         Some(_) => "draft",
     };
-    let head = gitx::head(&store.git_root).unwrap_or_default();
-    let branch = gitx::current_branch(&store.git_root).unwrap_or_default();
-    let dirty = gitx::is_dirty(&store.git_root).unwrap_or(false);
+    // Advisory workspace facts degrade to structured `null`s with a visible
+    // warning, never a fabricated empty string or false-clean (DESIGN §
+    // Planning Packet and Draft Contract).
+    let mut warnings: Vec<String> = Vec::new();
+    let head = fact_or_warn(gitx::head(&store.git_root), "git head", &mut warnings);
+    let branch = fact_or_warn(
+        gitx::current_branch(&store.git_root),
+        "git branch",
+        &mut warnings,
+    );
+    let dirty = fact_or_warn(
+        gitx::is_dirty(&store.git_root),
+        "git dirty state",
+        &mut warnings,
+    );
 
     Ok(json!({
         "request": spec.request,
@@ -242,6 +254,7 @@ pub fn planning(store: &Store, spec_ref: &str) -> Result<Value> {
         "draft_state": draft_state,
         "workspace": {
             "git": { "head": head, "branch": branch, "dirty": dirty },
+            "warnings": warnings,
             "signals": project_signals(store),
         },
         "prior_context_candidates": prior_context_candidates(store, &spec.spec_ref)?,
@@ -332,11 +345,10 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
         ),
     };
 
-    let diff = gitx::worktree_stat(&store.git_root, &baseline).unwrap_or(gitx::DiffStat {
-        files: 0,
-        insertions: 0,
-        deletions: 0,
-    });
+    // The diff scope is required for verification correctness: an unreadable
+    // diff fails the packet rather than reporting a fabricated zero diff
+    // (DESIGN § Planning Packet and Draft Contract).
+    let diff = gitx::worktree_stat(&store.git_root, &baseline)?;
 
     // The controller runs the provenance scan inside `run next` (the mutation
     // point); the packet reports the findings that scan recorded this round.
@@ -370,6 +382,7 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
             "hits": prov.len(),
             "findings": prov.iter().map(|f| f.id.clone()).collect::<Vec<_>>(),
         },
+        "command_evidence_anomalies": evidence_identity_anomalies(&run),
         "tools": ["evidence collect", "evidence record", "finding record"],
     }))
 }
@@ -409,6 +422,40 @@ pub fn review(store: &Store, run_id: &str) -> Result<Value> {
 
 fn requirement_json(req: &crate::model::Requirement) -> Value {
     serde_json::to_value(req).unwrap_or(Value::Null)
+}
+
+/// An advisory git fact, or `None` plus a visible warning when unavailable.
+fn fact_or_warn<T>(fact: Result<T>, name: &str, warnings: &mut Vec<String>) -> Option<T> {
+    match fact {
+        Ok(v) => Some(v),
+        Err(e) => {
+            warnings.push(format!("{name} unavailable: {}", e.message));
+            None
+        }
+    }
+}
+
+/// Command-evidence records whose captured repository identity shows the
+/// command changed HEAD or dirtied new paths — surfaced in verification and
+/// review packets (DESIGN § Acceptance Ledger).
+fn evidence_identity_anomalies(run: &RunProjection) -> Vec<Value> {
+    run.evidence
+        .iter()
+        .filter_map(|ev| {
+            let repo = ev.repo.as_ref()?;
+            if !repo.head_changed && repo.newly_dirty.is_empty() {
+                return None;
+            }
+            Some(json!({
+                "evidence": ev.id,
+                "requirement": ev.requirement,
+                "head_changed": repo.head_changed,
+                "head_before": repo.head_before,
+                "head_after": repo.head_after,
+                "newly_dirty": repo.newly_dirty,
+            }))
+        })
+        .collect()
 }
 
 fn prior_findings(run: &RunProjection, task_id: &str) -> Vec<Value> {
@@ -465,11 +512,7 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
         })
         .collect();
 
-    let diff = gitx::diff_stat(&store.git_root, &run.base_commit).unwrap_or(gitx::DiffStat {
-        files: 0,
-        insertions: 0,
-        deletions: 0,
-    });
+    let diff = gitx::diff_stat(&store.git_root, &run.base_commit);
     let tasks_done = run
         .tasks
         .iter()
@@ -536,13 +579,56 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
             _ = writeln!(out, "  {id}  {}", req_status_label(r.status));
         }
     }
-    _ = writeln!(
-        out,
-        "\nChanged  {} files  +{} -{}     {} tasks",
-        diff.files, diff.insertions, diff.deletions, tasks_done
-    );
+    render_evidence_anomalies(&mut out, run);
+    // Honest about an unreadable diff: never a fabricated zero (DESIGN §
+    // Planning Packet and Draft Contract).
+    match diff {
+        Ok(d) => {
+            _ = writeln!(
+                out,
+                "\nChanged  {} files  +{} -{}     {} tasks",
+                d.files, d.insertions, d.deletions, tasks_done
+            );
+        }
+        Err(e) => {
+            _ = writeln!(
+                out,
+                "\nChanged  unavailable — git diff failed: {}     {} tasks",
+                e.message, tasks_done
+            );
+        }
+    }
     out.push_str("Evidence + full diff:  speccy review --evidence\n");
     out
+}
+
+/// Append the command-evidence identity anomalies (changed HEAD, newly dirty
+/// paths) to the review markdown so accepted evidence that mutated the
+/// workspace is visible at the gate.
+fn render_evidence_anomalies(out: &mut String, run: &RunProjection) {
+    let anomalies = evidence_identity_anomalies(run);
+    if anomalies.is_empty() {
+        return;
+    }
+    out.push_str("\nCommand evidence changed the workspace\n");
+    for a in &anomalies {
+        let mut parts = Vec::new();
+        if a["head_changed"] == Value::Bool(true) {
+            parts.push("changed HEAD".to_string());
+        }
+        if let Some(paths) = a["newly_dirty"].as_array()
+            && !paths.is_empty()
+        {
+            let list: Vec<&str> = paths.iter().filter_map(Value::as_str).collect();
+            parts.push(format!("newly dirty: {}", list.join(", ")));
+        }
+        _ = writeln!(
+            out,
+            "  {}  {}",
+            a["evidence"].as_str().unwrap_or("?"),
+            parts.join("; ")
+        );
+    }
 }
 
 /// "1 accepted risk" / "2 accepted risks" (DESIGN § Review UX). Shared with the

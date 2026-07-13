@@ -196,6 +196,22 @@ pub struct EvidenceRecord {
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stdout_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo: Option<EvidenceRepoIdentity>,
+}
+
+/// Before/after repository identity captured around a `kind: command`
+/// evidence execution, so the command's effect is attributable to exact
+/// repository states (DESIGN § Acceptance Ledger).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceRepoIdentity {
+    pub head_before: String,
+    pub head_after: String,
+    pub head_changed: bool,
+    pub diff_hash_before: String,
+    pub diff_hash_after: String,
+    #[serde(default)]
+    pub newly_dirty: Vec<String>,
 }
 
 /// A structured reviewer finding (SCHEMAS § finding record).

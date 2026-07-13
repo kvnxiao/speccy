@@ -628,6 +628,7 @@ fn evidence_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
         command: None,
         exit_code: None,
         stdout_hash: None,
+        repo: None,
     };
     store.append_run_event(
         &spec_id,

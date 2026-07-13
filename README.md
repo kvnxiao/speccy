@@ -47,6 +47,18 @@ Routine work happens inside the harness via the installed skills
 (`/speccy-brainstorm`, `/speccy-plan`, `/speccy-implement`, `/speccy-ship`).
 The `speccy ctl …` surface is machine-facing and rarely typed by hand.
 
+## Security posture
+
+`kind: command` evidence runs in the **live workspace** with the session's
+inherited environment. The `evidence.command_policy.allow` list is a drift
+guardrail — it refuses commands nobody meant to declare — **not** an
+authorization boundary: the active harness sandbox is what authorizes what an
+approved command may do. Speccy does not add its own command sandbox. What it
+does add is accountability: every command's process tree is contained and torn
+down before its evidence is recorded, and the exact before/after repository
+identity (HEAD, dirty paths, worktree-diff hash) is captured so a command that
+mutates the workspace can never pass as a clean check.
+
 ## Build
 
 ```bash

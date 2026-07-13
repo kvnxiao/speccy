@@ -16,8 +16,8 @@ files:
     target: codex
     scope: repo
     template_id: skills/plan.j2
-    source_hash: sha256:46bb76a146d28c181c696971f2f9ce6383968a1f5cbe33b2bcc3e850a95cb930
-    rendered_hash: sha256:096866d411099f22b70ad61f50fe1fdb4a9cf7bdc924ae726a60a03c300b5982
+    source_hash: sha256:9c9289fc190b3d962bf71f0ded1ec98804c4728c087cbbbc67e773bd9f32762b
+    rendered_hash: sha256:70351970e88aff3119826fe999fea1c7ffcb43ac3c3c2407cef76e0b0531a840
   - path: .agents/skills/speccy-plan/references/spec-card-example.md
     target: codex
     scope: repo
@@ -106,8 +106,8 @@ files:
     target: claude
     scope: repo
     template_id: skills/plan.j2
-    source_hash: sha256:46bb76a146d28c181c696971f2f9ce6383968a1f5cbe33b2bcc3e850a95cb930
-    rendered_hash: sha256:83b479d9885c7b2394d151e48b5342a63f8b3c2ce69a2306bda695444894de00
+    source_hash: sha256:9c9289fc190b3d962bf71f0ded1ec98804c4728c087cbbbc67e773bd9f32762b
+    rendered_hash: sha256:0a5b9e0c209cc9413e341f9bec73572750702bac5390bc3fefa5ad3712ed123d
   - path: .claude/skills/speccy-plan/references/spec-card-example.md
     target: claude
     scope: repo

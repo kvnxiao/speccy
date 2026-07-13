@@ -11,6 +11,7 @@ use crate::error::Result;
 use crate::error::SpeccyError;
 use crate::event::Event;
 use crate::event::EvidenceRecord;
+use crate::event::EvidenceRepoIdentity;
 use crate::gitx;
 use crate::ids;
 use crate::model::EvidenceKind;
@@ -20,7 +21,6 @@ use camino::Utf8Path;
 use serde_json::Value;
 use serde_json::json;
 use std::io::Read;
-use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::mpsc;
@@ -76,78 +76,182 @@ pub fn collect(
     // (env-scrubbing stub; full redaction model is Q18 in OPEN-ITEMS.md).
     let secrets = secret_env_values();
 
-    // Serialize all command execution on the workspace command lock.
+    // Serialize all command execution on the workspace command lock, held
+    // through process cleanup and identity capture (DESIGN § Acceptance
+    // Ledger).
+    let ctx = CollectCtx {
+        store,
+        spec_id: &spec_id,
+        run_id,
+        config: &config,
+        secrets: &secrets,
+        cap,
+        timeout,
+    };
     let records = store.with_command_lock(|| {
         let mut out = Vec::new();
         for (req_id, ev_id, command) in &targets {
-            let id = ids::short_id("ev");
-            let dirty_before = gitx::dirty_files(&store.git_root).unwrap_or_default().len();
-            let mut run = run_shell(command, &store.workspace_root, timeout, cap);
-            let dirty_after = gitx::dirty_files(&store.git_root).unwrap_or_default().len();
-
-            run.stdout = scrub_secrets(&run.stdout, &secrets);
-            run.stderr = scrub_secrets(&run.stderr, &secrets);
-
-            let stdout_hash = crate::hash::sha256_prefixed(&run.stdout);
-
-            let artifact_rel = format!("evidence/{id}.txt");
-            let artifact_body = render_artifact(command, &run, dirty_before, dirty_after);
-            let artifact_hash = crate::hash::sha256_prefixed(artifact_body.as_bytes());
-            write_atomic(
-                &store.run_dir(&spec_id, run_id).join(&artifact_rel),
-                artifact_body.as_bytes(),
-            )?;
-
-            let mut notes = Vec::new();
-            if run.timed_out {
-                notes.push(format!(
-                    "timed out after {}s",
-                    config.evidence.command_timeout_seconds
-                ));
-            }
-            if run.truncated {
-                notes.push(format!("output truncated at {cap} bytes"));
-            }
-            if run.reader_abandoned {
-                notes.push("reader abandoned: descendant process still holds the pipe".to_string());
-            }
-            let note = (!notes.is_empty()).then(|| notes.join("; "));
-            let record = EvidenceRecord {
-                id: id.clone(),
-                requirement: req_id.clone(),
-                request: Some(ev_id.clone()),
-                kind: EvidenceKind::Command,
-                collected_by: "controller".into(),
-                note: note.clone(),
-                artifact: Some(artifact_rel),
-                artifact_hash: Some(artifact_hash.clone()),
-                command: Some(command.clone()),
-                exit_code: Some(run.exit_code),
-                stdout_hash: Some(stdout_hash.clone()),
-            };
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::EvidenceRecorded { evidence: record },
-            )?;
-            out.push(json!({
-                "id": id,
-                "requirement": req_id,
-                "request": ev_id,
-                "kind": "command",
-                "command": command,
-                "exit_code": run.exit_code,
-                "stdout_hash": stdout_hash,
-                "artifact_hash": artifact_hash,
-                "artifact": format!("evidence/{id}.txt"),
-                "collected_by": "controller",
-                "note": note,
-            }));
+            out.push(collect_one(&ctx, req_id, ev_id, command)?);
         }
         Ok(out)
     })?;
 
     Ok(json!({ "evidence": records }))
+}
+
+/// Shared context for one `evidence collect` invocation.
+struct CollectCtx<'a> {
+    store: &'a Store,
+    spec_id: &'a str,
+    run_id: &'a str,
+    config: &'a ProjectConfig,
+    secrets: &'a [(String, String)],
+    cap: usize,
+    timeout: Duration,
+}
+
+/// Execute one declared command under identity capture and containment, store
+/// its artifact, and append its evidence record.
+fn collect_one(ctx: &CollectCtx<'_>, req_id: &str, ev_id: &str, command: &str) -> Result<Value> {
+    let id = ids::short_id("ev");
+    let before = capture_repo_identity(&ctx.store.git_root).map_err(|e| {
+        SpeccyError::io(format!(
+            "evidence collection failed: cannot capture the pre-command repository identity: {}",
+            e.message
+        ))
+    })?;
+    let mut run = run_shell(command, &ctx.store.workspace_root, ctx.timeout, ctx.cap);
+    let after = capture_repo_identity(&ctx.store.git_root).map_err(|e| {
+        SpeccyError::io(format!(
+            "evidence collection failed: cannot capture the post-command repository identity: {}",
+            e.message
+        ))
+    })?;
+    let newly_dirty: Vec<String> = after
+        .dirty
+        .iter()
+        .filter(|p| !before.dirty.contains(p))
+        .cloned()
+        .collect();
+    let repo = EvidenceRepoIdentity {
+        head_before: before.head.clone(),
+        head_after: after.head.clone(),
+        head_changed: before.head != after.head,
+        diff_hash_before: before.diff_hash.clone(),
+        diff_hash_after: after.diff_hash.clone(),
+        newly_dirty,
+    };
+
+    run.stdout = scrub_secrets(&run.stdout, ctx.secrets);
+    run.stderr = scrub_secrets(&run.stderr, ctx.secrets);
+
+    let stdout_hash = crate::hash::sha256_prefixed(&run.stdout);
+
+    let artifact_rel = format!("evidence/{id}.txt");
+    let artifact_body = render_artifact(command, &run, &before, &after, &repo);
+    let artifact_hash = crate::hash::sha256_prefixed(artifact_body.as_bytes());
+    write_atomic(
+        &ctx.store
+            .run_dir(ctx.spec_id, ctx.run_id)
+            .join(&artifact_rel),
+        artifact_body.as_bytes(),
+    )?;
+
+    let (note, exit_code) = execution_verdict(ctx, &run, &repo);
+    let record = EvidenceRecord {
+        id: id.clone(),
+        requirement: req_id.to_string(),
+        request: Some(ev_id.to_string()),
+        kind: EvidenceKind::Command,
+        collected_by: "controller".into(),
+        note: note.clone(),
+        artifact: Some(artifact_rel.clone()),
+        artifact_hash: Some(artifact_hash.clone()),
+        command: Some(command.to_string()),
+        exit_code: Some(exit_code),
+        stdout_hash: Some(stdout_hash.clone()),
+        repo: Some(repo.clone()),
+    };
+    ctx.store.append_run_event(
+        ctx.spec_id,
+        ctx.run_id,
+        Event::EvidenceRecorded { evidence: record },
+    )?;
+    Ok(json!({
+        "id": id,
+        "requirement": req_id,
+        "request": ev_id,
+        "kind": "command",
+        "command": command,
+        "exit_code": exit_code,
+        "stdout_hash": stdout_hash,
+        "artifact_hash": artifact_hash,
+        "artifact": artifact_rel,
+        "collected_by": "controller",
+        "note": note,
+        "repo": repo,
+        "contained": run.contained,
+    }))
+}
+
+/// The recorded note and exit code for one execution. Containment failure is
+/// failed evidence, never a successful command with a warning: the recorded
+/// exit code fails closed and the artifact keeps the observed one.
+fn execution_verdict(
+    ctx: &CollectCtx<'_>,
+    run: &ShellRun,
+    repo: &EvidenceRepoIdentity,
+) -> (Option<String>, i32) {
+    let mut notes = Vec::new();
+    if run.timed_out {
+        notes.push(format!(
+            "timed out after {}s",
+            ctx.config.evidence.command_timeout_seconds
+        ));
+    }
+    if run.truncated {
+        notes.push(format!("output truncated at {} bytes", ctx.cap));
+    }
+    if run.reader_abandoned {
+        notes.push("reader abandoned: descendant process still holds the pipe".to_string());
+    }
+    let exit_code = if run.contained {
+        run.exit_code
+    } else {
+        notes.push(format!(
+            "process containment failed: descendants survived teardown; evidence fails closed (observed exit {})",
+            run.exit_code
+        ));
+        -1
+    };
+    if repo.head_changed {
+        notes.push(format!(
+            "command changed HEAD: {} -> {}",
+            repo.head_before, repo.head_after
+        ));
+    }
+    ((!notes.is_empty()).then(|| notes.join("; ")), exit_code)
+}
+
+/// The exact repository state on one side of a command execution: HEAD, the
+/// sorted dirty paths (untracked included), and a hash of the complete
+/// worktree diff against HEAD.
+struct RepoIdentity {
+    head: String,
+    dirty: Vec<String>,
+    diff_hash: String,
+}
+
+fn capture_repo_identity(git_root: &Utf8Path) -> Result<RepoIdentity> {
+    let head = gitx::head(git_root)?;
+    let mut dirty = gitx::dirty_files(git_root)?;
+    dirty.sort();
+    let diff = gitx::worktree_diff(git_root, "HEAD")?;
+    Ok(RepoIdentity {
+        head,
+        dirty,
+        diff_hash: crate::hash::sha256_prefixed(diff.as_bytes()),
+    })
 }
 
 /// (`requirement_id`, `request_id`, command) tuples to execute.
@@ -199,6 +303,12 @@ fn resolve_targets(
     Ok(targets)
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent observations of one execution (timeout, \
+              truncation, reader loss, containment), not an encoded state \
+              machine; an enum would misrepresent that they combine freely"
+)]
 struct ShellRun {
     exit_code: i32,
     stdout: Vec<u8>,
@@ -207,16 +317,23 @@ struct ShellRun {
     /// stdout or stderr exceeded `command_output_max_bytes` and was clamped.
     truncated: bool,
     /// A reader thread was still blocked on a pipe past the grace window (a
-    /// killed command's descendant still holds the write end); its stream is
-    /// recorded empty and the thread is leaked rather than blocking forever.
+    /// descendant that survived teardown still holds the write end); its
+    /// stream is recorded empty and the thread is leaked rather than blocking
+    /// forever.
     reader_abandoned: bool,
+    /// The full process tree was torn down and confirmed gone before this run
+    /// was recorded. `false` is a containment failure and fails the evidence
+    /// closed (DESIGN § Acceptance Ledger).
+    contained: bool,
 }
 
 /// Grace after the process exits (or is killed) for the reader threads to drain
 /// the pipes before a still-blocked reader is abandoned.
 const READER_GRACE: Duration = Duration::from_secs(2);
 
-/// Run a command through the platform shell with a timeout and output cap.
+/// Run a command through the platform shell with a timeout, an output cap,
+/// and process-tree containment: descendants are torn down and reaped after
+/// normal exit or timeout, before the run is returned for recording.
 fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize) -> ShellRun {
     let mut cmd = if cfg!(windows) {
         let mut c = Command::new("cmd");
@@ -231,6 +348,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    containment::prepare(&mut cmd);
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -242,14 +360,16 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
                 timed_out: false,
                 truncated: false,
                 reader_abandoned: false,
+                contained: true,
             };
         }
     };
+    let guard = containment::attach(&child);
 
     // Drain pipes on threads so a chatty command cannot deadlock on a full
     // pipe. The threads report over channels (rather than a joined handle) so
-    // that a reader blocked on a pipe a killed descendant still holds open can
-    // be abandoned instead of blocking this thread forever.
+    // that a reader blocked on a pipe an uncontained descendant still holds
+    // open can be abandoned instead of blocking this thread forever.
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
     let (out_tx, out_rx) = mpsc::channel();
@@ -269,11 +389,6 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
             Ok(Some(status)) => break status.code().unwrap_or(-1),
             Ok(None) => {
                 if Instant::now() >= deadline {
-                    // Best-effort tree kill: descendants that inherited the
-                    // pipes must die too, or the readers never see EOF.
-                    kill_tree(&mut child);
-                    // Reap the killed child; nothing to do with the result.
-                    _ = child.wait();
                     timed_out = true;
                     break -1;
                 }
@@ -282,6 +397,12 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
             Err(_) => break -1,
         }
     };
+
+    // Tear down the whole process tree — after normal exit as well as on
+    // timeout — and reap before draining the pipes, so surviving descendants
+    // die (readers then see EOF) and nothing keeps mutating after this
+    // function returns.
+    let contained = guard.teardown(&mut child);
 
     // One shared grace deadline across both streams so a single stuck reader
     // cannot double the wait.
@@ -295,6 +416,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
         timed_out,
         truncated: out_trunc || err_trunc,
         reader_abandoned: out_lost || err_lost,
+        contained,
     }
 }
 
@@ -309,28 +431,102 @@ fn recv_stream(rx: &mpsc::Receiver<(Vec<u8>, bool)>, deadline: Instant) -> (Vec<
     }
 }
 
-/// Best-effort tree kill of a timed-out command. On Windows, `taskkill /T`
-/// terminates the whole process tree so descendants that inherited the pipes
-/// die too; elsewhere (and if `taskkill` cannot be spawned) fall back to
-/// killing the direct child.
-fn kill_tree(child: &mut Child) {
-    #[cfg(windows)]
-    {
-        // Only trust `taskkill` when it actually reports success: a nonzero
-        // exit (process already gone, access denied) means the tree may still
-        // be alive, so fall through to the direct child kill.
-        let killed = Command::new("taskkill")
-            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+/// Process-tree containment (DESIGN § Acceptance Ledger): the command's whole
+/// tree is addressable, torn down after normal exit or timeout, and reaped
+/// before evidence is recorded. Unix uses a per-command process group and the
+/// `kill` utility (no repository-owned `unsafe`); Windows uses a kill-on-close
+/// job object via the `win32job` dependency.
+#[cfg(unix)]
+mod containment {
+    use std::process::Child;
+    use std::process::Command;
+    use std::process::Stdio;
+    use std::thread;
+    use std::time::Duration;
+
+    pub struct Guard {
+        pgid: u32,
+    }
+
+    /// Give the command its own process group so the whole tree shares one id.
+    pub fn prepare(cmd: &mut Command) {
+        use std::os::unix::process::CommandExt as _;
+        cmd.process_group(0);
+    }
+
+    pub fn attach(child: &Child) -> Guard {
+        // `process_group(0)` makes the child the leader, so pgid == pid.
+        Guard { pgid: child.id() }
+    }
+
+    /// Send `sig` to the whole group via the `kill` utility; `true` when the
+    /// signal was delivered to at least one member.
+    fn signal_group(pgid: u32, sig: &str) -> bool {
+        Command::new("kill")
+            .args([sig, "--", &format!("-{pgid}")])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
-            .is_ok_and(|s| s.success());
-        if killed {
-            return;
+            .is_ok_and(|s| s.success())
+    }
+
+    impl Guard {
+        /// SIGKILL the group, reap the direct child, then confirm no member
+        /// survives (signal 0 fails once the group is empty). Returns whether
+        /// containment was confirmed.
+        pub fn teardown(self, child: &mut Child) -> bool {
+            _ = signal_group(self.pgid, "-KILL");
+            _ = child.wait();
+            for _ in 0..40 {
+                if !signal_group(self.pgid, "-0") {
+                    return true;
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+            false
         }
     }
-    _ = child.kill();
+}
+
+#[cfg(windows)]
+mod containment {
+    use std::os::windows::io::AsRawHandle as _;
+    use std::process::Child;
+    use std::process::Command;
+
+    pub struct Guard {
+        /// Kill-on-close job object holding the command's whole tree; `None`
+        /// when the job could not be created or the child could not be
+        /// assigned, which is a containment failure.
+        job: Option<win32job::Job>,
+    }
+
+    pub fn prepare(_cmd: &mut Command) {}
+
+    pub fn attach(child: &Child) -> Guard {
+        let mut info = win32job::ExtendedLimitInfo::new();
+        info.limit_kill_on_job_close();
+        let job = win32job::Job::create_with_limit_info(&info)
+            .and_then(|job| {
+                job.assign_process(child.as_raw_handle() as isize)?;
+                Ok(job)
+            })
+            .ok();
+        Guard { job }
+    }
+
+    impl Guard {
+        /// Reap the direct child, then close the job handle: kill-on-close
+        /// terminates every remaining member. Containment holds iff the tree
+        /// was in the job from the start.
+        pub fn teardown(self, child: &mut Child) -> bool {
+            _ = child.wait();
+            let established = self.job.is_some();
+            drop(self.job);
+            established
+        }
+    }
 }
 
 /// Read a pipe up to `max_bytes`, returning the clamped bytes and whether the
@@ -355,14 +551,31 @@ fn read_capped(pipe: Option<impl Read>, max_bytes: usize) -> (Vec<u8>, bool) {
 fn render_artifact(
     command: &str,
     run: &ShellRun,
-    dirty_before: usize,
-    dirty_after: usize,
+    before: &RepoIdentity,
+    after: &RepoIdentity,
+    repo: &EvidenceRepoIdentity,
 ) -> String {
     format!(
-        "command: {command}\nexit_code: {}\ntimed_out: {}\ntruncated: {}\ndirty_before: {dirty_before}\ndirty_after: {dirty_after}\n\n--- stdout ---\n{}\n--- stderr ---\n{}\n",
+        "command: {command}\nexit_code: {}\ntimed_out: {}\ntruncated: {}\ncontained: {}\n\
+         head_before: {}\nhead_after: {}\nhead_changed: {}\n\
+         diff_hash_before: {}\ndiff_hash_after: {}\n\
+         dirty_before ({}): {}\ndirty_after ({}): {}\nnewly_dirty ({}): {}\n\
+         \n--- stdout ---\n{}\n--- stderr ---\n{}\n",
         run.exit_code,
         run.timed_out,
         run.truncated,
+        run.contained,
+        repo.head_before,
+        repo.head_after,
+        repo.head_changed,
+        repo.diff_hash_before,
+        repo.diff_hash_after,
+        before.dirty.len(),
+        before.dirty.join(", "),
+        after.dirty.len(),
+        after.dirty.join(", "),
+        repo.newly_dirty.len(),
+        repo.newly_dirty.join(", "),
         String::from_utf8_lossy(&run.stdout),
         String::from_utf8_lossy(&run.stderr),
     )
@@ -448,12 +661,12 @@ mod tests {
         assert!(!truncated);
     }
 
-    // A timed-out command whose backgrounded descendant still holds the output
-    // pipe must not block the collector forever: the reader is abandoned after
-    // the bounded grace window. (Unix-only: relies on `sleep` + `&` semantics.)
+    // A timed-out command is contained: the whole process group is torn down,
+    // so the reader sees EOF instead of blocking on a pipe an orphaned
+    // descendant still holds. (Unix-only: relies on `sleep` semantics.)
     #[cfg(unix)]
     #[test]
-    fn timeout_abandons_a_reader_held_by_a_descendant() {
+    fn timeout_kills_descendants_and_frees_the_readers() {
         use camino::Utf8Path;
         use std::time::Duration;
         use std::time::Instant;
@@ -468,11 +681,16 @@ mod tests {
         let elapsed = start.elapsed();
         assert!(run.timed_out, "command should have hit the 1s timeout");
         assert!(
-            run.reader_abandoned,
-            "reader held by the orphaned sleep should be abandoned"
+            run.contained,
+            "the process group teardown should be confirmed"
         );
-        // 1s timeout + 2s grace; a generous bound proves it did not block on
-        // the 30s sleep.
+        assert!(
+            !run.reader_abandoned,
+            "group teardown should free the readers via EOF"
+        );
+        assert_eq!(run.stdout, b"hi\n", "pre-timeout output is kept");
+        // 1s timeout + bounded teardown probe; a generous bound proves it did
+        // not block on the 30s sleep.
         assert!(
             elapsed < Duration::from_secs(15),
             "collector blocked too long: {elapsed:?}"

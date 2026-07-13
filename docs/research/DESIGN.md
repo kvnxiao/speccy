@@ -158,7 +158,9 @@ Baseline rules:
 - Every approved spec has an acceptance ledger before implementation starts.
 - Every requirement has a stable local ID, a plain-English statement, and one or more evidence requests: command/test output, browser/API observation, file/diff review, harness review, manual evidence, explicit waiver, or blocked status. Evidence requests are an array, each with a stable ID unique within its requirement (`E1`, `E2`; qualified as `R-AUTH-001.E1`); collected evidence records reference the request they satisfy, so a requirement with several declared proofs stays auditable per proof rather than per requirement (shapes in `SCHEMAS.md`).
 - For `kind: command` evidence, the controller executes the command: `speccy ctl evidence collect` runs it and records exit code, stdout, stderr, and a content hash. `evidence record` refuses agent-pasted output for that kind, so `passed` on command evidence never rests on a transcript claim. Trust narrows to review, browser, and manual kinds, which the risk tiers already treat as weaker.
-- Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Q18 in `OPEN-ITEMS.md`). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), and the controller records worktree dirty-state before and after the run so command-induced changes stay attributable.
+- Command execution policy: the declared command string runs through the platform shell (`sh -c`; `cmd /c` on Windows) in the workspace root, under the `evidence.command_timeout_seconds` and `evidence.command_output_max_bytes` caps from `.speccy/project.yaml`, with known-secret environment values scrubbed from stored output (full redaction model: Q18 in `OPEN-ITEMS.md`). Command executions serialize on the workspace command lock (see "Run Lease and Concurrent Writers"), which stays held through process cleanup and identity capture.
+- Repository identity around commands: the controller captures the exact repository state before and after every command execution — HEAD SHA, the sorted dirty paths including untracked files, and a hash of the complete worktree diff — so command-induced changes are attributable to exact states, never to a dirty-file count (equal counts with different paths or contents are different identities). A changed HEAD and newly dirty paths are recorded in the evidence artifact and record and surfaced in verification/review packets. If either identity capture fails, evidence collection fails: an unavailable git fact never masquerades as a clean one.
+- Process-tree containment: the full command process tree is contained on Linux, macOS, and Windows (a per-command process group on Unix; a kill-on-close job object on Windows). After normal shell exit and on timeout the controller tears down remaining descendants and reaps them before recording evidence, so a backgrounded process can never keep mutating after collection returns. A containment failure records **failed** evidence — never a successful command with a warning. Speccy does not own a command sandbox: the active harness sandbox remains the authorization boundary for what an approved command may do while it runs.
 - Command allow policy: when `evidence.command_policy.allow` is set in `.speccy/project.yaml`, a declared `kind: command` string that matches no pattern is flagged by structural lint at `record-draft`/`patch-draft` — so the mismatch surfaces at spec time, where the human can fix or approve around it — and refused at `evidence collect` (`validation_failed`). Patterns match the whole declared command string (glob), never a prefix: commands execute through a shell, so `npm test && curl …` is a different whole string from `npm test` and matches nothing unless a pattern explicitly allows it. The policy is a drift guardrail — lint plus refusal against commands nobody meant to declare — not an authorization boundary; the harness sandbox remains the security boundary for whatever an approved command spawns (see "Human Gates"). Unset means any approved command may run; the spec card always shows the command strings either way (see "Spec Card UX").
 - On `high` and `critical` specs, `evidence record` for `kind: browser` and `kind: api` requires a non-empty `artifact` reference — a screenshot, trace, DOM capture, or HTTP transcript stored under the run's evidence tree — and refuses prose-only records. The controller enforces presence and hashes the artifact; it cannot vouch for authenticity, but a stored artifact is inspectable at review where a transcript claim is not. At `minimal` and `standard` the artifact stays optional.
 - An approved revision's ledger is immutable in place: requirement statements and evidence requests are frozen at approval. Agents may only propose draft patches; a human prose approval creates a new revision and a new run. Verifiers change requirement status only, through evidence operations.
@@ -873,7 +875,10 @@ Enforcement is three cheap layers, none of them a dedicated agent:
    paths are excluded.
    A hit records a blocking finding and feeds the normal repair round. String
    matching is exactly deterministic-core work: zero tokens, no judgment
-   calls, runs every round.
+   calls, runs every round. The scan is fail-closed on its input: if the diff
+   cannot be read, `run next` halts with the error rather than scanning
+   nothing — an empty diff may only mean a successfully read, genuinely
+   empty diff.
 2. **Prevention in role prose.** Worker and repair prompts carry a standing
    rule: never write Speccy identifiers or process language into product
    files, including test names — requirement-to-test traceability lives in
@@ -1150,6 +1155,13 @@ when `/speccy-plan` promotes a brainstorm; this is the only point where a
 brainstorm handoff is persisted). The controller stores the request on the
 spec and echoes it in every planning packet, so a fresh session never depends
 on transcript memory for the original ask.
+
+Packet git facts are honest about unavailability. A fact the controller
+cannot read is reported as a structured `null` alongside a visible warning —
+never a fabricated empty string, zero, or "clean". Facts required for
+provenance, verification, or evidence correctness (the verification packet's
+diff scope, the provenance scan's diff, evidence identity capture) do not
+degrade to a warning: their operation fails instead.
 
 `speccy ctl packet planning --spec <ref> --json` should not call an LLM and should not return a bare template. It returns a deterministic planning work order built from controller state:
 
