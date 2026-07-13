@@ -148,6 +148,20 @@ impl Harness {
         fs_err::create_dir_all(self.repo.path().join(rel)).expect("create dir");
     }
 
+    /// Run a command; return `(stdout, stderr, success)`.
+    pub fn output_full(&self, args: &[&str]) -> (String, String, bool) {
+        let out = self
+            .base_command()
+            .args(args)
+            .output()
+            .expect("speccy runs");
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+            out.status.success(),
+        )
+    }
+
     /// Run a command; return `(stdout, success)`.
     pub fn output(&self, args: &[&str]) -> (String, bool) {
         let out = self

@@ -1,6 +1,6 @@
 # Speccy Research Folder
 
-Design and research workspace for `speccy`, a spec-driven run controller for coding agents. Code lives at this repo's root once `IMPLEMENTATION-PLAN.md` M0 scaffolds the Rust crate.
+Design and research workspace for `speccy`, a spec-driven run controller for coding agents. The implementation is the two-crate Cargo workspace at this repo's root (`speccy-core`, `speccy-cli`); these docs remain the authoritative behavior source.
 
 ## Doc map and authority
 
@@ -10,7 +10,7 @@ Each topic has exactly one authoritative home. When editing, change the owner an
 | --- | --- | --- |
 | `DESIGN.md` | Behavior and mechanics: state machines, gates, caps, lease protocol, resume, requirement resolution rules, evidence rules, branch/snapshot policy, storage trees + git policy, CLI surfaces (human + `ctl`), install/update behavior, packs, packet contents, MVP scope. Also owns canonical enum values (run states, task statuses, requirement statuses, risk tiers, directive actions), each defined with the state machine that owns it. | Authoritative |
 | `TERMINOLOGY.md` | Vocabulary: a compact proper-noun glossary (one line per term, pointing to DESIGN for mechanics), naming discipline, spec status values, and ID scopes. Names the status vocabularies and points to DESIGN for their values. | Authoritative for vocabulary |
-| `SCHEMAS.md` | Controller I/O payload shapes: the JSON envelope, the `run next` directive, and every `--input` payload. Provisional until M1 implements them. | Authoritative for payload shapes |
+| `SCHEMAS.md` | Controller I/O payload shapes: the JSON envelope, the `run next` directive, and every `--input` payload. Implemented; intentionally unstable before 1.0. | Authoritative for payload shapes |
 | `IMPLEMENTATION-PLAN.md` | Build sequencing and engineering choices not in DESIGN (crate layout, dependencies, git-CLI shell-out, template embedding), the vertical-slice milestones M0–M6 with task checklists. Sequences the build; DESIGN specifies behavior. | Authoritative for build order |
 | `WALKTHROUGH.md` | Illustrative end-to-end scenario with mocked command outputs, sectioned by lifecycle area and bounded by the human checkpoints (setup → plan → implement → ship → accept; archive later when historical context goes stale). Each section leads with what the human types and reads, then shows the controller operations behind it — both the human's-eye view and the protocol reference. If it conflicts with DESIGN/TERMINOLOGY, the design docs win. | Illustration |
 | `OPEN-ITEMS.md` | The live surface for undecided work: backlog, open questions (historical Q-numbers), dogfood watch list. | Live backlog |

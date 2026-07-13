@@ -55,7 +55,7 @@ pub enum Command {
     New(NewArgs),
     /// Install or update repo-local harness packs.
     Install(InstallArgs),
-    /// Export a spec, review packet, or redacted run bundle.
+    /// Export the human review packet.
     #[command(subcommand)]
     Export(ExportCommand),
 }
@@ -348,8 +348,10 @@ pub enum ExportCommand {
     /// Export the human review packet.
     Review(ExportArgs),
     /// Export the full spec.
+    #[command(hide = true)]
     Spec(ExportArgs),
     /// Export a redacted run bundle for audit/debugging.
+    #[command(hide = true)]
     RunBundle(ExportBundleArgs),
 }
 

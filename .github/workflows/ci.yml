@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -17,7 +20,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Nightly is needed only for rustfmt's unstable options (see .rustfmt.toml).
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -36,3 +39,20 @@ jobs:
           git config --global user.name CI
       - name: CI gate (fmt + clippy + test)
         run: just ci
+
+  msrv:
+    name: MSRV cargo check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Stable only bootstraps `cargo metadata`; the check runs on the MSRV
+      # toolchain read from workspace Cargo metadata (single source of truth).
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install MSRV toolchain from workspace metadata
+        run: |
+          msrv="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')"
+          rustup toolchain install "$msrv" --profile minimal
+          echo "MSRV=$msrv" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check on MSRV
+        run: cargo "+$MSRV" check --workspace --all-targets --locked

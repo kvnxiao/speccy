@@ -1,10 +1,10 @@
 ## **Spec Driven Orchestration Principles**
 
-Agentic orchestration tools must be designed to integrate with any agent harness, and provide an autonomous approach to agentic engineering via concrete checkpoints for human intervention, thereby removing the realtime need to steer an agent on the fly. The goal is to provide as much determinism as possible to the agentic engineering process and minimizing the burden of context overload for human intervention, while relying on ever-improving AI models to implement the plan autonomously. **A correctly designed agent orchestration tool should never be obsoleted by a future frontier AI model.**
+Agentic orchestration tools must be designed to integrate with any agent harness, and provide an autonomous approach to agentic engineering via concrete checkpoints for human intervention, thereby reducing the realtime need to steer an agent on the fly. The split of guarantees is deliberate: the bookkeeping — sequencing, gates, caps, evidence — is deterministic and auditable, while the implementation and review work delegated to models remains nondeterministic. Speccy promises less supervision and an inspectable record of what happened, not that model output is correct or that a run never needs attention.
 
 Before: iterate on a plan or prompt, and then start implementation in auto-mode, baby sitting on the AI model's output and steering it for directional corrections.
 
-After: focusing more brainpower on the initial plan such that it is as comprehensive as possible, then stepping back to allowing the AI model to implement the plan autonomously. Human intervention gates are at the beginning (reviewing the plan) and the end (reviewing the implementation) - no baby sitting needed.
+After: focusing more brainpower on the initial plan such that it is as comprehensive as possible, then stepping back to allowing the AI model to implement the plan autonomously. Human intervention concentrates at the gates — reviewing the plan, answering escalations, and reviewing the implementation against recorded evidence — instead of continuous steering.
 
 ## **Core Principles**
 

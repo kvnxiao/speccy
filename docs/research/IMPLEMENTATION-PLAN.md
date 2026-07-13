@@ -1,26 +1,24 @@
 # Speccy Implementation Plan: Rust Walking Skeleton
 
-Status: roadmap, implementation in progress
-Date: 2026-07-04
+Status: historical build sequence; the milestone deliverables are implemented
+Date: 2026-07-12
 
 Build sequencing for the Speccy MVP. This doc sequences the build; `DESIGN.md` and `TERMINOLOGY.md` specify behavior. Every milestone names a deliverable and points to the DESIGN section that owns it — when a bullet and DESIGN disagree, DESIGN wins, so this doc never restates mechanics, enum values, or transition rules. Resolved prerequisites (project home, license, resolution rules, gate enumeration, workspace identity, payload shapes) are in `DECISION-LOG.md`; the milestones assume them.
 
-Progress note: the current repository contains an implemented Rust walking skeleton with tests spanning the trust loop, human surface, install packs, exception paths, and hardening. The checklist below remains the build-sequencing plan; mark individual boxes only when that milestone is deliberately accepted as complete.
+Progress note: the engineering deliverables of M0–M6 are implemented as the two-crate workspace at the repo root (`speccy-core`, `speccy-cli`), with integration tests spanning the trust loop (`trust.rs`), human surface (`human.rs`), install packs (`pack.rs`), exception paths (`exceptions.rs`), hardening/crash matrix (`hardening.rs`), and the full fake-harness E2E (`e2e.rs`). What remains open from M6 is the recurring part: dogfood friction keeps feeding `OPEN-ITEMS.md`. The checklists below are retained unmarked as the historical build sequence, not as a status report — this note is the status.
 
 Each milestone is a one-line goal, its deliverables, and one **Done when** line — the single observable behavior that proves the slice works. Exhaustive per-behavior assertions live in the tests.
 
 The sequence is **vertical-slice-first**: M1 builds the thinnest real end-to-end loop so the product's "does this feel lightweight?" test arrives at M1, not at the end. Later milestones thicken each layer. Dogfood runs as recurring pressure after M1 and M4, not only as a final exam.
 
-The project is not scaffolded yet. M0 runs `cargo init` at this repo's root.
-
 ## Build choices not in DESIGN
 
 DESIGN owns product decisions (Rust + `minijinja`, JSONL store, statuses, gates). This doc owns only build-level choices DESIGN is silent on:
 
-- Single cargo package: `src/lib.rs` with modules `store`, `state`, `ops`, `lease`, `gitx`, `evidence`, `render`, `cli`, plus `src/main.rs`. Split into a workspace only when it hurts.
+- Cargo workspace with two member crates: `speccy-core` (deterministic library) and `speccy-cli` (the `speccy` binary). The plan started as a single package; the split happened when the library/binary boundary hurt.
 - Git operations shell out to the `git` CLI via `std::process`; no `gix`/`libgit2` dependency.
-- Templates embedded in the binary (`rust-embed` or `include_dir`), rendered strict-undefined.
-- Core dependencies: `clap`, `serde`, `serde_json`, `serde-saphyr` (YAML; `serde_yaml` is archived), `minijinja`, `thiserror`/`anyhow`, `sha2`, `jiff`, `fd-lock` or `fs4` (lease, store, and command lock files), `ulid`, `rust-embed`, `similar` (three-way merge, M4+), `insta` (golden tests, dev).
+- Templates embedded in the binary (`rust-embed`), rendered strict-undefined.
+- Core dependencies: `clap`, `serde`, `serde_json`, `serde-saphyr` (YAML; `serde_yaml` is archived), `minijinja`, `thiserror`, `sha2`, `jiff`, `fs4` (lease, store, and command lock files), `ulid`, `rust-embed`, `similar` (three-way merge), `insta` (golden tests, dev).
 
 ## Milestones
 

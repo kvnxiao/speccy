@@ -1,13 +1,13 @@
 # Speccy Controller I/O Shapes
 
-Status: authoritative for payload shapes, provisional until M1 implements them
-Date: 2026-07-03
+Status: authoritative for payload shapes; implemented, intentionally unstable before 1.0
+Date: 2026-07-12
 
 Every `speccy ctl` operation's input payload, the response envelope, and the
 `run next` directive. `DESIGN.md` owns behavior; this document owns only the
-shapes. Shapes are serde-internal until dogfooding proves them (Open
-Question 3 in `DESIGN.md`): they may change without a compatibility promise
-before 1.0.
+shapes. The shapes below are implemented, but they are serde-internal until
+dogfooding proves them (Q3 in `OPEN-ITEMS.md`): they may change without a
+compatibility promise before 1.0.
 
 Conventions:
 

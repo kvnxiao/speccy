@@ -9,6 +9,11 @@ task sequence, and run state, then delegates implementation and verification
 through the harness — returning a compact review packet showing what changed,
 what was tested, what drifted, and what still needs human judgment.
 
+What Speccy guarantees is the bookkeeping: deterministic sequencing, gates,
+and auditable evidence. The implementation and review work itself is done by
+models through the harness, and its quality is not guaranteed — the point is
+less supervision with an inspectable record, not unsupervised correctness.
+
 The design lives in [`docs/research/`](docs/research/) — `DESIGN.md` owns
 behavior, `TERMINOLOGY.md` the vocabulary, `SCHEMAS.md` the payload shapes,
 `IMPLEMENTATION-PLAN.md` the build order, and `WALKTHROUGH.md` an end-to-end
@@ -67,5 +72,5 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-Rust 2021, MIT licensed. Git operations shell out to the `git` CLI; templates
+Rust 2024, MIT licensed. Git operations shell out to the `git` CLI; templates
 are embedded and rendered with `minijinja`.

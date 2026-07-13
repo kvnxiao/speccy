@@ -2200,7 +2200,8 @@ speccy archive
 speccy export review
 ```
 
-Advanced/admin commands:
+Advanced/admin commands (designed but not yet implemented; hidden from normal
+`--help` until they land so the advertised surface matches what works):
 
 ```bash
 speccy export spec
@@ -2218,7 +2219,7 @@ Command semantics:
 - `accept` closes out a `submitted` run as a human assertion that the recorded change landed. It uses the `change_ref` saved by `run record-ship` by default, displays that reference before recording, is idempotent for already-landed runs, and accepts optional `--pr <url>`/`--note "<text>"` only for recovery or manual association. MVP does no merge detection.
 - `archive` marks an accepted spec archived when it no longer describes the codebase. Accepted specs are already hidden from default `status`/`list`; archive is not part of routine close-out. The landed run remains `landed` in run history, and archiving removes the spec's decisions from planning context in MVP; its `carry_forward` decisions stay recorded for a future decision index (see "Carry-Forward Decisions").
 - `export review` produces the normal human review artifact.
-- `export spec` and `export run-bundle` are advanced paths for audits, diagnostics, and custom harness integrations.
+- `export spec` and `export run-bundle` are advanced paths for audits, diagnostics, and custom harness integrations. Neither is implemented yet; both stay hidden from normal help (still invocable, returning a structured `not_implemented` error) and are re-advertised only when implemented.
 - Full planning, repair, and verification happen through the installed Speccy skills/agents inside Codex or Claude Code.
 
 `speccy status` is the human's one glance at a workspace. It prints one card
