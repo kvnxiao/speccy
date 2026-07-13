@@ -581,9 +581,9 @@ snapshot: a snapshot commit there would bury or misattribute the human's
 out-of-band commit and worktree edits (see "Run Branch and Snapshot Policy").
 `run start` opens the run directly in `implementing`. The run-level
 review-round counter counts review rounds *opened* — each derived
-`-> verifying` transition — so a gate resume, which re-enters `verifying` or
-`implementing` through a distinct resume event rather than a transition, does
-not open a round and a run parked at its cap resumes within the cap.
+`-> verifying` transition — so a gate resume, which the gate decision's own
+replay applies rather than a state-transition event, does not open a round
+and a run parked at its cap resumes within the cap.
 Idempotency is over
 settled state: once derived transitions apply, repeated calls return the same
 directive without re-applying them.
@@ -1438,13 +1438,13 @@ The amendment path reuses the planning machinery instead of adding a new surface
 1. The human describes the change in prose, such as "expiry should be 30 minutes, drop R6" or "verify this via the API instead of the browser."
 2. The harness runs the same draft-revision loop `/speccy-plan` uses: patch the spec draft, lint it, and present an amended spec card that shows the diff against the prior approved revision and names the escalation that motivated it. Nothing is recorded yet — amend is a deferred gate answer, and the run stays parked at its gate while the draft loop runs.
 3. The human approves the amended card in prose; the harness records the approval through `spec record-decision` (type `approve`, with `supersedes.run_id` naming the parked run), producing a new approved spec revision.
-4. Before recording the approval, the controller resolves `supersedes.run_id` and refuses the whole operation unless that run exists and is parked at an escalation or ship gate — so a typo or a stale run_id records nothing, rather than approving the revision and then failing to close a run that cannot be found. Once validated, the same operation closes the parked run as `cancelled`, writing its run-scoped decision record linking the superseding revision and run — the same atomicity rule as gate waivers. A crash in the residual window between the approval append and the run's cancellation leaves the run parked at its gate; the recovery is the gate's ordinary cancel answer, not a controller reconciliation pass. The checkpoint copy tells the user to run `/speccy-implement` (fresh session recommended, selector only when ambiguous).
+4. Before recording the approval, the controller resolves `supersedes.run_id` and refuses the whole operation unless that run exists and is parked at an escalation or ship gate — so a typo or a stale run_id records nothing, rather than approving the revision and then failing to close a run that cannot be found. Once validated, the operation records the approval — the durable intent — and then closes the parked run as `cancelled` with a single run-scoped superseded decision linking the superseding revision. A crash between the two log writes leaves the approval recorded and the run still parked; an exact retry of the same approval recognizes the already-approved revision with the matching `supersedes.run_id` and finishes the run cancellation without duplicating either decision (a retry after full success is likewise a no-op success). No controller loop scans other logs to reconcile the window. The checkpoint copy tells the user to run `/speccy-implement` (fresh session recommended, selector only when ambiguous).
 
 An abandoned amendment records nothing: if the amended card is never approved, the run is still parked at its gate and every other gate answer remains available. This is why `gate_answers` names `spec record-decision` as the amend recorder — `spec patch-draft` is only the working step and records no decision.
 
 At escalation the controller commits any uncommitted in-flight diff as a labeled escalation snapshot, so the parked worktree is clean and the superseding run's clean-worktree rule holds. The new run starts on the same branch, seeded with the prior run's summary and the escalation snapshot reference, so it reconciles rather than redoes. Rolling back to the run baseline remains the human's explicit fallback at the gate.
 
-Setup and waiver answers stay on the same run: the harness records the decision, and the following `run next` call resumes the loop from where it stopped. The resume is recorded as a distinct event from an ordinary state transition, so replay re-enters `verifying` or `implementing` without incrementing the run-level review-round counter — a gate resume is not a fresh round. `provide_setup` re-arms the current round (re-review at the run gate, or the stuck task's worker at its same round); a waiver that resolves the last outstanding requirement lets `verifying` complete without any re-review. Only amendment replaces the run, because only amendment changes the definition of done.
+Setup and waiver answers stay on the same run: the harness records the decision, and the following `run next` call resumes the loop from where it stopped. The decision is one committed event whose replay applies the waived status and the resume together, re-entering `verifying` or `implementing` without incrementing the run-level review-round counter — a gate resume is not a fresh round. `provide_setup` re-arms the current round (re-review at the run gate, or the stuck task's worker at its same round); a waiver that resolves the last outstanding requirement lets `verifying` complete without any re-review. Only amendment replaces the run, because only amendment changes the definition of done.
 
 ### Acceptance
 
@@ -1488,6 +1488,7 @@ speccy archive [<selector>]                      # hide stale historical context
 ```
 
 - `speccy accept` is a human assertion. Speccy does not verify the merge in MVP; the human is telling Speccy what already happened. The command uses the `change_ref` recorded at ship time, so the routine path never repeats `--pr`.
+- `speccy accept` is a cross-log operation: it records the run's `landed` transition first, then the spec's `accepted` status. A crash between the two is repaired by re-running `speccy accept`, which recognizes a landed run whose spec is not yet accepted and completes the spec transition without a second run event.
 - Before recording a submitted run as landed, `speccy accept` displays the recorded `change_ref` (PR URL, branch/patch, head SHA, and base when present) so the human can catch a wrong selector. If the run is already `landed`, it prints "already recorded" and exits successfully. If more than one submitted run matches, selector resolution asks the human to disambiguate instead of guessing.
 - The assertion is order-independent with respect to teammates and remote review. A teammate may merge the PR, close the local branch, squash the commits, or advance the base branch before the original author returns; `speccy accept` still closes out the submitted run because the recorded `change_ref` identifies what was proposed and the human assertion identifies that it landed. `--pr` and `--note` exist for recovery, local-only changes, or manual association when no useful `change_ref` was recorded.
 - Because the step is manual, it must be impossible to lose: `/speccy-ship` ends by printing the shortest unambiguous command (`speccy accept` in the common single-submitted-run case, or `speccy accept <selector>` when needed), the Awaiting-merge status card carries it as the next action (see "CLI/Admin Flow"), and the default PR metadata block includes a full-reference `accept_with` command for durable PR context (see "Lightweight Team Sharing"), so the reminder survives in whichever surface the human returns to.
@@ -1557,14 +1558,52 @@ The state model (JSONL-first):
 - Large artifacts: files referenced by ID and content hash, such as transcripts, diffs, screenshots, command logs, and evidence.
 - Generated snapshots: markdown/YAML views for review, not the primary source of truth.
 
-All controller state writes are atomic: write to a temp file, fsync, then
-rename over the target. JSONL event appends use verified read-back — the
-appended record is re-read and checked before the operation reports success —
-so a crash never leaves a half-written transition. Resume from the store is
-only trustworthy if every write follows this discipline.
+#### Write guarantees and crash recovery
 
-The event vocabulary grows additively: a new binary may write event variants
-an older binary does not know (for example `run_resumed`). Replay is
+The store makes four distinct guarantees. They are not interchangeable, and
+no claim below may be silently upgraded to a stronger one:
+
+1. **Atomic file replacement.** Whole-file writes (lease, workspace metadata,
+   derived projections) go temp file → fsync → rename, so a crash never
+   leaves a half-written file.
+2. **Atomic single-event append.** A JSONL event append is verified by
+   read-back before the operation reports success, and replay fails closed on
+   a truncated tail — one record is either fully durable or effectively
+   absent. This guarantee covers exactly one record; a *sequence* of appends
+   is **not** crash-atomic, and nothing may pretend it is.
+3. **Atomic logical mutation.** Every same-log, user-visible logical
+   operation commits exactly one domain event whose replay applies the
+   complete outcome. A gate decision, a ship record, or a status update never
+   exposes a partial half-state, because there is no multi-append sequence to
+   interrupt — the one committed event *is* the outcome.
+4. **Cross-log convergence.** Operations that must touch more than one log
+   (superseding approval, `speccy accept`, the human `speccy cancel` command)
+   record their durable intent first and converge on exact retry without
+   duplicating a semantic fact. Read-only status may report the pending
+   half, but `run next` never scans other logs to reconcile.
+
+The audited multi-append inventory — every operation that performs more than
+one event append, or a git side effect plus an append — and its class:
+
+| Operation | Writes | Class and recovery |
+| --- | --- | --- |
+| `spec start` | spec dir + `SpecCreated` | one logical event; a pre-append crash leaves an inert directory with no events |
+| `run start` | git branch + `RunStarted` | one logical event; a pre-append crash leaves only a reusable branch |
+| `task claim`, `task record-handoff`, `requirement set-status`, `finding record`, `evidence record` | one event each | atomic single-event append |
+| `evidence collect` | artifact files + one event | one logical event; a pre-append crash leaves unreferenced artifact files and retry re-collects |
+| `run record-ship` | one `ShipRecorded` | one logical event; replay applies the `submitted` transition |
+| `run record-decision` (rework, cancel, waive, provide_setup, confirm) | one `RunDecision` | one logical event; replay applies the decision's complete outcome — the appended `RT<n>` task and re-entry, the cancellation, the waived status plus gate resume |
+| `run interrupt` | git snapshot + one `RunDecision` | one logical event carrying the snapshot SHA; a crash between the git commit and the append leaves an unreferenced snapshot commit, and the retried interrupt records once with no duplicate decision |
+| `run next` task integrate / escalate | git snapshot + one transition event | derived transition; a crash between the snapshot commit and its event parks the run at the out-of-band escalation gate on the next call — state is never misread, recovery is the gate |
+| `run next` run-repair spawn | `TaskAppended` + `RunStateTransitioned` | derived transition with a convergent prefix: a crash after the task append is recognized (a queued task while `verifying`) and the next call completes only the re-entry, never a duplicate task |
+| `run next` provenance scan | N `FindingRecorded` | independent additive facts; a partially recorded round is completed by the next round's scan over the same diff |
+| superseding approval | spec `SpecDecision` + run `RunDecision` (superseded) | cross-log; approval intent first, exact retry finishes the run cancellation |
+| `speccy accept` | run `RunStateTransitioned` (landed) + spec `SpecStatusChanged` | cross-log; run transition first, exact retry recognizes the landed run and completes the spec transition |
+| `speccy cancel` | spec `SpecDecision` (cancel) + N run `RunStateTransitioned` | cross-log; the one cancellation decision first, exact retry converges the remaining selected runs and appends no second decision |
+
+The event vocabulary grows additively — and, before 1.0, cuts old variants
+without a migration path: a new binary may write event variants (or replay
+semantics) an older binary does not know. Replay is
 fail-closed, so an older binary reading a newer log errors on the unknown
 variant rather than silently dropping it. This is accepted for a local
 single-binary tool — the store is not a shared wire format — and it is why a
@@ -2162,7 +2201,7 @@ Command semantics:
 - `doctor` checks the local controller, harness install, and optional MCP wiring if enabled.
 - `new` records plain engineering intent and creates deterministic draft-spec state when the user is outside an installed harness. It may print the next in-harness instruction or a controller packet reference, but it must not create a run, draft the complete spec by calling an LLM, or launch a harness.
 - `list` shows active specs in the current workspace and can filter them with `--query`; it is the human discovery path for choosing a spec without typing an opaque reference. With `--json` it is also the selector-resolution path for installed skills: they resolve a user's free text to a full `SPEC-...` reference before calling `ctl` operations, which take exact references only.
-- `status` and `cancel` manage the current spec/run when the user is outside the harness. Resuming is not a CLI action; a fresh harness session re-enters via `/speccy-implement`, with a selector only when ambiguous.
+- `status` and `cancel` manage the current spec/run when the user is outside the harness. Resuming is not a CLI action; a fresh harness session re-enters via `/speccy-implement`, with a selector only when ambiguous. `cancel` is a cross-log operation: it records at most one spec cancellation decision (the durable intent, written first) and then converges every active run of that spec to `cancelled`; an exact retry cancels any runs the crash left behind and appends no second decision, and a cancel of an already-cancelled spec with no active runs is a no-op report.
 - `review` shows the current human packet for a selected spec, choosing the packet by state: draft or approved specs show the spec card/approved summary; implementing or verifying runs show the current status card plus last activity; verified runs show the review packet; escalated runs show the escalation packet; submitted runs show the recorded change reference and close-out instruction; landed/accepted specs show the final accepted summary. `--evidence` drills into the ledger, command logs, evidence artifacts, findings, decisions, and full diff where available; `--json` returns the same state-aware view structurally.
 - `accept` closes out a `submitted` run as a human assertion that the recorded change landed. It uses the `change_ref` saved by `run record-ship` by default, displays that reference before recording, is idempotent for already-landed runs, and accepts optional `--pr <url>`/`--note "<text>"` only for recovery or manual association. MVP does no merge detection.
 - `archive` marks an accepted spec archived when it no longer describes the codebase. Accepted specs are already hidden from default `status`/`list`; archive is not part of routine close-out. The landed run remains `landed` in run history, and archiving removes the spec's decisions from planning context in MVP; its `carry_forward` decisions stay recorded for a future decision index (see "Carry-Forward Decisions").

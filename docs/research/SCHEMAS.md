@@ -205,10 +205,13 @@ supersedes:                           # optional; links for split/amendment
   run_id: run_01j1bxgvk3tf4qs6mv9zpxwe8d
 ```
 
-`supersedes.run_id` on an `approve` makes it a superseding approval: inside
-the same operation the controller closes that run as `cancelled` and writes
-its linking run-scoped decision record. This is how an `amend` gate answer is
-recorded (see "Amendment at the Escalation Gate" in `DESIGN.md`).
+`supersedes.run_id` on an `approve` makes it a superseding approval: the
+controller validates the target run, records the approval (the durable
+intent), then closes that run as `cancelled` with a single linking run-scoped
+superseded decision. An exact retry of the same payload converges a crash
+between the two writes without duplicating either decision. This is how an
+`amend` gate answer is recorded (see "Amendment at the Escalation Gate" in
+`DESIGN.md`).
 
 ## `run record-decision` — decision.json (run-scoped, gate answers)
 

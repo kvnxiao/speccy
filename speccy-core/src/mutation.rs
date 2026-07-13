@@ -19,7 +19,6 @@ use crate::event::Event;
 use crate::event::Handoff;
 use crate::event::RequirementUpdate;
 use crate::event::RunDecisionRecord;
-use crate::event::TaskInit;
 use crate::gitx;
 use crate::ids;
 use crate::model::ChangeRef;
@@ -319,8 +318,8 @@ fn validate_finding_ids(run: &RunProjection, u: &RequirementUpdate) -> Result<()
 // Run mutations
 // --------------------------------------------------------------------------
 
-/// `run record-ship` — record the landed change reference and move the
-/// verified run to `submitted`.
+/// `run record-ship` — record the landed change reference, one committed
+/// event whose replay moves the verified run to `submitted`.
 ///
 /// # Errors
 ///
@@ -342,19 +341,17 @@ pub fn record_ship(
         txn.append(Event::ShipRecorded {
             change_ref: change_ref.clone(),
         })?;
-        txn.append(Event::RunStateTransitioned {
-            to: RunState::Submitted,
-            snapshot: None,
-        })?;
         Ok(json!({ "run_state": "submitted", "change_ref": change_ref }))
     })
 }
 
 /// `run interrupt` — record a harness interrupt (e.g. structured-output retry
-/// exhaustion) and park the run at the escalation gate, committing the
-/// in-flight diff as a labeled snapshot. The controller only receives the
-/// signal — the retry count lives in pack prose, so the controller stays
-/// deterministic (DESIGN § Capability Escalation and Give-Up Policy).
+/// exhaustion) and park the run at the escalation gate. The in-flight diff is
+/// committed as a labeled snapshot first, then one decision event carrying
+/// the snapshot SHA is appended; its replay applies the escalation. The
+/// controller only receives the signal — the retry count lives in pack
+/// prose, so the controller stays deterministic (DESIGN § Capability
+/// Escalation and Give-Up Policy).
 ///
 /// # Errors
 ///
@@ -381,6 +378,15 @@ pub fn interrupt(
                 run.state
             )));
         }
+        directive::ensure_on_branch(store, run)?;
+        let snapshot = if gitx::is_dirty(&store.git_root)? {
+            Some(gitx::commit_all(
+                &store.git_root,
+                &format!("speccy: {} escalation snapshot", run.spec_ref),
+            )?)
+        } else {
+            None
+        };
         let note = detail.map_or_else(|| reason.to_string(), |d| format!("{reason}: {d}"));
         txn.append(Event::RunDecision {
             decision: RunDecisionRecord {
@@ -392,14 +398,13 @@ pub fn interrupt(
                 reason: Some(note),
                 residual_risk: None,
                 carry_forward: false,
+                snapshot: snapshot.clone(),
             },
         })?;
-        let applied = directive::escalate(store, txn.guard, run)?
-            .ok_or_else(|| SpeccyError::io("interrupt failed to escalate the run"))?;
         Ok(json!({
             "run_state": "escalated",
             "reason": reason,
-            "snapshot": applied.snapshot,
+            "snapshot": snapshot,
         }))
     })
 }
@@ -453,6 +458,7 @@ pub fn record_decision(
             reason: d.reason.clone(),
             residual_risk: d.residual_risk.clone(),
             carry_forward: d.carry_forward,
+            snapshot: None,
         };
         let append_decision = |kind: RunDecisionKind| {
             txn.append(Event::RunDecision {
@@ -467,24 +473,13 @@ pub fn record_decision(
                         "rework is only valid at the ship gate",
                     ));
                 }
-                let reason = require_reason(d, "rework")?;
+                // Validated here; replay seeds the RT task from the
+                // decision's reason.
+                require_reason(d, "rework")?;
                 let decision = record(RunDecisionKind::Rework);
+                let rt = run.next_rt_id();
                 txn.append(Event::RunDecision {
                     decision: decision.clone(),
-                })?;
-                let rt = directive::next_rt_id(run);
-                txn.append(Event::TaskAppended {
-                    task: TaskInit {
-                        id: rt.clone(),
-                        title: Some("Rework from ship feedback".into()),
-                        requirements: Vec::new(),
-                        constraints: Vec::new(),
-                    },
-                    seed_feedback: Some(reason),
-                })?;
-                txn.append(Event::RunStateTransitioned {
-                    to: RunState::Implementing,
-                    snapshot: None,
                 })?;
                 let config = ProjectConfig::load(&store.workspace_root)?;
                 Ok(json!({
@@ -504,10 +499,6 @@ pub fn record_decision(
             }
             "cancel" => {
                 append_decision(RunDecisionKind::Cancel)?;
-                txn.append(Event::RunStateTransitioned {
-                    to: RunState::Cancelled,
-                    snapshot: None,
-                })?;
                 Ok(json!({ "type": "cancel", "run_state": "cancelled" }))
             }
             "waive" => {
@@ -528,23 +519,15 @@ pub fn record_decision(
                 }
                 require_reason(d, "waive")?;
                 require_residual_risk(d, "waive")?;
+                // One committed event: replay applies the waived status and
+                // the gate resume together.
                 append_decision(RunDecisionKind::Waive)?;
-                txn.append(Event::RequirementStatusSet {
-                    updates: vec![RequirementUpdate {
-                        requirement: requirement.clone(),
-                        status: RequirementStatus::Waived,
-                        evidence: Vec::new(),
-                        findings: Vec::new(),
-                        residual_risk: d.residual_risk.clone(),
-                        note: d.reason.clone(),
-                    }],
-                })?;
-                let resumed = resume_from_escalated(txn)?;
+                let resumed = txn.reload()?.state;
                 Ok(json!({
                     "type": "waive",
                     "requirement": requirement,
                     "requirement_status": "waived",
-                    "run_state": resumed,
+                    "run_state": resumed.as_str(),
                     "resume": "call run next",
                 }))
             }
@@ -556,8 +539,10 @@ pub fn record_decision(
                 }
                 require_reason(d, &d.kind)?;
                 append_decision(RunDecisionKind::ProvideSetup)?;
-                let resumed = resume_from_escalated(txn)?;
-                Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
+                let resumed = txn.reload()?.state;
+                Ok(
+                    json!({ "type": d.kind, "run_state": resumed.as_str(), "resume": "call run next" }),
+                )
             }
             "confirm_accepted_risk" => {
                 if !run.at_accepted_risk_gate() {
@@ -591,55 +576,4 @@ fn require_residual_risk(d: &RunDecisionInput, kind: &str) -> Result<()> {
     } else {
         Ok(())
     }
-}
-
-/// After a gate decision that unblocks a parked run, move it back into the
-/// loop with a `RunResumed` event — distinct from a state transition, so it
-/// re-enters without opening a new review round (DESIGN § Capability
-/// Escalation and Give-Up Policy).
-fn resume_from_escalated(txn: &RunTxn<'_>) -> Result<&'static str> {
-    let run = txn.reload()?;
-    if run.state != RunState::Escalated {
-        return Ok(run.state.as_str());
-    }
-
-    if run.all_tasks_done() {
-        // Run-level gate. Re-open the current round's review only when work is
-        // still outstanding; a waiver that resolved the last requirement lets
-        // `verifying` complete directly (subject to the critical gate).
-        let reopen_review =
-            !(run.all_requirements_resolved() && run.run_blocking_findings().is_empty());
-        txn.append(Event::RunResumed {
-            to: RunState::Verifying,
-            reopen_review,
-        })?;
-        return Ok(RunState::Verifying.as_str());
-    }
-
-    // Task-level gate. Re-enter implementing without opening a review round.
-    txn.append(Event::RunResumed {
-        to: RunState::Implementing,
-        reopen_review: false,
-    })?;
-    // The stuck task is still `in_review` with its failing statuses. If it would
-    // re-escalate immediately (provide_setup, or a partial waiver), re-open it
-    // to `building` at the SAME round so the worker retries with the new setup;
-    // a waiver that fully resolved the task instead integrates on the next
-    // `run next`, so no re-open is needed.
-    if let Some(task) = run.active_task()
-        && task.status == TaskStatus::InReview
-        && run.task_reviewed_this_round(task)
-    {
-        let would_integrate = run.task_requirements_resolved(task)
-            && run.task_blocking_findings_this_round(task).is_empty();
-        if !would_integrate {
-            txn.append(Event::TaskTransitioned {
-                task: task.id.clone(),
-                to: TaskStatus::Building,
-                round: task.round,
-                snapshot: None,
-            })?;
-        }
-    }
-    Ok(RunState::Implementing.as_str())
 }

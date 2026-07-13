@@ -206,12 +206,6 @@ fn default_actor() -> String {
     "human".into()
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "single decision-kind dispatch; each match arm is self-contained and \
-              splitting would mean threading store/spec/target/decision through \
-              several helpers for no clarity gain"
-)]
 fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Value> {
     let decision: SpecDecisionInput = read_input(input)?;
     let spec = store.spec_state_by_ref(spec_ref)?;
@@ -233,9 +227,12 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
                 .revision(target)
                 .ok_or_else(|| SpeccyError::not_found(format!("no revision {target}")))?;
             if rev.approved {
-                return Err(SpeccyError::invalid_transition(format!(
-                    "{target} is already approved; an approved revision is immutable"
-                )));
+                // Cross-log convergence: an exact retry of a recorded
+                // superseding approval finishes the linked run cancellation
+                // without duplicating either decision (DESIGN § Amendment at
+                // the Escalation Gate). Anything else is refused — an
+                // approved revision is immutable.
+                return retry_superseding_approval(store, &spec, &decision, target);
             }
             let config = ProjectConfig::load(&store.workspace_root)?;
             let findings = lint::lint_draft(&rev.draft, &config.evidence.command_policy);
@@ -278,35 +275,13 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
             };
             store.append_spec_event(&spec.spec_id, Event::SpecDecision { decision: record })?;
 
-            // Amendment at a gate: a superseding approval atomically closes the
-            // parked run as cancelled with a linking decision record (DESIGN §
-            // Amendment at the Escalation Gate).
+            // Amendment at a gate: the recorded approval is the durable
+            // intent; the parked run is then closed with a single superseded
+            // decision whose replay cancels it (DESIGN § Amendment at the
+            // Escalation Gate).
             let mut superseded_run = None;
             if let Some((run_spec_id, run_id)) = superseded {
-                store.append_run_event(
-                    &run_spec_id,
-                    &run_id,
-                    Event::RunDecision {
-                        decision: RunDecisionRecord {
-                            decision_id: ids::short_id("dec"),
-                            kind: RunDecisionKind::Superseded,
-                            requirement: None,
-                            task: None,
-                            actor: "human".into(),
-                            reason: Some(format!("superseded by revision {target}")),
-                            residual_risk: None,
-                            carry_forward: false,
-                        },
-                    },
-                )?;
-                store.append_run_event(
-                    &run_spec_id,
-                    &run_id,
-                    Event::RunStateTransitioned {
-                        to: RunState::Cancelled,
-                        snapshot: None,
-                    },
-                )?;
+                supersede_run(store, &run_spec_id, &run_id, target)?;
                 superseded_run = Some(run_id);
             }
             Ok(json!({
@@ -335,6 +310,72 @@ fn spec_record_decision(store: &Store, spec_ref: &str, input: &str) -> Result<Va
             "unknown spec decision type `{other}`"
         ))),
     }
+}
+
+/// Close a superseded run with its single linking decision; replay applies
+/// the cancellation (DESIGN § Amendment at the Escalation Gate).
+fn supersede_run(store: &Store, run_spec_id: &str, run_id: &str, revision: &str) -> Result<()> {
+    store.append_run_event(
+        run_spec_id,
+        run_id,
+        Event::RunDecision {
+            decision: RunDecisionRecord {
+                decision_id: ids::short_id("dec"),
+                kind: RunDecisionKind::Superseded,
+                requirement: None,
+                task: None,
+                actor: "human".into(),
+                reason: Some(format!("superseded by revision {revision}")),
+                residual_risk: None,
+                carry_forward: false,
+                snapshot: None,
+            },
+        },
+    )
+}
+
+/// An `approve` against an already-approved revision is refused unless it is
+/// the exact retry of a recorded superseding approval, in which case it
+/// finishes the linked run cancellation and duplicates neither decision
+/// (DESIGN § Amendment at the Escalation Gate).
+fn retry_superseding_approval(
+    store: &Store,
+    spec: &SpecState,
+    decision: &SpecDecisionInput,
+    target: &str,
+) -> Result<Value> {
+    let refusal = || {
+        SpeccyError::invalid_transition(format!(
+            "{target} is already approved; an approved revision is immutable"
+        ))
+    };
+    let Some(run_id) = decision
+        .supersedes
+        .as_ref()
+        .and_then(|s| s.run_id.as_deref())
+    else {
+        return Err(refusal());
+    };
+    let recorded = spec.decisions.iter().any(|prior| {
+        prior.kind == SpecDecisionKind::Approve
+            && prior.revision_id == target
+            && prior.supersedes.as_ref().and_then(|s| s.run_id.as_deref()) == Some(run_id)
+    });
+    if !recorded {
+        return Err(refusal());
+    }
+    let (run_spec_id, _) = store.find_run(run_id)?;
+    let run = store.run_projection(&run_spec_id, run_id)?;
+    if run.state != RunState::Cancelled {
+        supersede_run(store, &run_spec_id, run_id, target)?;
+    }
+    Ok(json!({
+        "approved_revision": target,
+        "spec_status": "approved",
+        "requirements_frozen": true,
+        "superseded_run": run_id,
+        "next": "Run /speccy-implement (fresh session recommended).",
+    }))
 }
 
 fn spec_decision_record(

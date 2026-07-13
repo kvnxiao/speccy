@@ -284,6 +284,21 @@ pub fn accept(
     }
     let Some((run_id, run)) = submitted.into_iter().next() else {
         if already_landed {
+            // Cross-log convergence (DESIGN § Acceptance): a crash between
+            // the run's landed transition and the spec's accepted status is
+            // repaired here on retry, with no second run event.
+            if spec.status != SpecStatus::Accepted {
+                store.append_spec_event(
+                    &spec.spec_id,
+                    Event::SpecStatusChanged {
+                        to: SpecStatus::Accepted,
+                    },
+                )?;
+                return Ok(format!(
+                    "{}  run already landed; completed the spec's accepted status.",
+                    style::paint(style::SPEC_REF, &spec.spec_ref)
+                ));
+            }
             return Ok(format!(
                 "{}  already recorded as landed.",
                 style::paint(style::SPEC_REF, &spec.spec_ref)
@@ -365,9 +380,35 @@ pub fn archive(store: &Store, selector: Option<&str>) -> Result<String> {
     ))
 }
 
-/// `speccy cancel` — stop the current or selected spec/run.
+/// `speccy cancel` — stop the current or selected spec/run. Cross-log
+/// convergence (DESIGN § CLI/Admin Flow): the one cancellation decision is
+/// the durable intent, recorded first; the spec's runs converge after it. An
+/// exact retry appends no second decision and cancels any runs a crash left
+/// behind.
 pub fn cancel(store: &Store, selector: Option<&str>) -> Result<String> {
     let spec = resolve_spec(store, selector)?;
+    let already_cancelled = spec.status == SpecStatus::Cancelled;
+    if !already_cancelled {
+        let latest_rev = spec
+            .latest_revision()
+            .map(|r| r.id.clone())
+            .unwrap_or_default();
+        store.append_spec_event(
+            &spec.spec_id,
+            Event::SpecDecision {
+                decision: SpecDecisionRecord {
+                    decision_id: ids::short_id("dec"),
+                    kind: SpecDecisionKind::Cancel,
+                    revision_id: latest_rev,
+                    actor: "human".into(),
+                    approved_in_prose: None,
+                    note: Some("cancelled via speccy cancel".into()),
+                    carry_forward: false,
+                    supersedes: None,
+                },
+            },
+        )?;
+    }
     let mut cancelled_run = false;
     for rid in store.list_runs(&spec.spec_id)? {
         let run = store.run_projection(&spec.spec_id, &rid)?;
@@ -383,25 +424,12 @@ pub fn cancel(store: &Store, selector: Option<&str>) -> Result<String> {
             cancelled_run = true;
         }
     }
-    let latest_rev = spec
-        .latest_revision()
-        .map(|r| r.id.clone())
-        .unwrap_or_default();
-    store.append_spec_event(
-        &spec.spec_id,
-        Event::SpecDecision {
-            decision: SpecDecisionRecord {
-                decision_id: ids::short_id("dec"),
-                kind: SpecDecisionKind::Cancel,
-                revision_id: latest_rev,
-                actor: "human".into(),
-                approved_in_prose: None,
-                note: Some("cancelled via speccy cancel".into()),
-                carry_forward: false,
-                supersedes: None,
-            },
-        },
-    )?;
+    if already_cancelled && !cancelled_run {
+        return Ok(format!(
+            "{} is already cancelled.",
+            style::paint(style::SPEC_REF, &spec.spec_ref)
+        ));
+    }
     if cancelled_run {
         Ok(format!(
             "Cancelled {} and its active run. Recorded as a spec decision.",

@@ -531,38 +531,43 @@ fn step_verifying(
 /// Append a dynamic run-level repair task (`RT<n>`) linked to the failing
 /// requirements and return the run to `implementing` so the normal task loop
 /// re-proves them, then re-enters `verifying` for the next review round.
+/// Convergent prefix (DESIGN § Storage Model, "Write guarantees and crash
+/// recovery"): `verifying` requires every task integrated, so a queued task
+/// here can only be a crashed spawn's already-appended repair task — the
+/// resumed call completes the re-entry without duplicating it.
 fn spawn_run_repair(
     store: &Store,
     guard: &StoreLockGuard,
     run: &RunProjection,
 ) -> Result<AppliedTransition> {
-    let rt = next_rt_id(run);
-    let failing = run.failing_requirements();
-    let seed = if failing.is_empty() {
-        Some("resolve the run-level review findings".to_string())
-    } else {
-        Some(format!(
-            "re-prove run-level failures: {}",
-            failing.join(", ")
-        ))
-    };
-    store.append_run_event_with(
-        guard,
-        &run.spec_id,
-        &run.run_id,
-        Event::TaskAppended {
-            task: crate::event::TaskInit {
-                id: rt.clone(),
-                title: Some(format!(
-                    "Run-level repair (round {})",
-                    run.run_review_round + 1
-                )),
-                requirements: failing,
-                constraints: Vec::new(),
+    if run.next_queued_task().is_none() {
+        let failing = run.failing_requirements();
+        let seed = if failing.is_empty() {
+            Some("resolve the run-level review findings".to_string())
+        } else {
+            Some(format!(
+                "re-prove run-level failures: {}",
+                failing.join(", ")
+            ))
+        };
+        store.append_run_event_with(
+            guard,
+            &run.spec_id,
+            &run.run_id,
+            Event::TaskAppended {
+                task: crate::event::TaskInit {
+                    id: run.next_rt_id(),
+                    title: Some(format!(
+                        "Run-level repair (round {})",
+                        run.run_review_round + 1
+                    )),
+                    requirements: failing,
+                    constraints: Vec::new(),
+                },
+                seed_feedback: seed,
             },
-            seed_feedback: seed,
-        },
-    )?;
+        )?;
+    }
     store.append_run_event_with(
         guard,
         &run.spec_id,
@@ -578,13 +583,6 @@ fn spawn_run_repair(
         to: RunState::Implementing.as_str().into(),
         snapshot: None,
     })
-}
-
-/// Next `RT<n>` id for the run (shared with the ship-gate rework path).
-#[must_use = "the generated id must be used to append the new repair task"]
-pub(crate) fn next_rt_id(run: &RunProjection) -> String {
-    let n = run.tasks.iter().filter(|t| t.id.starts_with("RT")).count() + 1;
-    format!("RT{n}")
 }
 
 /// Commit any in-flight diff as a labeled escalation snapshot and park the run.
@@ -629,7 +627,7 @@ fn task_snapshot(store: &Store, run: &RunProjection, task: &TaskState) -> Result
     gitx::commit_all(&store.git_root, &msg)
 }
 
-fn ensure_on_branch(store: &Store, run: &RunProjection) -> Result<()> {
+pub(crate) fn ensure_on_branch(store: &Store, run: &RunProjection) -> Result<()> {
     if gitx::current_branch(&store.git_root)? != run.branch {
         gitx::checkout(&store.git_root, &run.branch)?;
     }

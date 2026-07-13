@@ -487,3 +487,114 @@ fn escalation_packet_scopes_to_failing_requirement() {
     let gate = drive_to_gate(&h, &run);
     assert_eq!(gate["run_state"], json!("verified"), "{gate}");
 }
+
+/// A2 cross-log convergence: a crash between accept's run `landed` transition
+/// and the spec's `accepted` status is repaired by re-running `speccy accept`,
+/// with no second run event.
+#[test]
+fn accept_retry_completes_the_spec_transition() {
+    let h = Harness::new();
+    let (spec_ref, run) = verified_run(&h);
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+    h.ctl_in(
+        &[
+            "ctl",
+            "run",
+            "record-ship",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "kind": "none" }),
+    );
+    let out = h.human(&["accept", &spec_ref]);
+    assert!(out.contains("submitted -> landed"), "{out}");
+
+    // Simulate the crash: the run landed but the spec never became accepted.
+    common::drop_last_event(&common::spec_log_path(&h));
+
+    let retry = h.human(&["accept", &spec_ref]);
+    assert!(
+        retry.contains("completed the spec's accepted status"),
+        "{retry}"
+    );
+    assert!(h.human(&["list", "--accepted"]).contains(&spec_ref));
+    let run_log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    assert_eq!(
+        run_log.matches("\"to\":\"landed\"").count(),
+        1,
+        "duplicate landed transition:\n{run_log}"
+    );
+    let spec_log = fs_err::read_to_string(common::spec_log_path(&h)).expect("read spec log");
+    assert_eq!(
+        spec_log.matches("\"to\":\"accepted\"").count(),
+        1,
+        "duplicate accepted status:\n{spec_log}"
+    );
+
+    // A retry after full success stays a no-op.
+    let again = h.human(&["accept", &spec_ref]);
+    assert!(again.contains("already recorded"), "{again}");
+}
+
+/// A2 cross-log convergence: `speccy cancel` records one cancellation
+/// decision (the durable intent, first), and an exact retry converges the
+/// runs a crash left behind without a second decision.
+#[test]
+fn cancel_retry_converges_runs_without_a_second_decision() {
+    let h = Harness::new();
+    let (spec_ref, revision) = approve_minimal(&h, "Cancel converge");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let out = h.human(&["cancel", &spec_ref]);
+    assert!(out.contains("Cancelled"), "{out}");
+
+    // Simulate the crash: the decision landed but the run was never cancelled.
+    let run_log = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log path");
+    common::drop_last_event(&run_log);
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("implementing"), "{status}");
+
+    let retry = h.human(&["cancel", &spec_ref]);
+    assert!(retry.contains("Cancelled"), "{retry}");
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("cancelled"), "{status}");
+    let spec_log = fs_err::read_to_string(common::spec_log_path(&h)).expect("read spec log");
+    assert_eq!(
+        spec_log.matches("\"type\":\"cancel\"").count(),
+        1,
+        "duplicate cancellation decision:\n{spec_log}"
+    );
+
+    // A cancel of an already-cancelled spec with no active runs is a no-op.
+    let again = h.human(&["cancel", &spec_ref]);
+    assert!(again.contains("already cancelled"), "{again}");
+    let spec_log = fs_err::read_to_string(common::spec_log_path(&h)).expect("read spec log");
+    assert_eq!(spec_log.matches("\"type\":\"cancel\"").count(), 1);
+}

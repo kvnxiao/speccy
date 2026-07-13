@@ -408,26 +408,133 @@ impl RunProjection {
                     self.last_snapshot = Some(s.clone());
                 }
             }
-            Event::RunResumed { to, reopen_review } => {
-                self.accumulate_active(ts);
-                // A gate resume re-enters without opening a review round, so it
-                // never touches `run_review_round`. When work remains it re-arms
-                // the current round's verifying marker (re-review and the
-                // run-scope provenance guard); a run-completing waiver leaves the
-                // marker alone so the waive's own status write still reads as
-                // this round's review.
-                self.state = *to;
-                if *reopen_review && *to == RunState::Verifying {
-                    self.last_verifying_entered_seq = Some(seq);
-                }
+            Event::RunDecision { decision } => {
+                self.decisions.push(decision.clone());
+                self.apply_decision(seq, ts, decision);
             }
-            Event::RunDecision { decision } => self.decisions.push(decision.clone()),
-            Event::ShipRecorded { change_ref } => self.change_ref = Some(change_ref.clone()),
+            Event::ShipRecorded { change_ref } => {
+                self.change_ref = Some(change_ref.clone());
+                self.accumulate_active(ts);
+                self.state = RunState::Submitted;
+            }
             _ => {}
         }
         if let Some(label) = event_label(self, event) {
             self.last_event_label = Some(label);
         }
+    }
+
+    /// Apply a gate decision's complete outcome. Each decision is one
+    /// committed logical event (DESIGN § Storage Model, "Write guarantees and
+    /// crash recovery"), so its follow-on transitions replay here rather than
+    /// as separate events a crash could split.
+    fn apply_decision(
+        &mut self,
+        seq: usize,
+        ts: Timestamp,
+        decision: &crate::event::RunDecisionRecord,
+    ) {
+        match decision.kind {
+            RunDecisionKind::Cancel | RunDecisionKind::Superseded => {
+                self.accumulate_active(ts);
+                self.state = RunState::Cancelled;
+            }
+            RunDecisionKind::Interrupt => {
+                self.accumulate_active(ts);
+                self.state = RunState::Escalated;
+                if decision.snapshot.is_some() {
+                    self.last_snapshot.clone_from(&decision.snapshot);
+                }
+            }
+            RunDecisionKind::Rework => {
+                self.tasks.push(TaskState {
+                    id: self.next_rt_id(),
+                    title: Some("Rework from ship feedback".to_string()),
+                    requirements: Vec::new(),
+                    constraints: Vec::new(),
+                    status: TaskStatus::Queued,
+                    round: 0,
+                    baseline_commit: None,
+                    snapshot: None,
+                    seed_feedback: decision.reason.clone(),
+                    last_handoff_seq: None,
+                });
+                self.accumulate_active(ts);
+                self.state = RunState::Implementing;
+            }
+            RunDecisionKind::Waive => {
+                if let Some(req) = &decision.requirement {
+                    let entry = self.requirements.entry(req.clone()).or_default();
+                    entry.status = RequirementStatus::Waived;
+                    if decision.residual_risk.is_some() {
+                        entry.residual_risk.clone_from(&decision.residual_risk);
+                    }
+                    if decision.reason.is_some() {
+                        entry.note.clone_from(&decision.reason);
+                    }
+                }
+                // The waive's own status write counts as this round's review
+                // (DECISION-LOG § Human gates and workflow).
+                self.max_status_seq = Some(seq);
+                self.apply_gate_resume(seq, ts);
+            }
+            RunDecisionKind::ProvideSetup => self.apply_gate_resume(seq, ts),
+            RunDecisionKind::ConfirmAcceptedRisk => {}
+        }
+    }
+
+    /// Re-enter the loop from `escalated` after an unblocking gate decision.
+    /// A gate resume re-enters without opening a review round, so it never
+    /// touches `run_review_round`. When work remains it re-arms the current
+    /// round's verifying marker (re-review and the run-scope provenance
+    /// guard); a run-completing waiver leaves the marker alone so the waive's
+    /// own status write still reads as this round's review.
+    fn apply_gate_resume(&mut self, seq: usize, ts: Timestamp) {
+        if self.state != RunState::Escalated {
+            return;
+        }
+        self.accumulate_active(ts);
+        if self.all_tasks_done() {
+            // Run-level gate. Re-open the current round's review only when
+            // work is still outstanding; a waiver that resolved the last
+            // requirement lets `verifying` complete directly (subject to the
+            // critical gate).
+            let reopen_review =
+                !(self.all_requirements_resolved() && self.run_blocking_findings().is_empty());
+            self.state = RunState::Verifying;
+            if reopen_review {
+                self.last_verifying_entered_seq = Some(seq);
+            }
+            return;
+        }
+        // Task-level gate. Re-enter implementing without opening a review
+        // round. The stuck task is still `in_review` with its failing
+        // statuses: if it would re-escalate immediately (provide_setup, or a
+        // partial waiver), re-open it to `building` at the SAME round so the
+        // worker retries with the new setup; a waiver that fully resolved the
+        // task instead integrates on the next `run next`.
+        self.state = RunState::Implementing;
+        let reopen = self
+            .active_task()
+            .filter(|t| t.status == TaskStatus::InReview && self.task_reviewed_this_round(t))
+            .filter(|t| {
+                !(self.task_requirements_resolved(t)
+                    && self.task_blocking_findings_this_round(t).is_empty())
+            })
+            .map(|t| t.id.clone());
+        if let Some(id) = reopen
+            && let Some(t) = self.task_mut(&id)
+        {
+            t.status = TaskStatus::Building;
+        }
+    }
+
+    /// Next `RT<n>` id for a dynamic run-level repair/rework task (shared by
+    /// the run-repair spawner and rework-decision replay, which must agree).
+    #[must_use = "the generated id must be used to append or replay the task"]
+    pub fn next_rt_id(&self) -> String {
+        let n = self.tasks.iter().filter(|t| t.id.starts_with("RT")).count() + 1;
+        format!("RT{n}")
     }
 
     /// Close the just-ended state interval into `active_seconds` when the run
@@ -698,7 +805,6 @@ fn event_label(run: &RunProjection, event: &Event) -> Option<String> {
         }
         Event::TaskAppended { task, .. } => format!("queued {}", task_label(run, &task.id)),
         Event::RunStateTransitioned { to, .. } => format!("run {}", to.as_str()),
-        Event::RunResumed { to, .. } => format!("run resumed to {}", to.as_str()),
         Event::RunDecision { decision } => format!("decision: {}", decision.kind.as_str()),
         Event::ShipRecorded { .. } => "recorded ship".to_string(),
         _ => return None,
@@ -723,8 +829,9 @@ mod tests {
     #[test]
     fn active_time_excludes_parked_intervals() {
         let t0 = 1_700_000_000i64;
-        // 10m implementing, then parked at `escalated` for 3h, then resumed and
-        // 5m verifying. Only the active 15m should count.
+        // 10m implementing, then parked at `escalated` for 3h, then resumed
+        // (via a provide_setup gate decision) and 5m verifying. Only the
+        // active 15m should count.
         let events = vec![
             LoggedEvent {
                 ts: at(t0),
@@ -748,13 +855,23 @@ mod tests {
             },
             LoggedEvent {
                 ts: at(t0 + 600 + 10_800),
-                event: Event::RunResumed {
-                    to: RunState::Verifying,
-                    reopen_review: true,
+                event: Event::RunDecision {
+                    decision: RunDecisionRecord {
+                        decision_id: "dec_x".into(),
+                        kind: RunDecisionKind::ProvideSetup,
+                        requirement: None,
+                        task: None,
+                        actor: "human".into(),
+                        reason: Some("setup provided".into()),
+                        residual_risk: None,
+                        carry_forward: false,
+                        snapshot: None,
+                    },
                 },
             },
         ];
         let run = RunProjection::replay(&events).expect("replay");
+        assert_eq!(run.state, RunState::Verifying, "gate resume re-enters");
         let now = at(t0 + 600 + 10_800 + 300);
         assert_eq!(run.active_seconds_at(now), 15 * 60);
     }

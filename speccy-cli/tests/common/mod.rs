@@ -348,3 +348,45 @@ pub fn drive_to_gate(h: &Harness, run: &str) -> Value {
     }
     panic!("loop did not terminate");
 }
+
+/// The spec-scoped `events.jsonl` (the log holding `spec_created`), distinct
+/// from the run-scoped logs nested under `runs/`.
+pub fn spec_log_path(h: &Harness) -> PathBuf {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in fs_err::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.file_name().is_some_and(|n| n == "events.jsonl") {
+                out.push(path);
+            }
+        }
+    }
+    let mut logs = Vec::new();
+    walk(h.home.path(), &mut logs);
+    logs.into_iter()
+        .find(|p| fs_err::read_to_string(p).is_ok_and(|t| t.contains("\"type\":\"spec_created\"")))
+        .expect("spec log exists")
+}
+
+/// Drop a stored log's final event line — how tests simulate a crash between
+/// two appends of a cross-log operation.
+pub fn drop_last_event(path: &Path) {
+    let text = fs_err::read_to_string(path).expect("read log");
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert!(lines.pop().is_some(), "log has no events to drop");
+    let mut out = lines.join("\n");
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    fs_err::write(path, out).expect("write log");
+}
+
+/// Append a raw event line to a stored log — how tests simulate the durable
+/// prefix of a multi-append operation interrupted mid-way.
+pub fn append_event_line(path: &Path, line: &str) {
+    let mut text = fs_err::read_to_string(path).expect("read log");
+    text.push_str(line);
+    text.push('\n');
+    fs_err::write(path, text).expect("write log");
+}

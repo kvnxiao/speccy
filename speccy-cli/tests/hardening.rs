@@ -745,11 +745,10 @@ fn concurrent_ship_with_one_token_commits_once() {
         1,
         "duplicate ship committed:\n{log}"
     );
-    assert_eq!(
-        log.matches("\"to\":\"submitted\"").count(),
-        1,
-        "duplicate submitted transition:\n{log}"
-    );
+    // The submitted transition is the ship record's own replay, not a
+    // second event a crash could split off.
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("submitted"), "{status}");
 }
 
 /// A1: a stored run risk outside the closed vocabulary fails replay closed

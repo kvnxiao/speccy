@@ -124,20 +124,14 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         snapshot: Option<String>,
     },
-    /// A run resumed from `escalated` by a gate decision (`waive` /
-    /// `provide_setup`). Distinct from `RunStateTransitioned` so replay
-    /// re-enters `verifying`/`implementing` without counting a new review
-    /// round; `reopen_review` re-arms the current round's review (and the
-    /// run-scope provenance guard) when work is still outstanding (DESIGN §
-    /// Capability Escalation and Give-Up Policy).
-    RunResumed {
-        to: RunState,
-        #[serde(default)]
-        reopen_review: bool,
-    },
-    /// A run-scoped gate decision (ship, escalation, accepted-risk).
+    /// A run-scoped gate decision (ship, escalation, accepted-risk). One
+    /// committed logical event: replay applies the decision's complete
+    /// outcome — cancellation, escalation with its snapshot, the rework
+    /// `RT<n>` task and re-entry, or the waived status plus gate resume
+    /// (DESIGN § Storage Model, "Write guarantees and crash recovery").
     RunDecision { decision: RunDecisionRecord },
-    /// The landed change reference recorded at ship time.
+    /// The landed change reference recorded at ship time. One committed
+    /// logical event: replay applies the `submitted` transition.
     ShipRecorded { change_ref: ChangeRef },
 }
 
@@ -261,7 +255,9 @@ pub struct Supersedes {
     pub run_id: Option<String>,
 }
 
-/// A run-scoped gate decision (SCHEMAS § run record-decision).
+/// A run-scoped gate decision (SCHEMAS § run record-decision). `snapshot` is
+/// controller-set on an `interrupt` decision: the labeled escalation snapshot
+/// committed just before the decision was recorded.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunDecisionRecord {
     pub decision_id: String,
@@ -278,4 +274,6 @@ pub struct RunDecisionRecord {
     pub residual_risk: Option<String>,
     #[serde(default)]
     pub carry_forward: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
 }

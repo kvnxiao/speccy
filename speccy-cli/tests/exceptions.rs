@@ -1954,3 +1954,399 @@ fn run_record_ship_rejects_unknown_change_ref_kind() {
         "{refused}"
     );
 }
+
+/// Line count of the run's stored event log.
+fn run_log_lines(h: &Harness, run: &str) -> usize {
+    h.read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists")
+        .lines()
+        .count()
+}
+
+/// A2: `rework` commits exactly one event whose replay applies the complete
+/// outcome; a retry after the commit boundary is refused with no duplicate,
+/// and losing the event removes the whole outcome — never a partial one.
+#[test]
+fn rework_is_one_committed_event_with_no_partial_outcome() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "One-event rework");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let d = drive_to_gate(&h, &run);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+
+    let before = run_log_lines(&h, &run);
+    let out = gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "rework", "reason": "tighten the copy" }),
+    );
+    assert_eq!(out["run_state"], json!("implementing"), "{out}");
+    assert_eq!(out["task_appended"], json!("RT1"), "{out}");
+    assert_eq!(
+        run_log_lines(&h, &run),
+        before + 1,
+        "rework must commit exactly one event"
+    );
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("implementing"));
+    assert!(
+        status["tasks"]
+            .as_array()
+            .expect("tasks array present")
+            .iter()
+            .any(|t| t["id"] == json!("RT1")),
+        "{status}"
+    );
+
+    // After the commit boundary an exact retry is refused; nothing duplicates.
+    let retry = h.ctl_in_raw(
+        &[
+            "ctl",
+            "run",
+            "record-decision",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "rework", "reason": "tighten the copy" }),
+    );
+    assert_eq!(retry["ok"], json!(false), "{retry}");
+    assert_eq!(
+        retry["error"]["code"],
+        json!("invalid_transition"),
+        "{retry}"
+    );
+    assert_eq!(run_log_lines(&h, &run), before + 1);
+
+    // Losing the committed event removes the whole outcome, not half of it.
+    let log = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log path");
+    common::drop_last_event(&log);
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("verified"), "{status}");
+    assert!(
+        !status["tasks"]
+            .as_array()
+            .expect("tasks array present")
+            .iter()
+            .any(|t| t["id"] == json!("RT1")),
+        "partial rework outcome survived: {status}"
+    );
+}
+
+/// A2: a waive is one committed event; replay applies the waived status and
+/// the gate resume together.
+#[test]
+fn waive_is_one_committed_event() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "One-event waive");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let lease = claim_and_handoff(&h, &run, "T1");
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "blocked", "note": "no staging env" }),
+    );
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["subject"]["gate"], json!("escalation"), "{d}");
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+
+    let before = run_log_lines(&h, &run);
+    let out = gate_decision(
+        &h,
+        &run,
+        &lease,
+        json!({ "type": "waive", "requirement": "R1",
+                "reason": "env is out of scope", "residual_risk": "unproven on staging" }),
+    );
+    assert_eq!(out["run_state"], json!("implementing"), "{out}");
+    assert_eq!(
+        run_log_lines(&h, &run),
+        before + 1,
+        "waive must commit exactly one event"
+    );
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    let waived = status["requirements"]
+        .as_array()
+        .expect("requirements array present")
+        .iter()
+        .any(|r| r["id"] == json!("R1") && r["status"] == json!("waived"));
+    assert!(waived, "{status}");
+}
+
+/// A2: `run interrupt` is one committed event carrying the snapshot SHA.
+#[test]
+fn interrupt_is_one_committed_event() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "One-event interrupt");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+    h.ctl(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &lease,
+        "--json",
+    ]);
+    h.write_file("src/wip.txt", "in flight\n");
+
+    let before = run_log_lines(&h, &run);
+    let out = h.ctl_in(
+        &[
+            "ctl",
+            "run",
+            "interrupt",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "reason": "structured_output_retries_exhausted", "detail": "3x malformed" }),
+    );
+    assert_eq!(out["run_state"], json!("escalated"), "{out}");
+    assert!(out["snapshot"].is_string(), "{out}");
+    assert_eq!(
+        run_log_lines(&h, &run),
+        before + 1,
+        "interrupt must commit exactly one event"
+    );
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    let last = log.lines().last().expect("log has events");
+    assert!(last.contains("\"type\":\"interrupt\""), "{last}");
+    assert!(last.contains("\"snapshot\""), "{last}");
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(status["run_state"], json!("escalated"));
+}
+
+/// A2: the run-repair spawner's prefix converges — after a crash between the
+/// repair task's append and the re-entry, the next `run next` completes only
+/// the re-entry and never duplicates the task.
+#[test]
+fn run_repair_spawn_converges_after_a_partial_append() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Repair converge");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let lease = to_run_gate(&h, &run);
+    let f = h.ctl_in(
+        &[
+            "ctl", "finding", "record", "--run", &run, "--input", "-", "--json",
+        ],
+        &json!({ "requirement": "R1", "severity": "blocking",
+                 "note": "regression at integration", "recorded_by": "v" }),
+    );
+    set_status(
+        &h,
+        &run,
+        &lease,
+        json!({ "requirement": "R1", "status": "failed", "findings": [f["id"]] }),
+    );
+
+    // Simulate the crash: the spawner appended its repair task, then died
+    // before the re-entry transition.
+    let log = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log path");
+    common::append_event_line(
+        &log,
+        r#"{"ts":"2026-07-13T00:00:00Z","type":"task_appended","task":{"id":"RT1","title":"Run-level repair (round 2)","requirements":["R1"],"constraints":[]},"seed_feedback":"re-prove run-level failures: R1"}"#,
+    );
+
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("claim_task"), "{d}");
+    assert_eq!(d["subject"]["task"], json!("RT1"), "{d}");
+    let reentered = d["applied_transitions"]
+        .as_array()
+        .expect("applied transitions present")
+        .iter()
+        .any(|t| t["subject"] == json!("run") && t["to"] == json!("implementing"));
+    assert!(reentered, "{d}");
+
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run, "--json"]);
+    let rts = status["tasks"]
+        .as_array()
+        .expect("tasks array present")
+        .iter()
+        .filter(|t| {
+            t["id"]
+                .as_str()
+                .expect("task id is a string")
+                .starts_with("RT")
+        })
+        .count();
+    assert_eq!(rts, 1, "duplicate repair task after resume: {status}");
+}
+
+/// A2: a superseding approval converges on exact retry — the approval is the
+/// durable intent, and a crash before the run's cancellation is finished by
+/// retrying the same payload, duplicating neither decision.
+#[test]
+fn superseding_approval_retry_converges_the_crash_window() {
+    let h = Harness::new();
+    let (spec_ref, rev1) = approve_minimal(&h, "Supersede converge");
+    let run1 = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev1,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let d = drive_to_gate(&h, &run1);
+    assert_eq!(d["run_state"], json!("verified"), "{d}");
+
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "patch-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "set": {} }),
+    );
+    let approve_payload = json!({ "type": "approve", "revision": "spec_rev_002-draft",
+                                  "approved_in_prose": "go",
+                                  "supersedes": { "run_id": run1 } });
+    let decision_args = [
+        "ctl",
+        "spec",
+        "record-decision",
+        "--spec",
+        &spec_ref,
+        "--input",
+        "-",
+        "--json",
+    ];
+    let approved = h.ctl_in(&decision_args, &approve_payload);
+    assert_eq!(approved["superseded_run"], json!(run1), "{approved}");
+
+    // Simulate the crash between the approval append and the run's closure.
+    let run_log = h
+        .home_path_containing(&format!("{run1}/events.jsonl"))
+        .expect("run event log path");
+    common::drop_last_event(&run_log);
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run1, "--json"]);
+    assert_eq!(status["run_state"], json!("verified"), "{status}");
+
+    // The exact retry finishes the cancellation, duplicating neither decision.
+    let retried = h.ctl_in(&decision_args, &approve_payload);
+    assert_eq!(retried["approved_revision"], json!("spec_rev_002"));
+    assert_eq!(retried["superseded_run"], json!(run1));
+    let status = h.ctl(&["ctl", "run", "status", "--run", &run1, "--json"]);
+    assert_eq!(status["run_state"], json!("cancelled"), "{status}");
+    let spec_log = fs_err::read_to_string(common::spec_log_path(&h)).expect("read spec log");
+    assert_eq!(
+        spec_log
+            .matches("\"type\":\"approve\",\"revision_id\":\"spec_rev_002\"")
+            .count(),
+        1,
+        "duplicate approval decision:\n{spec_log}"
+    );
+    let run_events = fs_err::read_to_string(&run_log).expect("read run log");
+    assert_eq!(
+        run_events.matches("\"type\":\"superseded\"").count(),
+        1,
+        "duplicate superseded decision:\n{run_events}"
+    );
+
+    // A retry after full success is a no-op success.
+    let again = h.ctl_in(&decision_args, &approve_payload);
+    assert_eq!(again["superseded_run"], json!(run1));
+    let run_events = fs_err::read_to_string(&run_log).expect("read run log");
+    assert_eq!(run_events.matches("\"type\":\"superseded\"").count(), 1);
+
+    // A plain re-approval without the supersede link is still refused.
+    let plain = h.ctl_in_raw(
+        &decision_args,
+        &json!({ "type": "approve", "revision": "spec_rev_002-draft",
+                 "approved_in_prose": "go" }),
+    );
+    assert_eq!(plain["ok"], json!(false), "{plain}");
+    assert_eq!(
+        plain["error"]["code"],
+        json!("invalid_transition"),
+        "{plain}"
+    );
+}
