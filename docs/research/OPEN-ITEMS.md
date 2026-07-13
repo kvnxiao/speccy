@@ -1,7 +1,7 @@
 # Open Items
 
-Status: 0 backlog items · 3 deferred perf items · 16 open questions · 5 watch items
-Date: 2026-07-05 (review-hardening fold)
+Status: 1 backlog item · 3 deferred perf items · 16 open questions · 5 watch items
+Date: 2026-07-13 (evaluation deferral)
 
 The live surface for undecided work. `DESIGN.md` and `TERMINOLOGY.md` are
 authoritative for current behavior; resolved decision history is archived in
@@ -9,9 +9,21 @@ authoritative for current behavior; resolved decision history is archived in
 
 ## Backlog
 
-Empty. The decision index (the last backlog item) is deferred to Later
-Capabilities; its `carry_forward` flag is recorded from M3, so the projection
-needs no data migration when multi-spec use proves it necessary.
+- **Evaluation corpus, protocol, and result template** — deferred in favor of
+  manual dogfooding on real projects. When picked up: a small versioned corpus
+  (~12 calibration tasks with seeded defects and hidden scoring), matched
+  ordinary-harness vs Speccy pairs under identical model/tool conditions with
+  counterbalanced order, a runner outside controller paths, and a
+  pre-registered metric set (seeded defects found/missed, verifier false
+  accepts, unique findings per persona, human active minutes, wall
+  time/tokens/repair rounds, ship-decision correctness). Reviewer-roster and
+  ceremony policy changes stay frozen until it produces data: the roster and
+  scope defaults hold, and any later policy must be justified by unique defect
+  lift, false-accept rate, and marginal cost rather than reviewer agreement.
+
+The decision index is deferred to Later Capabilities; its `carry_forward` flag
+is recorded from M3, so the projection needs no data migration when multi-spec
+use proves it necessary.
 
 ## Deferred performance
 
