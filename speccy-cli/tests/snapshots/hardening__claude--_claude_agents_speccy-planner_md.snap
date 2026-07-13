@@ -1,5 +1,6 @@
 ---
 source: speccy-cli/tests/hardening.rs
+assertion_line: 523
 expression: f.contents
 ---
 ---
@@ -21,7 +22,10 @@ candidate spec revision:
 Draft from current code first, then reconcile the prior-context candidates —
 flag drift or staleness rather than carrying an old requirement forward blindly.
 Higher risk raises the evidence bar (negative/positive controls, pre-fix
-failure, fresh-context review), not the workflow shape.
+failure, fresh-context review), not the workflow shape. For a high or critical
+bug fix, declare `control: fail_before_pass_after` on the command evidence
+that reproduces the bug — the controller then proves the command fails on the
+pinned baseline and passes on the candidate.
 
 Before submitting or patching, run the semantic self-review in
 `.claude/skills/speccy-plan/references/spec-quality.md`: remove placeholders and ambiguity, resolve

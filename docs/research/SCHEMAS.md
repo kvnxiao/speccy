@@ -158,6 +158,11 @@ requirements:
                                       # qualified form R-AUTH-001.E1
         kind: command                 # command | review | browser | api | manual
         command: "npm test -- auth/magic-link"   # required for kind: command
+        control: fail_before_pass_after   # optional; kind: command only. The
+                                      # controller also runs the command against
+                                      # the run's pinned baseline in an isolated
+                                      # worktree, expecting failure (DESIGN
+                                      # § Acceptance Ledger)
         note: ""                      # optional; expectations for the collector
 tasks:
   - id: T1                            # unique within the spec
@@ -172,7 +177,9 @@ requirement/task IDs, requirement without an evidence request, task
 referencing an unknown requirement, requirement not covered by any task,
 duplicate evidence-request IDs within a requirement,
 `kind: command` string matching no `evidence.command_policy.allow` pattern
-(only when that policy is configured).
+(only when that policy is configured), `control` on a request whose kind is
+not `command`, and a `control` value outside the closed vocabulary
+(`fail_before_pass_after`).
 
 ## `spec patch-draft` — spec-patch.json
 
@@ -281,6 +288,34 @@ Identity capture failure fails the collection (`io_error`); a containment
 failure records the evidence with `exit_code: -1` (failed) and a note — never
 a successful command with a warning. The artifact file additionally stores
 the full sorted dirty-path lists and the observed raw exit code.
+
+A request declared with `control: fail_before_pass_after` additionally
+records the baseline execution and the control verdict (semantics in
+DESIGN § Acceptance Ledger):
+
+```json
+"control": {
+  "kind": "fail_before_pass_after",
+  "status": "passed",
+  "baseline": {
+    "commit": "9c81d4a…", "exit_code": 1,
+    "stdout_hash": "sha256:…", "artifact": "evidence/ev_12a6.baseline.txt",
+    "artifact_hash": "sha256:…", "contained": true,
+    "repo": { "…": "same shape as the top-level repo identity" }
+  },
+  "isolation": { "path": "…/control-wt-ev_12a6", "cleanup": "removed" },
+  "note": null
+}
+```
+
+- `status` — closed vocabulary: `passed` (baseline failed, candidate
+  succeeded), `failed` (baseline passed or candidate failed), `blocked` (the
+  control could not be established; `note` names why, including any leaked
+  isolation path).
+- `isolation.cleanup` — `removed` or `leaked`; a `leaked` cleanup forces
+  `status` away from `passed` and surfaces the path in `note`.
+- `baseline` is null when the baseline never executed (worktree setup
+  failure).
 
 ## `evidence record` — evidence.json
 

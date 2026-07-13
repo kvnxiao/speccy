@@ -8,6 +8,7 @@
 //! Driving).
 
 use crate::model::ChangeRef;
+use crate::model::EvidenceControl;
 use crate::model::EvidenceKind;
 use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
@@ -198,6 +199,10 @@ pub struct EvidenceRecord {
     pub stdout_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<EvidenceRepoIdentity>,
+    // Boxed: the control record (a second execution plus repo identity) would
+    // otherwise dominate the `Event` enum's size for every stored event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<Box<EvidenceControlRecord>>,
 }
 
 /// Before/after repository identity captured around a `kind: command`
@@ -212,6 +217,62 @@ pub struct EvidenceRepoIdentity {
     pub diff_hash_after: String,
     #[serde(default)]
     pub newly_dirty: Vec<String>,
+}
+
+/// The recorded outcome of a declared fail-before/pass-after control
+/// (SCHEMAS § evidence collect; semantics in DESIGN § Acceptance Ledger).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceControlRecord {
+    pub kind: EvidenceControl,
+    pub status: ControlStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<ControlBaselineRecord>,
+    pub isolation: ControlIsolation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// The baseline-side execution of a controlled command, run against the
+/// pinned run base commit in an isolated worktree.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ControlBaselineRecord {
+    pub commit: String,
+    pub exit_code: i32,
+    pub stdout_hash: String,
+    pub artifact: String,
+    pub artifact_hash: String,
+    pub contained: bool,
+    pub repo: EvidenceRepoIdentity,
+}
+
+/// Where the baseline ran and whether that path was verifiably cleaned up.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ControlIsolation {
+    pub path: String,
+    pub cleanup: ControlCleanup,
+}
+
+/// Cleanup verification result for the control's isolation path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlCleanup {
+    /// The isolation worktree was removed and its absence verified.
+    Removed,
+    /// The isolation path still exists; it is surfaced in the control note
+    /// and the control never reports `passed`.
+    Leaked,
+}
+
+/// Control verdict vocabulary (closed; unknown stored values fail replay).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlStatus {
+    /// Baseline failed and candidate succeeded.
+    Passed,
+    /// Baseline passed (vacuous evidence) or the candidate failed.
+    Failed,
+    /// The control could not be established; the note names why.
+    Blocked,
 }
 
 /// A structured reviewer finding (SCHEMAS § finding record).

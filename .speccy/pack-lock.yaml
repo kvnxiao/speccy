@@ -28,8 +28,8 @@ files:
     target: codex
     scope: repo
     template_id: references/spec-quality.md.j2
-    source_hash: sha256:699079b73a7bfe0db3753bb5b15b33fe8a541f9a401fcd33e8914163c29a6a2a
-    rendered_hash: sha256:3567e33795d51f111f8d49d1b489fe66124f0586c05ff1f257c5872d053ba3f4
+    source_hash: sha256:6cfb27cd7bee944c42efe61c5736067004aa87af103820bc10e9873ffc1530d5
+    rendered_hash: sha256:08fa1affee0fb4dd1f4a178297a52bd223cabeab33068693fe77b419b4595e63
   - path: .agents/skills/speccy-ship/SKILL.md
     target: codex
     scope: repo
@@ -40,8 +40,8 @@ files:
     target: claude
     scope: repo
     template_id: agents/planner.j2
-    source_hash: sha256:80209e425434d9a5987a7150e00feb1347f1ca6c9ff0748984e05b2310541216
-    rendered_hash: sha256:b7ffc287ca071214f137035f1c763d822f767feceaa9f6b82d2500640d2bf9d3
+    source_hash: sha256:06e10ac25dbb16282cefce25503c93a923bdb1080d4b7c45b36342ac4ceaa30d
+    rendered_hash: sha256:5b3fc9715f7c1521d20421f0509b547423c238bde8227841cf75190d59029a4c
   - path: .claude/agents/speccy-repair.md
     target: claude
     scope: repo
@@ -118,8 +118,8 @@ files:
     target: claude
     scope: repo
     template_id: references/spec-quality.md.j2
-    source_hash: sha256:699079b73a7bfe0db3753bb5b15b33fe8a541f9a401fcd33e8914163c29a6a2a
-    rendered_hash: sha256:3567e33795d51f111f8d49d1b489fe66124f0586c05ff1f257c5872d053ba3f4
+    source_hash: sha256:6cfb27cd7bee944c42efe61c5736067004aa87af103820bc10e9873ffc1530d5
+    rendered_hash: sha256:08fa1affee0fb4dd1f4a178297a52bd223cabeab33068693fe77b419b4595e63
   - path: .claude/skills/speccy-ship/SKILL.md
     target: claude
     scope: repo
@@ -130,8 +130,8 @@ files:
     target: codex
     scope: repo
     template_id: agents/planner.j2
-    source_hash: sha256:80209e425434d9a5987a7150e00feb1347f1ca6c9ff0748984e05b2310541216
-    rendered_hash: sha256:3f8aa89f300a46786c9abc7c4ae5d9dfbe4c9b20705b0b7b4daf8b07def3affa
+    source_hash: sha256:06e10ac25dbb16282cefce25503c93a923bdb1080d4b7c45b36342ac4ceaa30d
+    rendered_hash: sha256:02f4f264e65f2586fb82f6f1282f0d4f19f6c4813e04ffd0b79cd8e80496a818
   - path: .codex/agents/speccy-repair.toml
     target: codex
     scope: repo

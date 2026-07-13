@@ -383,6 +383,7 @@ pub fn verification(store: &Store, run_id: &str, requirements: &[String]) -> Res
             "findings": prov.iter().map(|f| f.id.clone()).collect::<Vec<_>>(),
         },
         "command_evidence_anomalies": evidence_identity_anomalies(&run),
+        "control_outcomes": control_outcomes(&run),
         "tools": ["evidence collect", "evidence record", "finding record"],
     }))
 }
@@ -453,6 +454,25 @@ fn evidence_identity_anomalies(run: &RunProjection) -> Vec<Value> {
                 "head_before": repo.head_before,
                 "head_after": repo.head_after,
                 "newly_dirty": repo.newly_dirty,
+            }))
+        })
+        .collect()
+}
+
+/// Every recorded fail-before/pass-after control outcome — surfaced in the
+/// verification packet; non-passed outcomes are called out in the review
+/// packet (DESIGN § Acceptance Ledger).
+fn control_outcomes(run: &RunProjection) -> Vec<Value> {
+    run.evidence
+        .iter()
+        .filter_map(|ev| {
+            let control = ev.control.as_ref()?;
+            Some(json!({
+                "evidence": ev.id,
+                "requirement": ev.requirement,
+                "status": control.status,
+                "isolation_cleanup": control.isolation.cleanup,
+                "note": control.note,
             }))
         })
         .collect()
@@ -580,6 +600,7 @@ fn render_review_markdown(spec: &SpecState, run: &RunProjection, store: &Store) 
         }
     }
     render_evidence_anomalies(&mut out, run);
+    render_failed_controls(&mut out, run);
     // Honest about an unreadable diff: never a fabricated zero (DESIGN §
     // Planning Packet and Draft Contract).
     match diff {
@@ -627,6 +648,29 @@ fn render_evidence_anomalies(out: &mut String, run: &RunProjection) {
             "  {}  {}",
             a["evidence"].as_str().unwrap_or("?"),
             parts.join("; ")
+        );
+    }
+}
+
+/// Append every fail-before/pass-after control that did not pass, so a
+/// vacuous or unprovable control is visible at the review gate.
+fn render_failed_controls(out: &mut String, run: &RunProjection) {
+    let outcomes = control_outcomes(run);
+    let not_passed: Vec<&Value> = outcomes
+        .iter()
+        .filter(|o| o["status"] != json!("passed"))
+        .collect();
+    if not_passed.is_empty() {
+        return;
+    }
+    out.push_str("\nFail-before/pass-after controls not proven\n");
+    for o in &not_passed {
+        _ = writeln!(
+            out,
+            "  {}  {}  {}",
+            o["evidence"].as_str().unwrap_or("?"),
+            o["status"].as_str().unwrap_or("?"),
+            o["note"].as_str().unwrap_or("")
         );
     }
 }

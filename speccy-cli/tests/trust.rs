@@ -939,3 +939,221 @@ fn unreadable_diff_halts_run_next() {
     ]);
     assert_eq!(refused["ok"], json!(false), "{refused}");
 }
+
+/// Minimal spec whose command evidence declares a fail-before/pass-after
+/// control.
+fn controlled_draft(command: &str) -> Value {
+    json!({
+        "goal": "fix the bug", "scope": { "in": ["x"] }, "risk": "high",
+        "requirements": [{ "id": "R1", "statement": "the bug is fixed",
+            "evidence": [{ "id": "E1", "kind": "command", "command": command,
+                           "control": "fail_before_pass_after" }] }],
+        "tasks": [{ "id": "T1", "title": "the fix", "requirements": ["R1"] }]
+    })
+}
+
+fn collect_r1(h: &Harness, run: &str) -> Value {
+    let collected = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    collected["evidence"][0].clone()
+}
+
+// D: the control proves fail-before/pass-after — the command fails against
+// the pinned baseline in an isolated worktree and passes against the
+// candidate — without the live worktree being reset or mutated.
+#[test]
+fn control_proves_fail_before_pass_after_without_touching_the_live_worktree() {
+    let h = Harness::new();
+    let base = h.git(&["rev-parse", "HEAD"]).trim().to_string();
+    let run = start_run(
+        &h,
+        controlled_draft("git ls-files --error-unmatch fixed.txt"),
+    );
+
+    // The "fix": the file exists (tracked) in the candidate state only.
+    h.write_file("fixed.txt", "fixed\n");
+    h.git(&["add", "fixed.txt"]);
+    let head_before = h.git(&["rev-parse", "HEAD"]).trim().to_string();
+
+    let ev = collect_r1(&h, &run);
+    assert_eq!(ev["exit_code"], json!(0), "{ev}");
+    let control = &ev["control"];
+    assert_eq!(control["kind"], json!("fail_before_pass_after"));
+    assert_eq!(control["status"], json!("passed"), "{control}");
+    assert_eq!(control["baseline"]["commit"], json!(base));
+    assert_ne!(control["baseline"]["exit_code"], json!(0));
+    assert_eq!(control["baseline"]["contained"], json!(true));
+    assert!(
+        control["baseline"]["stdout_hash"]
+            .as_str()
+            .expect("baseline stdout hash")
+            .starts_with("sha256:")
+    );
+
+    // Isolation: the worktree lived outside the repo, was removed, and its
+    // absence verified.
+    assert_eq!(control["isolation"]["cleanup"], json!("removed"));
+    let isolation_path = control["isolation"]["path"]
+        .as_str()
+        .expect("isolation path recorded");
+    assert!(
+        !std::path::Path::new(isolation_path).exists(),
+        "isolation worktree must be gone: {isolation_path}"
+    );
+    assert!(
+        !isolation_path.starts_with(h.repo_path().to_str().expect("utf8 repo path")),
+        "isolation worktree must not live inside the repo: {isolation_path}"
+    );
+
+    // The live worktree is untouched: same HEAD, same dirty set.
+    assert_eq!(h.git(&["rev-parse", "HEAD"]).trim(), head_before);
+    assert_eq!(h.git(&["status", "--porcelain"]).trim(), "A  fixed.txt");
+    assert_eq!(
+        h.git(&["worktree", "list"]).trim().lines().count(),
+        1,
+        "no worktree registration may remain"
+    );
+
+    // The baseline artifact is stored and the control replays from the log.
+    let baseline_artifact = control["baseline"]["artifact"]
+        .as_str()
+        .expect("baseline artifact recorded");
+    assert!(
+        h.read_home_file_containing(baseline_artifact).is_some(),
+        "baseline artifact stored: {baseline_artifact}"
+    );
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run events log stored");
+    let recorded: Value = log
+        .lines()
+        .find(|l| l.contains("\"type\":\"evidence_recorded\""))
+        .and_then(|l| serde_json::from_str(l).ok())
+        .expect("an evidence_recorded event");
+    assert_eq!(recorded["evidence"]["control"]["status"], json!("passed"));
+}
+
+// D: a command that also passes on the baseline cannot distinguish before
+// from after — the control fails even though the candidate run passed.
+#[test]
+fn control_fails_when_the_baseline_also_passes() {
+    let h = Harness::new();
+    let run = start_run(&h, controlled_draft("echo vacuous"));
+    let ev = collect_r1(&h, &run);
+    assert_eq!(ev["exit_code"], json!(0));
+    assert_eq!(ev["control"]["status"], json!("failed"), "{ev}");
+    assert!(
+        ev["control"]["note"]
+            .as_str()
+            .expect("control note present")
+            .contains("baseline command passed")
+    );
+    assert_eq!(ev["control"]["isolation"]["cleanup"], json!("removed"));
+}
+
+// D: a failing candidate fails the control (and the evidence itself).
+#[test]
+fn control_fails_when_the_candidate_fails() {
+    let h = Harness::new();
+    let run = start_run(&h, controlled_draft("exit 3"));
+    let ev = collect_r1(&h, &run);
+    assert_eq!(ev["exit_code"], json!(3));
+    assert_eq!(ev["control"]["status"], json!("failed"), "{ev}");
+    assert!(
+        ev["control"]["note"]
+            .as_str()
+            .expect("control note present")
+            .contains("candidate command failed")
+    );
+}
+
+// D: an unavailable baseline environment is blocked — never passed, never a
+// synthesized failure.
+#[test]
+fn unavailable_baseline_is_blocked_not_failed() {
+    let h = Harness::new();
+    let run = start_run(&h, controlled_draft("echo hi"));
+
+    // Point the stored run baseline at a commit that does not exist, so the
+    // isolation worktree cannot be created.
+    let log_path = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log path");
+    let text = fs_err::read_to_string(&log_path).expect("read log");
+    let mut out = String::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let mut v: Value = serde_json::from_str(line).expect("json line");
+        if v["type"] == json!("run_started") {
+            v["base_commit"] = json!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        }
+        out.push_str(&serde_json::to_string(&v).expect("serialize line"));
+        out.push('\n');
+    }
+    fs_err::write(&log_path, out).expect("write log");
+
+    let ev = collect_r1(&h, &run);
+    assert_eq!(ev["exit_code"], json!(0), "candidate still runs: {ev}");
+    assert_eq!(ev["control"]["status"], json!("blocked"), "{ev}");
+    assert!(
+        ev["control"]["note"]
+            .as_str()
+            .expect("control note present")
+            .contains("baseline worktree setup failed")
+    );
+    assert!(ev["control"]["baseline"].is_null());
+}
+
+// D: control is linted — only valid on kind: command, only known values.
+#[test]
+fn control_lint_rejects_non_command_and_unknown_values() {
+    let h = Harness::new();
+    let start = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "lint test", "title": "Lint test" }),
+    );
+    let spec_ref = start["spec_ref"]
+        .as_str()
+        .expect("spec_ref present")
+        .to_string();
+    let drafted = h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({
+            "goal": "g", "scope": { "in": ["x"] }, "risk": "standard",
+            "requirements": [
+                { "id": "R1", "statement": "s",
+                  "evidence": [{ "id": "E1", "kind": "review",
+                                 "control": "fail_before_pass_after" }] },
+                { "id": "R2", "statement": "s",
+                  "evidence": [{ "id": "E1", "kind": "command", "command": "echo hi",
+                                 "control": "prove_it_backwards" }] }
+            ],
+            "tasks": [{ "id": "T1", "title": "t", "requirements": ["R1", "R2"] }]
+        }),
+    );
+    assert_eq!(drafted["lint"]["clean"], json!(false), "{drafted}");
+    let codes: Vec<&str> = drafted["lint"]["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter_map(|f| f["code"].as_str())
+        .collect();
+    assert!(codes.contains(&"control_on_non_command"), "{codes:?}");
+    assert!(codes.contains(&"invalid_control"), "{codes:?}");
+}

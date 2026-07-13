@@ -154,6 +154,37 @@ pub fn branch_exists(dir: &Utf8Path, name: &str) -> Result<bool> {
     Ok(out.status.success())
 }
 
+/// Create a detached worktree at `path` checked out at `commit` (evidence
+/// control baselines; DESIGN § Acceptance Ledger).
+///
+/// # Errors
+///
+/// Returns an error if `git` is unavailable or the worktree cannot be created.
+pub fn worktree_add(dir: &Utf8Path, path: &Utf8Path, commit: &str) -> Result<()> {
+    git(dir, &["worktree", "add", "--detach", path.as_str(), commit])?;
+    Ok(())
+}
+
+/// Remove the worktree registered at `path`, discarding its state.
+///
+/// # Errors
+///
+/// Returns an error if `git` is unavailable or the removal fails.
+pub fn worktree_remove(dir: &Utf8Path, path: &Utf8Path) -> Result<()> {
+    git(dir, &["worktree", "remove", "--force", path.as_str()])?;
+    Ok(())
+}
+
+/// Drop worktree registrations whose directories no longer exist.
+///
+/// # Errors
+///
+/// Returns an error if `git` is unavailable or the prune fails.
+pub fn worktree_prune(dir: &Utf8Path) -> Result<()> {
+    git(dir, &["worktree", "prune"])?;
+    Ok(())
+}
+
 /// Stage everything and commit under the controller identity. Returns the new
 /// commit SHA. Never squashes (DESIGN § Run Branch and Snapshot Policy).
 ///

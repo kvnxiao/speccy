@@ -9,12 +9,19 @@
 use crate::config::ProjectConfig;
 use crate::error::Result;
 use crate::error::SpeccyError;
+use crate::event::ControlBaselineRecord;
+use crate::event::ControlCleanup;
+use crate::event::ControlIsolation;
+use crate::event::ControlStatus;
 use crate::event::Event;
+use crate::event::EvidenceControlRecord;
 use crate::event::EvidenceRecord;
 use crate::event::EvidenceRepoIdentity;
 use crate::gitx;
 use crate::ids;
+use crate::model::EvidenceControl;
 use crate::model::EvidenceKind;
+use crate::model::EvidenceRequest;
 use crate::store::Store;
 use crate::store::write_atomic;
 use camino::Utf8Path;
@@ -59,10 +66,11 @@ pub fn collect(
     // security boundary; this is a drift guardrail.
     let allow = &config.evidence.command_policy.allow;
     if !allow.is_empty() {
-        for (req_id, ev_id, command) in &targets {
-            if !crate::lint::command_allowed(command, allow) {
+        for t in &targets {
+            if !crate::lint::command_allowed(&t.command, allow) {
                 return Err(SpeccyError::validation(format!(
-                    "command for {req_id}.{ev_id} matches no allow pattern: {command}"
+                    "command for {}.{} matches no allow pattern: {}",
+                    t.requirement, t.request, t.command
                 )));
             }
         }
@@ -83,6 +91,7 @@ pub fn collect(
         store,
         spec_id: &spec_id,
         run_id,
+        base_commit: &run.base_commit,
         config: &config,
         secrets: &secrets,
         cap,
@@ -90,8 +99,8 @@ pub fn collect(
     };
     let records = store.with_command_lock(|| {
         let mut out = Vec::new();
-        for (req_id, ev_id, command) in &targets {
-            out.push(collect_one(&ctx, req_id, ev_id, command)?);
+        for target in &targets {
+            out.push(collect_one(&ctx, target)?);
         }
         Ok(out)
     })?;
@@ -104,16 +113,32 @@ struct CollectCtx<'a> {
     store: &'a Store,
     spec_id: &'a str,
     run_id: &'a str,
+    base_commit: &'a str,
     config: &'a ProjectConfig,
     secrets: &'a [(String, String)],
     cap: usize,
     timeout: Duration,
 }
 
+/// One declared command target to execute.
+struct Target {
+    requirement: String,
+    request: String,
+    command: String,
+    control: Option<EvidenceControl>,
+}
+
 /// Execute one declared command under identity capture and containment, store
 /// its artifact, and append its evidence record.
-fn collect_one(ctx: &CollectCtx<'_>, req_id: &str, ev_id: &str, command: &str) -> Result<Value> {
+fn collect_one(ctx: &CollectCtx<'_>, target: &Target) -> Result<Value> {
+    let (req_id, ev_id, command) = (&target.requirement, &target.request, &target.command);
     let id = ids::short_id("ev");
+    // Baseline side of a declared control runs first, in an isolated
+    // worktree, so the negative is proven before the candidate executes.
+    let control_draft = match target.control {
+        Some(kind) => Some(run_baseline(ctx, &id, command, kind)?),
+        None => None,
+    };
     let before = capture_repo_identity(&ctx.store.git_root).map_err(|e| {
         SpeccyError::io(format!(
             "evidence collection failed: cannot capture the pre-command repository identity: {}",
@@ -158,26 +183,28 @@ fn collect_one(ctx: &CollectCtx<'_>, req_id: &str, ev_id: &str, command: &str) -
     )?;
 
     let (note, exit_code) = execution_verdict(ctx, &run, &repo);
+    let control = control_draft.map(|draft| Box::new(control_verdict(draft, exit_code)));
     let record = EvidenceRecord {
         id: id.clone(),
-        requirement: req_id.to_string(),
-        request: Some(ev_id.to_string()),
+        requirement: req_id.clone(),
+        request: Some(ev_id.clone()),
         kind: EvidenceKind::Command,
         collected_by: "controller".into(),
         note: note.clone(),
         artifact: Some(artifact_rel.clone()),
         artifact_hash: Some(artifact_hash.clone()),
-        command: Some(command.to_string()),
+        command: Some(command.clone()),
         exit_code: Some(exit_code),
         stdout_hash: Some(stdout_hash.clone()),
         repo: Some(repo.clone()),
+        control: control.clone(),
     };
     ctx.store.append_run_event(
         ctx.spec_id,
         ctx.run_id,
         Event::EvidenceRecorded { evidence: record },
     )?;
-    Ok(json!({
+    let mut response = json!({
         "id": id,
         "requirement": req_id,
         "request": ev_id,
@@ -191,7 +218,205 @@ fn collect_one(ctx: &CollectCtx<'_>, req_id: &str, ev_id: &str, command: &str) -
         "note": note,
         "repo": repo,
         "contained": run.contained,
-    }))
+    });
+    if let Some(control) = control {
+        let value = serde_json::to_value(control)
+            .map_err(|e| SpeccyError::io(format!("cannot serialize control record: {e}")))?;
+        if let Some(fields) = response.as_object_mut() {
+            fields.insert("control".into(), value);
+        }
+    }
+    Ok(response)
+}
+
+/// Baseline-side observations of a declared control, gathered before the
+/// candidate command has run.
+struct BaselineDraft {
+    kind: EvidenceControl,
+    baseline: Option<ControlBaselineRecord>,
+    isolation: ControlIsolation,
+    /// Environment problems that block the control regardless of exit codes:
+    /// worktree setup, identity capture, spawn, or containment failure.
+    blocked: Vec<String>,
+}
+
+/// Execute the declared command against the pinned run baseline in an
+/// isolated temporary worktree. Environment problems become a blocked
+/// control, never a synthesized failure; only artifact-write failures error.
+fn run_baseline(
+    ctx: &CollectCtx<'_>,
+    id: &str,
+    command: &str,
+    kind: EvidenceControl,
+) -> Result<BaselineDraft> {
+    let worktree = ctx
+        .store
+        .run_dir(ctx.spec_id, ctx.run_id)
+        .join(format!("control-wt-{id}"));
+    if let Err(e) = gitx::worktree_add(&ctx.store.git_root, &worktree, ctx.base_commit) {
+        let cleanup = cleanup_worktree(ctx, &worktree);
+        return Ok(BaselineDraft {
+            kind,
+            baseline: None,
+            isolation: ControlIsolation {
+                path: worktree.to_string(),
+                cleanup,
+            },
+            blocked: vec![format!("baseline worktree setup failed: {}", e.message)],
+        });
+    }
+    let executed = baseline_execution(ctx, id, command, &worktree);
+    // The isolation path is torn down and verified before any error can
+    // propagate, and a leak is surfaced either way.
+    let cleanup = cleanup_worktree(ctx, &worktree);
+    let (baseline, blocked) = executed.map_err(|e| {
+        if cleanup == ControlCleanup::Leaked {
+            SpeccyError::io(format!(
+                "{}; isolation worktree leaked at {worktree}",
+                e.message
+            ))
+        } else {
+            e
+        }
+    })?;
+    Ok(BaselineDraft {
+        kind,
+        baseline,
+        isolation: ControlIsolation {
+            path: worktree.to_string(),
+            cleanup,
+        },
+        blocked: blocked.into_iter().collect(),
+    })
+}
+
+/// Run the baseline command inside the isolation worktree and store its
+/// artifact. Returns the baseline record plus an optional blocking reason;
+/// only the artifact write can error.
+fn baseline_execution(
+    ctx: &CollectCtx<'_>,
+    id: &str,
+    command: &str,
+    worktree: &Utf8Path,
+) -> Result<(Option<ControlBaselineRecord>, Option<String>)> {
+    let Ok(before) = capture_repo_identity(worktree) else {
+        return Ok((
+            None,
+            Some("baseline identity capture failed before execution".into()),
+        ));
+    };
+    let mut run = run_shell(command, worktree, ctx.timeout, ctx.cap);
+    if !run.spawned {
+        return Ok((
+            None,
+            Some(format!(
+                "baseline command could not be spawned: {}",
+                String::from_utf8_lossy(&run.stderr)
+            )),
+        ));
+    }
+    let Ok(after) = capture_repo_identity(worktree) else {
+        return Ok((
+            None,
+            Some("baseline identity capture failed after execution".into()),
+        ));
+    };
+    let repo = EvidenceRepoIdentity {
+        head_before: before.head.clone(),
+        head_after: after.head.clone(),
+        head_changed: before.head != after.head,
+        diff_hash_before: before.diff_hash.clone(),
+        diff_hash_after: after.diff_hash.clone(),
+        newly_dirty: after
+            .dirty
+            .iter()
+            .filter(|p| !before.dirty.contains(p))
+            .cloned()
+            .collect(),
+    };
+    run.stdout = scrub_secrets(&run.stdout, ctx.secrets);
+    run.stderr = scrub_secrets(&run.stderr, ctx.secrets);
+    let stdout_hash = crate::hash::sha256_prefixed(&run.stdout);
+    let artifact_rel = format!("evidence/{id}.baseline.txt");
+    let body = render_artifact(command, &run, &before, &after, &repo);
+    let artifact_hash = crate::hash::sha256_prefixed(body.as_bytes());
+    write_atomic(
+        &ctx.store
+            .run_dir(ctx.spec_id, ctx.run_id)
+            .join(&artifact_rel),
+        body.as_bytes(),
+    )?;
+    let blocked = (!run.contained)
+        .then(|| "baseline containment failed: descendants survived teardown".to_string());
+    Ok((
+        Some(ControlBaselineRecord {
+            commit: ctx.base_commit.to_string(),
+            exit_code: run.exit_code,
+            stdout_hash,
+            artifact: artifact_rel,
+            artifact_hash,
+            contained: run.contained,
+            repo,
+        }),
+        blocked,
+    ))
+}
+
+/// Remove the isolation worktree and verify it is gone. `Leaked` means the
+/// path still exists after removal, deletion, and prune were all attempted.
+fn cleanup_worktree(ctx: &CollectCtx<'_>, worktree: &Utf8Path) -> ControlCleanup {
+    _ = gitx::worktree_remove(&ctx.store.git_root, worktree);
+    if worktree.as_std_path().exists() {
+        _ = fs_err::remove_dir_all(worktree.as_std_path());
+    }
+    _ = gitx::worktree_prune(&ctx.store.git_root);
+    if worktree.as_std_path().exists() {
+        ControlCleanup::Leaked
+    } else {
+        ControlCleanup::Removed
+    }
+}
+
+/// Combine the baseline draft with the candidate's recorded exit code into
+/// the stored control verdict. A blocked environment is never a synthesized
+/// failure, and a leaked isolation path never reports `passed`.
+fn control_verdict(draft: BaselineDraft, candidate_exit: i32) -> EvidenceControlRecord {
+    let mut notes = draft.blocked;
+    let mut status = if !notes.is_empty() {
+        ControlStatus::Blocked
+    } else if let Some(baseline) = &draft.baseline {
+        if baseline.exit_code == 0 {
+            notes.push(
+                "baseline command passed: the evidence does not distinguish before from after"
+                    .into(),
+            );
+            ControlStatus::Failed
+        } else if candidate_exit == 0 {
+            ControlStatus::Passed
+        } else {
+            notes.push("candidate command failed".into());
+            ControlStatus::Failed
+        }
+    } else {
+        notes.push("baseline result missing".into());
+        ControlStatus::Blocked
+    };
+    if draft.isolation.cleanup == ControlCleanup::Leaked {
+        notes.push(format!(
+            "isolation worktree leaked at {}",
+            draft.isolation.path
+        ));
+        if status == ControlStatus::Passed {
+            status = ControlStatus::Blocked;
+        }
+    }
+    EvidenceControlRecord {
+        kind: draft.kind,
+        status,
+        baseline: draft.baseline,
+        isolation: draft.isolation,
+        note: (!notes.is_empty()).then(|| notes.join("; ")),
+    }
 }
 
 /// The recorded note and exit code for one execution. Containment failure is
@@ -254,12 +479,25 @@ fn capture_repo_identity(git_root: &Utf8Path) -> Result<RepoIdentity> {
     })
 }
 
-/// (`requirement_id`, `request_id`, command) tuples to execute.
+/// The declared control of a request, or `validation_failed` when the stored
+/// value is outside the closed vocabulary (fail closed rather than silently
+/// running the command uncontrolled).
+fn declared_control(req_id: &str, ev: &EvidenceRequest) -> Result<Option<EvidenceControl>> {
+    match (&ev.control, ev.control_enum()) {
+        (Some(raw), None) => Err(SpeccyError::validation(format!(
+            "{req_id}.{} declares unknown control \"{raw}\"",
+            ev.id
+        ))),
+        (_, parsed) => Ok(parsed),
+    }
+}
+
+/// The declared command targets to execute.
 fn resolve_targets(
     draft: &crate::model::SpecDraft,
     requirements: &[String],
     requests: &[String],
-) -> Result<Vec<(String, String, String)>> {
+) -> Result<Vec<Target>> {
     let mut targets = Vec::new();
 
     if !requests.is_empty() {
@@ -283,7 +521,12 @@ fn resolve_targets(
             let command = ev.command.clone().ok_or_else(|| {
                 SpeccyError::validation(format!("{qualified} has no command string"))
             })?;
-            targets.push((req_id.to_string(), ev_id.to_string(), command));
+            targets.push(Target {
+                requirement: req_id.to_string(),
+                request: ev_id.to_string(),
+                command,
+                control: declared_control(req_id, ev)?,
+            });
         }
         return Ok(targets);
     }
@@ -296,7 +539,12 @@ fn resolve_targets(
             if ev.kind_enum() == Some(EvidenceKind::Command)
                 && let Some(command) = &ev.command
             {
-                targets.push((req_id.clone(), ev.id.clone(), command.clone()));
+                targets.push(Target {
+                    requirement: req_id.clone(),
+                    request: ev.id.clone(),
+                    command: command.clone(),
+                    control: declared_control(req_id, ev)?,
+                });
             }
         }
     }
@@ -305,7 +553,7 @@ fn resolve_targets(
 
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "four independent observations of one execution (timeout, \
+    reason = "five independent observations of one execution (spawn, timeout, \
               truncation, reader loss, containment), not an encoded state \
               machine; an enum would misrepresent that they combine freely"
 )]
@@ -313,6 +561,10 @@ struct ShellRun {
     exit_code: i32,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+    /// The shell process started. `false` distinguishes "could not execute"
+    /// from a command that ran and failed — a control baseline must treat the
+    /// former as blocked, never as the expected failure.
+    spawned: bool,
     timed_out: bool,
     /// stdout or stderr exceeded `command_output_max_bytes` and was clamped.
     truncated: bool,
@@ -357,6 +609,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
                 exit_code: -1,
                 stdout: Vec::new(),
                 stderr: format!("failed to spawn command: {e}").into_bytes(),
+                spawned: false,
                 timed_out: false,
                 truncated: false,
                 reader_abandoned: false,
@@ -413,6 +666,7 @@ fn run_shell(command: &str, cwd: &Utf8Path, timeout: Duration, max_bytes: usize)
         exit_code,
         stdout,
         stderr,
+        spawned: true,
         timed_out,
         truncated: out_trunc || err_trunc,
         reader_abandoned: out_lost || err_lost,
@@ -625,8 +879,74 @@ fn scrub_secrets(data: &[u8], secrets: &[(String, String)]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use super::BaselineDraft;
+    use super::ControlBaselineRecord;
+    use super::ControlCleanup;
+    use super::ControlIsolation;
+    use super::ControlStatus;
+    use super::EvidenceControl;
+    use super::EvidenceRepoIdentity;
+    use super::control_verdict;
     use super::is_secret_name;
     use super::scrub_secrets;
+
+    fn baseline(exit_code: i32) -> ControlBaselineRecord {
+        ControlBaselineRecord {
+            commit: "base".into(),
+            exit_code,
+            stdout_hash: "sha256:x".into(),
+            artifact: "evidence/ev.baseline.txt".into(),
+            artifact_hash: "sha256:y".into(),
+            contained: true,
+            repo: EvidenceRepoIdentity {
+                head_before: "base".into(),
+                head_after: "base".into(),
+                head_changed: false,
+                diff_hash_before: "sha256:d".into(),
+                diff_hash_after: "sha256:d".into(),
+                newly_dirty: vec![],
+            },
+        }
+    }
+
+    fn draft(exit_code: i32, cleanup: ControlCleanup, blocked: Vec<String>) -> BaselineDraft {
+        BaselineDraft {
+            kind: EvidenceControl::FailBeforePassAfter,
+            baseline: Some(baseline(exit_code)),
+            isolation: ControlIsolation {
+                path: "/tmp/control-wt".into(),
+                cleanup,
+            },
+            blocked,
+        }
+    }
+
+    // A leaked isolation path never reports passed, and the leak is surfaced.
+    #[test]
+    fn leaked_isolation_never_reports_passed() {
+        let verdict = control_verdict(draft(1, ControlCleanup::Leaked, vec![]), 0);
+        assert_eq!(verdict.status, ControlStatus::Blocked);
+        let note = verdict.note.expect("leak is surfaced");
+        assert!(note.contains("leaked at /tmp/control-wt"), "{note}");
+    }
+
+    // A genuine semantic failure stays failed when the path also leaked.
+    #[test]
+    fn leaked_isolation_keeps_a_semantic_failure() {
+        let verdict = control_verdict(draft(0, ControlCleanup::Leaked, vec![]), 0);
+        assert_eq!(verdict.status, ControlStatus::Failed);
+    }
+
+    // Environment problems block the control even when the exit codes would
+    // otherwise read as a pass — never a synthesized failure or pass.
+    #[test]
+    fn blocked_environment_overrides_exit_codes() {
+        let verdict = control_verdict(
+            draft(1, ControlCleanup::Removed, vec!["baseline env gone".into()]),
+            0,
+        );
+        assert_eq!(verdict.status, ControlStatus::Blocked);
+    }
 
     #[test]
     fn scrubs_known_secret_values() {

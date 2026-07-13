@@ -13,6 +13,11 @@ verification, and review can proceed without hidden product decisions.
 - Give every requirement evidence that would actually prove it. A command needs
   a concrete command string; review/browser/api/manual evidence needs a note
   explaining what the verifier should check.
+- For a high or critical bug fix, add `control: fail_before_pass_after` to the
+  command evidence request that reproduces the bug. The controller runs that
+  command against the run's baseline in an isolated worktree (expecting
+  failure) and against the fix (expecting success), so the evidence cannot
+  pass vacuously.
 - Keep tasks implementation-focused and bounded. Every requirement must be
   covered by at least one task, but a task can cover several related
   requirements.

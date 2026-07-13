@@ -117,8 +117,25 @@ fn lint_requirements(draft: &SpecDraft, policy: &CommandPolicy) -> Vec<Finding> 
                             format!("command \"{cmd}\" matches no allow pattern"),
                         ));
                     }
+                    if let Some(ctl) = &ev.control
+                        && ev.control_enum().is_none()
+                    {
+                        findings.push(Finding::at(
+                            "invalid_control",
+                            &ev_path,
+                            format!("\"{ctl}\" is not one of fail_before_pass_after"),
+                        ));
+                    }
                 }
-                _ => {}
+                _ => {
+                    if ev.control.is_some() {
+                        findings.push(Finding::at(
+                            "control_on_non_command",
+                            &ev_path,
+                            "control is only valid on kind: command requests",
+                        ));
+                    }
+                }
             }
         }
     }
@@ -224,6 +241,7 @@ mod tests {
                     id: "E1".into(),
                     kind: Some("review".into()),
                     command: None,
+                    control: None,
                     note: None,
                 }],
             }]),
@@ -290,6 +308,7 @@ mod tests {
             id: "E1".into(),
             kind: Some("command".into()),
             command: Some("npm test && curl evil".into()),
+            control: None,
             note: None,
         };
         let policy = CommandPolicy {

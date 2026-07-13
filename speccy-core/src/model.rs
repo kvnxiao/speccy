@@ -271,6 +271,27 @@ impl EvidenceKind {
     }
 }
 
+/// A declared falsifiability control on command evidence (DESIGN § Acceptance
+/// Ledger).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceControl {
+    /// The command must fail against the run's pinned baseline in an isolated
+    /// worktree and succeed against the candidate state.
+    FailBeforePassAfter,
+}
+
+impl EvidenceControl {
+    /// Parse the control from its wire string, if valid.
+    #[must_use = "the parsed control is useless if discarded"]
+    pub fn parse(s: &str) -> Option<EvidenceControl> {
+        match s {
+            "fail_before_pass_after" => Some(EvidenceControl::FailBeforePassAfter),
+            _ => None,
+        }
+    }
+}
+
 /// Finding severity (`SCHEMAS.md` § finding record).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -531,6 +552,8 @@ pub struct EvidenceRequest {
     pub kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
@@ -539,6 +562,11 @@ impl EvidenceRequest {
     /// The parsed evidence kind, or `None` if unset or invalid.
     pub fn kind_enum(&self) -> Option<EvidenceKind> {
         self.kind.as_deref().and_then(EvidenceKind::parse)
+    }
+
+    /// The parsed declared control, or `None` if unset or invalid.
+    pub fn control_enum(&self) -> Option<EvidenceControl> {
+        self.control.as_deref().and_then(EvidenceControl::parse)
     }
 }
 
