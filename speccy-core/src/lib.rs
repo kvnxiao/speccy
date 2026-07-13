@@ -23,6 +23,7 @@ pub mod mutation;
 pub mod packets;
 pub mod projection;
 pub mod provenance;
+pub mod receipt;
 pub mod render;
 pub mod store;
 

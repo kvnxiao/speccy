@@ -55,7 +55,7 @@ pub enum Command {
     New(NewArgs),
     /// Install or update repo-local harness packs.
     Install(InstallArgs),
-    /// Export the human review packet.
+    /// Export the human review packet or the safe run receipt.
     #[command(subcommand)]
     Export(ExportCommand),
 }
@@ -350,8 +350,8 @@ pub enum ExportCommand {
     /// Export the full spec.
     #[command(hide = true)]
     Spec(ExportArgs),
-    /// Export a redacted run bundle for audit/debugging.
-    #[command(hide = true)]
+    /// Export the safe run receipt (versioned JSON + Markdown) for
+    /// audit/debugging.
     RunBundle(ExportBundleArgs),
 }
 
@@ -366,9 +366,11 @@ pub struct ExportArgs {
 #[derive(Debug, Args)]
 pub struct ExportBundleArgs {
     pub selector: Option<String>,
+    /// Destination directory.
     #[arg(long)]
     pub dest: Option<String>,
-    /// Redact known secrets from the bundle.
+    /// Accepted as an explicit marker; the receipt is redacted by
+    /// construction, so output is identical without it.
     #[arg(long)]
     pub redact: bool,
 }

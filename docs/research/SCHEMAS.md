@@ -393,3 +393,57 @@ and `packet escalation` carry the rendered human-facing text in a
 Verification packets name the persona roster to fan out and carry the full
 task diff reference against `baseline_commit` plus `prior_findings` from
 earlier rounds (mechanics in "Repeat Review Rounds" in `DESIGN.md`).
+
+## Run receipt (`export run-bundle`)
+
+`speccy export run-bundle [--redact] [--dest <dir>]` writes `run-bundle.json`
+plus a compact `run-bundle.md` view of the same facts (semantics and the
+allowlist rationale in "Lightweight Team Sharing" in `DESIGN.md`). The receipt
+is built from stored facts only, ordered deterministically (object keys
+alphabetical; arrays sorted by ID), so identical stored facts produce
+identical bytes. `manifest_hash` is the SHA-256 of the receipt JSON serialized
+with the `manifest_hash` field absent.
+
+```json
+{
+  "receipt_schema": 1,
+  "controller_version": "0.1.0",
+  "spec": { "ref": "SPEC-20260630-A7F4", "revision": "spec_rev_002",
+            "risk": "high" },
+  "run": { "id": "run_01j1bx…", "state": "submitted",
+           "branch": "speccy/spec-20260630-a7f4",
+           "base_commit": "9c81d4a…", "final_head": "a7f4c2e…",
+           "diff_hash": "sha256:…", "review_rounds": 2,
+           "active_seconds": 5400 },
+  "caps": { "task_repair_rounds": 3, "run_review_rounds": 3 },
+  "tasks": [ { "id": "T1", "title": "Token model + endpoints",
+               "status": "integrated", "rounds": 2,
+               "requirements": ["R-AUTH-001"] } ],
+  "requirements": [ { "id": "R-AUTH-001", "status": "passed",
+                      "residual_risk": null } ],
+  "evidence": [ { "id": "ev_12a6", "requirement": "R-AUTH-001",
+                  "request": "E1", "kind": "command", "exit_code": 0,
+                  "stdout_hash": "sha256:…", "artifact_hash": "sha256:…",
+                  "control": "passed" } ],
+  "findings": [ { "id": "f_98b1", "persona": "security",
+                  "severity": "blocking", "requirement": "R-AUTH-001",
+                  "task": "T1" } ],
+  "decisions": [ { "type": "waive", "actor": "human",
+                   "requirement": "R-AUTH-003",
+                   "residual_risk": "timing side channel remains" } ],
+  "change_ref": { "kind": "pr", "url": "…", "head_sha": "a7f4c2e…" },
+  "manifest_hash": "sha256:…"
+}
+```
+
+- `run.final_head` — the recorded `change_ref.head_sha`, else the last
+  snapshot, else the base commit; `run.diff_hash` hashes the
+  `base_commit..final_head` commit-range diff.
+- `run.active_seconds` — active time through the last recorded event, never
+  export time.
+- `evidence[].control` — the control verdict (`passed | failed | blocked`),
+  present only for controlled requests.
+- Excluded by construction: raw stdout/stderr and command-log bodies,
+  transcripts, environment values, screenshots, arbitrary artifacts, decision
+  `reason` bodies, and any agent/session/model identity claim the controller
+  did not observe. Included residual-risk notes are secret-scrubbed.

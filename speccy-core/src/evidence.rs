@@ -837,8 +837,9 @@ fn render_artifact(
 
 /// Env vars whose values are treated as secrets and scrubbed from stored
 /// command output. This is the MVP env-scrubbing stub; the full redaction
-/// model is Open Question 18 (`OPEN-ITEMS.md`).
-fn secret_env_values() -> Vec<(String, String)> {
+/// model is Open Question 18 (`OPEN-ITEMS.md`). Shared with the run receipt,
+/// whose included notes pass the same scrubbing.
+pub(crate) fn secret_env_values() -> Vec<(String, String)> {
     std::env::vars()
         // Skip trivially short values: they would match innocuous substrings.
         .filter(|(name, value)| is_secret_name(name) && value.trim().len() >= 4)
@@ -864,7 +865,7 @@ fn is_secret_name(name: &str) -> bool {
 
 /// Replace occurrences of each known-secret value with `[REDACTED:<NAME>]`.
 /// No-op (and byte-preserving) when there are no secrets to scrub.
-fn scrub_secrets(data: &[u8], secrets: &[(String, String)]) -> Vec<u8> {
+pub(crate) fn scrub_secrets(data: &[u8], secrets: &[(String, String)]) -> Vec<u8> {
     if secrets.is_empty() {
         return data.to_vec();
     }

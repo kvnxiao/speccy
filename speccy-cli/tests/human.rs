@@ -14,6 +14,7 @@ mod common;
 use common::Harness;
 use common::approve_minimal;
 use common::drive_to_gate;
+use serde_json::Value;
 use serde_json::json;
 
 fn verified_run(h: &Harness) -> (String, String) {
@@ -597,4 +598,176 @@ fn cancel_retry_converges_runs_without_a_second_decision() {
     assert!(again.contains("already cancelled"), "{again}");
     let spec_log = fs_err::read_to_string(common::spec_log_path(&h)).expect("read spec log");
     assert_eq!(spec_log.matches("\"type\":\"cancel\"").count(), 1);
+}
+
+// E: the run-bundle receipt is deterministic, verifiable, and safe by
+// construction — no raw command output, secrets scrubbed from included notes.
+#[test]
+fn run_bundle_receipt_is_deterministic_and_safe() {
+    let mut h = Harness::new();
+    h.set_env("RECEIPT_TEST_TOKEN", "tok-sekrit-value-123");
+
+    // Spec whose command evidence prints a sentinel we must NOT find in the
+    // receipt.
+    let start = h.ctl_in(
+        &["ctl", "spec", "start", "--input", "-", "--json"],
+        &json!({ "request": "receipt test", "title": "Receipt test" }),
+    );
+    let spec_ref = start["spec_ref"]
+        .as_str()
+        .expect("spec_ref present")
+        .to_string();
+    h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-draft",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({
+            "goal": "g", "scope": { "in": ["x"] }, "risk": "standard",
+            "requirements": [{ "id": "R1", "statement": "works",
+                "evidence": [{ "id": "E1", "kind": "command",
+                               "command": "echo raw-stdout-sentinel-xyz" }] }],
+            "tasks": [{ "id": "T1", "title": "t", "requirements": ["R1"] }]
+        }),
+    );
+    let approved = h.ctl_in(
+        &[
+            "ctl",
+            "spec",
+            "record-decision",
+            "--spec",
+            &spec_ref,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "type": "approve", "revision": "spec_rev_001-draft", "approved_in_prose": "go" }),
+    );
+    let revision = approved["approved_revision"]
+        .as_str()
+        .expect("approved revision")
+        .to_string();
+    let started = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &revision,
+        "--json",
+    ]);
+    let run = started["run_id"].as_str().expect("run id").to_string();
+
+    // Collected command evidence stores the raw sentinel stdout in the log
+    // and artifact; a residual-risk note carries a known-secret value.
+    let collected = h.ctl(&[
+        "ctl",
+        "evidence",
+        "collect",
+        "--run",
+        &run,
+        "--requirements",
+        "R1",
+        "--json",
+    ]);
+    let ev_id = collected["evidence"][0]["id"]
+        .as_str()
+        .expect("evidence id")
+        .to_string();
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    let lease = d["lease"]["token"]
+        .as_str()
+        .expect("lease token")
+        .to_string();
+    h.ctl_in(
+        &[
+            "ctl",
+            "requirement",
+            "set-status",
+            "--run",
+            &run,
+            "--lease",
+            &lease,
+            "--input",
+            "-",
+            "--json",
+        ],
+        &json!({ "updates": [{ "requirement": "R1", "status": "review_passed",
+                 "evidence": [ev_id],
+                 "residual_risk": "auth uses tok-sekrit-value-123 in dev" }] }),
+    );
+
+    // Export twice, plus once with --redact: byte-identical output.
+    let (out1, ok1) = h.output(&["export", "run-bundle", "--dest", "d1"]);
+    assert!(ok1, "{out1}");
+    let (_, ok2) = h.output(&["export", "run-bundle", "--dest", "d2"]);
+    assert!(ok2);
+    let (_, ok3) = h.output(&["export", "run-bundle", "--redact", "--dest", "d3"]);
+    assert!(ok3);
+    let json1 = h.read("d1/run-bundle.json");
+    assert_eq!(
+        json1,
+        h.read("d2/run-bundle.json"),
+        "receipt must be deterministic"
+    );
+    assert_eq!(
+        json1,
+        h.read("d3/run-bundle.json"),
+        "--redact output is identical"
+    );
+    let md = h.read("d1/run-bundle.md");
+
+    // The manifest hash verifies over the receipt minus the hash field.
+    let mut receipt: Value = serde_json::from_str(&json1).expect("receipt parses");
+    assert_eq!(receipt["receipt_schema"], json!(1));
+    assert_eq!(receipt["spec"]["ref"], json!(spec_ref));
+    assert_eq!(receipt["run"]["id"], json!(run));
+    let manifest = receipt["manifest_hash"]
+        .as_str()
+        .expect("manifest hash present")
+        .to_string();
+    receipt
+        .as_object_mut()
+        .expect("receipt is an object")
+        .remove("manifest_hash");
+    assert_eq!(
+        speccy_core::hash::sha256_prefixed(receipt.to_string().as_bytes()),
+        manifest
+    );
+    assert!(md.contains(&format!("Manifest {manifest}")));
+
+    // Allowlist only: hashes are present, raw stdout bodies and command
+    // strings are not, and the included note is secret-scrubbed.
+    let ev = &receipt["evidence"][0];
+    assert_eq!(ev["kind"], json!("command"));
+    assert_eq!(ev["exit_code"], json!(0));
+    assert!(
+        ev["stdout_hash"]
+            .as_str()
+            .expect("stdout hash kept")
+            .starts_with("sha256:")
+    );
+    for text in [&json1, &md] {
+        assert!(
+            !text.contains("raw-stdout-sentinel-xyz"),
+            "raw command output leaked into the receipt"
+        );
+        assert!(
+            !text.contains("tok-sekrit-value-123"),
+            "secret value leaked into the receipt"
+        );
+    }
+    assert!(
+        json1.contains("[REDACTED:RECEIPT_TEST_TOKEN]"),
+        "residual-risk note should be scrubbed, not dropped: {json1}"
+    );
 }

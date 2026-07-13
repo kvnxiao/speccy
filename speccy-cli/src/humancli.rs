@@ -491,6 +491,40 @@ pub fn export_review(store: &Store, selector: Option<&str>, dest: Option<&str>) 
     Ok(format!("Wrote {path}"))
 }
 
+/// `speccy export run-bundle` — write the safe run receipt (versioned JSON +
+/// compact Markdown; DESIGN § Lightweight Team Sharing). The receipt is
+/// redacted by construction; the accepted `--redact` flag changes nothing.
+pub fn export_run_bundle(
+    store: &Store,
+    selector: Option<&str>,
+    dest: Option<&str>,
+) -> Result<String> {
+    let spec = resolve_spec_any(store, selector)?;
+    let run_id = store
+        .list_runs(&spec.spec_id)?
+        .into_iter()
+        .next_back()
+        .ok_or_else(|| SpeccyError::not_found("no run to export"))?;
+    let (receipt, markdown) = speccy_core::receipt::run_bundle(store, &run_id)?;
+    let dest_dir = dest.map_or_else(
+        || {
+            store
+                .git_root
+                .join("docs")
+                .join("specs")
+                .join(&spec.spec_ref)
+        },
+        camino::Utf8PathBuf::from,
+    );
+    let json_path = dest_dir.join("run-bundle.json");
+    let md_path = dest_dir.join("run-bundle.md");
+    let mut body = receipt.to_string();
+    body.push('\n');
+    write_atomic(&json_path, body.as_bytes())?;
+    write_atomic(&md_path, markdown.as_bytes())?;
+    Ok(format!("Wrote {json_path}\nWrote {md_path}"))
+}
+
 // --- rendering ---
 
 fn is_notable(state: RunState) -> bool {

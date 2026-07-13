@@ -159,16 +159,15 @@ fn unimplemented_export_stubs_are_hidden_but_invocable() {
     assert!(ok, "export --help works");
     assert_eq!(
         advertised(&help),
-        BTreeSet::from(["review".to_string()]),
+        BTreeSet::from(["review".to_string(), "run-bundle".to_string()]),
         "export must advertise only implemented subcommands"
     );
 
-    for stub in [&["export", "spec"][..], &["export", "run-bundle"][..]] {
-        let (_, stderr, ok) = h.output_full(stub);
-        assert!(!ok, "stub {stub:?} must exit nonzero");
-        assert!(
-            stderr.contains("not implemented"),
-            "stub {stub:?} must say it is unimplemented: {stderr}"
-        );
-    }
+    let stub = ["export", "spec"];
+    let (_, stderr, ok) = h.output_full(&stub);
+    assert!(!ok, "stub {stub:?} must exit nonzero");
+    assert!(
+        stderr.contains("not implemented"),
+        "stub {stub:?} must say it is unimplemented: {stderr}"
+    );
 }

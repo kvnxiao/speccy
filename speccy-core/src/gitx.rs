@@ -253,6 +253,24 @@ pub fn diff_text(dir: &Utf8Path, base: &str) -> Result<String> {
     git(dir, &["diff", "--src-prefix=a/", "--dst-prefix=b/", base])
 }
 
+/// Full unified diff text between two commits (worktree excluded), with the
+/// same forced `a/`/`b/` prefixes as `diff_text`.
+///
+/// # Errors
+///
+/// Returns an error if `git` is unavailable or the diff fails.
+pub fn range_diff_text(dir: &Utf8Path, base: &str, head: &str) -> Result<String> {
+    git(
+        dir,
+        &[
+            "diff",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            &format!("{base}..{head}"),
+        ],
+    )
+}
+
 /// Untracked file paths (respecting `.gitignore`).
 ///
 /// # Errors

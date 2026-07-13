@@ -1708,8 +1708,32 @@ No-server sharing options:
 - Paste or attach the review packet to the PR.
 - Commit or attach only compact snapshots when useful: the review packet or a spec export.
 - Let other engineers rerun verification against the shared acceptance snapshot; this reuses the verifier role and the local controller tools rather than adding a separate skill, and is a later/team capability.
-- Export a redacted run bundle only when debugging or audit needs it: `speccy export run-bundle --redact`.
-- Attach that bundle to an issue, PR, CI artifact, or file share outside git rather than committing it.
+- Export a run receipt only when debugging or audit needs it: `speccy export run-bundle --redact`.
+- Attach that receipt to an issue, PR, CI artifact, or file share outside git rather than committing it.
+
+The run bundle is a **safe-by-construction immutable receipt**, not a dump
+that scrubs raw state after the fact. It emits versioned JSON plus a compact
+Markdown view, built from an allowlist of stored facts only:
+
+- controller and receipt-schema versions;
+- spec reference/revision and risk tier;
+- run ID, branch, base commit, final HEAD, and the whole-diff hash;
+- task/round outcomes with linked requirements;
+- requirement statuses and accepted-risk (residual-risk) notes;
+- evidence/finding IDs, kinds, personas, control outcomes, and artifact hashes;
+- decisions, caps, gate outcomes, active duration, and round counts;
+- a manifest hash over the receipt contents.
+
+It never includes raw command stdout/stderr or command-log bodies,
+transcripts, environment values, screenshots, or arbitrary artifacts, and it
+makes no claim of agent/session/model identity the controller did not itself
+observe. The included residual-risk notes pass the same known-secret
+scrubbing as stored command output. The receipt is deterministic: identical
+stored facts produce identical output (durations are measured to the last
+recorded event, never to export time), and the `--redact` flag is accepted as
+an explicit marker — output is identical without it because there is no
+unredacted mode. An HTML view is deferred until dogfood shows it improves
+decisions.
 
 Optional hosted mode:
 
@@ -2201,13 +2225,14 @@ speccy archive
 speccy export review
 ```
 
-Advanced/admin commands (designed but not yet implemented; hidden from normal
-`--help` until they land so the advertised surface matches what works):
+Advanced/admin commands:
 
 ```bash
-speccy export spec
 speccy export run-bundle --redact
 ```
+
+`export spec` is designed but not yet implemented; it stays hidden from
+normal `--help` until it lands so the advertised surface matches what works.
 
 Command semantics:
 
@@ -2220,7 +2245,8 @@ Command semantics:
 - `accept` closes out a `submitted` run as a human assertion that the recorded change landed. It uses the `change_ref` saved by `run record-ship` by default, displays that reference before recording, is idempotent for already-landed runs, and accepts optional `--pr <url>`/`--note "<text>"` only for recovery or manual association. MVP does no merge detection.
 - `archive` marks an accepted spec archived when it no longer describes the codebase. Accepted specs are already hidden from default `status`/`list`; archive is not part of routine close-out. The landed run remains `landed` in run history, and archiving removes the spec's decisions from planning context in MVP; its `carry_forward` decisions stay recorded for a future decision index (see "Carry-Forward Decisions").
 - `export review` produces the normal human review artifact.
-- `export spec` and `export run-bundle` are advanced paths for audits, diagnostics, and custom harness integrations. Neither is implemented yet; both stay hidden from normal help (still invocable, returning a structured `not_implemented` error) and are re-advertised only when implemented.
+- `export run-bundle` writes the safe run receipt (versioned JSON + compact Markdown; see "Lightweight Team Sharing") for audits, diagnostics, and custom harness integrations.
+- `export spec` is an advanced path that is not implemented yet; it stays hidden from normal help (still invocable, returning a structured `not_implemented` error) and is re-advertised only when implemented.
 - Full planning, repair, and verification happen through the installed Speccy skills/agents inside Codex or Claude Code.
 
 `speccy status` is the human's one glance at a workspace. It prints one card

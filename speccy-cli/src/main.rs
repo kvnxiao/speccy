@@ -62,7 +62,9 @@ fn main() -> ExitCode {
         // Not routed through emit_text: it would open the store first and turn
         // "not implemented" into a store error outside a workspace.
         Command::Export(ExportCommand::Spec(_)) => not_implemented("export spec"),
-        Command::Export(ExportCommand::RunBundle(_)) => not_implemented("export run-bundle"),
+        Command::Export(ExportCommand::RunBundle(args)) => emit_text(|store| {
+            humancli::export_run_bundle(store, args.selector.as_deref(), args.dest.as_deref())
+        }),
         Command::Install(args) => install(&args),
     }
 }

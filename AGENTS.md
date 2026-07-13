@@ -75,6 +75,7 @@ Two families, both in the `speccy-cli` crate (`speccy-cli/src/cli.rs`):
 | `provenance.rs` | deterministic scan keeping Speccy identifiers out of shipped code |
 | `gitx.rs` | git via `git` CLI shell-out (no libgit2); snapshots, branches, diffs |
 | `packets.rs` | deterministic work-order / review packets |
+| `receipt.rs` | `export run-bundle` — allowlist-only immutable run receipt |
 | `render.rs` / `install.rs` | `minijinja` harness-aware pack rendering; `speccy install` |
 | `lint.rs` | structural lint of spec drafts |
 | `config.rs` | `.speccy/project.yaml` policy load |
