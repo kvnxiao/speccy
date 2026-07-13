@@ -445,26 +445,40 @@ impl Store {
         }
     }
 
-    /// Write the lease for a run, replacing any existing one.
+    /// Write the lease for a run, replacing any existing one. Crate-private:
+    /// only `run next` lease management writes leases; lease-gated mutations
+    /// go through `mutation` (DESIGN § Run Lease and Concurrent Writers).
     ///
     /// # Errors
     ///
     /// Returns an error if the lease cannot be serialized or written.
-    pub fn write_lease(&self, spec_id: &str, run_id: &str, lease: &LeaseState) -> Result<()> {
+    pub(crate) fn write_lease(
+        &self,
+        spec_id: &str,
+        run_id: &str,
+        lease: &LeaseState,
+    ) -> Result<()> {
         let path = self.lease_path(spec_id, run_id);
         let bytes = serde_json::to_vec(lease)
             .map_err(|e| SpeccyError::io(format!("failed to serialize lease: {e}")))?;
         write_atomic(&path, &bytes)
     }
 
-    /// Confirm `token` matches the current live (non-expired) lease. Used to
-    /// gate state-mutating operations.
+    /// Confirm `token` matches the current live (non-expired) lease.
+    /// Crate-private: lease verification happens only inside the locked
+    /// mutation service (`mutation`), never as a standalone precondition
+    /// check that a concurrent write could race.
     ///
     /// # Errors
     ///
     /// Returns an error if there is no active lease, the lease has expired,
     /// or `token` does not match the current lease.
-    pub fn verify_lease(&self, spec_id: &str, run_id: &str, token: Option<&str>) -> Result<()> {
+    pub(crate) fn verify_lease(
+        &self,
+        spec_id: &str,
+        run_id: &str,
+        token: Option<&str>,
+    ) -> Result<()> {
         let lease = self.read_lease(spec_id, run_id)?.ok_or_else(|| {
             SpeccyError::lease_held("no active lease on this run; call run next --agent first")
         })?;

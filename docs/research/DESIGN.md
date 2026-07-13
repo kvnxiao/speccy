@@ -621,10 +621,14 @@ controller contract includes a run-level lease:
   state, so a skipped renewal only risks an earlier expiry, never a torn
   on-disk lease.
 - State-mutating operations — `task claim`, `task record-handoff`,
-  `requirement set-status`, `run record-decision`, `run record-ship`, and any
-  operation a `run next` directive names in `record_with` — require the live
-  token, passed as `--lease <token>`. The lease is run-scoped: spec-scoped
-  operations predate the run and are not lease-gated.
+  `requirement set-status`, `run record-decision`, `run record-ship`,
+  `run interrupt`, and any operation a `run next` directive names in
+  `record_with` — require the live token, passed as `--lease <token>`. The
+  lease is run-scoped: spec-scoped operations predate the run and are not
+  lease-gated. The token is verified inside the same store-lock hold that
+  validates and appends the operation's events (see "Storage Model"), so a
+  lease cleared or reissued between check and write cannot race the write; a
+  stale token appends nothing.
 - A second session asking for the run gets a `lease_held` error naming the
   holder and its expiry, and stops.
 - Expired leases are cleared deterministically by the following `run next`
@@ -1569,17 +1573,25 @@ downgrade after a run has advanced is unsupported.
 Concurrent `speccy` processes — the orchestrating skill plus lease-free
 reviewer personas — may append events at the same time. Event-log appends
 therefore serialize on a per-workspace store lock file; artifact files are
-written per-ID and never contend. Most appends hold the lock only for their own
-duration. The exception is `run next`: it holds the store lock across its whole
-cycle — the opening projection read, the derived-transition appends (including
-the git snapshot commits and diffs they trigger), and the closing projection
-read — so a second concurrent `run next` cannot read the same pre-transition
-state and apply a derived transition twice. Lease-free reviewer appends may
-therefore wait briefly while a `run next` cycle holds the lock. Lock order is
-one-directional: an operation that needs both takes the command lock first, then
-the store lock (`run next` takes only the store lock; `evidence collect` takes
-the command lock around execution and the store lock only for its own append),
-so the two locks cannot deadlock.
+written per-ID and never contend. Lease-free additive appends (reviewer
+findings, non-command evidence records) hold the lock only for their own
+append. Every lease-gated mutation instead commits through a locked mutation
+service: one store-lock hold covers the projection replay, the live-lease
+check, the transition validation, every event append the operation records,
+and the settled re-projection. Validation can therefore never race the write —
+two processes that validate against the same pre-state cannot both commit an
+incompatible transition, and a lease cleared or reissued between check and
+write is caught inside the hold, so a stale token appends nothing. `run next`
+follows the same discipline across its whole cycle — the opening projection
+read, lease management, the derived-transition appends (including the git
+snapshot commits and diffs they trigger), and the closing projection read — so
+a second concurrent `run next` cannot read the same pre-transition state and
+apply a derived transition twice. Lease-free reviewer appends may therefore
+wait briefly while a `run next` cycle or a lease-gated mutation holds the
+lock. Lock order is one-directional: an operation that needs both takes the
+command lock first, then the store lock (`run next` takes only the store lock;
+`evidence collect` takes the command lock around execution and the store lock
+only for its own append), so the two locks cannot deadlock.
 
 SQLite should not be committed to git. It is binary, noisy, and poor for review. JSONL event logs are text and portable, but they are still operational run history and should not be committed by default either.
 

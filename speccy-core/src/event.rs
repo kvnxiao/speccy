@@ -11,6 +11,7 @@ use crate::model::ChangeRef;
 use crate::model::EvidenceKind;
 use crate::model::FindingSeverity;
 use crate::model::RequirementStatus;
+use crate::model::RiskTier;
 use crate::model::RunDecisionKind;
 use crate::model::RunState;
 use crate::model::SpecDecisionKind;
@@ -72,12 +73,14 @@ pub enum Event {
 
     // --- run-scoped ---
     /// A run began against an approved revision, seeding its task list.
+    /// `risk` is a closed [`RiskTier`]; an out-of-vocabulary stored value
+    /// fails replay rather than falling back to `standard`.
     RunStarted {
         run_id: String,
         spec_ref: String,
         spec_id: String,
         revision_id: String,
-        risk: String,
+        risk: RiskTier,
         branch: String,
         base_commit: String,
         tasks: Vec<TaskInit>,

@@ -19,6 +19,7 @@ pub mod install;
 pub mod lease;
 pub mod lint;
 pub mod model;
+pub mod mutation;
 pub mod packets;
 pub mod projection;
 pub mod provenance;

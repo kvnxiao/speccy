@@ -37,13 +37,12 @@ use speccy_core::ids;
 use speccy_core::lint;
 use speccy_core::model::ChangeRef;
 use speccy_core::model::EvidenceKind;
-use speccy_core::model::RequirementStatus;
 use speccy_core::model::RiskTier;
 use speccy_core::model::RunDecisionKind;
 use speccy_core::model::RunState;
 use speccy_core::model::SpecDecisionKind;
 use speccy_core::model::SpecDraft;
-use speccy_core::model::TaskStatus;
+use speccy_core::mutation;
 use speccy_core::packets;
 use speccy_core::projection::RunProjection;
 use speccy_core::projection::SpecState;
@@ -365,13 +364,22 @@ fn run(store: &Store, op: RunOp) -> Result<Value> {
         RunOp::Status(args) => run_status(store, &args.run),
         RunOp::Next(args) => run_next(store, &args.run, &args.agent),
         RunOp::RecordDecision(args) => {
-            run_record_decision(store, &args.run, args.lease.as_deref(), &args.input)
+            let decision: mutation::RunDecisionInput = read_input(&args.input)?;
+            mutation::record_decision(store, &args.run, args.lease.as_deref(), &decision)
         }
         RunOp::RecordShip(args) => {
-            run_record_ship(store, &args.run, args.lease.as_deref(), &args.input)
+            let change_ref: ChangeRef = read_input(&args.input)?;
+            mutation::record_ship(store, &args.run, args.lease.as_deref(), &change_ref)
         }
         RunOp::Interrupt(args) => {
-            run_interrupt(store, &args.run, args.lease.as_deref(), &args.input)
+            let payload: InterruptInput = read_input(&args.input)?;
+            mutation::interrupt(
+                store,
+                &args.run,
+                args.lease.as_deref(),
+                &payload.reason,
+                payload.detail.as_deref(),
+            )
         }
     }
 }
@@ -380,31 +388,6 @@ fn run(store: &Store, op: RunOp) -> Result<Value> {
 struct InterruptInput {
     reason: String,
     detail: Option<String>,
-}
-
-fn run_interrupt(store: &Store, run_id: &str, lease: Option<&str>, input: &str) -> Result<Value> {
-    let payload: InterruptInput = read_input(input)?;
-    // Closed vocabulary; a single MVP value.
-    if payload.reason != "structured_output_retries_exhausted" {
-        return Err(SpeccyError::validation(format!(
-            "unknown interrupt reason `{}`; expected structured_output_retries_exhausted",
-            payload.reason
-        )));
-    }
-    let (spec_id, _) = store.find_run(run_id)?;
-    store.verify_lease(&spec_id, run_id, lease)?;
-    let applied = directive::interrupt_run(
-        store,
-        &spec_id,
-        run_id,
-        &payload.reason,
-        payload.detail.as_deref(),
-    )?;
-    Ok(json!({
-        "run_state": "escalated",
-        "reason": payload.reason,
-        "snapshot": applied.snapshot,
-    }))
 }
 
 fn run_start(store: &Store, spec_ref: &str, revision: &str) -> Result<Value> {
@@ -446,7 +429,14 @@ fn run_start(store: &Store, spec_ref: &str, revision: &str) -> Result<Value> {
     // so HEAD is unchanged and this works for both paths).
     let base_commit = gitx::head(&store.git_root)?;
 
-    let risk = rev.draft.risk.clone().unwrap_or_else(|| "standard".into());
+    // Parse the tier fail-closed at intake: an invalid declared value must
+    // never be stored (or later replayed) as `standard`.
+    let risk = match rev.draft.risk.as_deref() {
+        None => RiskTier::Standard,
+        Some(s) => RiskTier::parse(s).ok_or_else(|| {
+            SpeccyError::validation(format!("revision {target} has invalid risk tier `{s}`"))
+        })?,
+    };
     let tasks: Vec<TaskInit> = rev
         .draft
         .tasks()
@@ -515,396 +505,20 @@ fn run_next(store: &Store, run_id: &str, agent: &str) -> Result<Value> {
     directive::run_next(store, &spec_id, run_id, agent)
 }
 
-fn run_record_ship(store: &Store, run_id: &str, lease: Option<&str>, input: &str) -> Result<Value> {
-    let change_ref: ChangeRef = read_input(input)?;
-    let (spec_id, run) = store.run_by_id(run_id)?;
-    store.verify_lease(&spec_id, run_id, lease)?;
-    if run.state != RunState::Verified {
-        return Err(SpeccyError::invalid_transition(format!(
-            "run is {:?}, not verified; cannot ship",
-            run.state
-        )));
-    }
-    store.append_run_event(
-        &spec_id,
-        run_id,
-        Event::ShipRecorded {
-            change_ref: change_ref.clone(),
-        },
-    )?;
-    store.append_run_event(
-        &spec_id,
-        run_id,
-        Event::RunStateTransitioned {
-            to: RunState::Submitted,
-            snapshot: None,
-        },
-    )?;
-    Ok(json!({ "run_state": "submitted", "change_ref": change_ref }))
-}
-
-#[derive(Debug, Deserialize)]
-struct RunDecisionInput {
-    #[serde(rename = "type")]
-    kind: String,
-    requirement: Option<String>,
-    task: Option<String>,
-    #[serde(default = "default_actor")]
-    actor: String,
-    reason: Option<String>,
-    residual_risk: Option<String>,
-    #[serde(default)]
-    carry_forward: bool,
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "single decision-kind dispatch; each match arm is self-contained and \
-              splitting would mean threading store/spec_id/run_id/decision through \
-              several helpers for no clarity gain"
-)]
-fn run_record_decision(
-    store: &Store,
-    run_id: &str,
-    lease: Option<&str>,
-    input: &str,
-) -> Result<Value> {
-    let d: RunDecisionInput = read_input(input)?;
-    let (spec_id, run) = store.run_by_id(run_id)?;
-    store.verify_lease(&spec_id, run_id, lease)?;
-
-    let record = |kind: RunDecisionKind| RunDecisionRecord {
-        decision_id: ids::short_id("dec"),
-        kind,
-        requirement: d.requirement.clone(),
-        task: d.task.clone(),
-        actor: d.actor.clone(),
-        reason: d.reason.clone(),
-        residual_risk: d.residual_risk.clone(),
-        carry_forward: d.carry_forward,
-    };
-    let append_decision = |kind: RunDecisionKind| {
-        store.append_run_event(
-            &spec_id,
-            run_id,
-            Event::RunDecision {
-                decision: record(kind),
-            },
-        )
-    };
-
-    match d.kind.as_str() {
-        "rework" => {
-            if run.state != RunState::Verified {
-                return Err(SpeccyError::invalid_transition(
-                    "rework is only valid at the ship gate",
-                ));
-            }
-            let reason = require_reason(&d, "rework")?;
-            let decision = record(RunDecisionKind::Rework);
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::RunDecision {
-                    decision: decision.clone(),
-                },
-            )?;
-            let rt = directive::next_rt_id(&run);
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::TaskAppended {
-                    task: TaskInit {
-                        id: rt.clone(),
-                        title: Some("Rework from ship feedback".into()),
-                        requirements: Vec::new(),
-                        constraints: Vec::new(),
-                    },
-                    seed_feedback: Some(reason),
-                },
-            )?;
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::RunStateTransitioned {
-                    to: RunState::Implementing,
-                    snapshot: None,
-                },
-            )?;
-            let config = ProjectConfig::load(&store.workspace_root)?;
-            Ok(json!({
-                "decision_id": decision.decision_id,
-                "type": "rework",
-                "run_state": "implementing",
-                // The rework becomes the next run-level review round when the RT
-                // task re-enters verifying; report that number, not a constant.
-                "round": {
-                    "current": run.run_review_round + 1,
-                    "max": config.caps.run_review_rounds,
-                    "scope": "run"
-                },
-                "task_appended": rt,
-                "resume": "call run next",
-            }))
-        }
-        "cancel" => {
-            append_decision(RunDecisionKind::Cancel)?;
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::RunStateTransitioned {
-                    to: RunState::Cancelled,
-                    snapshot: None,
-                },
-            )?;
-            Ok(json!({ "type": "cancel", "run_state": "cancelled" }))
-        }
-        "waive" => {
-            if run.state != RunState::Escalated {
-                return Err(SpeccyError::invalid_transition(
-                    "waive is only valid at an escalation gate",
-                ));
-            }
-            let requirement = d
-                .requirement
-                .clone()
-                .ok_or_else(|| SpeccyError::validation("waive requires a requirement"))?;
-            ensure_run_requirement(&run, &requirement)?;
-            if run.req_status(&requirement).is_resolved() {
-                return Err(SpeccyError::invalid_transition(format!(
-                    "waive requires an unresolved requirement at the escalation gate ({requirement})"
-                )));
-            }
-            require_reason(&d, "waive")?;
-            require_residual_risk(&d, "waive")?;
-            append_decision(RunDecisionKind::Waive)?;
-            store.append_run_event(
-                &spec_id,
-                run_id,
-                Event::RequirementStatusSet {
-                    updates: vec![RequirementUpdate {
-                        requirement: requirement.clone(),
-                        status: RequirementStatus::Waived,
-                        evidence: Vec::new(),
-                        findings: Vec::new(),
-                        residual_risk: d.residual_risk.clone(),
-                        note: d.reason.clone(),
-                    }],
-                },
-            )?;
-            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
-            Ok(json!({
-                "type": "waive",
-                "requirement": requirement,
-                "requirement_status": "waived",
-                "run_state": resumed,
-                "resume": "call run next",
-            }))
-        }
-        "provide_setup" => {
-            if run.state != RunState::Escalated {
-                return Err(SpeccyError::invalid_transition(
-                    "provide_setup is only valid at an escalation gate",
-                ));
-            }
-            require_reason(&d, &d.kind)?;
-            append_decision(RunDecisionKind::ProvideSetup)?;
-            let resumed = resume_from_escalated(store, &spec_id, run_id)?;
-            Ok(json!({ "type": d.kind, "run_state": resumed, "resume": "call run next" }))
-        }
-        "confirm_accepted_risk" => {
-            if !run.at_accepted_risk_gate() {
-                return Err(SpeccyError::invalid_transition(
-                    "confirm_accepted_risk is only valid at the accepted-risk confirmation gate",
-                ));
-            }
-            require_reason(&d, &d.kind)?;
-            append_decision(RunDecisionKind::ConfirmAcceptedRisk)?;
-            Ok(json!({ "type": d.kind, "run_state": run.state, "resume": "call run next" }))
-        }
-        other => Err(SpeccyError::validation(format!(
-            "unknown run decision type `{other}`"
-        ))),
-    }
-}
-
-fn require_reason(d: &RunDecisionInput, kind: &str) -> Result<String> {
-    match d.reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(r) => Ok(r.to_string()),
-        None => Err(SpeccyError::validation(format!("{kind} requires a reason"))),
-    }
-}
-
-fn require_residual_risk(d: &RunDecisionInput, kind: &str) -> Result<()> {
-    if d.residual_risk.as_deref().map_or("", str::trim).is_empty() {
-        Err(SpeccyError::validation(format!(
-            "{kind} requires a residual_risk note"
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-/// After a gate decision that unblocks a parked run, move it back into the
-/// loop with a `RunResumed` event — distinct from a state transition, so it
-/// re-enters without opening a new review round (DESIGN § Capability
-/// Escalation and Give-Up Policy).
-fn resume_from_escalated(store: &Store, spec_id: &str, run_id: &str) -> Result<&'static str> {
-    let run = store.run_projection(spec_id, run_id)?;
-    if run.state != RunState::Escalated {
-        return Ok(run.state.as_str());
-    }
-
-    if run.all_tasks_done() {
-        // Run-level gate. Re-open the current round's review only when work is
-        // still outstanding; a waiver that resolved the last requirement lets
-        // `verifying` complete directly (subject to the critical gate).
-        let reopen_review =
-            !(run.all_requirements_resolved() && run.run_blocking_findings().is_empty());
-        store.append_run_event(
-            spec_id,
-            run_id,
-            Event::RunResumed {
-                to: RunState::Verifying,
-                reopen_review,
-            },
-        )?;
-        return Ok(RunState::Verifying.as_str());
-    }
-
-    // Task-level gate. Re-enter implementing without opening a review round.
-    store.append_run_event(
-        spec_id,
-        run_id,
-        Event::RunResumed {
-            to: RunState::Implementing,
-            reopen_review: false,
-        },
-    )?;
-    // The stuck task is still `in_review` with its failing statuses. If it would
-    // re-escalate immediately (provide_setup, or a partial waiver), re-open it
-    // to `building` at the SAME round so the worker retries with the new setup;
-    // a waiver that fully resolved the task instead integrates on the next
-    // `run next`, so no re-open is needed.
-    if let Some(task) = run.active_task()
-        && task.status == TaskStatus::InReview
-        && run.task_reviewed_this_round(task)
-    {
-        let would_integrate = run.task_requirements_resolved(task)
-            && run.task_blocking_findings_this_round(task).is_empty();
-        if !would_integrate {
-            store.append_run_event(
-                spec_id,
-                run_id,
-                Event::TaskTransitioned {
-                    task: task.id.clone(),
-                    to: TaskStatus::Building,
-                    round: task.round,
-                    snapshot: None,
-                },
-            )?;
-        }
-    }
-    Ok(RunState::Implementing.as_str())
-}
-
 // --------------------------------------------------------------------------
 // Task operations
 // --------------------------------------------------------------------------
 
 fn task(store: &Store, op: TaskOp) -> Result<Value> {
     match op {
-        TaskOp::Claim(args) => task_claim(store, &args.run, &args.task, &args.agent, &args.lease),
+        TaskOp::Claim(args) => {
+            mutation::claim_task(store, &args.run, &args.task, &args.agent, &args.lease)
+        }
         TaskOp::RecordHandoff(args) => {
-            task_record_handoff(store, &args.run, args.lease.as_deref(), &args.input)
+            let handoff: Handoff = read_input(&args.input)?;
+            mutation::record_handoff(store, &args.run, args.lease.as_deref(), handoff)
         }
     }
-}
-
-fn task_claim(
-    store: &Store,
-    run_id: &str,
-    task_id: &str,
-    agent: &str,
-    lease: &str,
-) -> Result<Value> {
-    let (spec_id, run) = store.run_by_id(run_id)?;
-    store.verify_lease(&spec_id, run_id, Some(lease))?;
-    let task = run
-        .task(task_id)
-        .ok_or_else(|| SpeccyError::not_found(format!("no task {task_id} in run {run_id}")))?;
-    if task.status != TaskStatus::Queued {
-        return Err(SpeccyError::invalid_transition(format!(
-            "task {task_id} is {:?}, not queued",
-            task.status
-        )));
-    }
-    let baseline_commit = gitx::head(&store.git_root)?;
-    store.append_run_event(
-        &spec_id,
-        run_id,
-        Event::TaskClaimed {
-            task: task_id.to_string(),
-            agent: agent.to_string(),
-            baseline_commit: baseline_commit.clone(),
-        },
-    )?;
-    Ok(json!({
-        "task": task_id,
-        "status": "building",
-        "round": 1,
-        "baseline_commit": baseline_commit,
-    }))
-}
-
-fn task_record_handoff(
-    store: &Store,
-    run_id: &str,
-    lease: Option<&str>,
-    input: &str,
-) -> Result<Value> {
-    let handoff: Handoff = read_input(input)?;
-    if handoff.summary.trim().is_empty() {
-        return Err(
-            SpeccyError::validation("handoff.summary is required").with_details(vec![Finding::at(
-                "missing_field",
-                "summary",
-                "summary is required",
-            )]),
-        );
-    }
-    let (spec_id, run) = store.run_by_id(run_id)?;
-    store.verify_lease(&spec_id, run_id, lease)?;
-    let task = run.task(&handoff.task).ok_or_else(|| {
-        SpeccyError::not_found(format!("no task {} in run {run_id}", handoff.task))
-    })?;
-    let expected_round = task.round.max(1);
-    if handoff.round != expected_round {
-        return Err(SpeccyError::validation(format!(
-            "handoff.round {} does not match current task round {}",
-            handoff.round, expected_round
-        )));
-    }
-    if task.status != TaskStatus::Building {
-        return Err(SpeccyError::invalid_transition(format!(
-            "task {} is {:?}, not building; cannot record a handoff",
-            handoff.task, task.status
-        )));
-    }
-    let handoff_id = ids::short_id("ho");
-    let task_id = handoff.task.clone();
-    let round = expected_round;
-    store.append_run_event(
-        &spec_id,
-        run_id,
-        Event::HandoffRecorded {
-            handoff_id: handoff_id.clone(),
-            task: task_id.clone(),
-            round,
-            handoff,
-        },
-    )?;
-    Ok(json!({ "task": task_id, "status": "in_review", "handoff_id": handoff_id }))
 }
 
 // --------------------------------------------------------------------------
@@ -1020,7 +634,7 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
     }
     let (spec_id, run) = store.run_by_id(run_id)?;
     if let Some(requirement) = &f.requirement {
-        ensure_run_requirement(&run, requirement)?;
+        run.require_requirement(requirement)?;
     }
     if let Some(task) = &f.task
         && run.task(task).is_none()
@@ -1052,126 +666,13 @@ fn finding_record(store: &Store, run_id: &str, input: &str) -> Result<Value> {
 
 fn requirement(store: &Store, op: RequirementOp) -> Result<Value> {
     let RequirementOp::SetStatus(args) = op;
-    requirement_set_status(store, &args.run, args.lease.as_deref(), &args.input)
+    let payload: StatusInput = read_input(&args.input)?;
+    mutation::set_requirement_status(store, &args.run, args.lease.as_deref(), payload.updates)
 }
 
 #[derive(Debug, Deserialize)]
 struct StatusInput {
     updates: Vec<RequirementUpdate>,
-}
-
-fn requirement_set_status(
-    store: &Store,
-    run_id: &str,
-    lease: Option<&str>,
-    input: &str,
-) -> Result<Value> {
-    let payload: StatusInput = read_input(input)?;
-    let (spec_id, run) = store.run_by_id(run_id)?;
-    store.verify_lease(&spec_id, run_id, lease)?;
-
-    // Validate each update's prerequisites before recording anything.
-    for u in &payload.updates {
-        validate_status_update(u, &run)?;
-    }
-
-    let updated: Vec<Value> = payload
-        .updates
-        .iter()
-        .map(|u| json!({ "requirement": u.requirement, "status": u.status }))
-        .collect();
-    store.append_run_event(
-        &spec_id,
-        run_id,
-        Event::RequirementStatusSet {
-            updates: payload.updates,
-        },
-    )?;
-    Ok(json!({ "updated": updated }))
-}
-
-/// Status prerequisites (DESIGN § Requirement Resolution Rules).
-fn validate_status_update(u: &RequirementUpdate, run: &RunProjection) -> Result<()> {
-    let current = run
-        .requirements
-        .get(&u.requirement)
-        .ok_or_else(|| SpeccyError::not_found(format!("no requirement {}", u.requirement)))?;
-    if current.status == RequirementStatus::Waived {
-        return Err(SpeccyError::invalid_transition(format!(
-            "{} is waived; waived is terminal for this run",
-            u.requirement
-        )));
-    }
-    validate_evidence_ids(run, u)?;
-    validate_finding_ids(run, u)?;
-
-    match u.status {
-        RequirementStatus::Waived => Err(SpeccyError::validation(format!(
-            "waived is gate-only; set it through run record-decision, not requirement set-status ({})",
-            u.requirement
-        ))),
-        RequirementStatus::Passed => {
-            if u.evidence.is_empty() {
-                Err(SpeccyError::validation(format!(
-                    "passed requires at least one recorded evidence artifact for {}",
-                    u.requirement
-                )))
-            } else {
-                Ok(())
-            }
-        }
-        RequirementStatus::ReviewPassed => {
-            if u.evidence.is_empty() {
-                return Err(SpeccyError::validation(format!(
-                    "review_passed requires at least one recorded evidence artifact for {}",
-                    u.requirement
-                )));
-            }
-            if matches!(run.risk, RiskTier::High | RiskTier::Critical)
-                && u.residual_risk.as_deref().map_or("", str::trim).is_empty()
-            {
-                return Err(SpeccyError::validation(format!(
-                    "review_passed at {:?} requires a residual_risk note for {}",
-                    run.risk, u.requirement
-                )));
-            }
-            Ok(())
-        }
-        RequirementStatus::Failed => {
-            if u.evidence.is_empty() && u.findings.is_empty() {
-                Err(SpeccyError::validation(format!(
-                    "failed requires at least one evidence artifact or finding for {}",
-                    u.requirement
-                )))
-            } else {
-                Ok(())
-            }
-        }
-        RequirementStatus::Blocked => {
-            if u.note.as_deref().map_or("", str::trim).is_empty() {
-                Err(SpeccyError::validation(format!(
-                    "blocked requires a note naming what is missing for {}",
-                    u.requirement
-                )))
-            } else {
-                Ok(())
-            }
-        }
-        RequirementStatus::Pending => Err(SpeccyError::validation(
-            "pending is the initial status and is never re-entered",
-        )),
-    }
-}
-
-fn ensure_run_requirement(run: &RunProjection, requirement: &str) -> Result<()> {
-    if run.requirements.contains_key(requirement) {
-        Ok(())
-    } else {
-        Err(SpeccyError::not_found(format!(
-            "no requirement {requirement} in run {}",
-            run.run_id
-        )))
-    }
 }
 
 fn validate_evidence_reference(
@@ -1180,7 +681,7 @@ fn validate_evidence_reference(
     ev: &EvidenceInput,
     kind: EvidenceKind,
 ) -> Result<()> {
-    ensure_run_requirement(run, &ev.requirement)?;
+    run.require_requirement(&ev.requirement)?;
     let Some(request) = ev.request.as_deref() else {
         return Ok(());
     };
@@ -1212,43 +713,6 @@ fn validate_evidence_reference(
         return Err(SpeccyError::validation(format!(
             "evidence request {request} is kind {declared_kind:?}, not {kind:?}"
         )));
-    }
-    Ok(())
-}
-
-fn validate_evidence_ids(run: &RunProjection, u: &RequirementUpdate) -> Result<()> {
-    for id in &u.evidence {
-        let record = run
-            .evidence
-            .iter()
-            .find(|e| &e.id == id)
-            .ok_or_else(|| SpeccyError::not_found(format!("no evidence artifact {id}")))?;
-        if record.requirement != u.requirement {
-            return Err(SpeccyError::validation(format!(
-                "evidence artifact {id} belongs to {}, not {}",
-                record.requirement, u.requirement
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn validate_finding_ids(run: &RunProjection, u: &RequirementUpdate) -> Result<()> {
-    for id in &u.findings {
-        let record = run
-            .findings
-            .iter()
-            .map(|(_, f)| f)
-            .find(|f| &f.id == id)
-            .ok_or_else(|| SpeccyError::not_found(format!("no finding {id}")))?;
-        if let Some(requirement) = &record.requirement
-            && requirement != &u.requirement
-        {
-            return Err(SpeccyError::validation(format!(
-                "finding {id} belongs to {requirement}, not {}",
-                u.requirement
-            )));
-        }
     }
     Ok(())
 }

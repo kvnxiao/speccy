@@ -603,3 +603,190 @@ fn doctor_detects_pack_drift() {
     assert!(!ok, "doctor should fail on drift: {report}");
     assert!(report.contains("DRIFT"), "{report}");
 }
+
+/// A1: a lease token that was cleared and reissued appends nothing. The lease
+/// check happens inside the same store-lock hold as the append, so a stale
+/// token can never slip a write in between check and commit.
+#[test]
+fn stale_lease_token_appends_nothing() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Stale lease");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    // Agent a acquires the lease.
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "a", "--json",
+    ]);
+    assert_eq!(d["action"], json!("claim_task"));
+    let stale = d["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+
+    // Expire it on disk (a crashed session), then let agent b clear + reissue.
+    let lease_path = h
+        .home_path_containing(&format!("{run}/lease.json"))
+        .expect("lease file exists");
+    fs_err::write(
+        &lease_path,
+        format!(r#"{{"token":"{stale}","agent":"a","expires_at":"2020-01-01T00:00:00Z"}}"#),
+    )
+    .expect("rewrite lease");
+    let d = h.ctl(&[
+        "ctl", "run", "next", "--run", &run, "--agent", "b", "--json",
+    ]);
+    assert_eq!(d["resume"]["cleared_lease"], json!("a"), "{d}");
+    let fresh = d["lease"]["token"].as_str().expect("lease token present");
+    assert_ne!(fresh, stale, "expired lease must be reissued");
+
+    // The stale token must be refused and must append nothing.
+    let refused = h.ctl_raw(&[
+        "ctl", "task", "claim", "--run", &run, "--task", "T1", "--agent", "a", "--lease", &stale,
+        "--json",
+    ]);
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    assert_eq!(refused["error"]["code"], json!("lease_held"), "{refused}");
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    assert!(
+        !log.contains("task_claimed"),
+        "stale token appended an event:\n{log}"
+    );
+}
+
+/// A1: two processes racing the same live token and pre-state commit at most
+/// one incompatible transition — the loser re-validates against the winner's
+/// committed state inside the lock and is refused.
+#[test]
+fn concurrent_ship_with_one_token_commits_once() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Ship race");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+    let gate = drive_to_gate(&h, &run);
+    assert_eq!(gate["run_state"], json!("verified"), "{gate}");
+    let lease = gate["lease"]["token"]
+        .as_str()
+        .expect("lease token present")
+        .to_string();
+
+    let envelopes: Vec<serde_json::Value> = thread::scope(|scope| {
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let h = &h;
+                let run = run.as_str();
+                let lease = lease.as_str();
+                scope.spawn(move || {
+                    h.ctl_in_raw(
+                        &[
+                            "ctl",
+                            "run",
+                            "record-ship",
+                            "--run",
+                            run,
+                            "--lease",
+                            lease,
+                            "--input",
+                            "-",
+                            "--json",
+                        ],
+                        &json!({ "kind": "none" }),
+                    )
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("thread joins"))
+            .collect()
+    });
+
+    let oks = envelopes.iter().filter(|e| e["ok"] == json!(true)).count();
+    assert_eq!(oks, 1, "exactly one ship must commit: {envelopes:?}");
+    let loser = envelopes
+        .iter()
+        .find(|e| e["ok"] == json!(false))
+        .expect("one ship must lose the race");
+    assert_eq!(
+        loser["error"]["code"],
+        json!("invalid_transition"),
+        "{loser}"
+    );
+
+    let log = h
+        .read_home_file_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    assert_eq!(
+        log.matches("ship_recorded").count(),
+        1,
+        "duplicate ship committed:\n{log}"
+    );
+    assert_eq!(
+        log.matches("\"to\":\"submitted\"").count(),
+        1,
+        "duplicate submitted transition:\n{log}"
+    );
+}
+
+/// A1: a stored run risk outside the closed vocabulary fails replay closed
+/// (`corrupt event`) instead of silently falling back to `standard`.
+#[test]
+fn corrupt_stored_risk_tier_fails_replay_closed() {
+    let h = Harness::new();
+    let (spec_ref, rev) = approve_minimal(&h, "Corrupt risk");
+    let run = h.ctl(&[
+        "ctl",
+        "run",
+        "start",
+        "--spec",
+        &spec_ref,
+        "--revision",
+        &rev,
+        "--json",
+    ])["run_id"]
+        .as_str()
+        .expect("run_id present")
+        .to_string();
+
+    let log_path = h
+        .home_path_containing(&format!("{run}/events.jsonl"))
+        .expect("run event log exists");
+    let log = fs_err::read_to_string(&log_path).expect("read run event log");
+    assert!(log.contains("\"risk\":\"standard\""), "{log}");
+    fs_err::write(
+        &log_path,
+        log.replace("\"risk\":\"standard\"", "\"risk\":\"experimental\""),
+    )
+    .expect("corrupt stored risk");
+
+    let refused = h.ctl_raw(&["ctl", "run", "status", "--run", &run, "--json"]);
+    assert_eq!(refused["ok"], json!(false), "{refused}");
+    let message = refused["error"]["message"]
+        .as_str()
+        .expect("error message present");
+    assert!(message.contains("corrupt event"), "{refused}");
+}

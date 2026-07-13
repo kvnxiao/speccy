@@ -272,7 +272,7 @@ impl RunProjection {
                         spec_ref: spec_ref.clone(),
                         spec_id: spec_id.clone(),
                         revision_id: revision_id.clone(),
-                        risk: RiskTier::parse(risk).unwrap_or(RiskTier::Standard),
+                        risk: *risk,
                         branch: branch.clone(),
                         base_commit: base_commit.clone(),
                         state: RunState::Implementing,
@@ -461,6 +461,22 @@ impl RunProjection {
     }
     fn task_mut(&mut self, id: &str) -> Option<&mut TaskState> {
         self.tasks.iter_mut().find(|t| t.id == id)
+    }
+
+    /// Fail with `not_found` unless the run tracks the given requirement.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the requirement is not part of this run.
+    pub fn require_requirement(&self, id: &str) -> crate::error::Result<()> {
+        if self.requirements.contains_key(id) {
+            Ok(())
+        } else {
+            Err(crate::error::SpeccyError::not_found(format!(
+                "no requirement {id} in run {}",
+                self.run_id
+            )))
+        }
     }
 
     /// The current status of a requirement, `pending` if unknown.
@@ -717,7 +733,7 @@ mod tests {
                     spec_ref: "SPEC-1".into(),
                     spec_id: "spec_x".into(),
                     revision_id: "spec_rev_001".into(),
-                    risk: "standard".into(),
+                    risk: RiskTier::Standard,
                     branch: "speccy/spec-1".into(),
                     base_commit: "abc".into(),
                     tasks: Vec::new(),
