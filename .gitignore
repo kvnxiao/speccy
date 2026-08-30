@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+
+# Speccy runtime state stays out of git by default (DESIGN § Git Policy).
+.speccy/
