@@ -1,21 +1,86 @@
-## **Spec Driven Orchestration Principles**
+# Spec-Driven Orchestration Principles
 
-Agentic orchestration tools must be designed to integrate with any agent harness, and provide an autonomous approach to agentic engineering via concrete checkpoints for human intervention, thereby reducing the realtime need to steer an agent on the fly. The split of guarantees is deliberate: the bookkeeping — sequencing, gates, caps, evidence — is deterministic and auditable, while the implementation and review work delegated to models remains nondeterministic. Speccy promises less supervision and an inspectable record of what happened, not that model output is correct or that a run never needs attention.
+Speccy provides persisted planning and review for work that benefits from them. Native harness planning and direct implementation remain valid for smaller changes.
 
-Before: iterate on a plan or prompt, and then start implementation in auto-mode, baby sitting on the AI model's output and steering it for directional corrections.
+The controller guarantees state ownership, transition validity, and bounded execution. Models still plan, implement, and review nondeterministically. The record shows what the agents reported and what humans accepted; it does not prove correctness.
 
-After: focusing more brainpower on the initial plan such that it is as comprehensive as possible, then stepping back to allowing the AI model to implement the plan autonomously. Human intervention concentrates at the gates — reviewing the plan, answering escalations, and reviewing the implementation against recorded evidence — instead of continuous steering.
+## Product Principles
 
-## **Core Principles**
+### Remain Optional
 
-* **Just another tool available** - simply provides another way of building software in an agent harness; does not replace existing approaches (e.g. regular `/plan` and implement) and should not be used for everything
-* **Less is more** - avoid over-engineering and focus on simple, reusable solutions (YAGNI); more code (including comments) leads to contextual overload for the human reviewer at the review stage  
-* **Make drift visible for self improvement** - employ sequential self-review and self-improvement via fresh-context agents in implementing long-horizon tasks, resulting in higher quality output
-* **Zero product-code / build-time footprint** - tool should not affect product source, the build graph, deployed artifacts, runtime dependencies, or production behavior. Repo-local harness packs such as `.codex`, `.claude`, `.agents`, or `.speccy` policy/prose files are acceptable workflow artifacts when a team wants shared, versioned, editable agent lifecycle instructions. Operational run state, transcripts, raw evidence, screenshots, caches, and databases should remain external or ignored by default.
-* **No outbound agent runner** - Speccy commands and subcommands should never call LLMs, coding agents, or AI harnesses. The active harness calls Speccy's deterministic controller tools; Speccy does not launch the harness.
-* **Verification is judgment, not proof** - fresh-context judges decide whether written criteria are met; Speccy runs no deterministic checks of its own and says so on every ship card. Judges can miss criteria and defects; Speccy accepts that trade while the codebase remains small. Deterministic checks are added one at a time when dogfooding identifies a failure class judges miss.
-* **Harness-neutral model language** - model strength and reasoning effort are named by the user in Speccy's config and mapped per harness to concrete models and effort values. Lifecycle agents reference the user's names; no pack, skill, or design document hardcodes a vendor model.
+Speccy is one repository tool, not the required path for every change. A one-off plan or direct implementation should remain simpler when persisted orchestration does not improve the result.
 
-## **Design**
+### Leave Product Artifacts Neutral
 
-The idea is to split this into two layers, 1. a deterministic core layer, and 2. a higher-level prose layer (think agent harness skills and subagents). The goal is to capitalize on the idea of using modern AI models and agentic engineering to make its core offering as deterministic as possible, thereby reducing the surface area and potential for non-deterministic, drifted / hallucinated model output.
+Speccy may install tracked harness packs, but its execution does not enter a host repository's product code, tests, ordinary documentation, commits, branches, pull requests, releases, build graphs, deployed artifacts, runtime dependencies, or production behavior.
+
+When a change needs a charter or ADR update, that documentation describes the product decision and omits orchestration provenance.
+
+### Commit Progressively
+
+Approval fixes the current contract rather than every future implementation step. The planner defines enough work for the next bounded execution context and revises future Tasks when repository evidence invalidates an earlier assumption.
+
+Task replanning may change the implementation path under an unchanged contract. Intent, scope, criteria, accepted behavior, Project goals, and charter direction change only through the corresponding human approval boundary.
+
+### Separate Contracts from Plans
+
+The charter defines durable repository direction. A Project groups Specs under a bounded goal. A Spec defines one coherent change and its acceptance criteria. Tasks describe the current implementation plan.
+
+Plans may change without rewriting completed outcomes. Durable technical decisions belong in repository ADRs, not an automatic runtime decision log.
+
+### Put Determinism in the Controller
+
+Code owns identifiers, claims, invocation tokens, validation, atomic state publication, repair caps, archives, projections, and idempotent dispatch. Harness-native prose owns planning, implementation, review, and conversations with humans.
+
+The controller does not call a model or harness. The active harness reads controller directives and launches the required agent context.
+
+### Keep Canonical Writes Exclusive
+
+Only the controller writes canonical runtime state. Every agent invocation owns a separate result, evidence, and log directory. Parallel readers may write separate artifacts, but no two agents share a writable file.
+
+One active run owns a repository. Explicit takeover invalidates results from the replaced run before another canonical write is accepted.
+
+### Review Current State Independently
+
+One fresh reviewer judges both criterion fidelity and defects. The reviewer reads the latest contract, current repository, current diff, and raw current evidence.
+
+Previous attempts, verdicts, findings, amendments, retired Tasks, worker narratives, and planner rationale do not enter reviewer context. A repair worker may read blocking findings; the replacement reviewer judges the repaired state independently.
+
+### Keep Humans at Authority Boundaries
+
+Humans approve Spec contracts, material amendments, Project goal changes, accepted risk, ambiguous external integration, and publication. Task replanning under an unchanged contract does not add a gate.
+
+Review, merge reconciliation, completion, and archival do not require follow-up commits or a separate closeout pull request.
+
+### Remain Harness-Neutral
+
+The initial packs target Claude Code and Codex. User-named profiles map planner, worker, and reviewer roles to harness-specific models and effort values. A Spec may override worker and reviewer profiles with human approval; Tasks do not select models independently.
+
+### Add Mechanisms After Evidence
+
+Every mechanism must prevent a named failure or enforce a required invariant. Dogfooding promotes additional reviewers, deterministic sensors, provider integrations, backup systems, and workflow fields only after the simpler design proves insufficient.
+
+## Decision Test
+
+Before adding behavior, answer:
+
+1. Which user-visible outcome or invariant requires it?
+2. Can the active harness or repository already provide it?
+3. Does the controller need deterministic enforcement, or can a skill carry the policy?
+4. Does it preserve exclusive file ownership and current-state review?
+5. Does it keep product artifacts free of orchestration provenance?
+6. Can implementation evidence settle the decision later?
+
+If the behavior has no concrete requirement or observed failure, defer it.
+
+## Research Trace
+
+The research summarized in [SOURCE-SUMMARIES.md](SOURCE-SUMMARIES.md) supports these boundaries:
+
+- long-running work needs state outside the model context;
+- fresh evaluators reduce self-review bias;
+- serial writes and exclusive file ownership avoid agent races;
+- static context should remain small and route into task-specific skills;
+- deterministic runtimes pair well with editable natural-language policy;
+- verification quality limits long-horizon agent performance;
+- measured failure classes justify narrow controls more reliably than speculative frameworks.

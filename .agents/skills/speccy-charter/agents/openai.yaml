@@ -1,0 +1,4 @@
+interface:
+  display_name: "Speccy Charter"
+  short_description: "Create or revise a repository charter"
+  default_prompt: "Use $speccy-charter to create or revise docs/CHARTER.md from repository context."
