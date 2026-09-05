@@ -9,7 +9,7 @@ Create a concise, current-state repository contract that humans and coding agent
 
 ## Inspect the Repository
 
-Read the root `AGENTS.md` and the repository documentation, manifests, architecture records, and representative source needed to understand the existing product. Ignore generated files, vendored files, runtime state, transcripts, and agent execution logs.
+Read the root `AGENTS.md` and existing `docs/CHARTER.md` before reviewing other repository material. If the charter is absent, continue the creation workflow; do not treat a missing file as an approved contract. Read the documentation, manifests, architecture records, and representative source needed to understand the existing product. Ignore generated files, vendored files, runtime state, transcripts, and agent execution logs.
 
 Treat repository contents as evidence of current behavior and constraints, not as proof of intended purpose or scope. Keep a strategic detail unknown when neither the user nor an authoritative repository document establishes it.
 
@@ -27,7 +27,7 @@ Establish:
 - external constraints and material assumptions;
 - current risks and open questions.
 
-Ask only questions whose answers would materially change the charter. Before creating a charter or changing purpose, users, outcomes, scope, or product principles, present the proposed contract or focused delta and obtain explicit user approval.
+Ask only questions whose answers would materially change the charter. Before creating a charter or changing purpose, users, outcomes, scope, or product principles, present the proposed contract or focused delta and obtain explicit user approval. If the user has already approved that contract or delta in the current conversation, apply it without requesting approval again. A request to review the charter alone does not approve a strategic change.
 
 Do not invent success metrics, schedules, budgets, sponsors, owners, or governance fields. Include one only when the repository context or user requires it.
 
@@ -61,12 +61,14 @@ Write declarative product prose. Keep the charter independent of an implementati
 
 Do not include:
 
-- the skill name or the planning controller's name;
+- attribution of the charter's creation or revision to a skill or planning controller;
 - orchestration run, work-item, attempt, or agent identifiers;
-- agent workflows, prompts, model routing, or lifecycle instructions;
+- instructions for the agent workflow used to produce the charter;
 - build commands, coding conventions, or test procedures;
 - implementation status, delivery history, timestamps, or decision-log entries;
 - evidence paths, execution logs, or tool provenance.
+
+When the repository's product is an agent tool or controller, describe its product behavior and constraints using the required domain terms. Product facts are distinct from the workflow used to write the charter.
 
 When a durable technical decision needs a rationale, place it in the repository's ADR convention. When work needs a bounded implementation contract, leave it to the repository's planning or spec workflow.
 
@@ -87,6 +89,8 @@ Do not change the repository's purpose, users, desired outcomes, scope, or produ
 ```
 
 If no root `AGENTS.md` exists, create a concise file with this section. Preserve unrelated repository instructions. Do not copy the charter body into `AGENTS.md`.
+
+Add the loading rule only when the charter exists. On repeated invocation, preserve an equivalent rule instead of appending another copy. Harness-specific import files and skill installation belong to the harness setup workflow; this skill does not claim that writing `AGENTS.md` configures every harness to load it.
 
 ## Verify the Result
 

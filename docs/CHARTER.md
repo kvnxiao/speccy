@@ -83,9 +83,10 @@ New control layers require a concrete failure or invariant. Implementation detai
 - One active run owns canonical state for a repository.
 - Runtime state is local and ignored by default.
 - Each agent invocation has exclusive writable artifact paths.
-- The active harness can launch fresh agent or skill contexts and can read repository files.
+- The active harness can launch fresh agent or skill contexts, read repository files, cancel invocations, and establish that their commands have stopped before replacement execution.
 - Workers can run repository-prescribed checks and create coherent commits.
 - Model review remains fallible, and recorded command evidence remains agent-produced unless a later deterministic sensor verifies it.
+- Scoped packets and exclusive artifact paths depend on cooperative agents and harness permissions. They do not isolate a malicious process running with the same filesystem access.
 - Teams may track installed harness packs, but runtime state and raw evidence remain untracked unless they choose otherwise.
 
 ## Risks and Open Questions
